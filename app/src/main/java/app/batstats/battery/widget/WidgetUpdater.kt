@@ -66,9 +66,10 @@ object WidgetUpdater {
     private fun updateLevel(ctx: Context, s: BatterySample) {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, BatteryLevelWidget::class.java))
+        if (ids.isEmpty()) return
         val rv = createRemoteViews(ctx).apply {
             setTextViewText(R.id.title, "Battery")
-            setTextViewText(R.id.value, "${s.levelPercent}%")
+            setTextViewText(R.id.value, s.levelPercent?.let { "$it%" } ?: "—")
         }
         ids.forEach { mgr.updateAppWidget(it, rv) }
     }
@@ -76,10 +77,11 @@ object WidgetUpdater {
     private fun updateTemp(ctx: Context, s: BatterySample) {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, BatteryTempWidget::class.java))
-        val tempC = (s.temperatureDeciC ?: 0) / 10.0
+        val tempC = s.temperatureDeciC?.div(10.0)
+        if (ids.isEmpty()) return
         val rv = createRemoteViews(ctx).apply {
             setTextViewText(R.id.title, "Temperature")
-            setTextViewText(R.id.value, String.format("%.1f °C", tempC))
+            setTextViewText(R.id.value, tempC?.let { String.format("%.1f °C", it) } ?: "—")
         }
         ids.forEach { mgr.updateAppWidget(it, rv) }
     }
@@ -88,6 +90,7 @@ object WidgetUpdater {
         val mgr = AppWidgetManager.getInstance(ctx)
         val ids = mgr.getAppWidgetIds(ComponentName(ctx, BatteryTimeWidget::class.java))
         val eta = TimeEstimator.etaString(s) ?: "—"
+        if (ids.isEmpty()) return
         val rv = createRemoteViews(ctx).apply {
             setTextViewText(R.id.title, "ETA")
             setTextViewText(R.id.value, eta)

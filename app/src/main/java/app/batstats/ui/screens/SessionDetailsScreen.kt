@@ -1,159 +1,44 @@
 package app.batstats.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.batstats.battery.drain.formatDuration
+import app.batstats.ui.components.ChartPoint
+import app.batstats.ui.components.TelemetryChart
 import app.batstats.viewmodel.SessionDetailsViewModel
-import kotlin.math.abs
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.*
+import java.text.DateFormat
+import java.util.Date
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionDetailsScreen(
-    sessionId: String,
-    onBack: () -> Unit,
-    vm: SessionDetailsViewModel
-) {
-    val ui by vm.ui.collectAsState()
-
-    Scaffold(topBar = {
-        LargeTopAppBar(
-            title = { Text("Session details") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-            actions = {
-//                IconButton(onClick = { /* share later */ }) { Icon(Icons.Outlined.Share, null) }
-//                IconButton(onClick = { /* export later */ }) { Icon(Icons.Outlined.Download, null) }
-            }
-        )
-    }) { pv ->
-        Column(
-            Modifier.padding(pv).fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val dateTimeFormatter = remember(Locale.getDefault()) {
-                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.getDefault())
-            }
-            val startStr = remember(ui.start) {
-                Instant.ofEpochMilli(ui.start)
-                    .atZone(ZoneId.systemDefault())
-                    .format(dateTimeFormatter)
-            }
-            val endStr = remember(ui.end) {
-                ui.end?.let {
-                    Instant.ofEpochMilli(it)
-                        .atZone(ZoneId.systemDefault())
-                        .format(dateTimeFormatter)
-                } ?: "Active"
-            }
-
-            ElevatedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${ui.type} • ${ui.levelRange}", style = MaterialTheme.typography.titleMedium)
-                    Text("Start: $startStr", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("End: $endStr", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ui.capacityMah?.let {
-                            AssistChip(onClick = {}, label = { Text("~${it} mAh") })
-                        }
-                        ui.avgCurrent?.let {
-                            AssistChip(onClick = {}, label = { Text("${it / 1000} mA avg") })
-                        }
+fun SessionDetailsScreen(sessionId: String, onBack: () -> Unit, vm: SessionDetailsViewModel) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    Scaffold(topBar = { TopAppBar(title = { Text("Observation details") }, navigationIcon = {
+        TextButton(onClick = onBack) { Text("Back") }
+    }) }) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            item {
+                Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${ui.type} · ${ui.levelRange}", style = MaterialTheme.typography.titleLarge)
+                    if (ui.start > 0) Text("Start: ${DateFormat.getDateTimeInstance().format(Date(ui.start))}")
+                    Text(ui.end?.let { "End: ${DateFormat.getDateTimeInstance().format(Date(it))}" } ?: "Current observation")
+                    Text("Source: ${ui.source}")
+                    if (ui.source == "legacy") Text("Legacy record: sampling continuity, screen accounting and calculation quality were not recorded.")
+                    else {
+                        Text("Observed: ${formatDuration(ui.observedMs)}")
+                        Text("Counter coverage: ${formatDuration(ui.counterCoveredMs)}")
+                        Text("Average counter rate: ${ui.avgCurrent?.let { "${it / 1000} mA" } ?: "Unavailable"}")
                     }
-                }
+                    ui.closeReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                } }
             }
-
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val tertiaryColor = MaterialTheme.colorScheme.tertiary
-            val errorColor = MaterialTheme.colorScheme.error
-
-            ChartCard("Current (mA)") {
-                val values = ui.points.map { it.currentMa?.toFloat() ?: 0f }
-                drawSeries(values, primaryColor)
-            }
-            ChartCard("Voltage (mV)") {
-                val values = ui.points.map { it.voltageMv?.toFloat() ?: 0f }
-                drawSeries(values, tertiaryColor)
-            }
-            ChartCard("Temperature (°C)") {
-                val values = ui.points.map { it.tempC?.toFloat() ?: 0f }
-                drawSeries(values, errorColor)
-            }
-
-            AnimatedVisibility(visible = ui.points.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                Text(
-                    "No data points captured yet.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(4.dp)
-                )
-            }
+            item { TelemetryChart("Net current", "mA", ui.points.map { ChartPoint(it.timestamp, it.currentMa?.toDouble(), it.observationId, it.gap) }) }
+            item { TelemetryChart("Voltage", "mV", ui.points.map { ChartPoint(it.timestamp, it.voltageMv?.toDouble(), it.observationId, it.gap) }) }
+            item { TelemetryChart("Temperature", "°C", ui.points.map { ChartPoint(it.timestamp, it.tempC, it.observationId, it.gap) }) }
         }
-    }
-}
-
-@Composable
-private fun ChartCard(
-    title: String,
-    drawBlock: DrawScope.() -> Unit
-) {
-    ElevatedCard {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            val scroll = rememberScrollState()
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .horizontalScroll(scroll)
-            ) {
-                Canvas(modifier = Modifier.width(1100.dp).height(180.dp)) {
-                    drawBlock()
-                }
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawSeries(values: List<Float>, color: Color) {
-    if (values.isEmpty()) return
-    val count = values.size
-    val min = values.minOrNull() ?: 0f
-    val max = values.maxOrNull() ?: 1f
-    val hasRange = abs(max - min) > 1e-6f
-    val range = if (hasRange) (max - min) else 1f
-    val stepX = if (count > 1) size.width / (count - 1) else 0f
-
-    fun mapY(v: Float) = if (hasRange) {
-        size.height - ((v - min) / range) * size.height
-    } else size.height * 0.5f
-
-    var prev: Offset? = null
-    values.forEachIndexed { i, v ->
-        val x = if (count > 1) i * stepX else size.width * 0.5f
-        val p = Offset(x, mapY(v))
-        prev?.let {
-            drawLine(color = color, start = it, end = p, strokeWidth = 3f)
-        } ?: if (count == 1) {
-            drawCircle(color = color, radius = 4.dp.toPx(), center = p)
-        } else {
-
-        }
-        prev = p
     }
 }

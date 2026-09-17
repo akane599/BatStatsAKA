@@ -7,26 +7,37 @@ import kotlinx.serialization.Serializable
 @Serializable
 @Entity(
     tableName = "battery_samples",
-    indices = [Index("timestamp"), Index("status")]
+    indices = [Index("timestamp"), Index("status"), Index("sessionId"), Index(value = ["observationId", "elapsedMs"], unique = true)]
 )
 data class BatterySample(
     @field:PrimaryKey(autoGenerate = true) val id: Long = 0,
     val timestamp: Long,
-    val levelPercent: Int,                  // 0..100
+    val levelPercent: Int?,                  // 0..100
     val status: Int,                        // BatteryManager status
-    val plugged: Int,                       // BatteryManager EXTRA_PLUGGED
+    val plugged: Int?,                       // BatteryManager EXTRA_PLUGGED
     val currentNowUa: Long?,                // microAmps (negative while discharging)
     val chargeCounterUah: Long?,            // microAh
     val voltageMv: Int?,                    // mV
     val temperatureDeciC: Int?,             // tenths of °C
     val health: Int?,                       // BatteryManager EXTRA_HEALTH
-    val screenOn: Boolean
+    val screenOn: Boolean,
+    val elapsedMs: Long? = null,
+    val uptimeMs: Long? = null,
+    val observationId: String? = null,
+    val sessionId: String? = null,
+    val currentAverageUa: Long? = null,
+    val energyNwh: Long? = null,
+    val cycleCount: Int? = null,
+    val etaMs: Long? = null,
+    val etaBasis: String? = null,
+    @ColumnInfo(defaultValue = "'legacy'") val source: String = "legacy",
+    val boundaryReason: String? = null
 )
 
 @Serializable
 @Entity(
     tableName = "charge_sessions",
-    indices = [Index("startTime"), Index("type")]
+    indices = [Index("startTime"), Index("type"), Index(value = ["activeKey"], unique = true)]
 )
 data class ChargeSession(
     @Contextual
@@ -34,14 +45,26 @@ data class ChargeSession(
     val type: SessionType,
     val startTime: Long,
     val endTime: Long?,             // null while active
-    val startLevel: Int,
+    val startLevel: Int?,
     val endLevel: Int?,
     val deltaUah: Long?,            // integrated charge delta
     val avgCurrentUa: Long?,        // session average
-    val estCapacityMah: Int?        // estimated capacity from this session
+    val estCapacityMah: Int?,       // legacy session estimate; new sessions do not guess capacity
+    val activeKey: Int? = if (endTime == null) 1 else null,
+    val observationId: String? = null,
+    val lastSampleTime: Long? = null,
+    @ColumnInfo(defaultValue = "0") val observedMs: Long = 0,
+    @ColumnInfo(defaultValue = "0") val counterCoveredMs: Long = 0,
+    @ColumnInfo(defaultValue = "0") val screenOnMs: Long = 0,
+    @ColumnInfo(defaultValue = "0") val screenOffMs: Long = 0,
+    val screenOnUah: Long? = null,
+    val screenOffUah: Long? = null,
+    val cpuSuspendMs: Long? = null,
+    val closeReason: String? = null,
+    @ColumnInfo(defaultValue = "'legacy'") val source: String = "legacy"
 )
 
-enum class SessionType { CHARGE, DISCHARGE }
+enum class SessionType { CHARGE, DISCHARGE, PLUGGED, UNKNOWN }
 
 @Entity(tableName = "alarm_rules")
 @Serializable

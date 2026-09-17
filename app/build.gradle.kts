@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
 }
 
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
 kotlin {
     jvmToolchain(21)
     compilerOptions {

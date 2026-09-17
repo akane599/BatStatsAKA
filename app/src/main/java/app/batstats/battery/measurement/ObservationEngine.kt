@@ -24,16 +24,16 @@ enum class Boundary { SAMPLE, SCREEN, POWER, DOZE, GAP }
 data class ObservedBucket(
     val durationMs: Long = 0,
     val chargeCoveredMs: Long = 0,
-    val dischargedUah: Long = 0,
+    val chargeChangeUah: Long = 0,
     val energyCoveredMs: Long = 0,
     val energyMwh: Double = 0.0
 ) {
-    val chargeMah: Double? get() = if (chargeCoveredMs > 0) dischargedUah / 1000.0 else null
-    val rateMa: Double? get() = if (chargeCoveredMs >= 60_000) dischargedUah * 3600.0 / chargeCoveredMs else null
+    val chargeMah: Double? get() = if (chargeCoveredMs > 0) chargeChangeUah / 1000.0 else null
+    val rateMa: Double? get() = if (chargeCoveredMs >= 60_000) chargeChangeUah * 3600.0 / chargeCoveredMs else null
     val estimatedEnergyMwh: Double? get() = if (energyCoveredMs > 0) energyMwh else null
     operator fun plus(other: ObservedBucket) = ObservedBucket(
         durationMs + other.durationMs, chargeCoveredMs + other.chargeCoveredMs,
-        dischargedUah + other.dischargedUah, energyCoveredMs + other.energyCoveredMs,
+        chargeChangeUah + other.chargeChangeUah, energyCoveredMs + other.energyCoveredMs,
         energyMwh + other.energyMwh
     )
 }
@@ -43,7 +43,7 @@ data class ObservationSummary(
     val latest: Observation? = null,
     val screenOn: ObservedBucket = ObservedBucket(),
     val screenOff: ObservedBucket = ObservedBucket(),
-    val chargingMs: Long = 0,
+    val charging: ObservedBucket = ObservedBucket(),
     val pluggedMs: Long = 0,
     val unknownMs: Long = 0,
     val cpuSuspendMs: Long = 0,
@@ -54,6 +54,7 @@ data class ObservationSummary(
     val lastIssue: String? = null,
     val stopped: Boolean = true
 ) {
+    val chargingMs: Long get() = charging.durationMs
     val discharge: ObservedBucket get() = screenOn + screenOff
     val observedMs: Long get() = discharge.durationMs + chargingMs + pluggedMs + unknownMs
 }
@@ -107,14 +108,18 @@ class ObservationEngine {
         }
 
         val discharging = before.power == PowerState.DISCHARGING
-        val charge = if (discharging && point.power == before.power)
-            BatteryReading.dischargedUah(before.chargeUah, point.chargeUah, elapsed) else null
+        val charge = when {
+            point.power != before.power -> null
+            discharging -> BatteryReading.dischargedUah(before.chargeUah, point.chargeUah, elapsed)
+            before.power == PowerState.CHARGING -> BatteryReading.dischargedUah(point.chargeUah, before.chargeUah, elapsed)
+            else -> null
+        }
         val voltage = if (before.voltageMv != null && point.voltageMv != null)
             (before.voltageMv + point.voltageMv) / 2.0 else null
         val bucket = ObservedBucket(
             durationMs = elapsed,
             chargeCoveredMs = if (charge != null) elapsed else 0,
-            dischargedUah = charge ?: 0,
+            chargeChangeUah = charge ?: 0,
             energyCoveredMs = if (charge != null && voltage != null) elapsed else 0,
             energyMwh = if (charge != null && voltage != null) charge * voltage / 1_000_000 else 0.0
         )
@@ -123,7 +128,7 @@ class ObservationEngine {
             latest = point,
             screenOn = if (discharging && before.interactive) summary.screenOn + bucket else summary.screenOn,
             screenOff = if (discharging && !before.interactive) summary.screenOff + bucket else summary.screenOff,
-            chargingMs = summary.chargingMs + if (before.power == PowerState.CHARGING) elapsed else 0,
+            charging = if (before.power == PowerState.CHARGING) summary.charging + bucket else summary.charging,
             pluggedMs = summary.pluggedMs + if (before.power == PowerState.PLUGGED) elapsed else 0,
             unknownMs = summary.unknownMs + if (before.power == PowerState.UNKNOWN) elapsed else 0,
             cpuSuspendMs = summary.cpuSuspendMs + (elapsed - awake).coerceIn(0, elapsed),

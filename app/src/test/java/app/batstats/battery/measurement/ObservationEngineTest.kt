@@ -10,6 +10,16 @@ class ObservationEngineTest {
                       generation: String = "one", wall: Long = 1_000_000 + t, doze: Boolean = false) =
         Observation(wall, t, uptime, 80, charge, -60_000, 4000, power, screen, doze, generation, boundary = boundary)
 
+    @Test fun chargingUsesCounterGainWithoutCreatingDischarge() {
+        val engine = ObservationEngine()
+        engine.accept(point(0, charge = 1_000_000, power = PowerState.CHARGING))
+        val result = engine.accept(point(60_000, charge = 1_010_000, power = PowerState.CHARGING))
+        assertEquals(10.0, result.charging.chargeMah!!, 0.001)
+        assertEquals(600.0, result.charging.rateMa!!, 0.001)
+        assertNull(result.discharge.chargeMah)
+        assertEquals(0L, result.screenOff.durationMs)
+    }
+
     @Test fun screenNeverOffMeansNoScreenOffTimeOrConsumption() {
         val engine = ObservationEngine()
         engine.accept(point(0))

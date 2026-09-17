@@ -33,12 +33,16 @@ class DashboardViewModel(
     settingsRepository: SettingsRepository<AppSettings>
 ) : AndroidViewModel(app) {
 
-    private val settings: StateFlow<AppSettings> = settingsRepository.flow
+    val settings: StateFlow<AppSettings> = settingsRepository.flow
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = AppSettingsSchema.default
         )
+
+    val observation = repo.observation
+    val collectionError = repo.error
+    fun refresh() = repo.refreshNow()
 
     val realtime: StateFlow<BatteryRepository.Realtime> = repo.realtimeFlow
     val isMonitoring: StateFlow<Boolean> = repo.isMonitoringFlow
@@ -62,7 +66,7 @@ class DashboardViewModel(
     init {
         viewModelScope.launch {
             realtime.collectLatest { rt ->
-                val current = rt.currentMa.toFloat()
+                val current = rt.currentMa?.toFloat() ?: return@collectLatest
                 _liveCurrent.update { history ->
                     (history + current).takeLast(100)
                 }

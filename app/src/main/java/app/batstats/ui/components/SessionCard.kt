@@ -52,11 +52,10 @@ fun SessionCard(
             .format(timeFormatter)
     }
     val isActive = session.endTime == null
-    val durationMs = (session.endTime ?: System.currentTimeMillis()) - session.startTime
+    val durationMs = session.observedMs
 
     Card(
         modifier = modifier,
-        onClick = {},
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isActive)
@@ -77,6 +76,7 @@ fun SessionCard(
                 color = when (session.type) {
                     SessionType.CHARGE -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                     SessionType.DISCHARGE -> MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                    else -> MaterialTheme.colorScheme.surfaceContainerHigh
                 },
                 modifier = Modifier.size(48.dp)
             ) {
@@ -84,11 +84,13 @@ fun SessionCard(
                     imageVector = when (session.type) {
                         SessionType.CHARGE -> Icons.Default.BatteryChargingFull
                         SessionType.DISCHARGE -> Icons.Default.Battery0Bar
+                        else -> Icons.Default.BatteryChargingFull
                     },
                     contentDescription = session.type.name,
                     tint = when (session.type) {
                         SessionType.CHARGE -> MaterialTheme.colorScheme.primary
                         SessionType.DISCHARGE -> MaterialTheme.colorScheme.error
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                     modifier = Modifier
                         .padding(12.dp)
@@ -109,7 +111,9 @@ fun SessionCard(
                         Text(
                             text = when (session.type) {
                                 SessionType.CHARGE -> "Charging Session"
-                                SessionType.DISCHARGE -> "Discharge Session"
+                                SessionType.DISCHARGE -> "Discharge observation"
+                                SessionType.PLUGGED -> "Plugged in · not charging"
+                                SessionType.UNKNOWN -> "Unknown power state"
                             },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Medium
@@ -151,7 +155,7 @@ fun SessionCard(
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    BatteryLevelChip(session.endLevel ?: session.startLevel)
+                    BatteryLevelChip(session.endLevel)
                 }
 
                 // Stats row
@@ -186,17 +190,17 @@ fun SessionCard(
 
 
 @Composable
-private fun BatteryLevelChip(level: Int) {
+private fun BatteryLevelChip(level: Int?) {
     Surface(
         shape = RoundedCornerShape(8.dp),
         color = when {
-            level < 20 -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-            level < 50 -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+            level != null && level < 20 -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+            level != null && level < 50 -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
             else -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         }
     ) {
         Text(
-            text = "$level%",
+            text = level?.let { "$it%" } ?: "—",
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Medium

@@ -2,6 +2,7 @@ package app.batstats.battery.util
 
 import android.content.Context
 import android.util.Log
+import android.os.SystemClock
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.shizuku.ShizukuBridge
 import kotlinx.coroutines.CancellationException
@@ -59,20 +60,37 @@ class DetailedStatsCollector(
     private val _mode = MutableStateFlow(ShellRunner.Mode.NONE)
     val mode: StateFlow<ShellRunner.Mode> = _mode.asStateFlow()
 
+    private var lastAttemptElapsed = Long.MIN_VALUE
+
+    fun accessChanged(mode: ShellRunner.Mode) {
+        if (mode != _mode.value || mode == ShellRunner.Mode.NONE) {
+            _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
+            _lastRefresh.value = 0; lastAttemptElapsed = Long.MIN_VALUE
+            _mode.value = mode
+            _error.value = if (mode == ShellRunner.Mode.NONE) NO_ACCESS_MESSAGE else null
+        }
+    }
+
     fun clearError() {
         _error.value = null
     }
 
-    suspend fun refresh(): Boolean {
+    suspend fun refresh(force: Boolean = false): Boolean {
+        if (!force && lastAttemptElapsed != Long.MIN_VALUE && SystemClock.elapsedRealtime() - lastAttemptElapsed < 30_000) return _snapshot.value != null
         if (!refreshing.compareAndSet(false, true)) {
             Log.d(TAG, "Refresh already in progress")
             return false
         }
 
+        lastAttemptElapsed = SystemClock.elapsedRealtime()
         _isRefreshing.value = true
         Log.d(TAG, "Starting refresh...")
 
         return try {
+            if (shellRunner.detectMode(forceRefresh = true) == ShellRunner.Mode.NONE) {
+                accessChanged(ShellRunner.Mode.NONE)
+                return false
+            }
             var hasData = false
             val failures = mutableListOf<String>()
 
