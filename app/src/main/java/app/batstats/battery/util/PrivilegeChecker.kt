@@ -35,7 +35,15 @@ object PrivilegeChecker {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    fun hasAdvancedViaAdb(context: Context): Boolean = hasDump(context) && hasBatteryStats(context)
+    fun hasAdvancedViaAdb(context: Context): Boolean {
+        // Android16 BatteryStatsService -> DumpUtils.checkDumpAndUsageStatsPermission.
+        if (!hasDump(context) || ContextCompat.checkSelfPermission(context,
+                Manifest.permission.PACKAGE_USAGE_STATS) != PackageManager.PERMISSION_GRANTED) return false
+        val ops = context.getSystemService(AppOpsManager::class.java) ?: return false
+        val mode = runCatching { ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+            Process.myUid(), context.packageName) }.getOrNull()
+        return mode == AppOpsManager.MODE_ALLOWED || mode == AppOpsManager.MODE_DEFAULT
+    }
 
     suspend fun hasRoot(): Boolean = withContext(Dispatchers.IO) {
         RootStatsCollector.isRootAvailable()

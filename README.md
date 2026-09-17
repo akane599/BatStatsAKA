@@ -4,19 +4,37 @@
 
 ![Banner](fastlane/metadata/android/en-US/images/banner.svg)
 
-Detailed Stats will not show some of the stats (dependent on device). The app doesn't handle most edge cases, but does almost always work for important ones, like power consumption stats ( in mah ) for all apps.
+BatStats monitors battery readings and observed charging/discharging sessions. Ordinary readings use Android BatteryManager. Advanced statistics use Shizuku, Root, or explicitly granted ADB permissions. Availability depends on the device; missing data is not zero consumption.
 
-## Advanced Stats
+This development branch targets Android 16/API36. Implementation and actual validation status are recorded in [PROGRESS.md](PROGRESS.md) and [AUDIT_REPORT.md](AUDIT_REPORT.md). Physical Samsung behavior remains unverified.
 
-Root and shizuku do not require any commands (self-explantory). ADB requires privileged perms (adb method to grant):
+## Advanced access
 
-  ```sh
-  for p in DUMP BATTERY_STATS PACKAGE_USAGE_STATS INTERACT_ACROSS_USERS; do adb shell pm grant org.mlm.batstats android.permission.$p; done
-  ```
-  Then force-stop BatStats (or reboot) and re-open. Check Settings -> Advanced Stats for grant status (can copy commands there too).
+Start Shizuku and authorize BatStats from the app. Shizuku is the preferred source when running and authorized. Its shell mode does not grant every root-only capability. On connection loss, ordinary readings remain available; a failed privileged read is not silently replaced by another source.
 
-## Contributing
-Issues and PRs are welcome. (Do try to make sure that the issue is not OS specific before submitting)
+For ADB mode, use the installed package (`org.mlm.batstats.debug` for debug builds). Android16 requires both permissions below and usage-stat app-op access:
 
-## License
-See [LICENSE](LICENSE) file for details.
+```sh
+adb shell pm grant org.mlm.batstats.debug android.permission.DUMP
+adb shell pm grant org.mlm.batstats.debug android.permission.PACKAGE_USAGE_STATS
+adb shell appops set org.mlm.batstats.debug GET_USAGE_STATS allow
+```
+
+Return to Advanced statistics and refresh. Grants may be refused by a device policy or build; collection errors remain visible. BATTERY_STATS and cross-user permissions are not substitutes for these dump permissions. Root mode requires an installed, authorized `su` implementation.
+
+## What the values mean
+
+- Android properties use µA (current), µAh (charge), nWh (energy); broadcast voltage uses mV and temperature uses tenths Celsius. Positive current means charging according to the Android contract. Vendor behavior still needs hardware verification.
+- BatStats observation starts when monitoring starts/resets. It excludes detected gaps and earlier consumption. Screen-off includes noninteractive AOD; it does not prove CPU sleep. CPU suspend and Android Doze are reported separately.
+- Counter-derived charge changes and voltage-based energy estimates include coverage. Remaining-time predictions require enough stable observed data and remain estimates.
+- Advanced UID estimates use Android’s cumulative statistics window, not BatStats history. Shared UIDs cannot be split reliably into separate app consumption. Activity counts and duration do not prove excessive drain.
+
+See [platform and source notes](docs/PLATFORM_NOTES.md) for contracts and limits. Existing production installations require the original signing key for an in-place update; development APKs use a separate package/signature.
+
+## Development
+
+Use JDK21 and Android SDK37 for compilation; targetAPI36, minimumAPI26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).
+
+## Contributing and license
+
+Issues and PRs should include Android version, access mode, reporting period and reproducible behavior. Avoid sharing private app/activity data unnecessarily. See [LICENSE](LICENSE).

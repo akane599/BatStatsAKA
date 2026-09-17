@@ -223,7 +223,7 @@ class BatteryRepository(
             currentAverageUa = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)),
             energyNwh = BatteryReading.energyNwh(property(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)),
             cycleCount = if (Build.VERSION.SDK_INT >= 34) extra(BatteryManager.EXTRA_CYCLE_COUNT)?.takeIf { it >= 0 } else null,
-            etaMs = if (power == PowerState.CHARGING) runCatching { batteryManager.computeChargeTimeRemaining() }
+            etaMs = if (Build.VERSION.SDK_INT >= 28 && power == PowerState.CHARGING) runCatching { batteryManager.computeChargeTimeRemaining() }
                 .getOrNull()?.takeIf { it in 1..7 * 86_400_000L } else null,
             etaBasis = if (power == PowerState.CHARGING) "Android charging estimate" else null,
             source = "BatteryManager"

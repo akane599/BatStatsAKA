@@ -14,6 +14,10 @@ Sources: [foreground service types](https://developer.android.com/develop/backgr
 
 Shizuku user services run as shell or root, depending on how Shizuku was started. Shell access does not grant every root-only capability. A running service and authorization are separate states. Reads must carry their actual source and failure state; incomplete output is not a successful sample. Reconnection starts a new baseline for cumulative differences. Root and ADB-granted modes remain supported, with their respective permission limits.
 
+For ADB-granted reads, Android16 `BatteryStatsService` checks DUMP plus PACKAGE_USAGE_STATS permission and an allowed/default usage app-op. BATTERY_STATS alone does not authorize dumps. `-c --charged` requests the current checkin-format window; `--checkin` can instead consume a saved completed report. Included history is discarded by the parser and output remains bounded; oversized or interrupted responses are failures.
+
+Sources: [Android16 BatteryStatsService](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/services/core/java/com/android/server/am/BatteryStatsService.java), [DumpUtils](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/com/android/internal/util/DumpUtils.java).
+
 Source: [Shizuku API and UserService lifecycle](https://github.com/RikkaApps/Shizuku-API/blob/master/README.md).
 
 ## Sensor contracts and screen state
@@ -31,3 +35,13 @@ Samsung documents that deep-sleeping apps only run when opened. If monitoring st
 No physical Samsung device is available. Emulated sensor inputs cannot validate Samsung current polarity/scaling, capacity calibration, actual AOD events, OEM process management, or physical battery overhead. Functional tests and screenshots must identify their emulator/API and distinguish injected inputs from real readings.
 
 Source: [Samsung background usage limits](https://www.samsung.com/us/support/answer/ANS10003442/).
+
+## Advanced statistics contracts
+
+Android checkin v9 supplies UID total, screen and proportional charge estimates, not every per-UID component. The proportional value is an alternative total, not an extra amount to add. Other activity counters cannot establish energy or causation. Job/sync records place milliseconds before count; mobile-active UID time is microseconds; global Bluetooth uses `gble` rather than per-UID `ble`. Idling counters are not Doze maintenance windows. Package maps use appId, so raw UID/user identity is retained and shared/removed/profile limitations remain visible.
+
+Android16 also documents `dumpsys batterystats --usage` and `--usage --proto`; these are possible component-report sources, but have different schemas/windows and cannot be silently merged into the checkin snapshot. Existing UI component fields were never populated. They now show only fields this source actually reports; device component estimates and per-UID activity remain available. A separate validated component transport would be required before presenting additional per-UID estimates.
+
+Kernel attributes use µV, µA, µAh, µWh, seconds and tenths Celsius by ABI. Full-charge capacity is a remembered gauge threshold, not a laboratory capacity measurement. CPU `time_in_state` uses10ms usertime units and covers time since driver load/reset, which can differ from time since boot.
+
+Sources: [Linux power supply class](https://cdn.kernel.org/doc/html/latest/power/power_supply_class.html), [CPU frequency statistics](https://kernel.org/doc/html/latest/cpu-freq/cpufreq-stats.html).

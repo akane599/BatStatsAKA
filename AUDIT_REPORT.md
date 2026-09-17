@@ -73,3 +73,11 @@ New confirmed findings (priority high; next fixes):
 - B19: Android16 batterystats dump requires DUMP and PACKAGE_USAGE_STATS permission plus allowed/default usage app-op. Original OR guard and current DUMP/BATTERY_STATS AND guard do not model this contract correctly. Correct the introduced restrictive gate before delivery.
 - B20: `dumpsys batterystats --checkin` prefers a saved completed snapshot and deletes that saved file after reading, so repeated reads can cover different windows and consume Android's checkin. Use current non-consuming `-c` output with bounded handling of included history, or a supported replacement; do not silently mix epochs.
 Sources: [BatteryStatsService Android16](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/services/core/java/com/android/server/am/BatteryStatsService.java) (`dumpUnmonitored`, help and checkin file paths), [DumpUtils permissions](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/com/android/internal/util/DumpUtils.java).
+
+### Stage3c producer validation in progress
+Twelve new synthetic Android16 parser cases all failed against the old implementation (41 tests total,12 failures). Fixes now parse correct job/sync/Doze/Bluetooth/network/UID fields, preserve unknowns, validate epochs and reject duplicate/invalid energy. Advanced UI now exposes actual reporting periods, uncertainty and complete scrollable lists; cycle-derived health removed. Source contracts B19/B20 corrected locally. Main compile/test validation ongoing; Root sysfs execution, stale access UI and reset/cancellation remain open.
+Stage3b debug APK assembled successfully. Lint failed one API28/min26 charging-ETA call; guarded in current stage, not yet revalidated. No emulator screen/instrumentation success yet.
+
+Parser fix verification: standalone Kotlin/JUnit **45 tests PASS** (16 advanced parser cases plus29 prior cases),1.07s test runtime; `/tmp/batstats-parser-fixed-tests.log`. Full Android compile/test still running. No device parser-output validation claimed.
+
+Stage3c Gradle verification PASSED4m40s:45 JVM tests,0fail/error/skip, Android migration-test compilation. Advanced UI compiles, not visually reviewed. B09/B19/B20 implemented with producer-based regressions; B05 fake cycle health removed. Root/access/reset follow-up is next.

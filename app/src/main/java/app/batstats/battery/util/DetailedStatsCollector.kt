@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Collects comprehensive battery stats using Root/Shizuku/ADB-granted DUMP.
@@ -33,11 +34,12 @@ class DetailedStatsCollector(
         private const val TAG = "DetailedStatsCollector"
 
         const val NO_ACCESS_MESSAGE =
-            "Need Shizuku, root, or ADB-granted DUMP/BATTERY_STATS. See Settings > Advanced Stats."
+            "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Settings > Advanced Stats."
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val refreshing = AtomicBoolean(false)
+    private val accessGeneration = AtomicLong()
 
     private val _snapshot = MutableStateFlow<BatteryStatsParser.FullSnapshot?>(null)
     val snapshot: StateFlow<BatteryStatsParser.FullSnapshot?> = _snapshot.asStateFlow()
@@ -64,6 +66,7 @@ class DetailedStatsCollector(
 
     fun accessChanged(mode: ShellRunner.Mode) {
         if (mode != _mode.value || mode == ShellRunner.Mode.NONE) {
+            accessGeneration.incrementAndGet()
             _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
             _lastRefresh.value = 0; lastAttemptElapsed = Long.MIN_VALUE
             _mode.value = mode
@@ -87,32 +90,35 @@ class DetailedStatsCollector(
         Log.d(TAG, "Starting refresh...")
 
         return try {
-            if (shellRunner.detectMode(forceRefresh = true) == ShellRunner.Mode.NONE) {
+            val selectedMode = shellRunner.detectMode(forceRefresh = true)
+            if (selectedMode == ShellRunner.Mode.NONE) {
                 accessChanged(ShellRunner.Mode.NONE)
                 return false
             }
+            accessChanged(selectedMode)
+            val generation = accessGeneration.get()
+            var newSnapshot: BatteryStatsParser.FullSnapshot? = null
+            var newIdle: BatteryStatsParser.DeviceIdleInfo? = null
+            var newPower: BatteryStatsParser.PowerManagerInfo? = null
             var hasData = false
             val failures = mutableListOf<String>()
 
             Log.d(TAG, "Fetching batterystats...")
-            when (val stats = shellRunner.exec("dumpsys batterystats --checkin")) {
+            when (val stats = shellRunner.exec("dumpsys batterystats -c --charged")) {
                 is ShellRunner.Outcome.Success -> {
-                    _mode.value = stats.mode
+                    if (stats.mode != selectedMode || generation != accessGeneration.get()) return false
                     Log.d(TAG, "Parsing batterystats (${stats.output.length} chars, via ${stats.mode})...")
                     val parsed = BatteryStatsParser.parseCheckin(stats.output)
-                    if (stats.output.lineSequence().none { it.startsWith("9,0,l,bt,") }) {
-                        _snapshot.value = null
+                    if (!parsed.hasValidWindow) {
                         failures += "Battery statistics format unavailable or incomplete"
                     } else {
-                        _snapshot.value = parsed
-                        _lastRefresh.value = parsed.capturedAt
+                        newSnapshot = parsed.copy(source = "Android batterystats · ${stats.mode.name}")
                         hasData = true
                     }
                     Log.d(TAG, "Parsed ${parsed.apps.size} apps, ${parsed.wakelocks.size} wakelocks")
                 }
 
                 is ShellRunner.Outcome.Failure -> {
-                    _mode.value = stats.mode
                     _snapshot.value = null
                     failures += describe(stats)
                     Log.e(TAG, "batterystats failed: ${stats.mode} / ${stats.message}")
@@ -121,7 +127,8 @@ class DetailedStatsCollector(
 
             when (val idle = shellRunner.exec("dumpsys deviceidle")) {
                 is ShellRunner.Outcome.Success -> {
-                    _deviceIdle.value = BatteryStatsParser.parseDeviceIdle(idle.output)
+                    if (idle.mode != selectedMode || generation != accessGeneration.get()) return false
+                    newIdle = BatteryStatsParser.parseDeviceIdle(idle.output)
                 }
 
                 is ShellRunner.Outcome.Failure -> {
@@ -132,7 +139,8 @@ class DetailedStatsCollector(
 
             when (val power = shellRunner.exec("dumpsys power")) {
                 is ShellRunner.Outcome.Success -> {
-                    _powerManager.value = BatteryStatsParser.parsePowerManager(power.output)
+                    if (power.mode != selectedMode || generation != accessGeneration.get()) return false
+                    newPower = BatteryStatsParser.parsePowerManager(power.output)
                 }
 
                 is ShellRunner.Outcome.Failure -> {
@@ -141,6 +149,11 @@ class DetailedStatsCollector(
                 }
             }
 
+            if (generation != accessGeneration.get()) return false
+            _snapshot.value = newSnapshot
+            _deviceIdle.value = newIdle
+            _powerManager.value = newPower
+            _lastRefresh.value = newSnapshot?.capturedAt ?: 0
             _error.value = failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
             hasData
@@ -148,7 +161,8 @@ class DetailedStatsCollector(
             throw ce
         } catch (e: Exception) {
             Log.e(TAG, "Refresh failed with exception", e)
-            _error.value = "Error: ${e.message}"
+            _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null; _lastRefresh.value = 0
+            _error.value = "Collection failed: ${e.javaClass.simpleName}"
             false
         } finally {
             _isRefreshing.value = false
@@ -163,7 +177,7 @@ class DetailedStatsCollector(
         ShellRunner.Mode.ROOT ->
             "Root is available but the dump failed: ${failure.message}."
         ShellRunner.Mode.ADB ->
-            "DUMP/BATTERY_STATS is granted but the dump failed: ${failure.message}."
+            "DUMP and usage-stat access were detected but the dump failed: ${failure.message}."
     }
 
     suspend fun resetStats(): Boolean {
