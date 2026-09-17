@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runInterruptible
 import java.util.concurrent.TimeUnit
 
 class ShellRunner(
@@ -62,15 +63,15 @@ class ShellRunner(
                     is ShizukuBridge.RunResult.Success -> CommandOutput.Result(result.output)
                     is ShizukuBridge.RunResult.Error -> CommandOutput.Result(error = result.message)
                 }
-                Mode.ROOT -> CommandOutput.run(listOf("su", "-c", cmd), CMD_TIMEOUT_SEC * 1000)
-                Mode.ADB -> CommandOutput.run(cmd.split(' '), CMD_TIMEOUT_SEC * 1000)
+                Mode.ROOT -> runInterruptible { CommandOutput.run(listOf("su", "-c", cmd), CMD_TIMEOUT_SEC * 1000) }
+                Mode.ADB -> runInterruptible { CommandOutput.run(cmd.split(' '), CMD_TIMEOUT_SEC * 1000) }
                 Mode.NONE -> CommandOutput.Result(error = if (shizuku.ping())
                     "Shizuku authorization required" else "Privileged access unavailable")
             }
             currentCoroutineContext().ensureActive()
             val error = result.error ?: when {
                 !allowEmpty && result.output.isBlank() -> "Command returned no data"
-                isErrorOutput(result.output) -> "Command was refused by Android"
+                DumpOutput.failure(result.output) != null -> DumpOutput.failure(result.output)
                 else -> null
             }
             _lastError.value = error
@@ -88,9 +89,7 @@ class ShellRunner(
         return result.output.takeIf { result.successful }
     }
 
-    private fun isErrorOutput(out: String): Boolean =
-        out.startsWith("ERROR") || out.contains("Permission Denial", ignoreCase = true) ||
-            out.contains("SecurityException")
+    private fun isErrorOutput(out: String): Boolean = DumpOutput.failure(out) != null
 
     suspend fun detectMode(forceRefresh: Boolean = false): Mode {
         if (!forceRefresh) {

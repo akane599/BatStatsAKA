@@ -276,9 +276,26 @@
     <string name="adv_health_note">The ratio depends on the fuel gauge, calibration and vendor units; it is not a laboratory health test. Cycle count alone cannot determine health. A missing field does not mean zero capacity.</string>
     <string name="adv_cpu_policy">CPU policy %1$d</string>
     <string name="adv_frequency">Current frequency</string>
-    <string name="adv_clock_ticks">%1$d kernel clock ticks</string>
+    <string name="adv_clock_ticks">%1$d usertime ticks (10 ms each)</string>
     <string name="adv_unavailable">Unavailable</string>
     <string name="adv_no_rows">No rows reported for this snapshot. This may mean no recorded activity, unsupported reporting, or unavailable access; it does not establish zero consumption.</string>
     <string name="adv_yes">Yes</string>
     <string name="adv_no">No</string>
+    <string name="adv_access_help">Access setup</string>
+    <string name="adv_access_instructions">Start Shizuku and authorize BatStats here. Root is an alternative when Shizuku is not running. For ADB mode, run these commands from an authorized computer or local ADB client, then refresh. Device policy may refuse grants. Ordinary battery readings do not require these grants.</string>
+    <string name="adv_copy_commands">Copy commands</string>
+    <string name="adv_reset_android">Reset Android battery statistics</string>
+    <string name="adv_reset_warning">This resets Android’s cumulative battery statistics for the whole device, including the window shown here. It does not clear BatStats history or reset its current observation. Other battery-analysis apps may also see the new window. This cannot be undone.</string>
+    <string name="adv_reset_confirm">Reset system statistics</string>
+    <string name="adv_cancel">Cancel</string>
+    <string name="adv_sort">Sort by: %1$s</string>
+    <string name="adv_kernel_collected">%1$s read at %2$s</string>
+    <string name="adv_technology">Battery technology</string>
+    <string name="adv_reported_status">Kernel status</string>
+    <string name="adv_present_charge">Reported present charge</string>
+    <string name="adv_kernel_current">Signed kernel current (ABI units)</string>
+    <string name="adv_kernel_voltage">Kernel voltage (ABI units)</string>
+    <string name="adv_kernel_temperature">Kernel temperature</string>
+    <string name="adv_kernel_time_empty">Kernel time-to-empty estimate</string>
+    <string name="adv_kernel_time_full">Kernel time-to-full estimate</string>
 </resources>

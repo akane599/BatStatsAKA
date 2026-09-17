@@ -63,7 +63,8 @@ object PrivilegeChecker {
     fun describeGrants(context: Context): Map<String, Boolean> = mapOf(
         "DUMP" to hasDump(context),
         "BATTERY_STATS" to hasBatteryStats(context),
-        "PACKAGE_USAGE_STATS" to hasUsageStats(context),
+        "PACKAGE_USAGE_STATS permission" to (ContextCompat.checkSelfPermission(context, Manifest.permission.PACKAGE_USAGE_STATS) == PackageManager.PERMISSION_GRANTED),
+        "Usage access app-op" to hasUsageStats(context),
         "INTERACT_ACROSS_USERS" to hasInteractAcrossUsers(context)
     )
 }

@@ -81,3 +81,10 @@ Stage3b debug APK assembled successfully. Lint failed one API28/min26 charging-E
 Parser fix verification: standalone Kotlin/JUnit **45 tests PASS** (16 advanced parser cases plus29 prior cases),1.07s test runtime; `/tmp/batstats-parser-fixed-tests.log`. Full Android compile/test still running. No device parser-output validation claimed.
 
 Stage3c Gradle verification PASSED4m40s:45 JVM tests,0fail/error/skip, Android migration-test compilation. Advanced UI compiles, not visually reviewed. B09/B19/B20 implemented with producer-based regressions; B05 fake cycle health removed. Root/access/reset follow-up is next.
+
+### Stage3d in progress
+B07: cancellation now interrupts helper command and cancels pipe delivery; pure interruption regression passed. Added rejection for native dumpsys timeout marker after partial checkin (previous format-only validation could accept it). B08 source generations/reset lock and stale access ViewModel tightened. B16 uses actual bounded su reads and kernel ABI parser; tests cover unsupported values, capacity basis, CPU/thermal fields and modern/legacy wakeup timing units. UI shows source/freshness/errors and restored sorting/reset/grant help. Full validation running.
+New B21 (Medium): application allowBackup=true with unreferenced template backup_rules allows automatic cloud backup of battery history. User requires local diagnostics unless deliberately shared; implement explicit backup exclusions in privacy/history stage.
+Environment: emulator watchdog restarts before APK installation; documented ro.hw_timeout_multiplier100 configured on task-only software ATD (unset by default), framework restart requested. Keep this accommodation and missing physical-device validation explicit.
+
+Stage3d validation: Gradle JVM51 tests PASS,0fail/error/skip. Combined build FAILED10m29s at lint with125 MissingTranslation errors/216 warnings; API28 compatibility error resolved. Newly resourced advanced UI requires real locale translations (B22,Medium); tracked for stage4c, not suppressed. Debug assembly was after lint and did not execute; last APK is stage3b. Transport Binder/device behavior still pending.

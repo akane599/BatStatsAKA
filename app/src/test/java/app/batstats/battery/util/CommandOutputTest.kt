@@ -34,4 +34,22 @@ class CommandOutputTest {
         assertFalse(result.successful)
         assertEquals("", result.output)
     }
+    @Test fun interruptionReturnsPromptlyAndDiscardsPartialOutput() {
+        val result = java.util.concurrent.atomic.AtomicReference<CommandOutput.Result>()
+        val worker = Thread { result.set(CommandOutput.run(listOf("sh", "-c", "printf partial; sleep 10"), 15000)) }
+        worker.start()
+        Thread.sleep(100)
+        worker.interrupt()
+        worker.join(1500)
+        assertFalse("Cancelled command must release its caller", worker.isAlive)
+        assertEquals("Command interrupted", result.get().error)
+        assertEquals("", result.get().output)
+    }
+
+    @Test fun nativeDumpTimeoutAfterPartialRecordsIsNotSuccessfulData() {
+        assertNotNull(DumpOutput.failure("9,0,l,bt,1,1000,500\n*** SERVICE 'batterystats' DUMP TIMEOUT (10000ms) EXPIRED ***"))
+        assertNotNull(DumpOutput.failure("Can't find service: battery"))
+        assertNull(DumpOutput.failure("9,10001,l,wua,SecurityException,2"))
+    }
+
 }

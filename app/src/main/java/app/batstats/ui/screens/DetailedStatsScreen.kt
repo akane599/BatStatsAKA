@@ -12,6 +12,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.ClipData
+import android.content.ClipboardManager
+import kotlinx.coroutines.launch
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -19,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.util.BatteryStatsParser
 import app.batstats.battery.util.RootStatsCollector
+import app.batstats.battery.util.KernelStats
 import app.batstats.viewmodel.DetailedStatsViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.text.DateFormat
@@ -39,6 +44,11 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
     val root by vm.hasRoot.collectAsStateWithLifecycle()
     val kernel by vm.kernelBattery.collectAsStateWithLifecycle()
     var tab by rememberSaveable { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var showAccess by rememberSaveable { mutableStateOf(false) }
+    var showReset by rememberSaveable { mutableStateOf(false) }
+    var sort by rememberSaveable { mutableIntStateOf(0) }
     var query by rememberSaveable { mutableStateOf("") }
     var appOnly by rememberSaveable { mutableStateOf(false) }
     var selected by remember { mutableStateOf<BatteryStatsParser.AppPowerStats?>(null) }
@@ -68,6 +78,10 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                                 if (s.rejectedRecords > 0) Text(stringResource(R.string.adv_rejected, s.rejectedRecords), color = MaterialTheme.colorScheme.error)
                             } ?: Text(stringResource(R.string.adv_no_snapshot))
                             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                            TextButton(onClick = { showAccess = true }) { Text(stringResource(R.string.adv_access_help)) }
+                            if (tab == 0) TextButton(onClick = { showReset = true }, enabled = !refreshing && mode != app.batstats.battery.util.ShellRunner.Mode.NONE) {
+                                Text(stringResource(R.string.adv_reset_android))
+                            }
                             if (running && !authorized) Button(onClick = vm::requestShizukuPermission) { Text(stringResource(R.string.adv_authorize)) }
                         }
                     }
@@ -110,11 +124,17 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Text(stringResource(R.string.adv_attribution_note), style = MaterialTheme.typography.bodySmall)
                                     OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(stringResource(R.string.adv_search)) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                                    TextButton(onClick = { sort = (sort + 1) % 4 }) {
+                                        Text(stringResource(R.string.adv_sort, stringResource(listOf(R.string.adv_charge_estimate, R.string.adv_reported_cpu, R.string.adv_foreground, R.string.adv_background)[sort])))
+                                    }
                                     FilterChip(selected = appOnly, onClick = { appOnly = !appOnly }, label = { Text(stringResource(R.string.adv_app_uids)) })
                                 }
                             }
                             val apps = snapshot?.apps.orEmpty().filter { (!appOnly || BatteryStatsParser.isUserApp(it.uid, it.packages)) &&
-                                (query.isBlank() || it.packageName.contains(query, true) || it.packages.any { p -> p.contains(query, true) } || it.uid.toString().contains(query)) }
+                                (query.isBlank() || it.packageName.contains(query, true) || it.packages.any { p -> p.contains(query, true) } || it.uid.toString().contains(query)) }.let { list -> when (sort) {
+                                    1 -> list.sortedByDescending { it.cpuTimeMs }; 2 -> list.sortedByDescending { it.foregroundTimeMs }
+                                    3 -> list.sortedByDescending { it.backgroundTimeMs }; else -> list.sortedByDescending { it.powerMah }
+                                } }
                             if (apps.isEmpty()) item { MissingRows() }
                             items(apps, key = { it.uid }) { app ->
                                 OutlinedCard(onClick = { selected = app }, modifier = Modifier.fillMaxWidth()) {
@@ -133,13 +153,13 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                             items(snapshot?.wakelocks.orEmpty()) { w -> DetailCard(w.tag) {
                                 Text("${w.packageName} · UID ${w.uid} · ${w.type}")
                                 DetailRow(R.string.adv_pooled_duration, duration(w.totalTimeMs))
-                                DetailRow(R.string.adv_count, w.count.toString())
+                                DetailRow(R.string.adv_count, w.count?.toString())
                                 DetailRow(R.string.adv_max_duration, duration(w.maxTimeMs))
                                 DetailRow(R.string.adv_background_pooled, duration(w.backgroundTimeMs))
                             } }
                             items(snapshot?.kernelWakelocks.orEmpty()) { w -> DetailCard(w.name) {
                                 Text(stringResource(R.string.adv_kernel_timer))
-                                DetailRow(R.string.adv_duration, duration(w.totalTimeMs)); DetailRow(R.string.adv_count, w.count.toString())
+                                DetailRow(R.string.adv_duration, duration(w.totalTimeMs)); DetailRow(R.string.adv_count, w.count?.toString())
                             } }
                         }
                         3 -> {
@@ -200,6 +220,18 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
             }
         }
     }
+    if (showAccess) AlertDialog(onDismissRequest = { showAccess = false }, title = { Text(stringResource(R.string.adv_access_help)) },
+        text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(stringResource(R.string.adv_access_instructions))
+            Text(vm.adbCommands, style = MaterialTheme.typography.bodySmall)
+        } }, confirmButton = { TextButton(onClick = {
+            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("BatStats ADB", vm.adbCommands))
+        }) { Text(stringResource(R.string.adv_copy_commands)) } }, dismissButton = { TextButton(onClick = { showAccess = false }) { Text(stringResource(R.string.adv_close)) } })
+    if (showReset) AlertDialog(onDismissRequest = { showReset = false }, title = { Text(stringResource(R.string.adv_reset_android)) },
+        text = { Text(stringResource(R.string.adv_reset_warning)) }, confirmButton = { TextButton(onClick = {
+            showReset = false
+            scope.launch { if (vm.resetStats()) vm.refresh(true) }
+        }) { Text(stringResource(R.string.adv_reset_confirm)) } }, dismissButton = { TextButton(onClick = { showReset = false }) { Text(stringResource(R.string.adv_cancel)) } })
     selected?.let { app -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(app.packageName) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(stringResource(R.string.adv_uid, app.uid, app.uid / BatteryStatsParser.PER_USER_RANGE))
@@ -221,10 +253,12 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
         } }, confirmButton = { TextButton(onClick = { selected = null }) { Text(stringResource(R.string.adv_close)) } }) }
 }
 
-@Composable private fun KernelDetails(root: Boolean, battery: RootStatsCollector.KernelBatteryInfo?, refresh: () -> Unit) {
-    var cpu by remember { mutableStateOf(emptyList<RootStatsCollector.CpuInfo>()) }
-    var thermal by remember { mutableStateOf(emptyList<RootStatsCollector.ThermalZone>()) }
-    var locks by remember { mutableStateOf(emptyList<RootStatsCollector.KernelWakelockInfo>()) }
+@Composable private fun KernelDetails(root: Boolean, battery: KernelStats.Battery?, refresh: () -> Unit) {
+    val errors by RootStatsCollector.errors.collectAsStateWithLifecycle()
+    val collected by RootStatsCollector.collectedAt.collectAsStateWithLifecycle()
+    var cpu by remember { mutableStateOf(emptyList<KernelStats.Cpu>()) }
+    var thermal by remember { mutableStateOf(emptyList<KernelStats.Thermal>()) }
+    var locks by remember { mutableStateOf(emptyList<KernelStats.Wakelock>()) }
     var refreshKey by remember { mutableIntStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(root, refreshKey) {
@@ -237,22 +271,33 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
         DetailCard(stringResource(R.string.adv_kernel)) {
             Text(stringResource(R.string.adv_kernel_note))
             if (!root) Text(stringResource(R.string.adv_root_needed))
-            OutlinedButton(onClick = { refresh(); refreshKey++ }, enabled = root && !busy) { Text(stringResource(R.string.adv_refresh)) }
+            collected.forEach { (source, at) -> Text(stringResource(R.string.adv_kernel_collected, source, date(at)), style = MaterialTheme.typography.bodySmall) }
+            errors.forEach { (source, error) -> Text("$source: $error", color = MaterialTheme.colorScheme.error) }
+            OutlinedButton(onClick = { refresh(); refreshKey++ }, enabled = !busy) { Text(stringResource(R.string.adv_refresh)) }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             DetailRow(R.string.adv_cycle_count, battery?.cycleCount?.toString())
             DetailRow(R.string.adv_design, battery?.chargeFullDesign?.let { charge(it / 1000.0) })
             DetailRow(R.string.adv_learned, battery?.chargeFull?.let { charge(it / 1000.0) })
             DetailRow(R.string.adv_capacity_ratio, battery?.batteryAge?.let { String.format(Locale.getDefault(), "%.0f%%", it) })
             DetailRow(R.string.adv_kernel_health, battery?.health)
+            DetailRow(R.string.adv_technology, battery?.technology)
+            DetailRow(R.string.adv_reported_status, battery?.status)
+            DetailRow(R.string.adv_present_charge, battery?.chargeNow?.let { charge(it / 1000.0) })
+            DetailRow(R.string.adv_kernel_current, battery?.currentNow?.let { "$it µA" })
+            DetailRow(R.string.adv_kernel_voltage, battery?.voltageNow?.let { "$it µV" })
+            DetailRow(R.string.adv_kernel_temperature, battery?.tempNow?.let { "${it / 10.0} °C" })
+            DetailRow(R.string.adv_kernel_time_empty, battery?.timeToEmptyNow?.let { duration(it * 1000) })
+            DetailRow(R.string.adv_kernel_time_full, battery?.timeToFullNow?.let { duration(it * 1000) })
             Text(stringResource(R.string.adv_health_note), style = MaterialTheme.typography.bodySmall)
         }
         cpu.forEach { c -> DetailCard(stringResource(R.string.adv_cpu_policy, c.cluster)) {
-            DetailRow(R.string.adv_frequency, "${c.currentFreq} kHz"); DetailValue(c.governor, "${c.minFreq}–${c.maxFreq} kHz")
+            DetailRow(R.string.adv_frequency, c.currentFreq?.let { "$it kHz" }); DetailValue(c.governor ?: stringResource(R.string.adv_unavailable), "${c.minFreq ?: "—"}–${c.maxFreq ?: "—"} kHz")
             c.timeInState.forEach { (frequency, ticks) -> DetailValue("$frequency kHz", stringResource(R.string.adv_clock_ticks, ticks)) }
         } }
-        thermal.forEach { t -> DetailCard(t.name) { DetailValue(t.type, "${t.tempMilliC / 1000.0} °C") } }
+        thermal.forEach { t -> DetailCard(t.name) { DetailValue(t.type ?: stringResource(R.string.adv_unavailable), t.tempMilliC?.let { "${it / 1000.0} °C" })
+            t.tripPoints.forEach { DetailValue(it.type, "${it.tempMilliC / 1000.0} °C") } } }
         locks.forEach { w -> DetailCard(w.name) {
-            DetailRow(R.string.adv_count, w.count.toString()); DetailRow(R.string.adv_duration, duration(w.totalTime / 1_000_000))
+            DetailRow(R.string.adv_count, w.count?.toString()); DetailRow(R.string.adv_duration, duration(w.totalTimeMs))
         } }
         if (cpu.isEmpty() && thermal.isEmpty() && locks.isEmpty()) MissingRows()
     }

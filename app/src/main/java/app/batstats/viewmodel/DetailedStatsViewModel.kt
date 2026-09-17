@@ -5,117 +5,74 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.DetailedStatsCollector
-import app.batstats.battery.util.PrivilegeChecker
 import app.batstats.battery.util.RootStatsCollector
+import app.batstats.battery.util.KernelStats
 import app.batstats.battery.util.ShellRunner
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class DetailedStatsViewModel(
     private val collector: DetailedStatsCollector,
-    private val shizukuBridge: ShizukuBridge,
-    private val shellRunner: ShellRunner,
-    private val context: Context
+    private val shizuku: ShizukuBridge,
+    private val shell: ShellRunner,
+    context: Context
 ) : ViewModel() {
-
-    // Forward flows from collector
     val snapshot = collector.snapshot
     val deviceIdle = collector.deviceIdle
     val powerManager = collector.powerManager
     val lastRefresh = collector.lastRefresh
     val isRefreshing = collector.isRefreshing
     val error = collector.error
-
-    private val _hasShizuku = MutableStateFlow(false)
-    val hasShizuku: StateFlow<Boolean> = _hasShizuku.asStateFlow()
-
-    private val _shizukuRunning = MutableStateFlow(false)
-    val shizukuRunning: StateFlow<Boolean> = _shizukuRunning.asStateFlow()
-
-    private val _shizukuDenied = MutableStateFlow(false)
-    val shizukuDenied: StateFlow<Boolean> = _shizukuDenied.asStateFlow()
-
+    val hasShizuku = shizuku.granted
+    val shizukuRunning = shizuku.running
+    val advMode = collector.mode
     private val _hasRoot = MutableStateFlow(false)
-    val hasRoot: StateFlow<Boolean> = _hasRoot.asStateFlow()
-
-    private val _hasAdb = MutableStateFlow(false)
-    val hasAdb: StateFlow<Boolean> = _hasAdb.asStateFlow()
-
-    private val _hasAdvanced = MutableStateFlow(false)
-    val hasAdvanced: StateFlow<Boolean> = _hasAdvanced.asStateFlow()
-
-    private val _advMode = MutableStateFlow<ShellRunner.Mode>(ShellRunner.Mode.NONE)
-    val advMode: StateFlow<ShellRunner.Mode> = _advMode.asStateFlow()
-
-    private val _kernelBattery = MutableStateFlow<RootStatsCollector.KernelBatteryInfo?>(null)
-    val kernelBattery: StateFlow<RootStatsCollector.KernelBatteryInfo?> = _kernelBattery.asStateFlow()
+    val hasRoot = _hasRoot.asStateFlow()
+    private val _kernelBattery = MutableStateFlow<KernelStats.Battery?>(null)
+    val kernelBattery = _kernelBattery.asStateFlow()
+    private var refreshJob: Job? = null
+    val adbCommands = listOf(
+        "adb shell pm grant ${context.packageName} android.permission.DUMP",
+        "adb shell pm grant ${context.packageName} android.permission.PACKAGE_USAGE_STATS",
+        "adb shell appops set ${context.packageName} GET_USAGE_STATS allow"
+    ).joinToString("\n")
 
     init {
         viewModelScope.launch {
-            shizukuBridge.granted.collectLatest { granted ->
-                if (granted && !_hasShizuku.value) {
-                    shellRunner.invalidateMode()
-                    refresh()
-                }
-                _hasShizuku.value = granted
+            combine(shizuku.running, shizuku.granted) { running, granted -> running to granted }.collect {
+                // Drop stale values immediately, before potentially slow mode probing.
+                collector.accessChanged(ShellRunner.Mode.NONE)
+                refreshJob?.cancel()
+                refreshJob = null
+                shell.invalidateMode()
+                refresh()
             }
         }
-        viewModelScope.launch {
-            shizukuBridge.running.collectLatest { _shizukuRunning.value = it }
-        }
-        refresh(forceRefresh = true)
     }
-
-    fun recheck() {
-        refresh(forceRefresh = true)
-    }
-
-    fun requestShizukuPermission() {
-        shizukuBridge.requestPermission()
-    }
-
-    fun clearError() = collector.clearError()
-
+    fun recheck() = refresh()
+    fun requestShizukuPermission() = shizuku.requestPermission()
     fun refresh(forceRefresh: Boolean = false) {
-        viewModelScope.launch {
-            if (forceRefresh) shellRunner.invalidateMode()
-
-            _hasAdb.value = PrivilegeChecker.hasAdvancedViaAdb(context)
-            _hasShizuku.value = shizukuBridge.hasPermissionResilient()
-            _shizukuRunning.value = shizukuBridge.ping()
-            _shizukuDenied.value = shizukuBridge.isPermanentlyDenied()
-            _hasRoot.value = RootStatsCollector.isRootAvailable()
-
-            val mode = shellRunner.detectMode(forceRefresh)
-            _advMode.value = mode
-            _hasAdvanced.value = mode != ShellRunner.Mode.NONE ||
-                _hasShizuku.value || _hasRoot.value || _hasAdb.value
-
-            if (_hasAdvanced.value) {
-                collector.refresh()
-            }
-            if (_hasRoot.value) {
-                _kernelBattery.value = RootStatsCollector.getKernelBatteryInfo()
-            }
+        if (refreshJob?.isActive == true) return
+        refreshJob = viewModelScope.launch {
+            val mode = shell.detectMode(forceRefresh = true)
+            collector.accessChanged(mode)
+            if (mode == ShellRunner.Mode.ROOT) _hasRoot.value = true
+            collector.refresh(force = forceRefresh)
         }
     }
-
     fun refreshRootStats() {
         viewModelScope.launch {
-            if (_hasRoot.value) {
-                _kernelBattery.value = RootStatsCollector.getKernelBatteryInfo()
-            }
+            RootStatsCollector.invalidateRootCache()
+            _hasRoot.value = RootStatsCollector.isRootAvailable()
+            _kernelBattery.value = if (_hasRoot.value) RootStatsCollector.getKernelBatteryInfo() else null
         }
     }
-
     suspend fun resetStats(): Boolean {
-        return try {
-            if (_hasAdvanced.value) collector.resetStats() else false
-        } catch (_: Exception) {
-            false
-        }
+        return try { collector.resetStats() }
+        catch (e: CancellationException) { throw e }
     }
 }

@@ -6,16 +6,12 @@ import android.os.SystemClock
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.shizuku.ShizukuBridge
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
@@ -37,7 +33,6 @@ class DetailedStatsCollector(
             "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Settings > Advanced Stats."
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val refreshing = AtomicBoolean(false)
     private val accessGeneration = AtomicLong()
 
@@ -106,7 +101,7 @@ class DetailedStatsCollector(
             Log.d(TAG, "Fetching batterystats...")
             when (val stats = shellRunner.exec("dumpsys batterystats -c --charged")) {
                 is ShellRunner.Outcome.Success -> {
-                    if (stats.mode != selectedMode || generation != accessGeneration.get()) return false
+                    if (stats.mode != selectedMode || generation != accessGeneration.get()) { accessChanged(shellRunner.access.value); return false }
                     Log.d(TAG, "Parsing batterystats (${stats.output.length} chars, via ${stats.mode})...")
                     val parsed = BatteryStatsParser.parseCheckin(stats.output)
                     if (!parsed.hasValidWindow) {
@@ -119,7 +114,7 @@ class DetailedStatsCollector(
                 }
 
                 is ShellRunner.Outcome.Failure -> {
-                    _snapshot.value = null
+                    _snapshot.value = null; _lastRefresh.value = 0
                     failures += describe(stats)
                     Log.e(TAG, "batterystats failed: ${stats.mode} / ${stats.message}")
                 }
@@ -127,7 +122,7 @@ class DetailedStatsCollector(
 
             when (val idle = shellRunner.exec("dumpsys deviceidle")) {
                 is ShellRunner.Outcome.Success -> {
-                    if (idle.mode != selectedMode || generation != accessGeneration.get()) return false
+                    if (idle.mode != selectedMode || generation != accessGeneration.get()) { accessChanged(shellRunner.access.value); return false }
                     newIdle = BatteryStatsParser.parseDeviceIdle(idle.output)
                 }
 
@@ -139,7 +134,7 @@ class DetailedStatsCollector(
 
             when (val power = shellRunner.exec("dumpsys power")) {
                 is ShellRunner.Outcome.Success -> {
-                    if (power.mode != selectedMode || generation != accessGeneration.get()) return false
+                    if (power.mode != selectedMode || generation != accessGeneration.get()) { accessChanged(shellRunner.access.value); return false }
                     newPower = BatteryStatsParser.parsePowerManager(power.output)
                 }
 
@@ -149,7 +144,8 @@ class DetailedStatsCollector(
                 }
             }
 
-            if (generation != accessGeneration.get()) return false
+            currentCoroutineContext().ensureActive()
+            if (generation != accessGeneration.get() || shellRunner.access.value != selectedMode) { accessChanged(shellRunner.access.value); return false }
             _snapshot.value = newSnapshot
             _deviceIdle.value = newIdle
             _powerManager.value = newPower
@@ -181,21 +177,22 @@ class DetailedStatsCollector(
     }
 
     suspend fun resetStats(): Boolean {
-        val outcome = shellRunner.exec("dumpsys batterystats --reset", allowEmpty = true)
-        val success = outcome is ShellRunner.Outcome.Success
-        if (success) {
-            _snapshot.value = null
-            _lastRefresh.value = 0L
+        if (!refreshing.compareAndSet(false, true)) {
+            _error.value = "Collection is in progress. Try the reset again after it finishes."
+            return false
         }
-        return success
-    }
-
-    fun startAutoRefresh(intervalMs: Long = 60_000L): Job {
-        return scope.launch {
-            while (isActive) {
-                refresh()
-                delay(intervalMs)
+        return try {
+            val outcome = shellRunner.exec("dumpsys batterystats --reset", allowEmpty = true)
+            if (outcome is ShellRunner.Outcome.Success) {
+                accessGeneration.incrementAndGet()
+                _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
+                _lastRefresh.value = 0; lastAttemptElapsed = Long.MIN_VALUE
+                _error.value = null
+                true
+            } else {
+                _error.value = (outcome as ShellRunner.Outcome.Failure).message
+                false
             }
-        }
+        } finally { refreshing.set(false) }
     }
 }

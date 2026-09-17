@@ -33,6 +33,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 class ShizukuBridge(private val context: Context) {
 
@@ -41,7 +43,7 @@ class ShizukuBridge(private val context: Context) {
 
         const val PERMISSION_REQUEST_CODE = 1001
 
-        private const val SERVICE_VERSION = 3
+        private const val SERVICE_VERSION = 4
 
         private const val BIND_TIMEOUT_MS = 10_000L
         private const val DEFAULT_CMD_TIMEOUT_MS = 25_000L
@@ -60,7 +62,7 @@ class ShizukuBridge(private val context: Context) {
         data class Error(val message: String, val reason: Failure) : RunResult()
     }
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val requestIds = AtomicLong(SystemClock.elapsedRealtimeNanos())
     private val binderRef = AtomicReference<IBinder?>(null)
     private val bindMutex = Mutex()
     private val listenersRegistered = AtomicBoolean(false)
@@ -270,48 +272,37 @@ class ShizukuBridge(private val context: Context) {
 
     private suspend fun runViaPipe(binder: IBinder, cmd: String, timeoutMs: Long): CommandOutput.Result? {
         val pipe = ParcelFileDescriptor.createPipe()
-        val readSide = pipe[0]
-        val writeSide = pipe[1]
-
-        val accepted = try {
+        val requestId = requestIds.incrementAndGet()
+        fun cancelRemote() {
             val data = Parcel.obtain()
-            val reply = Parcel.obtain()
             try {
-                data.writeString(cmd)
-                data.writeLong(timeoutMs)
-                writeSide.writeToParcel(data, 0)
-                if (!binder.transact(ShellUserService.TRANSACTION_RUN_PIPE, data, reply, 0)) {
-                    false
-                } else {
-                    reply.readInt() == 1
-                }
-            } finally {
-                data.recycle()
-                reply.recycle()
+                data.writeLong(requestId)
+                binder.transact(ShellUserService.TRANSACTION_CANCEL, data, null, IBinder.FLAG_ONEWAY)
+            } catch (_: Exception) { } finally { data.recycle() }
+            runCatching { pipe[0].close() }
+            runCatching { pipe[1].close() }
+        }
+        return withTimeoutOrNull(timeoutMs + READ_GRACE_MS) {
+            suspendCancellableCoroutine { continuation ->
+                val worker = Thread({
+                    try {
+                        val data = Parcel.obtain()
+                        val accepted = try {
+                            data.writeString(cmd); data.writeLong(timeoutMs); data.writeLong(requestId)
+                            pipe[1].writeToParcel(data, 0)
+                            binder.transact(ShellUserService.TRANSACTION_RUN_PIPE, data, null, IBinder.FLAG_ONEWAY)
+                        } finally { data.recycle(); runCatching { pipe[1].close() } }
+                        if (!continuation.isActive) { cancelRemote(); return@Thread }
+                        val result = if (accepted) ParcelFileDescriptor.AutoCloseInputStream(pipe[0]).use(CommandProtocol::read) else null
+                        continuation.resumeWith(Result.success(result))
+                    } catch (e: Exception) {
+                        continuation.resumeWith(Result.failure(e))
+                    } finally { runCatching { pipe[0].close() }; runCatching { pipe[1].close() } }
+                }, "batstats-shizuku-pipe").apply { isDaemon = true }
+                continuation.invokeOnCancellation { cancelRemote(); worker.interrupt() }
+                worker.start()
             }
-        } catch (t: Throwable) {
-            runCatching { readSide.close() }
-            throw t
-        } finally {
-            runCatching { writeSide.close() }
-        }
-
-        if (!accepted) {
-            runCatching { readSide.close() }
-            return null
-        }
-
-        val watchdog = scope.launch {
-            delay(timeoutMs + READ_GRACE_MS)
-            Log.w(TAG, "Pipe read timed out for: $cmd")
-            runCatching { readSide.close() }
-        }
-        return try {
-            ParcelFileDescriptor.AutoCloseInputStream(readSide).use(CommandProtocol::read)
-        } finally {
-            watchdog.cancel()
-            runCatching { readSide.close() }
-        }
+        } ?: CommandOutput.Result(error = "Privileged read timed out")
     }
 
     private suspend fun ensureBound(): IBinder? {
