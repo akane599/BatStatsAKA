@@ -27,7 +27,10 @@ import kotlinx.coroutines.withTimeoutOrNull
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
 import rikka.shizuku.ShizukuProvider
-import java.io.ByteArrayOutputStream
+import app.batstats.battery.util.CommandProtocol
+import app.batstats.battery.util.CommandOutput
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.currentCoroutineContext
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
 
@@ -38,21 +41,19 @@ class ShizukuBridge(private val context: Context) {
 
         const val PERMISSION_REQUEST_CODE = 1001
 
-        private const val SERVICE_VERSION = 2
+        private const val SERVICE_VERSION = 3
 
         private const val BIND_TIMEOUT_MS = 10_000L
         private const val DEFAULT_CMD_TIMEOUT_MS = 25_000L
 
         private const val READ_GRACE_MS = 5_000L
 
-        private const val MAX_OUTPUT_BYTES = 12 * 1024 * 1024
-        private const val COPY_BUFFER_BYTES = 64 * 1024
 
         private const val PING_RETRIES = 4
         private const val PING_RETRY_DELAY_MS = 120L
     }
 
-    enum class Failure { NOT_RUNNING, NO_PERMISSION, BIND_FAILED, TRANSPORT }
+    enum class Failure { NOT_RUNNING, NO_PERMISSION, BIND_FAILED, TRANSPORT, COMMAND }
 
     sealed class RunResult {
         data class Success(val output: String) : RunResult()
@@ -87,6 +88,12 @@ class ShizukuBridge(private val context: Context) {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "UserService connected (alive=${service?.isBinderAlive})")
             binderRef.set(service)
+            runCatching {
+                service?.linkToDeath({
+                    binderRef.compareAndSet(service, null)
+                    pendingBind.getAndSet(null)?.complete(null)
+                }, 0)
+            }
             pendingBind.getAndSet(null)?.complete(service)
         }
 
@@ -95,6 +102,9 @@ class ShizukuBridge(private val context: Context) {
             binderRef.set(null)
             pendingBind.getAndSet(null)?.complete(null)
         }
+
+        override fun onBindingDied(name: ComponentName?) = onServiceDisconnected(name)
+        override fun onNullBinding(name: ComponentName?) = onServiceDisconnected(name)
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
@@ -110,6 +120,7 @@ class ShizukuBridge(private val context: Context) {
         _running.value = false
         _granted.value = false
         binderRef.set(null)
+        pendingBind.getAndSet(null)?.complete(null)
     }
 
     private val permissionResultListener =
@@ -139,9 +150,13 @@ class ShizukuBridge(private val context: Context) {
             Log.d(TAG, "pingBinder threw: ${t.message}")
             false
         }
+        _running.value = alive
         if (alive) {
             everSeen = true
-            _running.value = true
+        } else {
+            _granted.value = false
+            binderRef.set(null)
+            pendingBind.getAndSet(null)?.complete(null)
         }
         return alive
     }
@@ -219,7 +234,7 @@ class ShizukuBridge(private val context: Context) {
                 )
 
             val first = execute(binder, cmd, timeoutMs)
-            if (first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
+            if (cmd.contains("--reset") || first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
                 return@withContext first
             }
 
@@ -237,10 +252,13 @@ class ShizukuBridge(private val context: Context) {
             return RunResult.Error("Helper service is no longer alive", Failure.TRANSPORT)
         }
         return try {
-            val piped = runViaPipe(binder, cmd, timeoutMs)
+            val result = runViaPipe(binder, cmd, timeoutMs)
+            currentCoroutineContext().ensureActive()
             when {
-                piped != null -> RunResult.Success(piped)
-                else -> runInline(binder, cmd)
+                !ping() || !hasPermission() -> RunResult.Error("Shizuku access lost during collection", Failure.TRANSPORT)
+                result == null -> RunResult.Error("Helper protocol unavailable", Failure.TRANSPORT)
+                result.error != null -> RunResult.Error(result.error, Failure.COMMAND)
+                else -> RunResult.Success(result.output)
             }
         } catch (ce: CancellationException) {
             throw ce
@@ -250,7 +268,7 @@ class ShizukuBridge(private val context: Context) {
         }
     }
 
-    private suspend fun runViaPipe(binder: IBinder, cmd: String, timeoutMs: Long): String? {
+    private suspend fun runViaPipe(binder: IBinder, cmd: String, timeoutMs: Long): CommandOutput.Result? {
         val pipe = ParcelFileDescriptor.createPipe()
         val readSide = pipe[0]
         val writeSide = pipe[1]
@@ -289,54 +307,10 @@ class ShizukuBridge(private val context: Context) {
             runCatching { readSide.close() }
         }
         return try {
-            readAll(readSide)
+            ParcelFileDescriptor.AutoCloseInputStream(readSide).use(CommandProtocol::read)
         } finally {
             watchdog.cancel()
-        }
-    }
-
-    private fun readAll(pfd: ParcelFileDescriptor): String {
-        ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
-            val sink = ByteArrayOutputStream(COPY_BUFFER_BYTES)
-            val buffer = ByteArray(COPY_BUFFER_BYTES)
-            var total = 0
-            while (true) {
-                val read = input.read(buffer)
-                if (read < 0) break
-                if (total + read >= MAX_OUTPUT_BYTES) {
-                    sink.write(buffer, 0, MAX_OUTPUT_BYTES - total)
-                    Log.w(TAG, "Output truncated at $MAX_OUTPUT_BYTES bytes")
-                    break
-                }
-                sink.write(buffer, 0, read)
-                total += read
-            }
-            return sink.toString(Charsets.UTF_8.name())
-        }
-    }
-
-    private fun runInline(binder: IBinder, cmd: String): RunResult {
-        val data = Parcel.obtain()
-        val reply = Parcel.obtain()
-        return try {
-            data.writeString(cmd)
-            if (!binder.transact(ShellUserService.TRANSACTION_RUN, data, reply, 0)) {
-                RunResult.Error("Binder transaction rejected", Failure.TRANSPORT)
-            } else {
-                val out = reply.readString()
-                if (out == null) {
-                    RunResult.Error("Empty response from helper service", Failure.TRANSPORT)
-                } else {
-                    RunResult.Success(out)
-                }
-            }
-        } catch (ce: CancellationException) {
-            throw ce
-        } catch (t: Throwable) {
-            RunResult.Error(t.message ?: t.javaClass.simpleName, Failure.TRANSPORT)
-        } finally {
-            data.recycle()
-            reply.recycle()
+            runCatching { readSide.close() }
         }
     }
 
@@ -364,8 +338,11 @@ class ShizukuBridge(private val context: Context) {
             }
 
             val startedAt = SystemClock.elapsedRealtime()
-            val binder = withTimeoutOrNull(BIND_TIMEOUT_MS) { deferred.await() }
-            pendingBind.compareAndSet(deferred, null)
+            val binder = try {
+                withTimeoutOrNull(BIND_TIMEOUT_MS) { deferred.await() }
+            } finally {
+                pendingBind.compareAndSet(deferred, null)
+            }
 
             if (binder == null || !binder.isBinderAlive) {
                 Log.e(TAG, "UserService bind failed after ${SystemClock.elapsedRealtime() - startedAt} ms")

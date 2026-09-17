@@ -122,7 +122,7 @@ fun DetailedStatsScreen(
                 },
                 actions = {
                     if (isRefreshing) {
-                        CircularWavyProgressIndicator(
+                        CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                         )
                     } else {
@@ -481,7 +481,7 @@ private fun ScreenTimeCard(snapshot: BatteryStatsParser.FullSnapshot?) {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Screen On", style = MaterialTheme.typography.labelMedium)
-                    LinearWavyProgressIndicator(
+                    LinearProgressIndicator(
                         progress = { screenOnPercent / 100f },
                         modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                         color = MaterialTheme.colorScheme.primary,
@@ -537,7 +537,7 @@ private fun SignalQualityCard(snapshot: BatteryStatsParser.FullSnapshot?) {
                         modifier = Modifier.width(80.dp),
                         style = MaterialTheme.typography.bodySmall
                     )
-                    LinearWavyProgressIndicator(
+                    LinearProgressIndicator(
                         progress = { stat.percentOfTotal },
                         modifier = Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(6.dp)),
                         color = colors.getOrNull(index) ?: MaterialTheme.colorScheme.primary,
@@ -567,7 +567,7 @@ private fun SignalQualityCard(snapshot: BatteryStatsParser.FullSnapshot?) {
                             modifier = Modifier.width(80.dp),
                             style = MaterialTheme.typography.bodySmall
                         )
-                        LinearWavyProgressIndicator(
+                        LinearProgressIndicator(
                             progress = { stat.percentOfTotal },
                             modifier = Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(6.dp)),
                             color = colors.getOrNull(index) ?: MaterialTheme.colorScheme.primary,
@@ -1466,7 +1466,7 @@ private fun RootTab(
                         enabled = !isLoading
                     ) {
                         if (isLoading) {
-                            CircularWavyProgressIndicator(modifier = Modifier.size(20.dp))
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp))
                         } else {
                             Icon(Icons.Outlined.Refresh, "Refresh")
                         }
@@ -1532,7 +1532,7 @@ private fun BatteryHealthCard(battery: RootStatsCollector.KernelBatteryInfo?) {
                         cycles < 800 -> 60
                         else -> 40
                     }
-                    CircularWavyProgressIndicator(
+                    CircularProgressIndicator(
                         progress = { healthPercent / 100f },
                         modifier = Modifier.size(48.dp),
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -1578,7 +1578,7 @@ private fun BatteryHealthCard(battery: RootStatsCollector.KernelBatteryInfo?) {
                 }
 
                 Spacer(Modifier.height(8.dp))
-                LinearWavyProgressIndicator(
+                LinearProgressIndicator(
                     progress = { (healthPct / 100f).toFloat().coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)),
                     color = when {
@@ -1671,7 +1671,7 @@ private fun CpuFrequencyCard(cpuInfo: List<RootStatsCollector.CpuInfo>) {
                                     modifier = Modifier.width(80.dp),
                                     style = MaterialTheme.typography.labelSmall
                                 )
-                                LinearWavyProgressIndicator(
+                                LinearProgressIndicator(
                                     progress = { percent },
                                     modifier = Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(3.dp)),
                                 )

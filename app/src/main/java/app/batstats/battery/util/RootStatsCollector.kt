@@ -6,10 +6,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
 import java.io.File
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Collects root-only battery statistics.
@@ -83,11 +80,11 @@ object RootStatsCollector {
 
     suspend fun isRootAvailable(): Boolean {
         cachedRoot?.let { cached ->
-            if (cached || SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) return cached
+            if (SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) return cached
         }
         return rootProbeLock.withLock {
             cachedRoot?.let { cached ->
-                if (cached || SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) {
+                if (SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) {
                     return@withLock cached
                 }
             }
@@ -274,38 +271,7 @@ object RootStatsCollector {
     }
 
     private fun exec(command: String, timeoutMs: Long): String? {
-        var process: Process? = null
-        var watchdog: Thread? = null
-        val timedOut = AtomicBoolean(false)
-        return try {
-            val p = ProcessBuilder("su", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            process = p
-            runCatching { p.outputStream.close() }
-
-            watchdog = Thread {
-                try {
-                    if (!p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
-                        timedOut.set(true)
-                        Log.w(TAG, "su timed out after $timeoutMs ms: $command")
-                        p.destroyForcibly()
-                    }
-                } catch (_: InterruptedException) {
-                }
-            }.apply {
-                isDaemon = true
-                start()
-            }
-
-            val out = p.inputStream.bufferedReader().use(BufferedReader::readText)
-            if (timedOut.get()) null else out
-        } catch (e: Exception) {
-            Log.d(TAG, "su failed for '$command': ${e.message}")
-            null
-        } finally {
-            watchdog?.interrupt()
-            runCatching { process?.destroy() }
-        }
+        val result = CommandOutput.run(listOf("su", "-c", command), timeoutMs)
+        return result.output.takeIf { result.successful }
     }
 }

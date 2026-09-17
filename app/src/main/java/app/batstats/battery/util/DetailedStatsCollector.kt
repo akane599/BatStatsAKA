@@ -74,7 +74,7 @@ class DetailedStatsCollector(
 
         return try {
             var hasData = false
-            var firstFailure: String? = null
+            val failures = mutableListOf<String>()
 
             Log.d(TAG, "Fetching batterystats...")
             when (val stats = shellRunner.exec("dumpsys batterystats --checkin")) {
@@ -82,14 +82,21 @@ class DetailedStatsCollector(
                     _mode.value = stats.mode
                     Log.d(TAG, "Parsing batterystats (${stats.output.length} chars, via ${stats.mode})...")
                     val parsed = BatteryStatsParser.parseCheckin(stats.output)
-                    _snapshot.value = parsed
-                    hasData = true
+                    if (stats.output.lineSequence().none { it.startsWith("9,0,l,bt,") }) {
+                        _snapshot.value = null
+                        failures += "Battery statistics format unavailable or incomplete"
+                    } else {
+                        _snapshot.value = parsed
+                        _lastRefresh.value = parsed.capturedAt
+                        hasData = true
+                    }
                     Log.d(TAG, "Parsed ${parsed.apps.size} apps, ${parsed.wakelocks.size} wakelocks")
                 }
 
                 is ShellRunner.Outcome.Failure -> {
                     _mode.value = stats.mode
-                    firstFailure = describe(stats)
+                    _snapshot.value = null
+                    failures += describe(stats)
                     Log.e(TAG, "batterystats failed: ${stats.mode} / ${stats.message}")
                 }
             }
@@ -97,28 +104,26 @@ class DetailedStatsCollector(
             when (val idle = shellRunner.exec("dumpsys deviceidle")) {
                 is ShellRunner.Outcome.Success -> {
                     _deviceIdle.value = BatteryStatsParser.parseDeviceIdle(idle.output)
-                    hasData = true
                 }
 
-                is ShellRunner.Outcome.Failure -> Log.w(TAG, "deviceidle failed: ${idle.message}")
+                is ShellRunner.Outcome.Failure -> {
+                    _deviceIdle.value = null
+                    failures += "Doze state: ${idle.message}"
+                }
             }
 
             when (val power = shellRunner.exec("dumpsys power")) {
                 is ShellRunner.Outcome.Success -> {
                     _powerManager.value = BatteryStatsParser.parsePowerManager(power.output)
-                    hasData = true
                 }
 
-                is ShellRunner.Outcome.Failure -> Log.w(TAG, "power failed: ${power.message}")
+                is ShellRunner.Outcome.Failure -> {
+                    _powerManager.value = null
+                    failures += "Power state: ${power.message}"
+                }
             }
 
-            if (hasData) {
-                _lastRefresh.value = System.currentTimeMillis()
-                _error.value = null
-                Log.d(TAG, "Refresh completed successfully")
-            } else {
-                _error.value = firstFailure ?: NO_ACCESS_MESSAGE
-            }
+            _error.value = failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
             hasData
         } catch (ce: CancellationException) {
@@ -145,7 +150,12 @@ class DetailedStatsCollector(
 
     suspend fun resetStats(): Boolean {
         val outcome = shellRunner.exec("dumpsys batterystats --reset", allowEmpty = true)
-        return outcome is ShellRunner.Outcome.Success
+        val success = outcome is ShellRunner.Outcome.Success
+        if (success) {
+            _snapshot.value = null
+            _lastRefresh.value = 0L
+        }
+        return success
     }
 
     fun startAutoRefresh(intervalMs: Long = 60_000L): Job {

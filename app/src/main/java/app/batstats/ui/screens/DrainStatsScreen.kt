@@ -397,7 +397,7 @@ private fun DrainStatRow(
         
         Spacer(Modifier.height(6.dp))
         
-        LinearWavyProgressIndicator(
+        LinearProgressIndicator(
             progress = { (percentage / 100f).coerceIn(0f, 1f) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -462,7 +462,7 @@ private fun DeepSleepCard(state: DrainState) {
             
             Spacer(Modifier.height(8.dp))
             
-            LinearWavyProgressIndicator(
+            LinearProgressIndicator(
                 progress = { (state.deepSleepPercentage / 100f).coerceIn(0f, 1f) },
                 modifier = Modifier
                     .fillMaxWidth()

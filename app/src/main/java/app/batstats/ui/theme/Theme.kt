@@ -3,7 +3,6 @@ package app.batstats.ui.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -79,7 +78,7 @@ fun MainTheme(
         extraLarge = RoundedCornerShape(28.dp)
     )
 
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = colorScheme,
         typography = MaterialTheme.typography,
         shapes = shapes,

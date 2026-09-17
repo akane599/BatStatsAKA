@@ -29,9 +29,9 @@ android {
     defaultConfig {
         applicationId = "org.mlm.batstats"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 734
-        versionName = "6.2.6"
+        targetSdk = 36
+        versionCode = 736
+        versionName = "6.2.7-dev"
 
         androidResources {
             localeFilters += setOf("en", "ar", "de", "es-rES", "es-rUS", "fr", "hr", "hu", "in", "it", "ja", "pl", "pt-rBR", "ru-rRU", "sv", "tr", "uk", "zh")
@@ -166,8 +166,16 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
-    // Testing
-//    androidTestImplementation(libs.androidx.ui.test.junit4)
+    // JVM regression tests and device integration/UI checks.
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(composeBom)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.androidx.ui.tooling)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

@@ -35,7 +35,7 @@ object PrivilegeChecker {
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    fun hasAdvancedViaAdb(context: Context): Boolean = hasDump(context) || hasBatteryStats(context)
+    fun hasAdvancedViaAdb(context: Context): Boolean = hasDump(context) && hasBatteryStats(context)
 
     suspend fun hasRoot(): Boolean = withContext(Dispatchers.IO) {
         RootStatsCollector.isRootAvailable()

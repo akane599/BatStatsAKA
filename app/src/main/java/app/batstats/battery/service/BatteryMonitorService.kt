@@ -48,6 +48,7 @@ class BatteryMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (started.get()) return START_STICKY
         if (!goForeground(Notifier.NOTIF_ID, Notifier.monitoringNotification(this, "Starting…"))) {
             stopSelf()
             return START_NOT_STICKY
@@ -122,7 +123,7 @@ class BatteryMonitorService : Service() {
 
     private fun goForeground(id: Int, notification: Notification): Boolean = try {
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            startForeground(id, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(id, notification)
         }
@@ -130,14 +131,6 @@ class BatteryMonitorService : Service() {
     } catch (t: Throwable) {
         Log.e(TAG, "startForeground failed", t)
         false
-    }
-
-    override fun onTimeout(startId: Int, fgsType: Int) {
-        if (Build.VERSION.SDK_INT >= 35 &&
-            (fgsType and ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) != 0
-        ) {
-            stopSelf()
-        }
     }
 
     override fun onDestroy() {

@@ -38,7 +38,7 @@ All below confirmed by direct execution path/source inspection; fixes pending un
 Suspicions needing tests: Samsung vendor current sign/units, provider/binder reconnection behavior, platform-specific checkin formats and sysfs accessibility. No real Samsung available.
 
 ## Validation
-Baseline build running; no source changes yet. APK signature/manifest inspected; see PROGRESS.md hashes. Default emulator creation hit disk requirement; recovery in progress. No physical Samsung hardware available.
+Baseline compile completed but dependency metadata check failed; remaining D8 work stopped and pristine metadata-only reproduction started. Stage 2 code now being implemented, not yet verified. APK signature/manifest inspected; see PROGRESS.md hashes. Default emulator creation hit disk requirement; recovery in progress. No physical Samsung hardware available.
 
 ## Work queue
 Establish baseline build and trace collection → persistence → calculations → UI/notification. Prioritize confirmed correctness/lifecycle defects; implement explicitly requested UX and delivery improvements.
@@ -53,3 +53,8 @@ Establish baseline build and trace collection → persistence → calculations �
 
 ## Architecture/coverage detail
 Read critical source in full: repository, entities/DAOs/database, export/import, service/boot/app/activity, all ViewModels, Shizuku helper/bridge/checkin collector, ShellRunner/RootStatsCollector/PrivilegeChecker/TimeEstimator/DetailedStatsCollector/BatteryStatsParser, drain tracker/state/notification, heuristic tracker, widgets. Reviewed build/manifest/workflows/settings and screen entry/data flows. Remaining detailed UI layouts/theme resources/localizations and assets are explicitly pending, together with runtime validation.
+
+### Stage 2 work in progress
+B06/B07/B08: specialUse FGS, goAsync boot, no source fallthrough on read errors, bounded framed helper output and partial-failure reporting implemented but unverified. B18 (High): baseline alpha Compose BOM UI artifacts require compile SDK 37.1, project has 37.0; switching to stable BOM whose UI AAR requires 37.0. Pristine metadata-only reproduction failed in 57s with five SDK 37.1 requirements; updated stable BOM metadata check passed. JVM compilation/tests pending. Stable Material 3 replaces unavailable experimental wavy indicators/theme. Read deadline now covers inherited pipes as well as parent-process timeout; 8 regression tests authored, not yet passed. All other B findings remain open.
+
+Static validation: parsed all 76 Android XML files successfully after manifest changes; `git diff --check` passes. This is not runtime or UI validation.

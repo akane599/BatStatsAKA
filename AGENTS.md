@@ -28,8 +28,8 @@ Use JDK 21 and Android SDK 37; the minimum supported device API is 26. Configure
 - `./gradlew :app:assembleDebug`: build debug APKs under `app/build/outputs/apk/debug/`.
 - `./gradlew :app:installDebug`: install on a connected device or emulator; launch BatStats from the device.
 - `./gradlew :app:lintDebug`: run Android Lint with `app/lint.xml`.
-- `./gradlew :app:testDebugUnitTest`: run JVM tests once test sources and dependencies are added.
-- `./gradlew :app:connectedDebugAndroidTest`: run instrumentation tests once configured, with a connected device/emulator.
+- `./gradlew :app:testDebugUnitTest`: run JVM regression tests.
+- `./gradlew :app:connectedDebugAndroidTest`: run instrumentation tests with a connected device/emulator.
 
 Use `gradlew.bat` on Windows.
 
@@ -39,7 +39,7 @@ Follow the configured official Kotlin style with four-space indentation. Use Pas
 
 ## Testing Guidelines
 
-No test sources, active test dependencies, or coverage threshold currently exist. `AndroidJUnitRunner` is declared. Add JVM tests under `app/src/test/` and device/Compose tests under `app/src/androidTest/`, mirroring source packages with `*Test.kt` names; configure dependencies first. For fixes, reproduce the affected behavior and record device/API, privilege mode (standard, ADB, Root, or Shizuku), and validation results.
+JUnit 4 regression tests live under `app/src/test/`; AndroidJUnitRunner, Compose UI testing, and UI Automator are configured for device checks. No coverage threshold is enforced. Add JVM tests under `app/src/test/` and device/Compose tests under `app/src/androidTest/`, mirroring source packages with `*Test.kt` names. For fixes, reproduce the affected behavior and record device/API, privilege mode (standard, ADB, Root, or Shizuku), and validation results.
 
 ## Commit & Pull Request Guidelines
 

@@ -67,6 +67,8 @@ object Notifier {
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
             .setContentIntent(pi)
+            .setWhen(0L)
+            .setShowWhen(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()

@@ -16,3 +16,8 @@
 .externalNativeBuild
 .cxx
 google-services.json
+
+.kotlin/
+**/build/
+*.keystore
+/artifacts/
