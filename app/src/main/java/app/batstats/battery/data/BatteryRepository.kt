@@ -39,6 +39,7 @@ class BatteryRepository(
     private val engine = ObservationEngine()
     private val sessionEngine = ObservationEngine()
     private val estimator = RemainingTimeEstimator()
+    private val stateEvents = StateEventSequencer<BatterySample>()
     private val events = Channel<Event>(64)
     @Volatile private var activeGeneration: String? = null
     val isClearingHistory: Boolean get() = maintenance.isClearing
@@ -157,6 +158,7 @@ class BatteryRepository(
         scope.launch(Dispatchers.Main.immediate) {
             if (activeGeneration != null || isClearingHistory) return@launch
             val generation = UUID.randomUUID().toString()
+            stateEvents.reset()
             activeGeneration = generation
             _isMonitoring.value = true
             diagnostics.record(DiagnosticCode.MONITORING_STARTED)
@@ -188,6 +190,7 @@ class BatteryRepository(
     fun stopSampling() {
         scope.launch(Dispatchers.Main.immediate) {
             if (activeGeneration != null) diagnostics.record(DiagnosticCode.MONITORING_STOPPED)
+            stateEvents.reset()
             activeGeneration = null // Queued samples become invalid immediately.
             _isMonitoring.value = false
             samplingJob?.cancel(); samplingJob = null
@@ -207,6 +210,7 @@ class BatteryRepository(
     }
 
     fun resetObservation() { scope.launch(Dispatchers.Main.immediate) {
+        stateEvents.reset()
         events.send(Event.Reset)
         capture(Boundary.SAMPLE)
     } }
@@ -215,10 +219,11 @@ class BatteryRepository(
         require(activeGeneration != null) { "Start monitoring before creating an observation" }
         val actual = realtimeFlow.value.powerState.toSessionType()
         require(type == actual) { "Session type must match the observed charging state" }
-        withContext(Dispatchers.Main.immediate) { events.send(Event.Reset); capture(Boundary.SAMPLE) }
+        withContext(Dispatchers.Main.immediate) { stateEvents.reset(); events.send(Event.Reset); capture(Boundary.SAMPLE) }
     }
 
     suspend fun endCurrentSession() = withContext(Dispatchers.Main.immediate) {
+        stateEvents.reset()
         events.send(Event.Reset); capture(Boundary.SAMPLE)
     }
 
@@ -227,6 +232,7 @@ class BatteryRepository(
         stopMonitoring = {
             withContext(Dispatchers.Main.immediate) {
                 stopService()
+                stateEvents.reset()
                 activeGeneration = null; _isMonitoring.value = false
                 samplingJob?.cancel(); samplingJob = null
                 if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
@@ -276,6 +282,11 @@ class BatteryRepository(
         val chargeCounter = BatteryReading.chargeUah(property(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER, "charge_counter"))
         val currentAverage = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE, "current_average"))
         val energy = BatteryReading.energyNwh(property(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER, "energy_counter"))
+        val interactive = powerManager.isInteractive
+        val dozing = powerManager.isDeviceIdleMode
+        // A queued SCREEN_OFF after an already-completed wake cannot establish an off
+        // endpoint. Preserve the actual reading and mark the contradictory event as a gap.
+        val captureBoundary = if (screenOverride != null && screenOverride != interactive) Boundary.GAP else boundary
         // Keep the monotonic clock pair adjacent: Binder/property latency between these
         // reads would otherwise appear as CPU suspend or a clock discontinuity.
         val elapsed = SystemClock.elapsedRealtime()
@@ -290,7 +301,7 @@ class BatteryRepository(
             voltageMv = extra(BatteryManager.EXTRA_VOLTAGE)?.let(BatteryReading::voltageMv),
             temperatureDeciC = extra(BatteryManager.EXTRA_TEMPERATURE)?.let(BatteryReading::temperatureDeciC),
             health = extra(BatteryManager.EXTRA_HEALTH),
-            screenOn = screenOverride ?: powerManager.isInteractive,
+            screenOn = interactive,
             elapsedMs = elapsed, uptimeMs = uptime, observationId = activeGeneration,
             currentAverageUa = currentAverage,
             energyNwh = energy,
@@ -308,9 +319,13 @@ class BatteryRepository(
         // Polling alone cannot establish screen/Doze continuity or prove that no transition happened.
         if (!receiverRegistered) return
         val point = Observation(wall, elapsed, sample.uptimeMs!!, sample.levelPercent, sample.chargeCounterUah,
-            sample.currentNowUa, sample.voltageMv, power, sample.screenOn, powerManager.isDeviceIdleMode,
-            generation, samplingIntervalMs, if (overflow) Boundary.GAP else boundary)
-        overflow = !events.trySend(Event.Sample(sample, point)).isSuccess
+            sample.currentNowUa, sample.voltageMv, power, sample.screenOn, dozing,
+            generation, samplingIntervalMs, if (overflow) Boundary.GAP else captureBoundary)
+        for (capture in stateEvents.offer(sample, point)) {
+            // Overflow may occur between the retained sample and its confirming event.
+            val delivered = if (overflow) capture.point.copy(boundary = Boundary.GAP) else capture.point
+            overflow = !events.trySend(Event.Sample(capture.value, delivered)).isSuccess
+        }
     }
 
     private suspend fun process(event: Event.Sample) {

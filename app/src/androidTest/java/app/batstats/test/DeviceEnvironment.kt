@@ -30,9 +30,12 @@ object DeviceEnvironment {
         try {
             assertTrue("Screenshot capture failed: $name", device.takeScreenshot(png))
             device.dumpWindowHierarchy(xml)
+            val expectedSizes = listOf(png.length(), xml.length())
+            assertTrue("Empty private capture: $name", expectedSizes.all { it > 0 })
+            // run-as may not write FUSE stdout under SELinux; only shell owns that write.
             val command = "mkdir -p '$output' && " +
-                "run-as ${context.packageName} cat '${png.absolutePath}' > '$output/$name.png' && " +
-                "run-as ${context.packageName} cat '${xml.absolutePath}' > '$output/$name.xml' && echo BATSTATS_CAPTURE_OK\n"
+                "run-as ${context.packageName} cat '${png.absolutePath}' | cat > '$output/$name.png' && " +
+                "run-as ${context.packageName} cat '${xml.absolutePath}' | cat > '$output/$name.xml' && stat -c %s '$output/$name.png' '$output/$name.xml' && echo BATSTATS_CAPTURE_OK\n"
             // UiAutomation's string command uses Runtime.exec, which does not interpret
             // pipes/redirection/quotes. Feed the fixed script to an actual shell over stdin.
             val pipes = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommandRw("sh")
@@ -40,7 +43,10 @@ object DeviceEnvironment {
                 ParcelFileDescriptor.AutoCloseOutputStream(pipes[1]).bufferedWriter().use { it.write(command) }
                 ParcelFileDescriptor.AutoCloseInputStream(pipes[0]).bufferedReader().use { it.readText() }
             } finally { pipes.forEach { it.close() } }
-            assertTrue("Screenshot publication failed: $name ($result)", result.trim().endsWith("BATSTATS_CAPTURE_OK"))
+            val lines = result.trim().lines()
+            assertEquals("Screenshot publication failed: $name ($result)", "BATSTATS_CAPTURE_OK", lines.lastOrNull())
+            assertEquals("Capture copy was empty or truncated: $name ($result)", expectedSizes,
+                lines.dropLast(1).map { it.trim().toLongOrNull() })
         } finally {
             png.delete(); xml.delete()
         }

@@ -8,6 +8,7 @@ import android.os.PowerManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 import app.batstats.R
@@ -38,6 +39,9 @@ class MonitoringLifecycleDeviceTest {
         val settings = BatteryGraph.settings.flow.first()
         val service = Intent(context, BatteryMonitorService::class.java)
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
+        lateinit var ownActivity: BatteryMainActivity
+        lateinit var launchIntent: Intent
+        scenario.onActivity { ownActivity = it; launchIntent = Intent(it.intent) }
         var phase = "start monitoring"
         try {
             context.stopService(service); repo.stopSampling()
@@ -111,6 +115,9 @@ class MonitoringLifecycleDeviceTest {
             BatteryGraph.settings.update { settings }
             device.executeShellCommand("dumpsys battery reset")
             device.wakeUp()
+            // onNewIntent retains OPEN_DRAIN in production. ActivityScenario matches
+            // lifecycle callbacks against its launch intent, including DESTROYED.
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { ownActivity.intent = launchIntent }
             scenario.close()
         }
     }

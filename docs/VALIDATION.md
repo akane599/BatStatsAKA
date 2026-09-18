@@ -2,6 +2,20 @@
 
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
+## Latest runtime checkpoint: 0e9b301
+
+Both API36 builds passed. PR run35331604578: ordinary25pass/2fail; push35331600751: ordinary26pass/1fail. Each executed27 methods, no skips. **Both independent Shizuku runs pass1/1** with real shellUID2000/Binder, authorization, allowlisted command, forbidden command, helper unbind/rebind, server death, ordinary-data survival and restart/reconnect collection. Battery values in scripted tests remain simulated.
+
+All5 repository recovery cases pass, including closed-Room restart and stop/reset. Dashboard failure/recovery, history/chart/deletion, navigation/settings and font200 checks pass. Widgets pass in push but time out in PR; phase diagnostics prepared. PR lifecycle behavior passes but ActivityScenario cleanup ignores the changed notification intent; push lifecycle exposes poll-before-screen-broadcast ordering. Stage6k fixes are in progress.
+
+**No current screenshots have been visually reviewed.** Exported PNG/XML files have zero bytes: SELinux denies run-as writing directly to FUSE stdout even though command exits0. A shell-owned copy pipe with exact nonzero byte-size assertions is being prepared. Filename retention alone was insufficient evidence.
+
+Clean0e9b301 installable APKs and signatures are in artifacts/build-info.json. Last full local build passed14m29s, with94 JVM cases per Debug/Preview variant and lint0errors/201+200warnings; final test-helper compile/assembly/lint passed2m13s. Held commits bebe479/a59149c add landscape/font200 and native loading on a second16KiB emulator;29 methods compile but those new checks have not executed. No physical Samsung or16KiB runtime success is claimed.
+
+## Historical execution evidence
+
+The entries below describe their stage at execution time; later checkpoints supersede earlier pending/failure status without erasing the failure evidence.
+
 | Stage | Actual checks | Result |
 | --- | --- | --- |
 | Baseline | Dependency metadata | Failed in57s: alpha Compose required SDK37.1; project declared37.0. Stable BOM fixed this. |
@@ -93,3 +107,5 @@ Final stage6h test-helper compile/assembly and Debug lint PASSED2m13s; all28 dev
 Stage6i extends the existing dark/font200 navigation test through landscape dashboard and observed-drain screens, with orientation cleanup. Android test compilation/assembly PASSED1m;28 methods total. Held locally while0e9b301 hosted checks run. Current installable APKs were recollected from clean0e9b301 after successful38s incremental assembly; signatures and16KiB ZIP alignment pass.
 
 Stage6j prepares actual16KiB Android testing: SDK catalog lists API36 google_apis_ps16k x86_64 revision7; pinned emulator action explicitly supports this target. A second sequential device pass reuses built APKs, with per-image reports and required page-size verification. New native test checks the app process page size and explicitly loads graphics-path/DataStore libraries.29 device methods compile; test APK assembly passes1m4s.14 host parser/orchestration checks, bash/actionlint/diff checks pass. No16KiB runtime pass yet. Current0e9b301 APKs rechecked: all64-bit PT_LOAD alignments pass; strict graphics-path RELRO-end warning remains, no trailing writable LOAD overlap. Reports include APK SHA256.
+
+Stage6k targeted Debug105-case suite (after an initial104-case compile/build pass) and Preview105-case suite pass with no failures/errors/skips. All29 Android methods compile. Full Debug/Preview lint passes0errors/201+200warnings. Fourteen host orchestration/parser cases and actionlint pass. Full local compile/JVM/lint/Debug+optimized Preview+test APK build PASSED15m10s (/tmp/batstats-stage6k-validation.log). Artifact collection from clean committed source is next. Screen-event sequencing preserves actual readings and distinguishes absent/conflicting/late confirmation; source reference and policy are in PLATFORM_NOTES. No device assertion removed.

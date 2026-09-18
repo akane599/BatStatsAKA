@@ -21,6 +21,8 @@ Live totals start when BatStats begins observing or when **Reset observation** i
 
 Durations use monotonic clocks. Screen on means interactive; screen off includes noninteractive Always On Display. Locking the device alone does not establish screen-off or sleep. Screen-on/off drain buckets contain discharging intervals only. CPU suspend is derived from the difference between elapsed-time and uptime changes over observed intervals; Android Doze is separately observed. The two clocks are read together after battery-property reads to avoid counting collection latency as sleep. Neither screen-off time nor Doze proves CPU deep sleep.
 
+A poll or activity refresh can arrive just before its screen/power/Doze broadcast. One real capture may wait for a matching event within two seconds; confirmation uses that first actual endpoint, not a fabricated earlier sample. Missing, conflicting or delayed events leave a gap. The wait is checked at the next capture and schedules no timer or wakeup.
+
 Charge totals use valid counter differences. Average drain uses only intervals covered by those counters, with at least one minute required. Estimated interval energy uses charge change and mean endpoint voltage. Missing intervals, interrupted collection, clock discontinuities and incompatible counters are excluded; coverage stays visible. No observed screen-off period means no screen-off charge or rate. History sessions identify their own source and period; old records without continuity evidence are marked as legacy.
 
 ## Advanced access

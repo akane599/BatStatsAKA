@@ -44,6 +44,7 @@ class WidgetDeliveryDeviceTest {
         val manager = AppWidgetManager.getInstance(context)
         val widgets = mutableListOf<AppWidgetHostView>()
         var host: AppWidgetHost? = null
+        var phase = "bind and receive initial widget views"
         suspend fun awaitViews(condition: () -> Boolean) = withTimeout(120_000) {
             while (true) {
                 var ready = false
@@ -85,6 +86,7 @@ class WidgetDeliveryDeviceTest {
                 automation.dropShellPermissionIdentity()
             }
             awaitViews { captions().all { !it.isNullOrEmpty() } }
+            phase = "refresh barrier"
             instrumentation.waitForIdleSync()
             val refreshed = CompletableDeferred<Unit>()
             BatteryGraph.repo.refreshNow { refreshed.complete(Unit) }
@@ -93,14 +95,17 @@ class WidgetDeliveryDeviceTest {
                 plugged = 0, currentNowUa = null, chargeCounterUah = null, voltageMv = 4000,
                 temperatureDeciC = 250, health = null, screenOn = true, etaMs = 7_200_000)
             val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(sample.timestamp))
+            phase = "paused scripted values"
             WidgetUpdater.push(context, sample, monitoring = false, fahrenheit = false)
             awaitViews { value(0) == "80%" && value(1) == "25.0 °C" && value(2) == "—" &&
                 captions().all { it == context.getString(R.string.widget_paused_at, date) } }
             DeviceEnvironment.screenshot("widgets-paused-scripted")
+            phase = "Fahrenheit and estimate"
             WidgetUpdater.push(context, sample, monitoring = true, fahrenheit = true)
             awaitViews { value(1) == "77.0 °F" && value(2) == context.getString(R.string.monitor_eta_remaining, "2h 0m") &&
                 captions().all { it == context.getString(R.string.widget_read_at, date) } }
             DeviceEnvironment.screenshot("widgets-fahrenheit-estimate-scripted")
+            phase = "unavailable values"
             WidgetUpdater.showPlaceholder(context)
             awaitViews { widgets.indices.all { value(it) == "—" } && captions().all {
                 it == context.getString(R.string.widget_paused_at, context.getString(R.string.widget_no_reading)) } }
@@ -108,7 +113,11 @@ class WidgetDeliveryDeviceTest {
         } catch (failure: Throwable) {
             runCatching { DeviceEnvironment.screenshot("widgets-failure") }
                 .exceptionOrNull()?.let(failure::addSuppressed)
-            throw failure
+            var actual = "Views could not be inspected"
+            runCatching { instrumentation.runOnMainSync {
+                actual = "values=${widgets.indices.map { value(it) }}; captions=${captions()}"
+            } }.exceptionOrNull()?.let(failure::addSuppressed)
+            throw AssertionError("Widget failure during $phase; $actual", failure)
         } finally {
             scenario.onActivity { host?.stopListening(); host?.deleteHost() }
             scenario.close()
