@@ -22,7 +22,7 @@ class NavigationDeviceTest {
     @get:Rule(order = 0) val permission = GrantPermissionRule.grant(Manifest.permission.POST_NOTIFICATIONS)
     @get:Rule(order = 1) val compose = createAndroidComposeRule<BatteryMainActivity>()
     private lateinit var savedSettings: AppSettings
-    private var savedFont = "1.0"
+    private var savedFont: String? = null
     private fun label(id: Int) = DeviceEnvironment.context.getString(id)
     private fun click(id: Int) = compose.onNodeWithText(label(id)).performClick()
     private fun scroll(id: Int) {
@@ -43,7 +43,8 @@ class NavigationDeviceTest {
 
     @After fun restore() = runBlocking {
         if (::savedSettings.isInitialized) BatteryGraph.settings.update { savedSettings }
-        if (savedFont.matches(Regex("[0-9.]+"))) DeviceEnvironment.device.executeShellCommand("settings put system font_scale $savedFont")
+        val font = savedFont ?: return@runBlocking
+        if (font.matches(Regex("[0-9.]+"))) DeviceEnvironment.device.executeShellCommand("settings put system font_scale $font")
         else DeviceEnvironment.device.executeShellCommand("settings delete system font_scale")
     }
 

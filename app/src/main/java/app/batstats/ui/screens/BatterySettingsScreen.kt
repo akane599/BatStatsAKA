@@ -11,6 +11,7 @@ import android.net.Uri
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -73,6 +74,7 @@ fun BatterySettingsScreen(
     stringProvider: StringResourceProvider = koinInject()
 ) {
     val context = LocalContext.current
+    val resources = LocalResources.current
     val alertSettingsUnavailable = stringResource(R.string.alert_settings_unavailable)
     val settings by vm.settings.collectAsStateWithLifecycle()
     val settingsError by vm.error.collectAsStateWithLifecycle()
@@ -395,14 +397,14 @@ fun BatterySettingsScreen(
                                 when (val result = vm.import(jsonInput)) {
                                     is ImportResult.Success -> {
                                         showImportDialog = false
-                                        snackbarHost.showSnackbar(context.getString(R.string.settings_import_result,
+                                        snackbarHost.showSnackbar(resources.getString(R.string.settings_import_result,
                                             result.appliedCount, result.skippedCount, result.errors.size))
                                     }
-                                    is ImportResult.Error -> importError = context.getString(R.string.settings_import_rejected, result.error.name)
+                                    is ImportResult.Error -> importError = resources.getString(R.string.settings_import_rejected, result.error.name)
                                 }
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                            catch (_: IllegalArgumentException) { importError = context.getString(R.string.settings_invalid_import) }
-                            catch (_: Exception) { importError = context.getString(R.string.settings_import_failed) }
+                            catch (_: IllegalArgumentException) { importError = resources.getString(R.string.settings_invalid_import) }
+                            catch (_: Exception) { importError = resources.getString(R.string.settings_import_failed) }
                             finally { importing = false }
                         }
                     },

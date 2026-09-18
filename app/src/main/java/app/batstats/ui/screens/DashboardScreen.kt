@@ -8,6 +8,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import app.batstats.battery.drain.formatDrainRate
 import app.batstats.R
 import androidx.compose.ui.res.stringResource
@@ -63,7 +65,7 @@ fun DashboardScreen(
                         Text(reading.level?.let { "$it%" } ?: "—", style = MaterialTheme.typography.displayLarge)
                         Text(text.state(reading.powerState), style = MaterialTheme.typography.titleLarge)
                         reading.level?.let { level -> LinearProgressIndicator(progress = { level / 100f }, modifier = Modifier.fillMaxWidth()) }
-                        Text(reading.sample?.timestamp?.let { context.getString(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(it))) }
+                        Text(reading.sample?.timestamp?.let { stringResource(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(it))) }
                             ?: stringResource(R.string.monitor_waiting_battery), style = MaterialTheme.typography.bodySmall)
                         Text((if (observing || reading.sample?.status == 2) TimeEstimator.etaString(context, reading.sample) else null) ?: stringResource(R.string.monitor_eta_unavailable))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -110,8 +112,9 @@ fun DashboardScreen(
                     stringResource(R.string.session_temperature) to temp
                 )
                 val config = LocalConfiguration.current
+                val windowWidth = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    values.chunked(if (config.fontScale > 1.3f || config.screenWidthDp < 360) 1 else 2).forEach { row ->
+                    values.chunked(if (config.fontScale > 1.3f || windowWidth < 360.dp) 1 else 2).forEach { row ->
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             row.forEach { (label, value) -> ReadingTile(label, value, Modifier.weight(1f)) }
                         }

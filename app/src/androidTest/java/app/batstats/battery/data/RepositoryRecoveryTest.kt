@@ -27,7 +27,7 @@ import java.util.UUID
 /** Injected broadcasts/errors exercise recovery; they are not physical battery measurements. */
 @RunWith(AndroidJUnit4::class)
 class RepositoryRecoveryTest {
-    private class ReadingContext(base: Context) : ContextWrapper(base) {
+    internal class ReadingContext(base: Context) : ContextWrapper(base) {
         val directory = File(base.cacheDir, "battery-recovery-${UUID.randomUUID()}").apply { mkdirs() }
         @Volatile var missingBattery = false
         @Volatile var throwOnBattery = false
@@ -53,7 +53,7 @@ class RepositoryRecoveryTest {
         override fun unregisterReceiver(receiver: BroadcastReceiver?) { registeredReceiver = null }
     }
 
-    private class Fixture {
+    internal class Fixture {
         val context = ReadingContext(ApplicationProvider.getApplicationContext())
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val database = Room.inMemoryDatabaseBuilder(context, BatteryDatabase::class.java).build()

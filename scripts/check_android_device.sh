@@ -5,7 +5,13 @@ batstats_serial="${ANDROID_SERIAL:-$(adb get-serialno)}"
 [[ "$batstats_serial" == emulator-* ]] || { echo 'Select a disposable emulator with ANDROID_SERIAL.' >&2; exit 1; }
 export ANDROID_SERIAL="$batstats_serial"
 [[ "$(adb shell getprop ro.build.version.sdk | tr -d '\r')" == 36 ]]
+batstats_hardware="$(adb shell getprop ro.hardware | tr -d '\r')"
+[[ "$batstats_hardware" == ranchu || "$batstats_hardware" == goldfish ]]
+# These are only this script's generated reports and test screenshots. A rerun must
+# not inherit old images or nest a previous phase's results inside the new report.
+rm -rf app/build/reports/device-validation
 mkdir -p app/build/reports/device-validation
+adb shell rm -rf /sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots
 collect_screenshots() {
   adb pull /sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots app/build/reports/device-validation/ >/dev/null 2>&1 || true
 }

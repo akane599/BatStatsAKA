@@ -44,6 +44,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
     val advancedError by collector.error.collectAsStateWithLifecycle()
     val ordinaryError by repository.error.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val reportTitle = stringResource(R.string.diagnostics_title)
+    val shareTitle = stringResource(R.string.diagnostic_share)
     var shareFailed by remember { mutableStateOf(false) }
     val readingText = remember(reading) { DiagnosticReport.reading(reading.sample) }
     val observationText = remember(observation, monitoring) { DiagnosticReport.observation(observation, monitoring) }
@@ -78,8 +80,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                         try {
                             context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                                 type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
-                                putExtra(Intent.EXTRA_SUBJECT, context.getString(R.string.diagnostics_title))
-                            }, context.getString(R.string.diagnostic_share)))
+                                putExtra(Intent.EXTRA_SUBJECT, reportTitle)
+                            }, shareTitle))
                             shareFailed = false
                         } catch (_: android.content.ActivityNotFoundException) { shareFailed = true }
                     }) { Text(stringResource(R.string.diagnostic_share)) }
