@@ -37,7 +37,7 @@ android {
         manifestPlaceholders["appLabel"] = "BatStats"
 
         androidResources {
-            localeFilters += setOf("en", "ar", "de", "es-rES", "es-rUS", "fr", "hr", "hu", "in", "it", "ja", "pl", "pt-rBR", "ru-rRU", "sv", "tr", "uk", "zh")
+            localeFilters += setOf("en", "es", "tr")
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
