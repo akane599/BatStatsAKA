@@ -334,18 +334,12 @@
     <string name="diagnostic_observation">Current observation</string>
     <string name="diagnostic_period_help">Only observed intervals are counted. Charge uses counter differences; energy is estimated from charge and average voltage. Screen off includes noninteractive Always On Display. CPU suspend and Android Doze are separate. Rates and estimates need enough consistent data; gaps are excluded.</string>
     <string name="diagnostic_access">Privileged access and report window</string>
-    <string name="diagnostic_access_values">Selected access: %1$s
-Shizuku running: %2$s
-Shizuku authorized: %3$s</string>
-    <string name="diagnostic_advanced_values">Android report captured: %1$s
-System window start: %2$s
-Reset/start counter: %3$s
-Battery time: %4$s ms
-Rejected records: %5$d</string>
+    <string name="diagnostic_access_values">Selected access: %1$s\nShizuku running: %2$s\nShizuku authorized: %3$s</string>
+    <string name="diagnostic_advanced_values">Android report captured: %1$s\nSystem window start: %2$s\nReset/start counter: %3$s\nBattery time: %4$s ms\nRejected records: %5$d</string>
     <string name="diagnostic_no_advanced">No current advanced report is available.</string>
     <string name="diagnostic_access_help">App energy estimates, wakelocks and system activity require Shizuku, Root or ADB grants. Android batterystats uses its own since-charge/reset window, which can differ from this app’s observation. Activity counts alone do not prove battery drain.</string>
     <string name="diagnostic_events">Recent collection events</string>
-    <string name="diagnostic_log_help">Up to 60 local events; repeated conditions are grouped. Writes are coalesced, so a process interruption may lose the latest minute. Codes and UTC times help identify failures without collecting raw dumps.</string>
+    <string name="diagnostic_log_help">Up to 60 local events; repeated conditions are grouped. Writes are coalesced; recent events may be lost if the process stops. Codes and UTC times help identify failures without collecting raw dumps.</string>
     <string name="diagnostic_storage_failed">Diagnostic storage is unavailable; recent events may only be held in memory.</string>
     <string name="diagnostic_empty">No collection events recorded yet.</string>
     <string name="diag_started">Monitoring started</string>
@@ -452,4 +446,60 @@ Rejected records: %5$d</string>
     <string name="option_6_months">6 months</string>
     <string name="option_1_year">1 year</string>
     <string name="option_forever">Forever (within storage limits)</string>
+    <string name="monitor_no_period">No period observed</string>
+    <string name="monitor_charge_unavailable">Charge unavailable</string>
+    <string name="monitor_coverage">Counter coverage %1$s / %2$s</string>
+    <string name="monitor_waiting_observation">Waiting for an observation</string>
+    <string name="monitor_since">Observed since %1$s</string>
+    <string name="monitor_through">Through last interval: %1$s</string>
+    <string name="monitor_cpu_coverage">%1$s / %2$s observed</string>
+    <string name="monitor_no_interval">— · no interval observed</string>
+    <string name="monitor_drain_heading">Drain while discharging</string>
+    <string name="monitor_screen_on">Screen on: %1$s</string>
+    <string name="monitor_screen_off">Screen off: %1$s</string>
+    <string name="monitor_activity_heading">Observed device activity</string>
+    <string name="monitor_cpu">CPU suspend: %1$s</string>
+    <string name="monitor_doze">Android Doze: %1$s</string>
+    <string name="monitor_charging">Charging: %1$s · gained %2$s</string>
+    <string name="monitor_window_heading">Observation window</string>
+    <string name="monitor_discharge">Discharge: %1$s</string>
+    <string name="monitor_gaps_excluded">%1$d gaps excluded</string>
+    <string name="monitor_aod_brief">Screen off includes noninteractive AOD. CPU suspend and Doze are separate.</string>
+    <string name="monitor_channel">Battery monitoring</string>
+    <string name="monitor_channel_description">Live battery readings and observed drain; silent while monitoring</string>
+    <string name="monitor_standard">Standard battery readings</string>
+    <string name="monitor_read_at">Reading %1$s</string>
+    <string name="monitor_waiting_battery">Waiting for Android battery data</string>
+    <string name="monitor_collection_issue">Collection issue: %1$s</string>
+    <string name="monitor_collapsed">On %1$s · Off %2$s · %3$s</string>
+    <string name="monitor_reset">Reset observation</string>
+    <string name="monitor_advanced_issue">Advanced statistics: %1$s</string>
+    <string name="monitor_standard_unavailable">Standard · advanced access unavailable</string>
+    <string name="monitor_source">Advanced source: %1$s</string>
+    <string name="monitor_eta_full">Est. full in %1$s</string>
+    <string name="monitor_eta_remaining">Est. remaining: %1$s</string>
+    <string name="monitor_eta_unavailable">Remaining time: insufficient data</string>
+    <string name="monitor_active">Monitoring active</string>
+    <string name="monitor_stopped">Monitoring stopped</string>
+    <string name="monitor_stop">Stop monitoring</string>
+    <string name="monitor_shizuku_ready">Shizuku connected and authorized</string>
+    <string name="monitor_shizuku_permission">Shizuku needs authorization</string>
+    <string name="monitor_access_help">App estimates, wakelocks and system activity require advanced access.</string>
+    <string name="monitor_derived_power">Derived net power</string>
+    <string name="monitor_direction_help">Android defines positive current and power as flowing into the battery, negative as flowing out. Vendor reporting may differ; missing values stay blank.</string>
+    <string name="monitor_details">Observation details and reset</string>
+    <string name="monitor_drain_title">Observed drain</string>
+    <string name="monitor_screen_help">Screen off means noninteractive, including Always On Display. Locking alone does not imply CPU sleep. CPU suspend comes from elapsed time minus uptime; Android Doze is a separate observed state.</string>
+    <string name="monitor_counter_help">Charge is the change in Android’s reported charge counter. Rates use only covered discharging intervals and need at least one minute. Blank values mean insufficient or unavailable data. System estimates and counter calibration can vary by device.</string>
+    <string name="monitor_reset_title">Start a new observation?</string>
+    <string name="monitor_reset_help">This closes the current history period and resets the live screen and notification totals. Saved history and Android battery statistics are retained.</string>
+    <string name="monitor_on_title">Screen on · discharging</string>
+    <string name="monitor_off_title">Screen off · discharging</string>
+    <string name="monitor_total">Observation total</string>
+    <string name="monitor_plugged">Plugged in without charging: %1$s</string>
+    <string name="monitor_gaps">%1$d observation gaps · %2$d intervals without valid charge</string>
+    <string name="chart_description">%1$s: %2$d readings; minimum %3$s, maximum %4$s %5$s. Gaps are excluded.</string>
+    <string name="chart_empty">No supported readings in this period.</string>
+    <string name="chart_range">%1$s %2$s · %3$d plotted readings</string>
+    <string name="chart_help">Representative readings; gaps and unknown continuity are not connected.</string>
 </resources>

@@ -28,6 +28,7 @@ class MonitoringNotificationTest {
             currentNowUa = -60_000, chargeCounterUah = 3_999_000, voltageMv = 4000, temperatureDeciC = 250,
             health = 2, screenOn = true)
         val manager = DrainNotificationManager(context, BatteryGraph.repo)
+        val labels = MonitoringText(context)
         val notification = manager.getNotification(BatteryRepository.Realtime(sample), summary, "Test source", null)
         assertEquals(0L, notification.`when`)
         assertTrue(notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
@@ -35,9 +36,9 @@ class MonitoringNotificationTest {
         assertEquals(DrainNotificationManager.CHANNEL_ID, notification.channelId)
         assertEquals(1, notification.actions.size)
         val expanded = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
-        assertTrue(expanded.contains(MonitoringText.bucket(summary.screenOn)))
-        assertTrue(expanded.contains(MonitoringText.since(summary)))
-        assertTrue(expanded.contains(MonitoringText.cpuSuspend(summary)))
+        assertTrue(expanded.contains(labels.bucket(summary.screenOn)))
+        assertTrue(expanded.contains(labels.since(summary)))
+        assertTrue(expanded.contains(labels.cpuSuspend(summary)))
         assertNull(summary.screenOff.rateMa)
         val widgetIntent = PendingIntent.getActivity(context, 0, Intent(context, BatteryMainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)

@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import app.batstats.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.contentDescription
@@ -30,15 +32,18 @@ fun TelemetryChart(title: String, unit: String, points: List<ChartPoint>) {
         val deltas = points.zipWithNext().map { (a, b) -> b.timestamp - a.timestamp }.filter { it > 0 }.sorted()
         (deltas.getOrNull(deltas.size / 2) ?: 30_000) * 3
     }
+    fun number(value: Double) = String.format(Locale.getDefault(),
+        if (kotlin.math.abs(value) in 0.0..<1.0 && value != 0.0) "%.2g" else "%.1f", value)
+    val accessibleDescription = stringResource(R.string.chart_description, title, finite.size, number(min), number(max), unit)
     ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("$title ($unit)", style = MaterialTheme.typography.titleMedium)
             if (finite.isEmpty()) {
-                Text("No supported readings in this period.")
+                Text(stringResource(R.string.chart_empty))
             } else {
-                Text("${String.format(Locale.getDefault(), "%.1f – %.1f", min, max)} $unit · ${finite.size} plotted readings", style = MaterialTheme.typography.labelMedium)
+                Text(stringResource(R.string.chart_range, "${number(min)} – ${number(max)}", unit, finite.size), style = MaterialTheme.typography.labelMedium)
                 Canvas(Modifier.fillMaxWidth().height(140.dp).semantics {
-                    contentDescription = "$title: ${finite.size} readings; minimum $min, maximum $max $unit. Gaps are excluded."
+                    contentDescription = accessibleDescription
                 }) {
                     drawLine(grid, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
                     var previous: Pair<ChartPoint, Offset>? = null
@@ -58,7 +63,7 @@ fun TelemetryChart(title: String, unit: String, points: List<ChartPoint>) {
                 }
                 val format = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
                 Text("${format.format(Date(start))} → ${format.format(Date(end))}", style = MaterialTheme.typography.bodySmall)
-                Text("Representative readings; gaps and unknown continuity are not connected.", style = MaterialTheme.typography.bodySmall)
+                Text(stringResource(R.string.chart_help), style = MaterialTheme.typography.bodySmall)
             }
         }
     }

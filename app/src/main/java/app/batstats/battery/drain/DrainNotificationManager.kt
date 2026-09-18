@@ -1,5 +1,6 @@
 package app.batstats.battery.drain
 
+import app.batstats.R
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -19,10 +20,11 @@ class DrainNotificationManager(private val context: Context, private val reposit
         const val CHANNEL_ID = "drain_stats_channel"
         const val NOTIFICATION_ID = 2001
     }
+    private val text = MonitoringText(context)
     init {
         context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, "Battery monitoring", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Live battery readings and observed drain; silent while monitoring"
+            NotificationChannel(CHANNEL_ID, context.getString(R.string.monitor_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                description = context.getString(R.string.monitor_channel_description)
                 setShowBadge(false); enableLights(false); enableVibration(false)
             }
         )
@@ -30,7 +32,7 @@ class DrainNotificationManager(private val context: Context, private val reposit
     fun getNotification(
         reading: BatteryRepository.Realtime = repository.realtimeFlow.value,
         summary: ObservationSummary = repository.observation.value,
-        access: String = "Standard battery readings",
+        access: String = context.getString(R.string.monitor_standard),
         error: String? = repository.error.value
     ): Notification {
         val content = PendingIntent.getActivity(context, NOTIFICATION_ID,
@@ -41,22 +43,22 @@ class DrainNotificationManager(private val context: Context, private val reposit
             Intent(context, DrainNotificationReceiver::class.java).setAction(DrainNotificationReceiver.ACTION_RESET),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val freshness = reading.sample?.timestamp?.let {
-            "Reading ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))}"
-        } ?: "Waiting for Android battery data"
+            context.getString(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)))
+        } ?: context.getString(R.string.monitor_waiting_battery)
         val expanded = buildString {
             appendLine("$freshness · $access")
-            error?.let { appendLine("Collection issue: $it") }
-            append(MonitoringText.expanded(summary))
+            error?.let { appendLine(context.getString(R.string.monitor_collection_issue, it)) }
+            append(text.expanded(summary))
         }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
-            .setContentTitle("${reading.level?.let { "$it%" } ?: "—"} · ${MonitoringText.state(reading.powerState)}")
-            .setContentText(error ?: "On ${formatDrainRate(summary.screenOn.rateMa)} · Off ${formatDrainRate(summary.screenOff.rateMa)} · $freshness")
+            .setContentTitle("${reading.level?.let { "$it%" } ?: "—"} · ${text.state(reading.powerState)}")
+            .setContentText(error ?: context.getString(R.string.monitor_collapsed, formatDrainRate(summary.screenOn.rateMa), formatDrainRate(summary.screenOff.rateMa), freshness))
             .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
             .setContentIntent(content).setOngoing(true).setOnlyAlertOnce(true)
             .setWhen(0L).setShowWhen(false).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .addAction(android.R.drawable.ic_menu_rotate, "Reset observation", reset).build()
+            .addAction(android.R.drawable.ic_menu_rotate, context.getString(R.string.monitor_reset), reset).build()
     }
     fun stopNotification() { context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID) }
 }

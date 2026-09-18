@@ -6,6 +6,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import app.batstats.battery.drain.formatDrainRate
 import app.batstats.R
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
@@ -31,6 +34,8 @@ fun DashboardScreen(
     onOpenData: () -> Unit, onOpenDetailedStats: () -> Unit, onOpenDrainStats: () -> Unit, onOpenDiagnostics: () -> Unit,
     vm: DashboardViewModel = koinViewModel()
 ) {
+    val context = LocalContext.current
+    val text = remember(context) { MonitoringText(context) }
     val reading by vm.realtime.collectAsStateWithLifecycle()
     val observing by vm.isMonitoring.collectAsStateWithLifecycle()
     val summary by vm.observation.collectAsStateWithLifecycle()
@@ -46,7 +51,7 @@ fun DashboardScreen(
     LaunchedEffect(running, granted) { shell.detectMode(forceRefresh = true) }
     Scaffold(topBar = {
         TopAppBar(title = { Text("BatStats") }, actions = {
-            IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, "Settings") }
+            IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, stringResource(R.string.settings)) }
         })
     }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
@@ -54,16 +59,16 @@ fun DashboardScreen(
             item {
                 ElevatedCard(Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
                     Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(if (observing) "Monitoring active" else "Monitoring stopped", style = MaterialTheme.typography.labelLarge)
+                        Text(stringResource(if (observing) R.string.monitor_active else R.string.monitor_stopped), style = MaterialTheme.typography.labelLarge)
                         Text(reading.level?.let { "$it%" } ?: "—", style = MaterialTheme.typography.displayLarge)
-                        Text(MonitoringText.state(reading.powerState), style = MaterialTheme.typography.titleLarge)
+                        Text(text.state(reading.powerState), style = MaterialTheme.typography.titleLarge)
                         reading.level?.let { level -> LinearProgressIndicator(progress = { level / 100f }, modifier = Modifier.fillMaxWidth()) }
-                        Text(reading.sample?.timestamp?.let { "Reading ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(it))}" }
-                            ?: "Waiting for Android battery information", style = MaterialTheme.typography.bodySmall)
-                        Text(TimeEstimator.etaString(reading.sample) ?: "Remaining time: insufficient data")
+                        Text(reading.sample?.timestamp?.let { context.getString(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.MEDIUM).format(Date(it))) }
+                            ?: stringResource(R.string.monitor_waiting_battery), style = MaterialTheme.typography.bodySmall)
+                        Text((if (observing || reading.sample?.status == 2) TimeEstimator.etaString(context, reading.sample) else null) ?: stringResource(R.string.monitor_eta_unavailable))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = vm::toggleMonitoring) { Text(if (observing) "Stop monitoring" else "Start monitoring") }
-                            TextButton(onClick = vm::refresh) { Text("Refresh reading") }
+                            Button(onClick = vm::toggleMonitoring) { Text(stringResource(if (observing) R.string.monitor_stop else R.string.start_monitoring)) }
+                            TextButton(onClick = vm::refresh) { Text(stringResource(R.string.diagnostic_refresh)) }
                         }
                     }
                 }
@@ -71,18 +76,18 @@ fun DashboardScreen(
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(when {
-                            running && granted -> "Shizuku connected and authorized"
-                            running -> "Shizuku needs authorization"
-                            access == ShellRunner.Mode.ROOT -> "Root access selected"
-                            access == ShellRunner.Mode.ADB -> "ADB-granted access selected"
-                            else -> "Standard battery information available"
-                        }, style = MaterialTheme.typography.titleMedium)
-                        Text("App estimates, wakelocks and system activity require advanced access.", style = MaterialTheme.typography.bodySmall)
+                        Text(stringResource(when {
+                            running && granted -> R.string.monitor_shizuku_ready
+                            running -> R.string.monitor_shizuku_permission
+                            access == ShellRunner.Mode.ROOT -> R.string.diag_access_root
+                            access == ShellRunner.Mode.ADB -> R.string.diag_access_adb
+                            else -> R.string.monitor_standard
+                        }), style = MaterialTheme.typography.titleMedium)
+                        Text(stringResource(R.string.monitor_access_help), style = MaterialTheme.typography.bodySmall)
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (running && !granted) TextButton(onClick = { shizuku.requestPermission() }) { Text("Authorize Shizuku") }
-                            TextButton(onClick = onOpenDetailedStats) { Text("Advanced statistics") }
+                            if (running && !granted) TextButton(onClick = { shizuku.requestPermission() }) { Text(stringResource(R.string.adv_authorize)) }
+                            TextButton(onClick = onOpenDetailedStats) { Text(stringResource(R.string.adv_title)) }
                             TextButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.diagnostics_title)) }
                         }
                     }
@@ -90,37 +95,43 @@ fun DashboardScreen(
             }
             item {
                 val current = reading.sample?.currentNowUa?.let {
-                    if (settings.showCurrentInMa) String.format(Locale.getDefault(), "%.0f mA", it / 1000.0) else "$it µA"
+                    if (settings.showCurrentInMa) formatDrainRate(it / 1000.0) else "$it µA"
                 } ?: "—"
                 val temp = reading.temperatureC?.let {
                     if (settings.temperatureUnitIndex == 1) String.format(Locale.getDefault(), "%.1f °F", it * 1.8 + 32)
                     else String.format(Locale.getDefault(), "%.1f °C", it)
                 } ?: "—"
+                val values = listOf(
+                    stringResource(R.string.session_net_current) to current,
+                    stringResource(R.string.session_voltage) to (reading.voltageMv?.let { "$it mV" } ?: "—"),
+                    stringResource(R.string.monitor_derived_power) to (reading.powerMw?.let {
+                        String.format(Locale.getDefault(), if (kotlin.math.abs(it) in 0.0..<1.0 && it != 0.0) "%.2g mW" else "%.0f mW", it)
+                    } ?: "—"),
+                    stringResource(R.string.session_temperature) to temp
+                )
+                val config = LocalConfiguration.current
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ReadingTile("Net current", current, Modifier.weight(1f))
-                        ReadingTile("Voltage", reading.voltageMv?.let { "$it mV" } ?: "—", Modifier.weight(1f))
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ReadingTile("Derived net power", reading.powerMw?.let { String.format(Locale.getDefault(), "%.0f mW", it) } ?: "—", Modifier.weight(1f))
-                        ReadingTile("Temperature", temp, Modifier.weight(1f))
+                    values.chunked(if (config.fontScale > 1.3f || config.screenWidthDp < 360) 1 else 2).forEach { row ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            row.forEach { (label, value) -> ReadingTile(label, value, Modifier.weight(1f)) }
+                        }
                     }
                 }
-                Text("Positive current/power flows into the battery; negative flows out. Missing readings stay blank.", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                Text(stringResource(R.string.monitor_direction_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
             }
             item {
-                Text(MonitoringText.since(summary), style = MaterialTheme.typography.titleMedium)
+                Text(text.since(summary), style = MaterialTheme.typography.titleMedium)
                 ObservationCards(summary)
-                TextButton(onClick = onOpenDrainStats) { Text("Observation details and reset") }
+                TextButton(onClick = onOpenDrainStats) { Text(stringResource(R.string.monitor_details)) }
             }
             item {
-                TelemetryChart("Net current", "mA", samples.map { ChartPoint(it.timestamp, it.currentNowUa?.div(1000.0), it.observationId, it.boundaryReason != null) })
+                TelemetryChart(stringResource(R.string.session_net_current), "mA", samples.map { ChartPoint(it.timestamp, it.currentNowUa?.div(1000.0), it.observationId, it.boundaryReason != null) })
             }
             item {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedButton(onClick = onOpenHistory) { Text("History") }
-                    OutlinedButton(onClick = onOpenData) { Text("Export / import") }
-                    OutlinedButton(onClick = onOpenAlarms) { Text("Battery alerts") }
+                    OutlinedButton(onClick = onOpenHistory) { Text(stringResource(R.string.history)) }
+                    OutlinedButton(onClick = onOpenData) { Text(stringResource(R.string.data_export_import)) }
+                    OutlinedButton(onClick = onOpenAlarms) { Text(stringResource(R.string.settings_notifications)) }
                 }
             }
         }

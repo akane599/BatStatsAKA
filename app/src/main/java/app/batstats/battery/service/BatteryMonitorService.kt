@@ -2,6 +2,7 @@ package app.batstats.battery.service
 
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
+import app.batstats.R
 import android.app.Service
 import android.app.NotificationManager
 import android.content.Intent
@@ -107,11 +108,11 @@ class BatteryMonitorService : Service() {
                 Triple(reading, observation, Triple(accessState.first, historyError, accessState.second))
             }.collect { (reading, observation, state) ->
                 val (access, historyError, accessError) = state
-                val issue = historyError ?: accessError?.let { "Advanced statistics: $it" }
+                val issue = historyError ?: accessError?.let { getString(R.string.monitor_advanced_issue, it) }
                 val important = "${reading.level}/${reading.powerState}/$access/$issue/${observation.startedAt}/${observation.gaps}"
                 val now = SystemClock.elapsedRealtime()
                 if (important != previousImportant || now - lastPush >= 30_000) {
-                    val label = if (access == ShellRunner.Mode.NONE) "Standard · advanced access unavailable" else "Advanced source: $access"
+                    val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
                     getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
                         notifications.getNotification(reading, observation, label, issue))
                     reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,

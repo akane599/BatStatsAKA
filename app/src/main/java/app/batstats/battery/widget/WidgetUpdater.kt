@@ -48,7 +48,7 @@ object WidgetUpdater {
                     if (fahrenheit) String.format(Locale.getDefault(), "%.1f °F", it / 10.0 * 1.8 + 32)
                     else String.format(Locale.getDefault(), "%.1f °C", it / 10.0)
                 } ?: "—")
-                else -> R.string.widget_estimate to (if (monitoring) TimeEstimator.etaString(sample) ?: "—" else "—")
+                else -> R.string.widget_estimate to (if (monitoring) TimeEstimator.etaString(context, sample) ?: "—" else "—")
             }
             val freshness = sample?.timestamp?.let {
                 DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
