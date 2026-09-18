@@ -2,7 +2,11 @@
 
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
-## Latest runtime checkpoint: d3ced0d
+## Latest runtime checkpoint: ac95a80
+
+**Both hosted runs pass.** Push35348444065 and PR35348449882 each complete Verify-and-build, the standard API36 device phases, the Android16 16 KiB phase, checksum collection and APK upload. Counting the marginal2048M pass at35346293477, three16 KiB executions have now succeeded, two of them at4096M. This is the first reproducible16 KiB runtime result for this branch; it remains an x86_64 emulator result and establishes nothing about ARM64 or physical Samsung hardware.
+
+## Preceding checkpoint: d3ced0d
 
 Standard API36 validation **passes**: push35338814265 and PR35338819113 each execute28 ordinary methods with0 failures,0 errors and0 skips, and each real Shizuku phase passes1/1. The stage6l corrections resolved the landscape reset-dialog failure at NavigationDeviceTest.kt122, and both runs reached the second image for the first time.
 
