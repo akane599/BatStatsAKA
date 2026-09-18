@@ -12,11 +12,11 @@ Build preparation includes separate debug and optimized nondebug Preview package
 
 ## Validation at this draft checkpoint
 
-- 94 JVM regression cases pass in each Debug and Preview configuration; Android test sources compile. These are synthetic/host checks, not physical measurements.
+- 94 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips; all25 Android test methods compile. These are synthetic/host checks, not physical measurements.
 - Host SQLite checks pass migrations, identity/deduplication, history paging and bounded chart queries.
-- Debug, nondebuggable/minified Preview and Android test APKs assembled; signatures checked. Newer resource/recovery-screen changes still need final assemblies.
+- Fresh Debug, nondebuggable/minified Preview and Android test APKs assembled from the current source; universal signatures and checksums verified (source commit dd7f2c0).
 - Resource completeness/format checks and direct AAPT2 compilation pass for493 Spanish and493 Turkish strings. Workflow actionlint passes.
-- Full lint rerun, actual Android16 UI/screenshots and Shizuku execution remain pending. Do not publish this description as final until VALIDATION.md and this section contain the completed results.
+- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. Do not publish this description as final until VALIDATION.md and this section contain the completed results.
 
 ## Limits and delivery
 
