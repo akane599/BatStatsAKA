@@ -47,10 +47,12 @@ class BatteryRepository(
     private var receiverRegistered = false
     private var samplingIntervalMs = 30_000L
     private var session: ChargeSession? = null
+    private var needsSessionRecovery = false
     private var lastPersisted: BatterySample? = null
     private var sampleCount = 0L
     private var lastCleanupElapsed = Long.MIN_VALUE
     private var samplesSinceCleanup = 0
+    private var lastCountFlushAttempt = Long.MIN_VALUE
 
     private val _realtime = MutableStateFlow(Realtime())
     val realtimeFlow = _realtime.asStateFlow()
@@ -58,8 +60,14 @@ class BatteryRepository(
     val isMonitoringFlow = _isMonitoring.asStateFlow()
     private val _observation = MutableStateFlow(ObservationSummary())
     val observation = _observation.asStateFlow()
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
+    private enum class FailureSource { BATTERY, STATE_EVENTS, HISTORY, RETENTION, SAMPLE_COUNT }
+    private val failures = MutableStateFlow<Map<FailureSource, String>>(emptyMap())
+    val error = failures.map { values ->
+        values.toSortedMap().values.joinToString("\n").ifEmpty { null }
+    }.stateIn(scope, SharingStarted.Eagerly, null)
+    private fun failure(source: FailureSource, message: String? = null) {
+        failures.update { if (message == null) it - source else it + (source to message) }
+    }
     val activeSessionFlow: Flow<ChargeSession?> = sessionDao.activeFlow()
     val settingsFlow = settingsRepository.flow
     val monitoringInterval = settingsRepository.flow.map { it.monitoringIntervalMs }
@@ -78,18 +86,19 @@ class BatteryRepository(
                 try {
                     when (event) {
                         is Event.Start -> if (activeGeneration == event.generation) {
-                            sessionDao.closeInterrupted("Process stopped; interval ended at last stored reading")
                             session = null
                             lastPersisted = null
                             engine.reset(); sessionEngine.reset(); estimator.reset()
                             _observation.value = engine.summary
+                            needsSessionRecovery = true
+                            recoverInterruptedSession()
                         }
                         is Event.Sample -> if (activeGeneration == event.point.generation) process(event)
                         Event.Stop -> {
                             finishSession("Monitoring stopped")
                             engine.stop(); estimator.reset()
                             _observation.value = engine.summary
-                            flushSampleCount()
+                            flushSampleCount(force = true)
                         }
                         Event.Reset -> {
                             finishSession("Observation reset by user")
@@ -102,12 +111,16 @@ class BatteryRepository(
                                     batteryDao.clearAll(); sessionDao.clearAll(); db.appEnergyDao().clearAll()
                                 }
                                 session = null; lastPersisted = null; sampleCount = 0
-                                _error.value = null
+                                needsSessionRecovery = false
+                                failure(FailureSource.HISTORY); failure(FailureSource.RETENTION)
                                 engine.reset(); sessionEngine.reset(); estimator.reset()
                                 _observation.value = engine.summary
-                                try { settingsRepository.update { it.copy(totalSamplesCollected = 0) } }
+                                try {
+                                    settingsRepository.update { it.copy(totalSamplesCollected = 0) }
+                                    failure(FailureSource.SAMPLE_COUNT)
+                                }
                                 catch (e: CancellationException) { throw e }
-                                catch (_: Exception) { _error.value = "History cleared; the sample-count setting could not be reset" }
+                                catch (_: Exception) { failure(FailureSource.SAMPLE_COUNT, "History cleared; the sample-count setting could not be reset") }
                                 event.result.complete(Unit)
                             } catch (e: Exception) { event.result.completeExceptionally(e); throw e }
                         }
@@ -116,7 +129,7 @@ class BatteryRepository(
                     throw e
                 } catch (e: Exception) {
                     diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
-                    _error.value = "History collection failed (${e.javaClass.simpleName}); live battery readings remain available"
+                    failure(FailureSource.HISTORY, "History collection failed (${e.javaClass.simpleName}); live battery readings remain available")
                     overflow = true
                 }
             }
@@ -145,7 +158,6 @@ class BatteryRepository(
             activeGeneration = generation
             _isMonitoring.value = true
             diagnostics.record(DiagnosticCode.MONITORING_STARTED)
-            _error.value = null
             events.send(Event.Start(generation))
             val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED).apply {
                 addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
@@ -154,9 +166,10 @@ class BatteryRepository(
             try {
                 ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
                 receiverRegistered = true
+                failure(FailureSource.STATE_EVENTS)
             } catch (e: RuntimeException) {
                 diagnostics.record(DiagnosticCode.STATE_EVENTS_UNAVAILABLE)
-                _error.value = "State events unavailable; intervals with unobserved changes will be excluded"
+                failure(FailureSource.STATE_EVENTS, "State events unavailable; observation is paused, ordinary battery readings continue")
             }
             samplingJob = scope.launch(Dispatchers.Main.immediate) {
                 settingsRepository.flow.map { it.monitoringIntervalMs }.distinctUntilChanged().collectLatest { interval ->
@@ -178,6 +191,7 @@ class BatteryRepository(
             samplingJob?.cancel(); samplingJob = null
             if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
             receiverRegistered = false
+            failure(FailureSource.STATE_EVENTS)
             events.send(Event.Stop)
         }
     }
@@ -186,7 +200,6 @@ class BatteryRepository(
     fun refreshNow(onComplete: suspend (Realtime) -> Unit = {}) {
         scope.launch(Dispatchers.Main.immediate) {
             try { capture(Boundary.SAMPLE) }
-            catch (e: RuntimeException) { diagnostics.record(DiagnosticCode.BATTERY_READ_FAILED); _error.value = "Battery reading failed (${e.javaClass.simpleName})" }
             finally { onComplete(_realtime.value) }
         }
     }
@@ -216,6 +229,7 @@ class BatteryRepository(
                 samplingJob?.cancel(); samplingJob = null
                 if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
                 receiverRegistered = false
+                failure(FailureSource.STATE_EVENTS)
             }
         },
         delete = {
@@ -226,36 +240,64 @@ class BatteryRepository(
     )
 
     private fun capture(boundary: Boundary, screenOverride: Boolean? = null) {
+        try { captureBattery(boundary, screenOverride) }
+        catch (e: CancellationException) { throw e }
+        catch (e: RuntimeException) {
+            diagnostics.record(DiagnosticCode.BATTERY_READ_FAILED)
+            failure(FailureSource.BATTERY, "Battery collection failed (${e.javaClass.simpleName})")
+            overflow = true
+        }
+    }
+
+    private fun captureBattery(boundary: Boundary, screenOverride: Boolean?) {
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        if (intent == null) { diagnostics.record(DiagnosticCode.BATTERY_UNAVAILABLE); _error.value = "Android has not supplied a battery reading"; overflow = true; return }
+        if (intent == null) {
+            diagnostics.record(DiagnosticCode.BATTERY_UNAVAILABLE)
+            failure(FailureSource.BATTERY, "Android has not supplied a battery reading")
+            overflow = true
+            return
+        }
         fun extra(name: String): Int? = if (intent.hasExtra(name)) intent.getIntExtra(name, Int.MIN_VALUE) else null
-        fun property(id: Int): Long = runCatching { batteryManager.getLongProperty(id) }.getOrDefault(Long.MIN_VALUE)
+        val failedProperties = mutableListOf<String>()
+        fun property(id: Int, name: String): Long = try { batteryManager.getLongProperty(id) }
+        catch (e: CancellationException) { throw e }
+        catch (_: RuntimeException) { failedProperties += name; Long.MIN_VALUE }
         val elapsed = SystemClock.elapsedRealtime()
         val wall = System.currentTimeMillis()
         val status = extra(BatteryManager.EXTRA_STATUS) ?: BatteryManager.BATTERY_STATUS_UNKNOWN
         val plugged = extra(BatteryManager.EXTRA_PLUGGED)?.takeIf { it >= 0 }
         val power = BatteryReading.powerState(status, plugged)
+        val chargeTime = if (Build.VERSION.SDK_INT >= 28 && power == PowerState.CHARGING) {
+            try { batteryManager.computeChargeTimeRemaining().takeIf { it in 1..7 * 86_400_000L } }
+            catch (e: CancellationException) { throw e }
+            catch (_: RuntimeException) { failedProperties += "charge_time"; null }
+        } else null
         val sample = BatterySample(
             timestamp = wall,
             levelPercent = BatteryReading.percentage(extra(BatteryManager.EXTRA_LEVEL) ?: -1, extra(BatteryManager.EXTRA_SCALE) ?: -1),
             status = status, plugged = plugged,
-            currentNowUa = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)),
-            chargeCounterUah = BatteryReading.chargeUah(property(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)),
+            currentNowUa = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW, "current_now")),
+            chargeCounterUah = BatteryReading.chargeUah(property(BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER, "charge_counter")),
             voltageMv = extra(BatteryManager.EXTRA_VOLTAGE)?.let(BatteryReading::voltageMv),
             temperatureDeciC = extra(BatteryManager.EXTRA_TEMPERATURE)?.let(BatteryReading::temperatureDeciC),
             health = extra(BatteryManager.EXTRA_HEALTH),
             screenOn = screenOverride ?: powerManager.isInteractive,
             elapsedMs = elapsed, uptimeMs = SystemClock.uptimeMillis(), observationId = activeGeneration,
-            currentAverageUa = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)),
-            energyNwh = BatteryReading.energyNwh(property(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER)),
+            currentAverageUa = BatteryReading.currentUa(property(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE, "current_average")),
+            energyNwh = BatteryReading.energyNwh(property(BatteryManager.BATTERY_PROPERTY_ENERGY_COUNTER, "energy_counter")),
             cycleCount = if (Build.VERSION.SDK_INT >= 34) extra(BatteryManager.EXTRA_CYCLE_COUNT)?.takeIf { it >= 0 } else null,
-            etaMs = if (Build.VERSION.SDK_INT >= 28 && power == PowerState.CHARGING) runCatching { batteryManager.computeChargeTimeRemaining() }
-                .getOrNull()?.takeIf { it in 1..7 * 86_400_000L } else null,
-            etaBasis = if (power == PowerState.CHARGING) "Android charging estimate" else null,
+            etaMs = chargeTime,
+            etaBasis = if (chargeTime != null) "Android charging estimate" else null,
             source = "BatteryManager"
         )
+        failure(FailureSource.BATTERY, failedProperties.takeIf { it.isNotEmpty() }?.let {
+            diagnostics.record(DiagnosticCode.BATTERY_READ_FAILED)
+            "Battery property reads failed: ${it.joinToString()}"
+        })
         _realtime.value = Realtime(sample)
         val generation = activeGeneration ?: return
+        // Polling alone cannot establish screen/Doze continuity or prove that no transition happened.
+        if (!receiverRegistered) return
         val point = Observation(wall, elapsed, sample.uptimeMs!!, sample.levelPercent, sample.chargeCounterUah,
             sample.currentNowUa, sample.voltageMv, power, sample.screenOn, powerManager.isDeviceIdleMode,
             generation, samplingIntervalMs, if (overflow) Boundary.GAP else boundary)
@@ -263,6 +305,7 @@ class BatteryRepository(
     }
 
     private suspend fun process(event: Event.Sample) {
+        recoverInterruptedSession()
         val old = engine.summary
         val summary = engine.accept(event.point)
         val changed = old.latest?.power != event.point.power
@@ -291,13 +334,18 @@ class BatteryRepository(
         session = updated; lastPersisted = sample
         _realtime.update { Realtime(mergePersistedReading(it.sample, sample)) }
         _observation.value = summary
-        _error.value = null
+        failure(FailureSource.HISTORY)
         if (inserted != -1L) { sampleCount++; samplesSinceCleanup++ }
         if (sampleCount >= 100) flushSampleCount()
         if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= 200 || event.point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
-            cleanup(sample.timestamp)
             lastCleanupElapsed = event.point.elapsedMs
             samplesSinceCleanup = 0
+            try { cleanup(sample.timestamp); failure(FailureSource.RETENTION) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) {
+                diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
+                failure(FailureSource.RETENTION, "History retention failed (${e.javaClass.simpleName}); retrying on the next maintenance interval")
+            }
         }
     }
 
@@ -321,11 +369,29 @@ class BatteryRepository(
         session = null; sessionEngine.reset()
     }
 
-    private suspend fun flushSampleCount() {
+    private suspend fun recoverInterruptedSession() {
+        if (!needsSessionRecovery) return
+        sessionDao.closeInterrupted("Process stopped; interval ended at last stored reading")
+        needsSessionRecovery = false
+    }
+
+    private suspend fun flushSampleCount(force: Boolean = false) {
         val count = sampleCount
         if (count == 0L) return
-        settingsRepository.update { it.copy(totalSamplesCollected = it.totalSamplesCollected + count) }
-        sampleCount = 0
+        val now = SystemClock.elapsedRealtime()
+        if (!force && lastCountFlushAttempt != Long.MIN_VALUE && now - lastCountFlushAttempt < 60_000) return
+        lastCountFlushAttempt = now
+        try {
+            settingsRepository.update {
+                it.copy(totalSamplesCollected = it.totalSamplesCollected.coerceIn(0L, Long.MAX_VALUE - count) + count)
+            }
+            sampleCount = 0
+            failure(FailureSource.SAMPLE_COUNT)
+        } catch (e: CancellationException) { throw e }
+        catch (e: Exception) {
+            diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
+            failure(FailureSource.SAMPLE_COUNT, "Sample-count preference could not be saved (${e.javaClass.simpleName}); battery history is retained")
+        }
     }
 
     private suspend fun cleanup(now: Long) {

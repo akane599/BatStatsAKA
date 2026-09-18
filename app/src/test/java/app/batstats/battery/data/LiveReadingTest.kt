@@ -14,6 +14,8 @@ class LiveReadingTest {
         assertSame(newer, mergePersistedReading(newer, persisted))
         val restarted = captured.copy(observationId = "second")
         assertSame(restarted, mergePersistedReading(restarted, persisted))
+        val sameMillisecondTransition = captured.copy(screenOn = false, status = 2, plugged = 1)
+        assertSame(sameMillisecondTransition, mergePersistedReading(sameMillisecondTransition, persisted))
         assertNull(mergePersistedReading(null, persisted))
     }
     @Test fun matchingCaptureReceivesPersistedSessionAndEstimate() {
