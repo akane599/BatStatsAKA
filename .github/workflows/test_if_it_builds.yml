@@ -1,5 +1,12 @@
 name: CI
 on: [push, pull_request]
+
+permissions:
+  contents: read
+
 jobs:
   build:
-    uses: mlm-games/ci/.github/workflows/android-ci.yml@v1
+    uses: ./.github/workflows/build-apk.yml
+    with:
+      run_android_tests: true
+    # Pull requests use ephemeral development signing; no repository signing secrets.

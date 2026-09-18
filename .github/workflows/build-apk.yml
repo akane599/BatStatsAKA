@@ -1,6 +1,21 @@
 name: Build installable APK
 
 on:
+  workflow_call:
+    inputs:
+      run_android_tests:
+        description: Run Android 16 emulator tests
+        type: boolean
+        default: true
+    secrets:
+      PREVIEW_KEYSTORE_BASE64:
+        required: false
+      PREVIEW_STORE_PASSWORD:
+        required: false
+      PREVIEW_KEY_ALIAS:
+        required: false
+      PREVIEW_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       run_android_tests:

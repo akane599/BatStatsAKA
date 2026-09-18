@@ -8,7 +8,7 @@ Shizuku remains primary, with bounded cancellable helper reads, explicit authori
 
 History now has nondestructive migrations, transactional bounded import/deduplication, predictable reset/delete behavior, pagination and session-linked charts. The UI adds readable source/freshness states, diagnostics and error recovery, accessible layouts, validated settings import and improved contrast. The useful expanded notification remains quiet with a stable identity and timestamp. Polling, retention, storage and notification work are bounded; no measured battery-saving percentage is claimed.
 
-Build preparation includes separate debug and optimized nondebug Preview packages, signing/update guidance, and a read-only manually started APK workflow with test/lint reports and checksums. The publishing workflow now honors its publication input. Baseline locale files were English duplicates; these are consolidated into English fallback with complete Spanish and Turkish resource translations.
+Build preparation includes separate debug and optimized nondebug Preview packages, signing/update guidance, and a read-only APK workflow usable from a phone and reused by push/PR CI, with test/lint reports and checksums. CI requires Android16 ordinary and Shizuku integration phases and passes no stable signing secrets. The publishing workflow now honors its publication input. Baseline locale files were English duplicates; these are consolidated into English fallback with complete Spanish and Turkish resource translations.
 
 ## Validation at this draft checkpoint
 
@@ -16,7 +16,7 @@ Build preparation includes separate debug and optimized nondebug Preview package
 - Host SQLite checks pass migrations, identity/deduplication, history paging and bounded chart queries.
 - Fresh Debug, nondebuggable/minified Preview and Android test APKs assembled from the current source; universal signatures and checksums verified (source commit dd7f2c0).
 - Resource completeness/format checks and direct AAPT2 compilation pass for493 Spanish and493 Turkish strings. Workflow actionlint passes.
-- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. Do not publish this description as final until VALIDATION.md and this section contain the completed results.
+- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. This remains a draft while those device checks are pending. Local software-emulator startup is exceptionally slow; baseline installation was rejected because Android was still booting. No app compatibility conclusion is drawn from that host limitation.
 
 ## Limits and delivery
 

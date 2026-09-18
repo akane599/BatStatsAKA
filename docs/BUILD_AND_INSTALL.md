@@ -11,7 +11,9 @@ After the workflow is approved and merged into the default branch:
 
 GitHub requires a `workflow_dispatch` file on the default branch before offering **Run workflow**; merely pushing a new workflow on a development branch does not register that button. See [GitHub’s manual-run documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
-This workflow has read-only repository permissions and does not create releases, tags, commits or PRs. Publishing it, pushing this branch, or triggering any Actions run still requires the user’s explicit approval. Existing push/PR CI runs automatically when those remote actions are approved.
+The APK workflow has read-only repository permissions and does not create releases, tags, commits or PRs. Push/PR CI now calls this same workflow with Android16 tests required, including the ordinary and real Shizuku phases. Publishing this branch and opening a PR automatically starts these checks and uploads APK/test artifacts; the push and PR events can each start a run. Explicit approval is required before these remote actions.
+
+Push/PR CI passes no repository signing secrets and uses an ephemeral development certificate. The directly launched phone workflow can use the optional stable Preview secrets described below. This keeps CI test code separate from stable signing credentials. The manually launched workflow still needs to reach the default branch before its Run workflow button appears.
 
 The separate **Android App Releases** workflow publishes only when **Upload releases** is explicitly selected. It delegates to an external release workflow that can push version/changelog commits and publish a release; it is not the phone download workflow. Its defaults now disable publication, Play upload and version bumping, and mark an explicitly published build as a prerelease.
 
