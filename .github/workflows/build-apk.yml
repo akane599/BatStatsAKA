@@ -72,6 +72,7 @@ jobs:
           python3 scripts/check_migrations.py
           python3 scripts/check_history_queries.py
           python3 scripts/check_resources.py
+          python3 -B -m unittest discover -s scripts -p 'test_*.py'
           ./gradlew :app:testDebugUnitTest :app:testPreviewUnitTest :app:lintDebug :app:lintPreview :app:assembleDebug :app:assemblePreview :app:assembleDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace
       - name: Enable KVM for the disposable emulator
         if: inputs.run_android_tests
