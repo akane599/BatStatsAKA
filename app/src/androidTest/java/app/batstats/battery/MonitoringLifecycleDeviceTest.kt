@@ -10,6 +10,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.By
+import androidx.test.uiautomator.StaleObjectException
 import androidx.test.uiautomator.Until
 import app.batstats.R
 import app.batstats.battery.drain.DrainNotificationManager
@@ -87,20 +88,24 @@ class MonitoringLifecycleDeviceTest {
             val row = device.wait(Until.findObject(By.text(title)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
-            // A tap can be lost while SystemUI is still animating the shade, and one
-            // lost tap followed by a single long wait only ends the suite. Re-target the
-            // row while the observation screen has not appeared; a delivered tap ends the
-            // loop, so the screen is never opened twice. The assertion is unchanged.
+            // Monitoring re-posts this notification as readings change, which replaces the
+            // SystemUI row and leaves any previously found node stale, so UiObject2.click()
+            // throws StaleObjectException against a row that is present and correct. Re-find
+            // the row immediately before each tap and treat only a stale node as a retry. A
+            // delivered tap ends the loop, so the screen is never opened twice, and reaching
+            // observed drain is still required within the same overall budget.
             val drainTitle = By.text(context.getString(R.string.monitor_drain_title))
-            var target = row
-            var attempts = 3
             var opened = false
+            var attempts = 3
             while (!opened && attempts-- > 0) {
-                target?.click()
-                opened = device.wait(Until.hasObject(drainTitle), if (attempts > 0) 30_000L else 60_000L)
-                if (!opened && attempts > 0 && device.openNotification()) {
-                    target = device.wait(Until.findObject(By.text(title)), 30_000)
+                val target = device.wait(Until.findObject(By.text(title)), 15_000)
+                val tapped = try {
+                    target?.click(); target != null
+                } catch (stale: StaleObjectException) {
+                    false // The row was replaced by an update between finding it and tapping.
                 }
+                if (tapped) opened = device.wait(Until.hasObject(drainTitle), if (attempts > 0) 20_000L else 60_000L)
+                if (!opened && attempts > 0) assertTrue("Notification shade did not reopen", device.openNotification())
             }
             DeviceEnvironment.screenshot("notification-opens-observation")
             assertTrue("Tapping the monitoring notification must open observed drain", opened)
