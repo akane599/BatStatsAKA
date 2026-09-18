@@ -30,6 +30,7 @@ class BatteryMonitorService : Service() {
     private var started = false
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (repository.isClearingHistory) { stopSelf(); return START_NOT_STICKY }
         if (started) return START_STICKY
         try {
             val notification = notifications.getNotification()

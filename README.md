@@ -31,6 +31,12 @@ Return to Advanced statistics and refresh. Grants may be refused by a device pol
 
 See [platform and source notes](docs/PLATFORM_NOTES.md) for contracts and limits. Existing production installations require the original signing key for an in-place update; development APKs use a separate package/signature.
 
+## History and privacy
+
+History export is deliberate: JSON and CSV include units, UTC timestamps, data sources and reporting periods. Date filters select samples and overlapping sessions; session totals keep their full original windows. Imports validate the complete file before committing, skip identical records, reject conflicts, and never resume imported sessions. Files are limited to64MiB and imports cannot exceed100,000 stored samples or10,000 sessions.
+
+Clearing history stops monitoring and deletes battery samples, sessions and stored app statistics. It does not reset Android system battery statistics, preferences or alarm rules. Export first to retain a copy. Automatic cloud/device transfer includes only preferences; battery history requires explicit export. Reports stay local until you choose a destination or share them.
+
 ## Development
 
 Use JDK21 and Android SDK37 for compilation; targetAPI36, minimumAPI26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).

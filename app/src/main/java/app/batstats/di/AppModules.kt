@@ -3,6 +3,7 @@ package app.batstats.di
 import android.os.Build
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.ExportImportManager
+import app.batstats.battery.data.HistoryMaintenance
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.drain.AdvancedDrainTracker
 import app.batstats.battery.drain.DrainNotificationManager
@@ -78,17 +79,18 @@ val appModule = module {
         )
     }
 
-    single { ExportImportManager(androidContext(), get()) }
-    single { BatteryRepository(androidContext(), get(), get(), get()) }
+    single { HistoryMaintenance() }
+    single { ExportImportManager(androidContext(), get(), get()) }
+    single { BatteryRepository(androidContext(), get(), get(), get(), get()) }
 
     single { AdvancedDrainTracker(androidContext(), get()) }
     single { DrainNotificationManager(androidContext(), get()) }
 
     viewModel { DashboardViewModel(androidApplication(), get(), get()) }
-    viewModel { SettingsViewModel(androidContext(), get(), get(), get()) }
+    viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
     viewModel { HistoryViewModel(get()) }
-    viewModel { DataViewModel(get()) }
+    viewModel { DataViewModel(get(), androidContext()) }
     viewModel { DrainStatsViewModel(get()) }
 
     viewModel { (sessionId: String) -> SessionDetailsViewModel(androidApplication(), get(), get(), sessionId) }

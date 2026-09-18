@@ -2,6 +2,9 @@ package app.batstats.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.content.Intent
+import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.service.BatteryMonitorService
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.settings.AppSettings
@@ -24,7 +27,8 @@ class SettingsViewModel(
     private val context: Context,
     private val repository: SettingsRepository<AppSettings>,
     private val resetManager: ResetManager<AppSettings>,
-    private val backupManager: SettingsBackupManager<AppSettings>
+    private val backupManager: SettingsBackupManager<AppSettings>,
+    private val batteryRepository: BatteryRepository
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = repository.flow
@@ -45,6 +49,12 @@ class SettingsViewModel(
 
     fun <V> observeField(fieldName: String): Flow<V> = repository.observeField(fieldName)
 
+    suspend fun clearHistory() {
+        batteryRepository.clearHistory {
+            context.stopService(Intent(context, BatteryMonitorService::class.java))
+        }
+    }
+
     suspend fun resetUISettings(): Int = resetManager.resetUISettings()
     suspend fun resetAll(): Int = resetManager.resetAll()
 
@@ -53,7 +63,7 @@ class SettingsViewModel(
             when (val result = backupManager.export()) {
                 is ExportResult.Success -> {
                     try {
-                        context.contentResolver.openOutputStream(uri)?.use { output ->
+                        (context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open settings destination")).use { output ->
                             output.write(result.json.toByteArray())
                         }
                         "Settings saved to ${uri.path}"

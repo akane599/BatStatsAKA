@@ -298,4 +298,14 @@
     <string name="adv_kernel_temperature">Kernel temperature</string>
     <string name="adv_kernel_time_empty">Kernel time-to-empty estimate</string>
     <string name="adv_kernel_time_full">Kernel time-to-full estimate</string>
+    <string name="history_range_help">The selected period ends when export begins. Session totals retain their full original windows; they are not clipped to this range.</string>
+    <string name="history_export_help">Includes units, UTC timestamps, sources and observation periods. Missing readings stay empty. Share files only with people you choose.</string>
+    <string name="history_import_help">Imports add history without starting monitoring. Identical records are skipped; conflicting or invalid files are rejected as a whole. CSV files contain either samples or sessions.</string>
+    <string name="history_limits">Limit: 64 MiB per file, 100,000 stored samples and 10,000 sessions after import. Export a smaller period if necessary.</string>
+    <string name="history_json_exported">JSON exported with units and reporting periods</string>
+    <string name="history_csv_exported">CSV exported with units and UTC timestamps</string>
+    <string name="history_imported">Added %1$d samples and %2$d sessions; extended %3$d sessions; %4$d unchanged. Monitoring was not started.</string>
+    <string name="history_operation_failed">History operation failed: %1$s</string>
+    <string name="history_clear_failed">History could not be cleared. Try again.</string>
+    <string name="history_clear_warning">Stops monitoring and permanently deletes battery samples, sessions and stored app statistics. Settings and alarm rules remain. Android system battery statistics are unaffected. Export first if you want a copy.</string>
 </resources>

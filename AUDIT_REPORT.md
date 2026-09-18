@@ -1,47 +1,64 @@
 # BatStats Audit Report
 
-Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`. Durable execution handoff: `PROGRESS.md`.
+Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; supplied APK6.2.6/code735 differs from source code734. Execution handoff: [PROGRESS.md](PROGRESS.md). Findings describe confirmed source paths unless execution evidence is stated.
 
 ## Coverage
-- [ ] Build, dependencies, manifest, CI/release, documentation/assets
-- [ ] Monitoring lifecycle, access modes, Root/Shizuku/shell security
-- [ ] Battery readings, calculations, estimates, session/screen accounting
-- [ ] Room persistence, retention, resets, import/export
-- [ ] Advanced collectors, parsers, per-app attribution and reporting windows
-- [ ] ViewModels, dashboard, navigation, charts, history, settings and themes
-- [ ] Notifications, widgets, alarms and background overhead
-- [ ] Automated tests, Android 16 interactions/screenshots and APK delivery
+- [x] Build/dependencies/manifest and CI/release source reviewed; workflow fixes and final delivery pending.
+- [x] Monitoring lifecycle, access modes, transport/security, measurements and session calculations reviewed; runtime checks pending.
+- [x] Room/migrations/import/export/clear/retention source reviewed; Android execution pending.
+- [x] Advanced collectors, Android16 producer layout, UID attribution and kernel ABI reviewed; real device outputs pending.
+- [x] ViewModels/navigation/screen layouts/theme colors and widget/background paths reviewed; remaining fixes below.
+- [ ] Complete localization/resource/store-asset review, actual screens, accessibility and error/recovery interactions.
+- [ ] Android16/Shizuku instrumentation, visual validation and final debug/nondebug APK delivery.
 
-## Findings
-All below confirmed by direct execution path/source inspection; fixes pending unless stated.
+## Confirmed findings and status
 
-| ID | Priority | Evidence and affected area |
-| --- | --- | --- |
-| B01 | High | `BatteryRepository`: missing level becomes 0; MIN_VALUE current survives fallback; valid zero replaced by average; power/current widgets inherit invalid readings. |
-| B02 | High | `AdvancedDrainTracker.isInDeepSleep`: total elapsed−uptime since boot >30s labels every later screen-off snapshot deep sleep; Doze time incorrectly used as CPU sleep. |
-| B03 | High | Drain tracker: end-of-interval screen attribution, racing receiver/poll jobs, wall-clock durations, charge time included in denominator, reset leaves prior snapshot, 4000 mAh fallback creates fictional consumption. |
-| B04 | High | Repository auto-session logic is a TODO; manual starts allow multiple active sessions; no reboot/gap boundaries; all-null current average converts NaN to 0. |
-| B05 | High | `TimeEstimator` assumes 4000 mAh and instantaneous current; UI invents health percentage from cycle-count thresholds. |
-| B06 | High | Android manifest/service uses `dataSync` for indefinite monitoring (Android 15+ six-hour limit); boot coroutine not protected by goAsync; privileged mode only chosen at startup. |
-| B07 | High | `ShellRunner` silently falls through Root→Shizuku→ADB; helper reports partial timeout/nonzero-exit output as success, truncates output; inline timeout occurs after blocking read. |
-| B08 | High | `DetailedStatsCollector`: successful power/deviceidle read hides failed batterystats and refreshes timestamp of stale snapshot; failed subreads retain previous data. |
-| B09 | High | `BatteryStatsParser`: jobs/sync count/time swapped per Android 16 BatteryStats.java; Doze idling fields mislabeled as maintenance; app detail fields never populated but displayed as zero. |
-| B10 | High | `BstatsCollector`: newly seen UID uses zero prior counter (attributes pre-observation usage); missing epoch/backend boundaries; retries every 5s on failure; duplicate dumps across collectors. |
-| B11 | High | `ForegroundDrainTracker`: arbitrary 80/20 mA subtraction, current charged attributed to last foreground app, ignores pause/stop and observation gaps; setting not consulted. |
-| B12 | High | Room destructive fallback loses history; imports nontransactional/unbounded and duplicate sample IDs reset; active imported sessions overwrite local state; exports ignore session range. |
-| B13 | High | Settings clear-all calls Room blocking API on main thread; service may continue writing during deletion. |
-| B14 | Medium | History `SessionCard` internal empty click handler consumes navigation; detail/export screens lack vertical scrolling; six dashboard actions crowd toolbar; charts replace missing with zero and lack axes/time. |
-| B15 | Medium | Monitoring notification rebuild resets timestamp; settings/alarms/retention largely unused; widget IPC on every sample even no installed widgets. |
-| B16 | Medium | Root-only collectors read files as app UID, not su; unsupported devices appear empty/zero; battery capacity advertised as true/exact. |
-| B17 | Medium | Release workflow has stale application-id `app.batstats`, unused upload inputs, default production publishing; no local test/report pipeline. |
+| ID | Priority | Evidence / affected area | Resolution / remaining verification |
+| --- | --- | --- | --- |
+| B01 | High | `BatteryRepository`: missing level becomes 0; MIN_VALUE current survives fallback; valid zero replaced by average; power/current widgets inherit invalid readings.  Fixed; JVM regression coverage; device validation pending |
+| B02 | High | `AdvancedDrainTracker.isInDeepSleep`: total elapsed−uptime since boot >30s labels every later screen-off snapshot deep sleep; Doze time incorrectly used as CPU sleep.  Fixed; separate observed CPU/Doze accounting tested |
+| B03 | High | Drain tracker: end-of-interval screen attribution, racing receiver/poll jobs, wall-clock durations, charge time included in denominator, reset leaves prior snapshot, 4000 mAh fallback creates fictional consumption.  Fixed; monotonic observation/screen/gap/coverage tests pass |
+| B04 | High | Repository auto-session logic is a TODO; manual starts allow multiple active sessions; no reboot/gap boundaries; all-null current average converts NaN to 0.  Fixed; shared writer and DB4 active uniqueness; Room device tests pending |
+| B05 | High | `TimeEstimator` assumes 4000 mAh and instantaneous current; UI invents health percentage from cycle-count thresholds.  Fixed; stable counter ETA, no fixed capacity or cycle-derived health |
+| B06 | High | Android manifest/service uses `dataSync` for indefinite monitoring (Android 15+ six-hour limit); boot coroutine not protected by goAsync; privileged mode only chosen at startup.  Implemented; API36 service/boot runtime tests pending |
+| B07 | High | `ShellRunner` silently falls through Root→Shizuku→ADB; helper reports partial timeout/nonzero-exit output as success, truncates output; inline timeout occurs after blocking read.  Implemented; bounded transport/cancellation JVM tests pass; Binder runtime pending |
+| B08 | High | `DetailedStatsCollector`: successful power/deviceidle read hides failed batterystats and refreshes timestamp of stale snapshot; failed subreads retain previous data.  Partly fixed; collector generations/stale snapshots handled; notification error propagation pending |
+| B09 | High | `BatteryStatsParser`: jobs/sync count/time swapped per Android 16 BatteryStats.java; Doze idling fields mislabeled as maintenance; app detail fields never populated but displayed as zero.  Fixed against Android16 producer; synthetic parser regressions pass |
+| B10 | High | `BstatsCollector`: newly seen UID uses zero prior counter (attributes pre-observation usage); missing epoch/backend boundaries; retries every 5s on failure; duplicate dumps across collectors.  Removed unused duplicate writer; detailed UID collector preserved |
+| B11 | High | `ForegroundDrainTracker`: arbitrary 80/20 mA subtraction, current charged attributed to last foreground app, ignores pause/stop and observation gaps; setting not consulted.  Removed unsupported heuristic; detailed UID reports preserved; unused setting pending |
+| B12 | High | Room destructive fallback loses history; imports nontransactional/unbounded and duplicate sample IDs reset; active imported sessions overwrite local state; exports ignore session range.  Implemented; bounded transactional imports/export, nondestructive migrations; JVM/host SQL pass, Android execution pending |
+| B13 | High | Settings clear-all calls Room blocking API on main thread; service may continue writing during deletion.  Implemented; serialized clear/start gate and cancellation tests pass; UI runtime pending |
+| B14 | Medium | History `SessionCard` internal empty click handler consumes navigation; detail/export screens lack vertical scrolling; six dashboard actions crowd toolbar; charts replace missing with zero and lack axes/time.  Partly fixed; dashboard/drain/advanced/export/session details revised; remaining history/accessibility/visual review pending |
+| B15 | Medium | Monitoring notification rebuild resets timestamp; settings/alarms/retention largely unused; widget IPC on every sample even no installed widgets.  Partly fixed; stable notification/collection, bounded retention; alerts/settings/widgets pending |
+| B16 | Medium | Root-only collectors read files as app UID, not su; unsupported devices appear empty/zero; battery capacity advertised as true/exact.  Implemented; actual su reads and validated kernel parsers; vendor/root hardware unverified |
+| B17 | Medium | Release workflow has stale application-id `app.batstats`, unused upload inputs, default production publishing; no local test/report pipeline.  Open; local manual build/report workflow and corrected release configuration pending |
+| B18 | High | Alpha Compose requires SDK37.1 while project declared37.0. | Fixed with stable Compose BOM; metadata and app compilation pass. |
+| B19 | High | ADB dump gate incorrectly modeled DUMP/PACKAGE_USAGE_STATS/AppOps. | Fixed to Android16 producer contract; actual device grants pending. |
+| B20 | High | `--checkin` may consume a completed saved report. | Fixed to current non-consuming `-c --charged`; source/window remains explicit. |
+| B21 | Medium | Default automatic backup included history databases. | Fixed manifest and both backup-rule generations: settings DataStore only; XML checked, OEM transfer unverified. |
+| B22 | Medium | New advanced UI strings lack locale translations. | Open: last lint125 MissingTranslation errors/216 warnings. More new strings now added; real translations required. |
+| B23 | Medium | Dark onSecondary#3B1F70 over secondary#8B5CF6 has calculated contrast3.07:1. | Open: fix normal-text contrast and inspect actual screens. |
+| B24 | Medium | Local chart query included imported/legacy readings without a matching source label. | Fixed local query to BatteryManager records; host SQL passes, Android regression compiled. Imported legacy detail labels still pending. |
+| B25 | Medium | Widgets lack freshness/stopped labels; absent in-memory sample leaves stale/blank display. | Open: update lifecycle/empty/freshness behavior and temperature preference. |
 
-Suspicions needing tests: Samsung vendor current sign/units, provider/binder reconnection behavior, platform-specific checkin formats and sysfs accessibility. No real Samsung available.
+## Actual validation
+- Pristine dependency metadata failed in57s: alpha UI requires SDK37.1. Stable BOM metadata passes with compile37/target36/min26.
+- Parser baseline reproduced12 new failures; fixed producer-based suite subsequently passed. Stage3d51 JVM tests passed; lint failed125 missing translations/216 warnings. API28/min26 charge-time error was corrected; lint translation errors are not suppressed.
+- **Stage4a rerun passed in2m6s:** `:app:testDebugUnitTest :app:compileDebugAndroidTestKotlin`;63 JVM tests,0fail/error/skip. Includes12 new history identity/units/coverage/CSV/JSON limits and clear-race/cancellation tests. Android migration/import test sources compile, not executed.
+- First stage4a run:63 JVM tests passed but Android tests did not compile because RoomDatabase is not Closeable. Fixed test cleanup with explicit try/finally; no assertions removed/weakened.
+- `python3 scripts/check_migrations.py`: actual SQL1/2/3→4 matches exported schema/indices, preserves rows and sanitizes sentinels/active state. `python3 scripts/check_history_queries.py`: actual DAO SQL verifies chart provenance, positive local IDs after negative imported IDs, duplicate-point transaction rollback preserving existing rows, overlapping periods and bounded sessions retaining active state. Both pass on host SQLite, not Android.
+- All76 Android XML files parse; explicit backup includes only settings DataStore; `git diff --check` passes.
+- Latest assembled APK is stage3b, older than current source. Final lint, debug and nondebug builds remain required.
 
-## Validation
-Baseline compile completed but dependency metadata check failed; remaining D8 work stopped and pristine metadata-only reproduction started. Stage 2 code now being implemented, not yet verified. APK signature/manifest inspected; see PROGRESS.md hashes. Default emulator creation hit disk requirement; recovery in progress. No physical Samsung hardware available.
+## Device/environment limits
+Android16 ATD software emulator has no KVM. Initial framework repeatedly hit watchdog; documented timeout multiplier100 allowed one verified boot completion before user pause. Baseline install was interrupted; installation status unknown. Resumed emulator boot plus build exhausted3.8GiB RAM/4GiBswap; only task emulator stopped. **Run builds and emulator checks sequentially.** No app UI screenshots/instrumentation/Shizuku runtime success claimed. No physical Samsung hardware available or requested. Emulator sensor values are injected; they cannot establish current calibration, capacity accuracy, Samsung AOD/lifecycle or energy savings.
 
-## Work queue
-Establish baseline build and trace collection → persistence → calculations → UI/notification. Prioritize confirmed correctness/lifecycle defects; implement explicitly requested UX and delivery improvements.
+## Next work and unresolved suspicions
+- Stage4b: meaningful alerts/settings, collector error propagation, rich stable notification consistency/navigation, local bounded diagnostics, widget freshness and remaining monitoring efficiency.
+- Stage4c: complete translations/resource extraction, history pagination/legacy states, color contrast and all-screen responsive/accessibility polish.
+- Stage5: API36/Shizuku/Binder/UI tests as environment supports, debug/nondebug APKs/signing guidance, locally prepared manual build workflow/reports/PR description. GitHub writes/Actions require explicit approval; none performed.
+- Samsung vendor current direction/units, kernel/sysfs permissions/formats, actual reconnection/cancellation and One UI process management remain unverified. Missing data stays distinguishable from zero.
+- Unused helper/constants/system-UI utilities are low-risk technical debt, not grounds for cleanup-only changes. User-requested UI enhancements are authorized independently of audit defects.
 
 ## Primary platform references consulted
 - [BatteryManager units, sentinel values and charge-time approximation](https://developer.android.com/reference/android/os/BatteryManager)
@@ -51,40 +68,4 @@ Establish baseline build and trace collection → persistence → calculations �
 - [Shizuku API lifecycle and UserService](https://github.com/RikkaApps/Shizuku-API/blob/master/README.md)
 - [Android 16 checkin producer](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/android/os/BatteryStats.java), local reference `/tmp/batstats-BatteryStats-android16.java`.
 
-## Architecture/coverage detail
-Read critical source in full: repository, entities/DAOs/database, export/import, service/boot/app/activity, all ViewModels, Shizuku helper/bridge/checkin collector, ShellRunner/RootStatsCollector/PrivilegeChecker/TimeEstimator/DetailedStatsCollector/BatteryStatsParser, drain tracker/state/notification, heuristic tracker, widgets. Reviewed build/manifest/workflows/settings and screen entry/data flows. Remaining detailed UI layouts/theme resources/localizations and assets are explicitly pending, together with runtime validation.
-
-### Stage 2 work in progress
-B06/B07/B08: specialUse FGS, goAsync boot, no source fallthrough on read errors, bounded framed helper output and partial-failure reporting implemented but unverified. B18 (High): baseline alpha Compose BOM UI artifacts require compile SDK 37.1, project has 37.0; switching to stable BOM whose UI AAR requires 37.0. Pristine metadata-only reproduction failed in 57s with five SDK 37.1 requirements; updated stable BOM metadata check passed. JVM compilation/tests pending. Stable Material 3 replaces unavailable experimental wavy indicators/theme. Read deadline now covers inherited pipes as well as parent-process timeout; 8 regression tests authored, not yet passed. All other B findings remain open.
-
-Static validation: parsed all 76 Android XML files successfully after manifest changes; `git diff --check` passes. This is not runtime or UI validation.
-
-### Stage 3a measurement model
-Added pure validated Android-unit readings, monotonic observation accounting and stable counter-based ETA model. Tests cover zero vs missing, units/sign, screen transitions, no screen-off interval, charging denominators, reset/reboot/clock/gaps, CPU suspend vs Doze, counter resets and unstable ETA. All 28 current pure JVM tests PASS (Kotlin 2.4.20/JUnit4). B01–B05 remain open until these models replace existing app calculations. Earlier Gradle test reproduced old command-pipe hang; current read-deadline implementation passes the same regression test. Android service/binder runtime verification remains pending.
-
-### Stage 3b integration (uncommitted; validation pending)
-B01–B04: normalized nullable readings feed one bounded serialized observation/persistence path; new DB4 metadata/unique active session/migrations1–4; UI and notification share screen/counter coverage. B05: removed fixed4000 ETA; cycle-derived health in advanced UI still open. B10/B11: removed unused duplicate hourly writer and unsupported per-app current-minus-baseline tracker; existing detailed UID statistics retained. B14/B15: dashboard/drain/notification and timestamp/gap-aware charts rewritten; no emulator visual validation yet. Migration tests1/2/3→4 authored. Earlier integration build failed on stale KSP adapter after DAO edit during build; rerun currently in progress. No complete APK/lint success yet.
-
-Remaining work: advanced producer-backed parser/UID attribution/source windows; root helper reads; imports/export/reset integrity; alarms/unused settings/retention bounds; local bounded diagnostics; resource extraction and all-screen/accessibility review; integration tests and actual emulator/Shizuku behavior; debug/non-debug APKs/signing/workflow/PR delivery. Emulator ADB online but framework services absent: baseline install failed, no app runtime validation yet.
-
-Stage 3b verification: Gradle JVM tests + instrumentation-source compilation PASS in5m35s:29 JVM tests,0 failures,0 skipped. Host SQLite migrations1/2/3→4 match Room-exported schema/indices/PKs and preserve rows while sanitizing unavailable sentinels; active uniqueness enforced. Android migration execution and UI still unverified.
-
-New confirmed findings (priority high; next fixes):
-- B19: Android16 batterystats dump requires DUMP and PACKAGE_USAGE_STATS permission plus allowed/default usage app-op. Original OR guard and current DUMP/BATTERY_STATS AND guard do not model this contract correctly. Correct the introduced restrictive gate before delivery.
-- B20: `dumpsys batterystats --checkin` prefers a saved completed snapshot and deletes that saved file after reading, so repeated reads can cover different windows and consume Android's checkin. Use current non-consuming `-c` output with bounded handling of included history, or a supported replacement; do not silently mix epochs.
-Sources: [BatteryStatsService Android16](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/services/core/java/com/android/server/am/BatteryStatsService.java) (`dumpUnmonitored`, help and checkin file paths), [DumpUtils permissions](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/com/android/internal/util/DumpUtils.java).
-
-### Stage3c producer validation in progress
-Twelve new synthetic Android16 parser cases all failed against the old implementation (41 tests total,12 failures). Fixes now parse correct job/sync/Doze/Bluetooth/network/UID fields, preserve unknowns, validate epochs and reject duplicate/invalid energy. Advanced UI now exposes actual reporting periods, uncertainty and complete scrollable lists; cycle-derived health removed. Source contracts B19/B20 corrected locally. Main compile/test validation ongoing; Root sysfs execution, stale access UI and reset/cancellation remain open.
-Stage3b debug APK assembled successfully. Lint failed one API28/min26 charging-ETA call; guarded in current stage, not yet revalidated. No emulator screen/instrumentation success yet.
-
-Parser fix verification: standalone Kotlin/JUnit **45 tests PASS** (16 advanced parser cases plus29 prior cases),1.07s test runtime; `/tmp/batstats-parser-fixed-tests.log`. Full Android compile/test still running. No device parser-output validation claimed.
-
-Stage3c Gradle verification PASSED4m40s:45 JVM tests,0fail/error/skip, Android migration-test compilation. Advanced UI compiles, not visually reviewed. B09/B19/B20 implemented with producer-based regressions; B05 fake cycle health removed. Root/access/reset follow-up is next.
-
-### Stage3d in progress
-B07: cancellation now interrupts helper command and cancels pipe delivery; pure interruption regression passed. Added rejection for native dumpsys timeout marker after partial checkin (previous format-only validation could accept it). B08 source generations/reset lock and stale access ViewModel tightened. B16 uses actual bounded su reads and kernel ABI parser; tests cover unsupported values, capacity basis, CPU/thermal fields and modern/legacy wakeup timing units. UI shows source/freshness/errors and restored sorting/reset/grant help. Full validation running.
-New B21 (Medium): application allowBackup=true with unreferenced template backup_rules allows automatic cloud backup of battery history. User requires local diagnostics unless deliberately shared; implement explicit backup exclusions in privacy/history stage.
-Environment: emulator watchdog restarts before APK installation; documented ro.hw_timeout_multiplier100 configured on task-only software ATD (unset by default), framework restart requested. Keep this accommodation and missing physical-device validation explicit.
-
-Stage3d validation: Gradle JVM51 tests PASS,0fail/error/skip. Combined build FAILED10m29s at lint with125 MissingTranslation errors/216 warnings; API28 compatibility error resolved. Newly resourced advanced UI requires real locale translations (B22,Medium); tracked for stage4c, not suppressed. Debug assembly was after lint and did not execute; last APK is stage3b. Transport Binder/device behavior still pending.
+Additional sources/contracts and privacy constraints: [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md). Do not treat source review or emulator success as proof of physical battery accuracy.

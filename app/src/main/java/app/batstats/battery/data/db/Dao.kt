@@ -8,13 +8,25 @@ interface BatteryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSample(sample: BatterySample): Long
 
+    @Query("SELECT * FROM battery_samples WHERE id = :id")
+    suspend fun byId(id: Long): BatterySample?
+
+    @Query("SELECT * FROM battery_samples WHERE timestamp = :timestamp")
+    suspend fun atTimestamp(timestamp: Long): List<BatterySample>
+
+    @Query("SELECT * FROM battery_samples WHERE observationId = :observationId AND elapsedMs = :elapsedMs LIMIT 1")
+    suspend fun observedPoint(observationId: String, elapsedMs: Long): BatterySample?
+
+    @Query("SELECT COUNT(*) FROM battery_samples")
+    suspend fun count(): Int
+
     @Query("SELECT * FROM battery_samples ORDER BY timestamp DESC LIMIT 1")
     suspend fun lastSample(): BatterySample?
 
     @Query("SELECT * FROM battery_samples WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
     fun samplesBetween(from: Long, to: Long): Flow<List<BatterySample>>
 
-    @Query("SELECT * FROM battery_samples WHERE id IN (SELECT MAX(id) FROM battery_samples WHERE timestamp BETWEEN :from AND :to GROUP BY timestamp / :bucketMs) ORDER BY timestamp")
+    @Query("SELECT * FROM battery_samples WHERE id IN (SELECT MAX(id) FROM battery_samples WHERE timestamp BETWEEN :from AND :to AND source = 'BatteryManager' GROUP BY timestamp / :bucketMs) ORDER BY timestamp")
     fun chartSamples(from: Long, to: Long, bucketMs: Long): Flow<List<BatterySample>>
 
     @Query("SELECT * FROM battery_samples WHERE sessionId = :sessionId ORDER BY elapsedMs, id")
@@ -42,6 +54,15 @@ interface SessionDao {
     suspend fun upsert(session: ChargeSession) {
         if (update(session) == 0) insert(session)
     }
+
+    @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
+    suspend fun byId(id: String): ChargeSession?
+
+    @Query("SELECT COUNT(*) FROM charge_sessions")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM charge_sessions WHERE activeKey IS NULL AND sessionId NOT IN (SELECT sessionId FROM charge_sessions ORDER BY activeKey IS NOT NULL DESC, startTime DESC LIMIT :limit)")
+    suspend fun boundStorage(limit: Int = 10_000)
 
     @Query("SELECT * FROM charge_sessions WHERE activeKey = 1 LIMIT 1")
     suspend fun active(): ChargeSession?

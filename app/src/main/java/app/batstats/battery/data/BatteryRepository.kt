@@ -26,7 +26,8 @@ class BatteryRepository(
     private val context: Context,
     private val db: BatteryDatabase,
     private val settingsRepository: SettingsRepository<AppSettings>,
-    private val scope: CoroutineScope
+    private val scope: CoroutineScope,
+    private val maintenance: HistoryMaintenance
 ) {
     private val batteryDao = db.batteryDao()
     val sessionDao = db.sessionDao()
@@ -37,6 +38,7 @@ class BatteryRepository(
     private val estimator = RemainingTimeEstimator()
     private val events = Channel<Event>(64)
     @Volatile private var activeGeneration: String? = null
+    val isClearingHistory: Boolean get() = maintenance.isClearing
     @Volatile private var overflow = false
     private var samplingJob: Job? = null
     private var receiverRegistered = false
@@ -45,6 +47,7 @@ class BatteryRepository(
     private var lastPersisted: BatterySample? = null
     private var sampleCount = 0L
     private var lastCleanupElapsed = Long.MIN_VALUE
+    private var samplesSinceCleanup = 0
 
     private val _realtime = MutableStateFlow(Realtime())
     val realtimeFlow = _realtime.asStateFlow()
@@ -95,9 +98,13 @@ class BatteryRepository(
                                 db.withTransaction {
                                     batteryDao.clearAll(); sessionDao.clearAll(); db.appEnergyDao().clearAll()
                                 }
-                                session = null; lastPersisted = null
+                                session = null; lastPersisted = null; sampleCount = 0
+                                _error.value = null
                                 engine.reset(); sessionEngine.reset(); estimator.reset()
                                 _observation.value = engine.summary
+                                try { settingsRepository.update { it.copy(totalSamplesCollected = 0) } }
+                                catch (e: CancellationException) { throw e }
+                                catch (_: Exception) { _error.value = "History cleared; the sample-count setting could not be reset" }
                                 event.result.complete(Unit)
                             } catch (e: Exception) { event.result.completeExceptionally(e); throw e }
                         }
@@ -129,7 +136,7 @@ class BatteryRepository(
 
     fun startSampling() {
         scope.launch(Dispatchers.Main.immediate) {
-            if (activeGeneration != null) return@launch
+            if (activeGeneration != null || isClearingHistory) return@launch
             val generation = UUID.randomUUID().toString()
             activeGeneration = generation
             _isMonitoring.value = true
@@ -187,17 +194,23 @@ class BatteryRepository(
         events.send(Event.Reset); capture(Boundary.SAMPLE)
     }
 
-    /** Caller must stop the service first. Serialization prevents a late write after deletion. */
-    suspend fun clearHistory() {
-        withContext(Dispatchers.Main.immediate) {
-            activeGeneration = null; _isMonitoring.value = false
-            samplingJob?.cancel(); samplingJob = null
-            if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
-            receiverRegistered = false
+    /** Serialized with imports and the sample writer; no queued sample can survive deletion. */
+    suspend fun clearHistory(stopService: () -> Unit) = maintenance.clear(
+        stopMonitoring = {
+            withContext(Dispatchers.Main.immediate) {
+                stopService()
+                activeGeneration = null; _isMonitoring.value = false
+                samplingJob?.cancel(); samplingJob = null
+                if (receiverRegistered) runCatching { context.unregisterReceiver(receiver) }
+                receiverRegistered = false
+            }
+        },
+        delete = {
+            val result = CompletableDeferred<Unit>()
+            events.send(Event.Clear(result))
+            result.await()
         }
-        val result = CompletableDeferred<Unit>()
-        events.send(Event.Clear(result)); result.await()
-    }
+    )
 
     private fun capture(boundary: Boundary, screenOverride: Boolean? = null) {
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -264,11 +277,12 @@ class BatteryRepository(
         _realtime.value = Realtime(sample)
         _observation.value = summary
         _error.value = null
-        if (inserted != -1L) sampleCount++
+        if (inserted != -1L) { sampleCount++; samplesSinceCleanup++ }
         if (sampleCount >= 100) flushSampleCount()
-        if (lastCleanupElapsed == Long.MIN_VALUE || event.point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
+        if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= 200 || event.point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             cleanup(sample.timestamp)
             lastCleanupElapsed = event.point.elapsedMs
+            samplesSinceCleanup = 0
         }
     }
 
@@ -306,7 +320,8 @@ class BatteryRepository(
             val cutoff = now - days * 86_400_000
             db.withTransaction { batteryDao.purge(cutoff); sessionDao.purge(cutoff); db.appEnergyDao().purgeOlderThan(cutoff) }
         }
-        batteryDao.boundStorage() // Even "forever" keeps at most 100,000 raw samples.
+        sessionDao.boundStorage()
+        batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

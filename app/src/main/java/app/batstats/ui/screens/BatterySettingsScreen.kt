@@ -28,7 +28,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
-import app.batstats.battery.BatteryGraph
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.Data
@@ -70,6 +69,7 @@ fun BatterySettingsScreen(
 
     var showResetDialog by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
+    var clearingHistory by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
 
     var showDropdown by remember { mutableStateOf(false) }
@@ -359,24 +359,31 @@ fun BatterySettingsScreen(
     // Clear Data Dialog
     if (showClearDataDialog) {
         val dataClearedMsg = stringResource(R.string.data_cleared)
+        val clearFailedMsg = stringResource(R.string.history_clear_failed)
         AlertDialog(
-            onDismissRequest = { showClearDataDialog = false },
+            onDismissRequest = { if (!clearingHistory) showClearDataDialog = false },
             icon = { Icon(Icons.Outlined.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
             title = { Text(stringResource(R.string.clear_all_data)) },
-            text = { Text(stringResource(R.string.clear_data_warning)) },
+            text = { Text(stringResource(R.string.history_clear_warning)) },
             confirmButton = {
                 TextButton(
+                    enabled = !clearingHistory,
                     onClick = {
+                        clearingHistory = true
                         scope.launch {
-                            BatteryGraph.db.clearAllTables()
-                            snackbarHost.showSnackbar(dataClearedMsg)
-                            showClearDataDialog = false
+                            try {
+                                vm.clearHistory()
+                                showClearDataDialog = false
+                                snackbarHost.showSnackbar(dataClearedMsg)
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                            catch (_: Exception) { snackbarHost.showSnackbar(clearFailedMsg) }
+                            finally { clearingHistory = false }
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) { Text(stringResource(R.string.delete_all)) }
             },
-            dismissButton = { TextButton(onClick = { showClearDataDialog = false }) { Text(stringResource(R.string.cancel)) } }
+            dismissButton = { TextButton(enabled = !clearingHistory, onClick = { showClearDataDialog = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 }

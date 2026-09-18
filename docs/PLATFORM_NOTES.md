@@ -45,3 +45,9 @@ Android16 also documents `dumpsys batterystats --usage` and `--usage --proto`; t
 Kernel attributes use µV, µA, µAh, µWh, seconds and tenths Celsius by ABI. Full-charge capacity is a remembered gauge threshold, not a laboratory capacity measurement. CPU `time_in_state` uses10ms usertime units and covers time since driver load/reset, which can differ from time since boot.
 
 Sources: [Linux power supply class](https://cdn.kernel.org/doc/html/latest/power/power_supply_class.html), [CPU frequency statistics](https://kernel.org/doc/html/latest/cpu-freq/cpufreq-stats.html).
+
+## Backup and alert preferences
+
+Android backs up databases and app files by default. Both the pre-Android12 backup rules and Android12+ cloud/device-transfer rules explicitly include only the settings DataStore directory. Battery databases and diagnostic files are not included; future diagnostics belong in noBackupFilesDir. Explicit exports remain the user-controlled transfer path. See [Auto Backup rules](https://developer.android.com/identity/data/autobackup).
+
+Android notification-channel sound and vibration are controlled by the user after channel creation. A working settings screen must open the channel settings rather than imply that unrelated preference switches override Android. See [notification channels](https://developer.android.com/develop/ui/compose/notifications/channels).
