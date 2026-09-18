@@ -22,10 +22,10 @@ batstats_hardware="$(adb shell getprop ro.hardware | tr -d '\r')"
 rm -rf app/build/reports/device-validation
 rm -rf app/build/outputs/connected_android_test_additional_output
 mkdir -p app/build/reports/device-validation
-adb shell rm -rf /sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots
+adb shell rm -rf /sdcard/Download/batstats-validation-screenshots
 batstats_phase=ordinary
 collect_screenshots() {
-  adb pull /sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots app/build/reports/device-validation/ >/dev/null 2>&1 || true
+  adb pull /sdcard/Download/batstats-validation-screenshots app/build/reports/device-validation/ >/dev/null 2>&1 || true
   # AGP can uninstall the app before this shell regains control. Its additional-output
   # collector copies screenshots before uninstalling, including after failed tests.
   local collected=app/build/outputs/connected_android_test_additional_output
@@ -50,7 +50,7 @@ run_gradle_phase() {
   rm -rf app/build/outputs/androidTest-results app/build/reports/androidTests \
     app/build/outputs/connected_android_test_additional_output
   ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace \
-    -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots \
+    -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/sdcard/Download/batstats-validation-screenshots \
     "$@" || result=$?
   if [[ -d app/build/outputs/androidTest-results ]]; then
     cp -R app/build/outputs/androidTest-results "app/build/reports/device-validation/${batstats_phase}-results" || return 1
@@ -74,7 +74,7 @@ fi
 collect_screenshots
 # Collect independent Shizuku evidence even if ordinary assertions failed. Both remain required.
 rm -rf app/build/outputs/connected_android_test_additional_output
-adb shell rm -rf /sdcard/Android/data/org.mlm.batstats.debug/files/validation-screenshots
+adb shell rm -rf /sdcard/Download/batstats-validation-screenshots
 batstats_phase=shizuku
 if python3 scripts/prepare_shizuku.py --serial "$batstats_serial"; then
   if "$batstats_prebuilt"; then

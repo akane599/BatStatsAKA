@@ -2,6 +2,7 @@ package app.batstats.test
 
 import android.content.Context
 import android.os.Build
+import android.os.ParcelFileDescriptor
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.uiautomator.UiDevice
@@ -18,9 +19,31 @@ object DeviceEnvironment {
         assertEquals("This suite verifies the Android 16 contract", 36, Build.VERSION.SDK_INT)
     }
     fun screenshot(name: String) {
-        val directory = File(context.getExternalFilesDir(null), "validation-screenshots").apply { mkdirs() }
-        assertTrue("Screenshot capture failed: $name", device.takeScreenshot(File(directory, "$name.png")))
-        device.dumpWindowHierarchy(File(directory, "$name.xml"))
+        requireDisposableEmulator()
+        require(name.matches(Regex("[a-z0-9-]+")))
+        // AGP creates its collection directory as shell before installing the package.
+        // Capture as the app in private storage, then publish through the test shell.
+        val directory = File(context.cacheDir, "validation-screenshots").apply { mkdirs() }
+        val png = File(directory, "$name.png")
+        val xml = File(directory, "$name.xml")
+        val output = "/sdcard/Download/batstats-validation-screenshots"
+        try {
+            assertTrue("Screenshot capture failed: $name", device.takeScreenshot(png))
+            device.dumpWindowHierarchy(xml)
+            val command = "mkdir -p '$output' && " +
+                "run-as ${context.packageName} cat '${png.absolutePath}' > '$output/$name.png' && " +
+                "run-as ${context.packageName} cat '${xml.absolutePath}' > '$output/$name.xml' && echo BATSTATS_CAPTURE_OK\n"
+            // UiAutomation's string command uses Runtime.exec, which does not interpret
+            // pipes/redirection/quotes. Feed the fixed script to an actual shell over stdin.
+            val pipes = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommandRw("sh")
+            val result = try {
+                ParcelFileDescriptor.AutoCloseOutputStream(pipes[1]).bufferedWriter().use { it.write(command) }
+                ParcelFileDescriptor.AutoCloseInputStream(pipes[0]).bufferedReader().use { it.readText() }
+            } finally { pipes.forEach { it.close() } }
+            assertTrue("Screenshot publication failed: $name ($result)", result.trim().endsWith("BATSTATS_CAPTURE_OK"))
+        } finally {
+            png.delete(); xml.delete()
+        }
     }
 }
 

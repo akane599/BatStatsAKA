@@ -147,16 +147,19 @@ class RepositoryRecoveryTest {
 
     @Test fun failedStorageRestartCannotReuseThePreviousObservationAndOrdinaryReadsStayAvailable(): Unit = runBlocking {
         val fixture = Fixture()
+        var phase = "initial observation"
         try {
             fixture.repository.startSampling()
             withTimeout(60_000) { fixture.repository.observation.first { it.startedAt != null } }
             fixture.repository.stopSampling()
             withTimeout(60_000) { fixture.repository.isMonitoringFlow.first { !it } }
+            phase = "restart with closed storage"
             fixture.database.close() // Deliberate storage failure, isolated from the app's normal database.
             fixture.repository.startSampling()
             withTimeout(60_000) { fixture.repository.isMonitoringFlow.first { it } }
             withTimeout(60_000) { fixture.repository.observation.first { it.startedAt == null } }
             withTimeout(60_000) { fixture.repository.error.first { it?.contains("History collection failed") == true } }
+            phase = "ordinary read failure and recovery"
             fixture.context.missingBattery = true
             fixture.refresh()
             withTimeout(60_000) { fixture.repository.error.first { it?.contains("not supplied") == true } }
@@ -164,6 +167,27 @@ class RepositoryRecoveryTest {
             assertEquals(80, fixture.refresh().level)
             withTimeout(60_000) { fixture.repository.error.first { it != null && !it.contains("not supplied") } }
             assertTrue(fixture.repository.error.value!!.contains("History collection failed"))
+            assertNull(fixture.repository.observation.value.latest)
+        } catch (failure: Throwable) {
+            throw AssertionError("Failed during $phase; observation=${fixture.repository.observation.value}; " +
+                "monitoring=${fixture.repository.isMonitoringFlow.value}; errors=${fixture.repository.error.value}", failure)
+        } finally { fixture.close() }
+    }
+
+    @Test fun storageLossCannotKeepAStoppedOrResetObservationRunning(): Unit = runBlocking {
+        val fixture = Fixture()
+        try {
+            fixture.repository.startSampling()
+            withTimeout(60_000) { fixture.repository.observation.first { it.startedAt != null } }
+            fixture.database.close()
+            fixture.repository.stopSampling()
+            withTimeout(60_000) { fixture.repository.observation.first { it.stopped } }
+            assertFalse(fixture.repository.isMonitoringFlow.value)
+            withTimeout(60_000) { fixture.repository.error.first { it?.contains("History collection failed") == true } }
+            fixture.repository.resetObservation()
+            withTimeout(60_000) { fixture.repository.observation.first { it.startedAt == null } }
+            assertEquals(0L, fixture.repository.observation.value.observedMs)
+            assertEquals(80, fixture.refresh().level)
             assertNull(fixture.repository.observation.value.latest)
         } finally { fixture.close() }
     }

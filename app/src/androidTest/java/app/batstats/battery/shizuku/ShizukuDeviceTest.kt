@@ -44,7 +44,10 @@ class ShizukuDeviceTest {
                 assertEquals(ShizukuBridge.Failure.NO_PERMISSION,
                     (bridge.run("dumpsys battery") as ShizukuBridge.RunResult.Error).reason)
                 scenario.onActivity { bridge.requestPermission() }
-                val allow = device.wait(Until.findObject(By.res("moe.shizuku.privileged.api", "button1")), 120_000)
+                // The pinned official release obfuscates resource names, including button1.
+                // This disposable emulator uses English; still constrain to Shizuku's package.
+                val allow = device.wait(Until.findObject(By.pkg("moe.shizuku.privileged.api")
+                    .text(Regex("Allow all the time", RegexOption.IGNORE_CASE).toPattern())), 120_000)
                 assertNotNull("Shizuku authorization dialog did not appear", allow)
                 DeviceEnvironment.screenshot("shizuku-authorization")
                 allow!!.click()
