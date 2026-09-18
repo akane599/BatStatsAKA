@@ -63,6 +63,12 @@ collect_diagnostics() {
     adb shell getconf PAGE_SIZE 2>/dev/null || true
     adb shell ls -l /data/tombstones 2>/dev/null || true
   } > "$directory/device.txt" || true
+  # A terminated process is not a crashing one. Name that difference in the job log,
+  # so an under-provisioned emulator is not investigated as an app defect.
+  if grep -q "lowmemorykiller: Kill 'org.mlm.batstats.debug'" "$directory/logcat.txt" 2>/dev/null; then
+    echo "Android's low-memory killer terminated org.mlm.batstats.debug during the $phase phase: emulator capacity, not an app crash." \
+      | tee "$directory/summary.txt" >&2
+  fi
   echo "Saved Android diagnostics for the $phase phase under $directory" >&2
 }
 run_prebuilt_phase() {

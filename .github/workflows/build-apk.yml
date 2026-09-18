@@ -100,7 +100,10 @@ jobs:
           arch: x86_64
           avd-name: batstats16k
           profile: pixel_2
-          ram-size: 2048M
+          # 16 KiB pages need more memory than the 4 KiB image for the same suite. At
+          # 2048M Android's low-memory killer terminated the foreground app mid-test,
+          # which surfaces only as an opaque "Process crashed" from the test runner.
+          ram-size: 4096M
           disable-animations: true
           script: BATSTATS_REPORT_GROUP=16k BATSTATS_EXPECTED_PAGE_SIZE=16384 bash scripts/check_android_device.sh --prebuilt
       - name: Record APK checksums and certificates

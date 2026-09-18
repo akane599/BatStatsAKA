@@ -9,7 +9,7 @@ Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-re
 - [x] Advanced collectors, Android16 producer layout, UID attribution and kernel ABI reviewed; vendor outputs unverified.
 - [x] ViewModels/navigation/layout/theme/widget/alert/settings/resource source reviewed; locale inventory corrected by comparing actual baseline values.
 - [x] Actual Android16 screens, accessibility, loading/empty/partial/error/recovery and notification/widget interactions (all28 ordinary methods pass at `d3ced0d`).
-- [ ] Android16 with16 KiB pages: the app process crashes at startup on `google_apis_ps16k` and the cause is still unidentified. Misaligned app native libraries are excluded; see VALIDATION.
+- [x] Android16 with16 KiB pages: one full `google_apis_ps16k` run passes (35346293477). The earlier failure was Android's low-memory killer terminating the foreground app on a2048M emulator, not an app or native-alignment defect; the step now requests4096M. Reproducibility across runs still needs confirmation.
 - [x] Final host tests/full lint and signed Debug/Preview APK assembly/collection.
 - [x] Real Shizuku Binder authorization, command validation, helper/server recovery on API36 (both0e9b301 runs). Visual and16KiB checks remain pending.
 
