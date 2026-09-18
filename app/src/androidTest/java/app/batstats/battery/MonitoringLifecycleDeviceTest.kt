@@ -87,8 +87,21 @@ class MonitoringLifecycleDeviceTest {
             val row = device.wait(Until.findObject(By.text(title)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
-            row!!.click()
-            val opened = device.wait(Until.hasObject(By.text(context.getString(R.string.monitor_drain_title))), 120_000)
+            // A tap can be lost while SystemUI is still animating the shade, and one
+            // lost tap followed by a single long wait only ends the suite. Re-target the
+            // row while the observation screen has not appeared; a delivered tap ends the
+            // loop, so the screen is never opened twice. The assertion is unchanged.
+            val drainTitle = By.text(context.getString(R.string.monitor_drain_title))
+            var target = row
+            var attempts = 3
+            var opened = false
+            while (!opened && attempts-- > 0) {
+                target?.click()
+                opened = device.wait(Until.hasObject(drainTitle), if (attempts > 0) 30_000L else 60_000L)
+                if (!opened && attempts > 0 && device.openNotification()) {
+                    target = device.wait(Until.findObject(By.text(title)), 30_000)
+                }
+            }
             DeviceEnvironment.screenshot("notification-opens-observation")
             assertTrue("Tapping the monitoring notification must open observed drain", opened)
             phase = "stop monitoring"

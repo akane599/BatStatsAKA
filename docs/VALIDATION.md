@@ -6,6 +6,12 @@ Results identify local versus GitHub Actions execution. None establish physical 
 
 **Both hosted runs pass.** Push35348444065 and PR35348449882 each complete Verify-and-build, the standard API36 device phases, the Android16 16 KiB phase, checksum collection and APK upload. Counting the marginal2048M pass at35346293477, three16 KiB executions have now succeeded, two of them at4096M. This is the first reproducible16 KiB runtime result for this branch; it remains an x86_64 emulator result and establishes nothing about ARM64 or physical Samsung hardware.
 
+## Standard-phase flakiness at 4d03cec
+
+The docs-only commit `4d03cec` touches four markdown files and no code, yet push35350723002 passed and PR35350728383 failed, so the standard API36 phase is nondeterministic rather than regressed. The failing run reports28 tests,2 failures,0 errors: `NavigationDeviceTest.largeTextDarkThemeKeepsActionsAndResetExplanationReachable` raised `ComposeTimeoutException: Condition still not satisfied after120000 ms` inside `awaitDashboard`, and `MonitoringLifecycleDeviceTest...DoNotInventOffTimeOrKeepRecordingAfterStop` failed at the notification tap. The captured log records zero low-memory kills and `Davey! duration=1276ms` frames, so this is software-rendering latency, not the memory failure fixed for the16 KiB image.
+
+Both methods delivered a single UI event and then waited120s without re-checking delivery. Back and the notification tap are now re-sent only while their destination has not appeared, at most three attempts within the original budget; a delivered event ends the loop, so neither action is applied twice. Destinations, assertions and failure screenshots are unchanged. `:app:compileDebugAndroidTestKotlin` passes locally. This reduces a mechanism observed in the log; a green run does not prove the flakiness is eliminated.
+
 ## Preceding checkpoint: d3ced0d
 
 Standard API36 validation **passes**: push35338814265 and PR35338819113 each execute28 ordinary methods with0 failures,0 errors and0 skips, and each real Shizuku phase passes1/1. The stage6l corrections resolved the landscape reset-dialog failure at NavigationDeviceTest.kt122, and both runs reached the second image for the first time.

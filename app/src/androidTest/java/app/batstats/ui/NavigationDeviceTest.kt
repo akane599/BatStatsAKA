@@ -31,8 +31,8 @@ class NavigationDeviceTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(id)))
         compose.onNodeWithText(label(id)).assertIsDisplayed()
     }
-    private fun awaitDashboard() {
-        compose.waitUntil(120_000) {
+    private fun awaitDashboard(timeoutMs: Long = 120_000) {
+        compose.waitUntil(timeoutMs) {
             compose.onAllNodesWithContentDescription(label(R.string.settings)).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNodeWithContentDescription(label(R.string.settings)).assertIsDisplayed()
@@ -42,12 +42,27 @@ class NavigationDeviceTest {
         // Settle that window before sending Back through the separate Android input path.
         compose.waitForIdle()
         DeviceEnvironment.device.waitForIdle()
-        DeviceEnvironment.device.pressBack()
-        try { awaitDashboard() }
-        catch (failure: Throwable) {
-            runCatching { DeviceEnvironment.screenshot("navigation-back-failure") }
-                .exceptionOrNull()?.let(failure::addSuppressed)
-            throw failure
+        // Software rendering on the emulator produces frames over a second long, and a
+        // single Back can be dropped before the window accepts input. Re-send it only
+        // while the dashboard has not appeared: the destination assertion is unchanged,
+        // a lost event no longer ends the suite, and a delivered one is never followed
+        // by a second press that would leave the dashboard again.
+        var remaining = BACK_ATTEMPTS
+        while (true) {
+            DeviceEnvironment.device.pressBack()
+            remaining--
+            try {
+                awaitDashboard(if (remaining > 0) 20_000 else 60_000)
+                return
+            } catch (failure: Throwable) {
+                if (remaining <= 0) {
+                    runCatching { DeviceEnvironment.screenshot("navigation-back-failure") }
+                        .exceptionOrNull()?.let(failure::addSuppressed)
+                    throw failure
+                }
+                compose.waitForIdle()
+                DeviceEnvironment.device.waitForIdle()
+            }
         }
     }
     private fun capture(name: String) { compose.waitForIdle(); DeviceEnvironment.screenshot(name) }
@@ -147,4 +162,6 @@ class NavigationDeviceTest {
         scroll(R.string.monitor_counter_help)
         capture("observation-dark-font200-landscape")
     }
+
+    private companion object { const val BACK_ATTEMPTS = 3 }
 }
