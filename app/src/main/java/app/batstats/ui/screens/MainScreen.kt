@@ -1,6 +1,5 @@
 package app.batstats.ui.screens
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -21,10 +20,6 @@ fun MainScreen(openDrain: Boolean = false, onDrainOpened: () -> Unit = {}) {
             if (backStack.lastOrNull() != Screen.DrainStats) backStack.add(Screen.DrainStats)
             onDrainOpened()
         }
-    }
-
-    BackHandler(enabled = backStack.size > 1) {
-        backStack.removeAt(backStack.lastIndex)
     }
 
     Surface(

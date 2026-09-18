@@ -176,7 +176,9 @@ dependencies {
     implementation(libs.material3.android)
 
     // Compose dependencies
-    val composeBom = platform(libs.androidx.compose.bom)
+    // Settings UI otherwise upgrades Material3 alone to an alpha with an incompatible Style ABI.
+    // Its Material3 references are available in the stable BOM; enforce the same set in app/tests.
+    val composeBom = enforcedPlatform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.tooling.preview)

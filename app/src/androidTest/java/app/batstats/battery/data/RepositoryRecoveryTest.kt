@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.os.Handler
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -45,6 +46,10 @@ class RepositoryRecoveryTest {
                 .putExtra(BatteryManager.EXTRA_TEMPERATURE, 250).putExtra(BatteryManager.EXTRA_HEALTH, 2)
         }
         override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter?, flags: Int): Intent? {
+            return registerReceiver(receiver, filter, null, null, flags)
+        }
+        override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter?, broadcastPermission: String?, scheduler: Handler?, flags: Int): Intent? {
+            // ContextCompat on API33+ uses this five-argument overload.
             if (receiver != null && rejectEvents) throw SecurityException("Injected subscription failure")
             // Script registration as well, so real sticky broadcasts cannot mask a failed poll.
             registeredReceiver = receiver
@@ -76,7 +81,7 @@ class RepositoryRecoveryTest {
         }
     }
 
-    @Test fun stoppedRefreshRecoversFromMissingReadingWithoutStartingMonitoring() = runBlocking {
+    @Test fun stoppedRefreshRecoversFromMissingReadingWithoutStartingMonitoring(): Unit = runBlocking {
         val fixture = Fixture()
         try {
             fixture.context.missingBattery = true
@@ -91,7 +96,7 @@ class RepositoryRecoveryTest {
         } finally { fixture.close() }
     }
 
-    @Test fun failedSubscriptionKeepsSnapshotsButCannotInventObservedPeriods() = runBlocking {
+    @Test fun failedSubscriptionKeepsSnapshotsButCannotInventObservedPeriods(): Unit = runBlocking {
         val fixture = Fixture()
         try {
             fixture.context.rejectEvents = true
@@ -114,7 +119,7 @@ class RepositoryRecoveryTest {
         } finally { fixture.close() }
     }
 
-    @Test fun automaticAndBroadcastReadExceptionsAreRecoverable() = runBlocking {
+    @Test fun automaticAndBroadcastReadExceptionsAreRecoverable(): Unit = runBlocking {
         val fixture = Fixture()
         try {
             // Force the first automatic poll to fail; the service's sampling coroutine must survive.
@@ -140,7 +145,7 @@ class RepositoryRecoveryTest {
         } finally { fixture.close() }
     }
 
-    @Test fun failedStorageRestartCannotReuseThePreviousObservationAndOrdinaryReadsStayAvailable() = runBlocking {
+    @Test fun failedStorageRestartCannotReuseThePreviousObservationAndOrdinaryReadsStayAvailable(): Unit = runBlocking {
         val fixture = Fixture()
         try {
             fixture.repository.startSampling()

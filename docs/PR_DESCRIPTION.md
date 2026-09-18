@@ -12,15 +12,15 @@ Build preparation includes separate debug and optimized nondebug Preview package
 
 ## Validation at this draft checkpoint
 
-Hosted CI now installs the correct platforms;android-37.0 SDK and passes both JVM suites and full lint. One run hit packaging heap exhaustion; the parallel PR run built all APKs and booted API36, then Gradle rejected overlapping APK distribution outputs before tests. CI now limits build concurrency and separates distribution copies from Android artifacts. Local path verification passes; hosted device revalidation is pending. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
+Hosted CI now builds Debug, Preview and test APKs and boots API36. The first ordinary runs executed20 methods plus one runner initialization error:16/17 checks passed and5/4 report entries failed. Room migrations/import/export/history and diagnostic persistence passed on Android. Failures exposed a transitive Material3/Foundation ABI mismatch, a recovery fixture using the wrong receiver overload, and a nonvoid JUnit method; corrections are being validated locally. Notification navigation/screen timing and system back still need a successful rerun. Shizuku has not executed yet. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
 
-- 94 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips; all25 Android test methods compile. These are synthetic/host checks, not physical measurements.
+- 94 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips; all26 Android test methods compile, including a new populated-history/chart/deletion regression (not yet executed). JVM inputs are synthetic, not physical measurements.
 - Six synthetic instrumentation-result parser regressions pass; prebuilt ADB execution rejects empty, failed, skipped, crashed or incomplete runs.
 - Host SQLite checks pass migrations, identity/deduplication, history paging and bounded chart queries.
 - Fresh Debug, nondebuggable/minified Preview and Android test APKs assembled from the current source; universal signatures and checksums verified (source commit dd7f2c0).
 - APK ZIP/native LOAD alignment passes for16KiB; graphics-path RELRO-end warning remains a runtime-validation limitation (see VALIDATION).
 - Resource completeness/format checks and direct AAPT2 compilation pass for493 Spanish and493 Turkish strings. Workflow actionlint passes.
-- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. This remains a draft while those device checks are pending. Local software emulation did not complete boot during approximately68minutes; both baseline installation attempts were rejected. The only returned screenshot was a blank background, and no app was installed. The task emulator has been stopped. No app compatibility conclusion is drawn from that host limitation.
+- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Hosted Android tests now execute, but the suite has failures and screenshots were lost by post-test uninstall. Screenshot retention is being corrected; visual review and Shizuku execution remain pending. Local software emulation never completed boot; hosted acceleration is now used. No physical Samsung compatibility conclusion follows.
 
 ## Limits and delivery
 

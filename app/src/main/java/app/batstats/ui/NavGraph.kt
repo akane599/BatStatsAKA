@@ -23,9 +23,11 @@ fun NavGraph(
     backStack: NavBackStack<NavKey>,
     decorators: List<NavEntryDecorator<Any>>
 ) {
+    // NavDisplay owns system/predictive back; every pop preserves the dashboard root.
+    val popBack: () -> Unit = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
     NavDisplay(
         backStack = backStack,
-        onBack = { backStack.removeAt(backStack.lastIndex) },
+        onBack = popBack,
         entryDecorators = decorators,
         entryProvider = entryProvider {
 
@@ -44,40 +46,40 @@ fun NavGraph(
 
             entry<Screen.History> {
                 HistoryScreen(
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     onOpenSession = { id -> backStack.add(Screen.SessionDetails(id)) }
                 )
             }
 
             entry<Screen.SessionDetails> { args ->
                 SessionDetailsScreen(
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     vm = koinViewModel(parameters = { parametersOf(args.sessionId) })
                 )
             }
 
             entry<Screen.Data> {
-                DataScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DataScreen(onBack = popBack)
             }
 
             entry<Screen.Settings> { args ->
                 BatterySettingsScreen(
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     onExportData = { backStack.add(Screen.Data) },
                     initialCategory = args.initialCategory
                 )
             }
 
             entry<Screen.DetailedStats> {
-                DetailedStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DetailedStatsScreen(onBack = popBack)
             }
 
             entry<Screen.Diagnostics> {
-                DiagnosticsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DiagnosticsScreen(onBack = popBack)
             }
 
             entry<Screen.DrainStats> {
-                DrainStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DrainStatsScreen(onBack = popBack)
             }
         }
     )
