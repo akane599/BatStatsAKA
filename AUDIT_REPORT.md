@@ -99,3 +99,5 @@ Unused helpers and general cleanup are independent low-priority opportunities, n
 Additional sources/contracts and privacy constraints: [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md). Do not treat source review or emulator success as proof of physical battery accuracy.
 
 Hosted build finding B32 (High): APK-dist defaults its copy output to the AGP input directory. PR35320646877 failed connectedDebugAndroidTest with an implicit-dependency validation error before any tests ran. Local task-path inspection reproduces the overlap. Configure separate build/outputs/distribution/{variant} copies; standard AGP outputs remain unchanged. Local Gradle verification passes for all three variants; hosted revalidation pending.
+
+Stage6d adds an isolated production history UI regression for card navigation, imported-source provenance, current chart gaps/units, missing temperature and stale-data removal after deletion. All26 Android test methods compile locally in3m36s; the new method has not executed. Both ff792f4 hosted builds passed and entered the Android16 device step; reports pending.
