@@ -1,1 +1,1 @@
-Battery Statisics Viewer
+Battery readings, observed drain and detailed monitoring

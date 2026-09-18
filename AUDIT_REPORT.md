@@ -68,6 +68,9 @@ The host has no KVM and3.8GiB RAM plus4GiB swap. Builds/emulators run sequential
 
 No current app screenshot, Android test execution, Binder success or widget delivery is claimed. No physical Samsung device is available or requested. Current polarity/scaling, fuel-gauge calibration, real AOD transitions, OEM background restrictions, root/vendor kernel paths and physical energy overhead remain unverified. Neither source changes nor emulator results establish battery-saving percentages.
 
+## Existing GitHub automation constraint
+Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]; its auto-review capability is therefore constrained by current repository policy. No settings changed or workflow triggered. The new manual APK workflow uses contents:read and has no publication steps. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
+
 ## Remaining work
 1. Finish emulator initialization and baseline APK inspection; run meaningful source/device checks without Gradle competing for memory. Capture actual screens and investigate failures.
 2. Run final device checks and verify APK signatures/artifact metadata. Host/JVM/full lint/assemblies pass; do not repeat without new changes or evidence. Preserve failures and limitations honestly.
