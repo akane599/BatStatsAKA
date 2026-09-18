@@ -2,6 +2,7 @@ package app.batstats.ui
 
 import android.Manifest
 import android.content.Intent
+import android.content.res.Configuration
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -23,6 +24,7 @@ class NavigationDeviceTest {
     @get:Rule(order = 1) val compose = createAndroidComposeRule<BatteryMainActivity>()
     private lateinit var savedSettings: AppSettings
     private var savedFont: String? = null
+    private var changedOrientation = false
     private fun label(id: Int) = DeviceEnvironment.context.getString(id)
     private fun click(id: Int) = compose.onNodeWithText(label(id)).performClick()
     private fun scroll(id: Int) {
@@ -50,6 +52,10 @@ class NavigationDeviceTest {
     }
 
     @After fun restore() = runBlocking {
+        if (changedOrientation) {
+            DeviceEnvironment.device.setOrientationNatural()
+            DeviceEnvironment.device.unfreezeRotation()
+        }
         if (::savedSettings.isInitialized) BatteryGraph.settings.update { savedSettings }
         val font = savedFont ?: return@runBlocking
         if (font.matches(Regex("[0-9.]+"))) DeviceEnvironment.device.executeShellCommand("settings put system font_scale $font")
@@ -113,5 +119,16 @@ class NavigationDeviceTest {
         compose.onNodeWithText(label(R.string.cancel)).assertIsDisplayed()
         capture("settings-reset-dark-font200")
         click(R.string.cancel) // Inspect the destructive control without resetting preferences.
+        backToDashboard()
+        changedOrientation = true
+        DeviceEnvironment.device.setOrientationLeft()
+        compose.waitUntil(120_000) {
+            compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        }
+        scroll(R.string.diagnostic_refresh)
+        capture("dashboard-dark-font200-landscape")
+        scroll(R.string.monitor_details); click(R.string.monitor_details)
+        scroll(R.string.monitor_counter_help)
+        capture("observation-dark-font200-landscape")
     }
 }

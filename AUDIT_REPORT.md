@@ -124,3 +124,5 @@ Capture fix writes PNG/XML privately then copies through the test shell into a d
 Stage6h full replacement build PASSED14m29s:94 JVM cases per variant, full lint0errors/201+200warnings, all APK assemblies. Final test-only capture helper compilation/assembly/lint remains running. B34/B35 device proof and screenshot review remain pending.
 
 Final stage6h test-helper compile/assembly and Debug lint PASSED2m13s; all28 device methods compile. Eleven host runner regressions, bash syntax, actionlint and diff checks pass. Ready for approved hosted validation; no device assertions weakened.
+
+Stage6i extends the existing dark/font200 navigation test through landscape dashboard and observed-drain screens, with orientation cleanup. Android test compilation/assembly PASSED1m;28 methods total. Held locally while0e9b301 hosted checks run. Current installable APKs were recollected from clean0e9b301 after successful38s incremental assembly; signatures and16KiB ZIP alignment pass.
