@@ -9,7 +9,8 @@ Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-re
 - [x] Advanced collectors, Android16 producer layout, UID attribution and kernel ABI reviewed; vendor outputs unverified.
 - [x] ViewModels/navigation/layout/theme/widget/alert/settings/resource source reviewed; locale inventory corrected by comparing actual baseline values.
 - [ ] Actual Android16 screens, accessibility, loading/empty/partial/error/recovery and notification/widget interactions.
-- [ ] Real Shizuku Binder integration, final lint and final debug/nondebug APK delivery.
+- [x] Final host tests/full lint and signed Debug/Preview APK assembly/collection.
+- [ ] Real Shizuku Binder integration and Android runtime/visual validation.
 
 ## Confirmed findings
 
@@ -59,23 +60,26 @@ Source review confirms these defects unless runtime reproduction is stated. Impl
 ## Actual validation
 - Baseline dependency metadata failed: alpha Compose required SDK37.1. Stable Compose fixes compilation against37 with target36/min26.
 - Producer-based parser tests reproduced12 baseline failures before fixes. Latest JVM suites each pass94 tests in Debug and Preview,0fail/error/skip. Host migration/history SQL checks pass. These inputs are synthetic, not physical measurements.
-- Stage5c built fresh Debug, optimized nondebug Preview and test APKs with locale/configuration fixes and all25 device-test methods. Final signature/artifact collection and runtime checks remain.
+- Stage5c built fresh Debug, optimized nondebug Preview and test APKs with locale/configuration fixes and all25 device-test methods. Signatures/artifact metadata verified from clean dd7f2c0; runtime checks remain.
 - All25 Android test methods compile through stage5c but none have executed, including the additional dashboard error/recovery test. Device suites cover repository recovery, actual screen/FGS/notification transitions, UI navigation/font200 and real Shizuku authorization/helper/server recovery.
 - Stage5c full Debug lint now has zero MissingTranslation errors but failed7 Compose LocalContextGetResourceValueCall errors/202warnings. Configuration-aware resource corrections pass full Debug/Preview lint (0errors;201/200warnings), with94 JVM tests passing per variant. The full command, including all three assemblies, passed16m. No errors suppressed. Fatal release lint, actionlint and direct resource compilation have passed, but are not substitutes for full lint.
 
 ## Environment and unresolved verification
-The host has no KVM and3.8GiB RAM plus4GiB swap. Builds/emulators run sequentially. ATD omits SystemUI and cannot validate notification rendering. Full API36 google_apis is cold-booting on5580 with software rendering after snapshot restore failed (RAM length mismatch/error-22). Unusable task snapshot removed, retaining metadata/logs. Other AVDs were found to reference the previously removed ATD SDK image; restoration completed (official r01). First restoration failed for disk space while the emulator retained the deleted snapshot; stopping it freed that space. Full emulator now starts without snapshots. Preserve all unrelated AVDs/shared images. No guest app installed yet; watchdog100/shell2000 verified but boot incomplete (zygote class preloading, Package Manager not registered). See PROGRESS for active sessions/logs.
+The host has no KVM and3.8GiB RAM plus4GiB swap. Builds/emulators run sequentially. ATD omits SystemUI and cannot validate notification rendering. Full API36 google_apis is cold-booting on5580 with software rendering after snapshot restore failed (RAM length mismatch/error-22). Unusable task snapshot removed, retaining metadata/logs. Other AVDs were found to reference the previously removed ATD SDK image; restoration completed (official r01). First restoration failed for disk space while the emulator retained the deleted snapshot; stopping it freed that space. Full emulator now starts without snapshots. Preserve all unrelated AVDs/shared images. No guest app installed yet; watchdog100/shell2000 verified but boot incomplete after ART verification progressed to service startup. Package Manager exists but refused both installation attempts as still booting. See PROGRESS for active sessions/logs.
 
 No current app screenshot, Android test execution, Binder success or widget delivery is claimed. No physical Samsung device is available or requested. Current polarity/scaling, fuel-gauge calibration, real AOD transitions, OEM background restrictions, root/vendor kernel paths and physical energy overhead remain unverified. Neither source changes nor emulator results establish battery-saving percentages.
+
+## Unresolved native runtime check
+Both APKs pass16KiB ZIP/PT_LOAD alignment. The stricter documented RELRO-end check flags graphics-path (arm64/x86_64); inspected headers contain no trailing writable data in the rounded protection range. This is an unresolved runtime question, not a confirmed crash or a compatibility pass. See VALIDATION for exact evidence; no binary or dependency changed.
 
 ## Existing GitHub automation constraint
 Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]; its auto-review capability is therefore constrained by current repository policy. No settings changed or workflow triggered. The new APK workflow uses contents:read, has no publication steps, and is reused by push/PR CI with Android16 tests mandatory and no signing secrets passed. actionlint passes; hosted execution still requires approval. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
 
 ## Remaining work
 1. Finish emulator initialization and baseline APK inspection; run meaningful source/device checks without Gradle competing for memory. Capture actual screens and investigate failures.
-2. Run final device checks and verify APK signatures/artifact metadata. Host/JVM/full lint/assemblies pass; do not repeat without new changes or evidence. Preserve failures and limitations honestly.
+2. Run final device checks. APK signatures/artifact metadata are verified. Host/JVM/full lint/assemblies pass; do not repeat without new changes or evidence. Preserve failures and limitations honestly.
 3. Complete visual/accessibility review and actual screenshot artifacts; finalize PR description, signing/artifact metadata and delivery records.
-4. Only then request explicit approval for exact GitHub actions and automatic triggers. No GitHub write/Actions run is approved or performed.
+4. Await the requested explicit approval for branch/draft-PR publication and validation runs. Continue local work meanwhile. No GitHub write/Actions run is approved or performed.
 
 Unused helpers and general cleanup are independent low-priority opportunities, not a reason to expand the change. Additional per-UID component transport would need its own validated schema/window; current activity counters cannot support arbitrary energy attribution.
 

@@ -40,5 +40,6 @@ for variant in ("debug", "preview"):
                     "signerSha256": fingerprint})
 (DEST / "build-info.json").write_text(json.dumps({"revision": revision, "uncommittedChanges": dirty, "apks": records}, indent=2) + "\n")
 (DEST / "SHA256SUMS").write_text("".join(f'{r["sha256"]}  {r["file"]}\n' for r in records))
-shutil.copy2(ROOT / "docs/BUILD_AND_INSTALL.md", DEST / "BUILD_AND_INSTALL.md")
+for guide in ("BUILD_AND_INSTALL.md", "VALIDATION.md", "MEASUREMENTS.md", "PLATFORM_NOTES.md", "LOCALIZATION.md"):
+    shutil.copy2(ROOT / "docs" / guide, DEST / guide)
 print(f"Collected {len(records)} verified universal APKs in artifacts/")

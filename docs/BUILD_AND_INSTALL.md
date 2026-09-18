@@ -7,7 +7,7 @@ After the workflow is approved and merged into the default branch:
 1. Open this repository in a signed-in mobile browser. Select **Actions → Build installable APK → Run workflow**. Desktop-site mode may help if GitHub hides the control.
 2. Select the development branch and keep Android 16 tests enabled. Start the workflow; it builds locally on GitHub’s runner without publishing a release or changing repository files.
 3. Wait for a successful run. Open **Artifacts → installable-apks** and extract the downloaded ZIP using your phone’s file manager. Install the universal **preview** APK. Android may ask you to allow installation from that browser or file manager.
-4. The artifact includes checksums, public signing fingerprints and `build-info.json`. Test/lint reports are a separate artifact, including on failed runs. Artifacts expire after14 days.
+4. The artifact includes checksums, public signing fingerprints, `build-info.json` and offline copies of the measurement, platform and validation guides. Test/lint reports are a separate artifact, including on failed runs. Artifacts expire after14 days.
 
 GitHub requires a `workflow_dispatch` file on the default branch before offering **Run workflow**; merely pushing a new workflow on a development branch does not register that button. See [GitHub’s manual-run documentation](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
 
