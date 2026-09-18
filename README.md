@@ -33,19 +33,23 @@ See [platform and source notes](docs/PLATFORM_NOTES.md) for contracts and limits
 
 ## Monitoring and alerts
 
-Ordinary sampling defaults to30 seconds; privileged collection defaults to5 minutes. Shorter intervals improve responsiveness and add monitoring work. Sampling does not wake the CPU; gaps remain explicit. No measured battery-saving percentage is claimed.
+Ordinary sampling defaults to 30 seconds; privileged collection defaults to 5 minutes. Shorter intervals improve responsiveness and add monitoring work. Sampling does not wake the CPU; gaps remain explicit. No measured battery-saving percentage is claimed.
 
-Battery alerts run only while monitoring is active. Low/high level and temperature alerts use hysteresis and remember the current alert episode across service restarts. Full means Android reports FULL, not merely100%. High-discharge alerts require at least3 readings spanning1 minute and do not identify the cause. Sound, vibration and permission are controlled in Android notification settings. The monitoring notification stays quiet and detailed; ineffective legacy display/heuristic switches have been retired while saved keys remain compatible.
+Battery alerts run only while monitoring is active. Low/high level and temperature alerts use hysteresis and remember the current alert episode across service restarts. Full means Android reports FULL, not merely 100%. High-discharge alerts require at least 3 readings spanning 1 minute and do not identify the cause. Sound, vibration and permission are controlled in Android notification settings. The monitoring notification stays quiet and detailed; ineffective legacy display/heuristic switches have been retired while saved keys remain compatible.
 
 ## History and privacy
 
-History export is deliberate: JSON and CSV include units, UTC timestamps, data sources and reporting periods. Date filters select samples and overlapping sessions; session totals keep their full original windows. Imports validate the complete file before committing, skip identical records, reject conflicts, and never resume imported sessions. Files are limited to64MiB and imports cannot exceed100,000 stored samples or10,000 sessions.
+History export is deliberate: JSON and CSV include units, UTC timestamps, data sources and reporting periods. Date filters select samples and overlapping sessions; session totals keep their full original windows. Imports validate the complete file before committing, skip identical records, reject conflicts, and never resume imported sessions. Files are limited to 64 MiB and imports cannot exceed 100,000 stored samples or 10,000 sessions.
 
 Clearing history stops monitoring and deletes battery samples, sessions and stored app statistics. It does not reset Android system battery statistics, preferences or alarm rules. Export first to retain a copy. Automatic cloud/device transfer includes only preferences; battery history requires explicit export. Reports stay local until you choose a destination or share them.
 
+## Build and install
+
+See the [phone build and signing guide](docs/BUILD_AND_INSTALL.md) for the manual APK workflow, Preview installation and update compatibility. No workflow has been published or run for this development work.
+
 ## Development
 
-Use JDK21 and Android SDK37 for compilation; targetAPI36, minimumAPI26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).
+Use JDK 21 and Android SDK 37 for compilation; target API 36, minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).
 
 ## Contributing and license
 

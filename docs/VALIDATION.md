@@ -17,6 +17,10 @@ Results below are local execution, not GitHub Actions or physical Samsung valida
 | 4c3a | JVM + Android test compilation | 90 passed,1m59s (`/tmp/batstats-stage4c3a-tests.log`). |
 | 4d1 | JVM + Android test compilation | 94 passed,0fail/error/skip. Initial process exited143 after JVM success, during Android compilation; daemon reported client disconnection, cause unknown (`/tmp/batstats-stage4d1-tests.log`). Unchanged rerun completed in44s with JVM results up-to-date (`/tmp/batstats-stage4d1-retest.log`). |
 
+| 5a | Debug/Preview JVM suites + debug/preview/Android test APK assembly | Passed21m54s:94 cases in each JVM suite,0fail/error/skip, including preview R8/resource shrinking and lintVitalPreview. Initial task selection failed because preview host tests were disabled by AGP9 default; explicitly enabling that component fixed it. Full lint still pending. |
+
+Stage5a command: `./gradlew :app:testDebugUnitTest :app:testPreviewUnitTest :app:assembleDebug :app:assemblePreview :app:assembleDebugAndroidTest --no-daemon -Dorg.gradle.jvmargs=-Xmx1024m --max-workers=1`. Log `/tmp/batstats-stage5a-rebuild.log`. `actionlint1.7.12` passes both changed workflows. Actual artifact collection/apksigner verification passes for both universal APKs; preview manifest min26/target36, nondebuggable and label BatStats Preview. Both use development signerSHA256 `93e78296c5eb4a5a2970679e96454de0c6979918c8f248765fddc1eb87ace8dd`. Generated build-info records actual APK code737 and the precommit working-tree state. These are intermediate builds; known recovery fixes/translations and final runtime validation remain.
+
 Standard command: `./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon -Dorg.gradle.jvmargs=-Xmx1024m --max-workers=1`.
 
 `python3 scripts/check_migrations.py` passes actual SQL1/2/3→4 schema/indices/row preservation/sentinel handling. `python3 scripts/check_history_queries.py` passes source filtering, import identity, duplicate-point transaction rollback, overlapping exports, retention,125-row paging and bounded/gap-preserving session chart queries. These run on host SQLite, not Android.

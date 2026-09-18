@@ -1,1 +1,7 @@
-Battery stats viewer with charge alarm rules
+BatStats shows Android-reported battery readings and records observed charging and discharging periods. See battery level, current, voltage, temperature and supported counters, with sources and reporting times. Missing values remain unavailable.
+
+A quiet, detailed monitoring notification shows observed drain and screen activity. Screen-off includes noninteractive Always On Display; CPU suspend and Android Doze are separate. Monitoring intervals balance responsiveness and collection work. Battery alerts run while monitoring is active; sound and vibration are controlled in Android notification settings.
+
+Shizuku is the preferred advanced access mode. Root and explicitly granted ADB access are also supported. Advanced reports can include Android UID estimates, wakelocks, alarms, jobs, network and CPU activity, depending on device support and permissions. These use Android’s statistics window, separate from local observation history. Shared UIDs limit app attribution. Activity duration alone does not prove excessive drain, and estimated mAh is not an exact energy measurement.
+
+Browse recorded periods, inspect data sources and local diagnostics, and deliberately export or import bounded JSON/CSV history with units and timestamps. Reports stay local unless you choose to share them. Current, capacity and kernel support vary by device. Samsung hardware behavior and physical monitoring energy use remain unverified for this development build.

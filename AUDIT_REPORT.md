@@ -1,6 +1,6 @@
 # BatStats Audit Report
 
-Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; supplied APK6.2.6/code735 differs from source code734. Execution handoff: [PROGRESS.md](PROGRESS.md). Findings describe confirmed source paths unless execution evidence is stated.
+Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; supplied APK6.2.6/code735 matches the APK-dist universal offset(+1) for source code734; the code difference alone does not imply another source revision. Execution handoff: [PROGRESS.md](PROGRESS.md). Findings describe confirmed source paths unless execution evidence is stated.
 
 ## Coverage
 - [x] Build/dependencies/manifest and CI/release source reviewed; workflow fixes and final delivery pending.
@@ -31,14 +31,14 @@ Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; supplied APK6.2.6/code735 
 | B14 | Medium | History `SessionCard` internal empty click handler consumes navigation; detail/export screens lack vertical scrolling; six dashboard actions crowd toolbar; charts replace missing with zero and lack axes/time.  Partly fixed; dashboard/drain/advanced/export/session details revised; remaining history/accessibility/visual review pending |
 | B15 | Medium | Monitoring notification rebuild resets timestamp; settings/alarms/retention largely unused; widget IPC on every sample even no installed widgets.  Partly fixed; stable notification/collection, bounded retention; alerts and effective settings implemented in4b1; notification/diagnostics/widgets pending |
 | B16 | Medium | Root-only collectors read files as app UID, not su; unsupported devices appear empty/zero; battery capacity advertised as true/exact.  Implemented; actual su reads and validated kernel parsers; vendor/root hardware unverified |
-| B17 | Medium | Release workflow has stale application-id `app.batstats`, unused upload inputs, default production publishing; no local test/report pipeline.  Open; local manual build/report workflow and corrected release configuration pending |
+| B17 | Medium | Release workflow had stale application-id, ignored publication inputs and production defaults. | Implemented locally in5a: separate read-only manual APK workflow, reports/signatures, release gate/correct ID/defaults. actionlint/build checks pass; hosted execution requires approval |
 | B18 | High | Alpha Compose requires SDK37.1 while project declared37.0. | Fixed with stable Compose BOM; metadata and app compilation pass. |
 | B19 | High | ADB dump gate incorrectly modeled DUMP/PACKAGE_USAGE_STATS/AppOps. | Fixed to Android16 producer contract; actual device grants pending. |
 | B20 | High | `--checkin` may consume a completed saved report. | Fixed to current non-consuming `-c --charged`; source/window remains explicit. |
 | B21 | Medium | Default automatic backup included history databases. | Fixed manifest and both backup-rule generations: settings DataStore only; XML checked, OEM transfer unverified. |
 | B22 | Medium | New advanced UI strings lack locale translations. | Open: last lint125 MissingTranslation errors/216 warnings. More new strings now added; real translations required. |
-| B23 | Medium | Dark onSecondary#3B1F70 over secondary#8B5CF6 has calculated contrast3.07:1. | Open: fix normal-text contrast and inspect actual screens. |
-| B24 | Medium | Local chart query included imported/legacy readings without a matching source label. | Fixed local query to BatteryManager records; host SQL passes, Android regression compiled. Imported legacy detail labels still pending. |
+| B23 | Medium | Dark onSecondary#3B1F70 over secondary#8B5CF6 had contrast3.07:1. | Fixed palettes; normal/fixed text and outline contrast regressions pass. Actual screens pending. |
+| B24 | Medium | Local chart query included imported/legacy readings without source labels. | Fixed local query and legacy/import detail evidence labels; host SQL passes, Android regressions compile. Device rendering pending. |
 | B25 | Medium | Widgets lack freshness/stopped labels; absent in-memory sample leaves stale/blank display. | Implemented in4b2; snapshot/empty/freshness/stopped/temperature handling; actual widget rendering pending. |
 
 ## Actual validation
@@ -99,3 +99,11 @@ Stage4c3a verification PASSED1m59s:90 JVM tests,0fail/error/skip and Android-tes
 B30 (Medium, confirmed): BatteryRepository.process publishes a queued sample after suspendable SQL, replacing newer raw captures. Working4d1 matches capture identity before applying persisted session/ETA. Parser capacity fractional truncation and dc Double-to-Float overflow also corrected. Channel setup exceptions previously escaped alert collection; monitoring display IPC failures could terminate its update coroutine. Working fixes and four new synthetic regressions await validation.
 
 Stage4d1 validation:94 JVM tests passed,0fail/error/skip. Initial client interrupted(exit143) before Android compilation completed; unchanged rerun PASSED44s with JVM results up-to-date. Detailed evidence in docs/VALIDATION.md. Numeric/live-publication/recoverable-notification fixes implemented; actual Binder/UI delivery remains unverified. Legacy phone/store screenshots reviewed; duplicate phone image under tvScreenshots does not validate TV support.
+
+Stage5a working tree: preview/signing/manual artifact workflow and release gate fixed locally; actionlint passes. Removed unused direct WorkManager/navigation-compose/constraint/browser dependencies and unnecessary requested BATTERY_STATS/INTERACT_ACROSS_USERS permissions; source search confirms no callers. Provider cross-user protection is retained. Debug/preview tests and assemblies pending; no claim of measured energy savings.
+
+Stage5a initial build failed during task selection: AGP9 only enables JVM test components for the instrumented build type by default, so testPreviewUnitTest was absent. Task inventory and current AGP API confirmed this; preview host tests now explicitly enabled with beforeVariants. Rebuild active (`/tmp/batstats-stage5a-rebuild.log`); no assertions removed or disabled.
+
+B31 (Medium, confirmed during recovery-test design): BatteryRepository shares one error field. Successful stopped/manual capture never clears a prior battery-read failure; a successful SQL write clears even a failed screen-event subscription. Separate failure ownership and source-specific recovery after the active build; preserve missing observation evidence if state events are unavailable. B30 follow-up: timestamp/generation equality alone cannot distinguish different captures within the same millisecond. Add full-input matching and a regression.
+
+Stage5a complete:94 JVM tests passed in each Debug/Preview; debug, optimized nondebug Preview and Android-test APKs assembled in21m54s. lintVitalPreview passed; full lint remains blocked by missing translations. Actual APK signature/manifest and artifact collector checks passed. Details in docs/VALIDATION.md. Workflow publication/execution is unapproved and has not occurred. Next: B31 source-specific recovery, B30 same-millisecond matching, Android UI/Shizuku runtime tests and translations.
