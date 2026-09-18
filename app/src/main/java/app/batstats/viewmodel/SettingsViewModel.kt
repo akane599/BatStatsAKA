@@ -1,5 +1,10 @@
 package app.batstats.viewmodel
 
+import app.batstats.R
+import app.batstats.settings.SettingsImportPolicy
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import android.content.Context
 import android.net.Uri
 import android.content.Intent
@@ -31,6 +36,9 @@ class SettingsViewModel(
     private val batteryRepository: BatteryRepository
 ) : ViewModel() {
 
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+
     val settings: StateFlow<AppSettings> = repository.flow
         .stateIn(
             scope = viewModelScope,
@@ -43,7 +51,7 @@ class SettingsViewModel(
 
     fun updateSetting(name: String, value: Any) {
         viewModelScope.launch {
-            repository.set(name, value)
+            attempt { repository.set(name, value) }
         }
     }
 
@@ -55,26 +63,31 @@ class SettingsViewModel(
         }
     }
 
-    suspend fun resetUISettings(): Int = resetManager.resetUISettings()
-    suspend fun resetAll(): Int = resetManager.resetAll()
+    suspend fun resetUISettings(): Boolean = attempt { resetManager.resetUISettings() }
+    suspend fun resetAll(): Boolean = attempt { resetManager.resetAll() }
 
-    suspend fun exportToFile(uri: Uri): String {
-        return withContext(Dispatchers.IO) {
+    private suspend fun attempt(block: suspend () -> Unit): Boolean = try {
+        block(); _error.value = null; true
+    } catch (e: CancellationException) { throw e }
+    catch (_: Exception) { _error.value = context.getString(R.string.settings_write_failed); false }
+
+    suspend fun exportToFile(uri: Uri): String = withContext(Dispatchers.IO) {
+        try {
             when (val result = backupManager.export()) {
                 is ExportResult.Success -> {
-                    try {
-                        (context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open settings destination")).use { output ->
-                            output.write(result.json.toByteArray())
-                        }
-                        "Settings saved to ${uri.path}"
-                    } catch (e: Exception) {
-                        "Failed to write file: ${e.message}"
+                    (context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open settings destination")).use { output ->
+                        output.write(result.json.toByteArray(Charsets.UTF_8))
                     }
+                    context.getString(R.string.settings_saved)
                 }
-                is ExportResult.Error -> "Export generation failed: ${result.message}"
+                is ExportResult.Error -> context.getString(R.string.settings_export_failed)
             }
-        }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { context.getString(R.string.settings_export_failed) }
     }
 
-    suspend fun import(json: String): ImportResult = backupManager.import(json)
+    suspend fun import(json: String): ImportResult = withContext(Dispatchers.IO) {
+        SettingsImportPolicy.validate(json)
+        backupManager.import(json)
+    }
 }

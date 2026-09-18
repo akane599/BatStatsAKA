@@ -1,5 +1,12 @@
 package app.batstats.ui.screens
 
+import app.batstats.settings.SettingsImportPolicy
+import app.batstats.settings.SettingsText
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.outlined.MoreVert
 import android.net.Uri
 import android.content.Intent
 import android.provider.Settings
@@ -68,11 +75,16 @@ fun BatterySettingsScreen(
     val context = LocalContext.current
     val alertSettingsUnavailable = stringResource(R.string.alert_settings_unavailable)
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val settingsError by vm.error.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbarHost = remember { SnackbarHostState() }
 
+    LaunchedEffect(settingsError) { settingsError?.let { snackbarHost.showSnackbar(it) } }
+
+    var showActions by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
+    var resettingSettings by remember { mutableStateOf(false) }
     var showImportDialog by remember { mutableStateOf(false) }
     var clearingHistory by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
@@ -96,6 +108,9 @@ fun BatterySettingsScreen(
         }
     }
 
+    val categoryTitles = mapOf("General" to stringResource(R.string.settings_general),
+        "Notifications" to stringResource(R.string.settings_notifications), "Display" to stringResource(R.string.settings_display),
+        "Data & Export" to stringResource(R.string.settings_data))
     val categoryOrder = listOf(
         General::class to "General",
         Notifications::class to "Notifications",
@@ -121,30 +136,24 @@ fun BatterySettingsScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
-                title = {
-                    Column {
-                        Text(stringResource(R.string.batstats))
-                        Text(
-                            stringResource(R.string.customize_behavior),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
+                title = { Text(stringResource(R.string.settings)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.back))
                     }
                 },
                 actions = {
-                    IconButton(onClick = { createSettingsBackup.launch("BatStats_Settings_Backup.json") }) {
-                        Icon(Icons.Outlined.Backup, contentDescription = stringResource(R.string.export_settings))
-                    }
-                    IconButton(onClick = { showImportDialog = true }) {
-                        Icon(Icons.Outlined.Restore, contentDescription = stringResource(R.string.import_settings_desc))
-                    }
-                    IconButton(onClick = { showResetDialog = true }) {
-                        Icon(Icons.Outlined.RestartAlt, contentDescription = stringResource(R.string.reset_settings_desc))
+                    IconButton(onClick = { showActions = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.settings_more)) }
+                    DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
+                        DropdownMenuItem(text = { Text(stringResource(R.string.export_settings)) }, onClick = {
+                            showActions = false; createSettingsBackup.launch("BatStats_Settings_Backup.json")
+                        }, leadingIcon = { Icon(Icons.Outlined.Backup, null) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.import_settings_desc)) }, onClick = {
+                            showActions = false; showImportDialog = true
+                        }, leadingIcon = { Icon(Icons.Outlined.Restore, null) })
+                        DropdownMenuItem(text = { Text(stringResource(R.string.reset_settings_desc)) }, onClick = {
+                            showActions = false; showResetDialog = true
+                        }, leadingIcon = { Icon(Icons.Outlined.RestartAlt, null) })
                     }
                 },
                 scrollBehavior = scrollBehavior
@@ -164,7 +173,7 @@ fun BatterySettingsScreen(
 
                     item(key = "header_$categoryTitle") {
                         Text(
-                            text = categoryTitle,
+                            text = categoryTitles.getValue(categoryTitle),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -174,7 +183,7 @@ fun BatterySettingsScreen(
                     item(key = "section_$categoryTitle") {
                         SettingsSection(title = "") {
                             fields.forEach { field ->
-                                val meta = field.meta ?: return@forEach
+                                val meta = field.meta?.let { SettingsText.resolve(context, field.name, it) } ?: return@forEach
                                 val enabled = schema.isEnabled(settings, field)
 
                                 RenderSettingField(
@@ -197,6 +206,7 @@ fun BatterySettingsScreen(
                             }
 
                             if (categoryClass == General::class) {
+                                settingsError?.let { Text(it, Modifier.padding(16.dp), color = MaterialTheme.colorScheme.error) }
                                 Text(stringResource(R.string.monitoring_settings_help), Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
                             }
                             if (categoryClass == Notifications::class) {
@@ -239,7 +249,7 @@ fun BatterySettingsScreen(
     // Dropdown Dialog
     val cf = currentField
     if (showDropdown && cf?.meta != null) {
-        val meta = cf.meta!!
+        val meta = SettingsText.resolve(context, cf.name, cf.meta!!)
         @Suppress("UNCHECKED_CAST")
         val anyField = cf as SettingField<AppSettings, Any?>
         val index = when (val value = anyField.get(settings)) {
@@ -266,7 +276,7 @@ fun BatterySettingsScreen(
 
     // Slider Dialog
     if (showSlider && cf?.meta != null) {
-        val meta = cf.meta!!
+        val meta = SettingsText.resolve(context, cf.name, cf.meta!!)
         @Suppress("UNCHECKED_CAST")
         val anyField = cf as SettingField<AppSettings, Any?>
         val value = anyField.get(settings)
@@ -281,7 +291,7 @@ fun BatterySettingsScreen(
 
         SliderSettingDialog(
             title = meta.title,
-            currentValue = currentVal,
+            currentValue = currentVal.takeIf(Float::isFinite)?.coerceIn(meta.min, meta.max) ?: meta.min,
             min = meta.min,
             max = meta.max,
             step = meta.step,
@@ -303,11 +313,12 @@ fun BatterySettingsScreen(
         val uiSettingsResetMsg = stringResource(R.string.ui_settings_reset)
         val allSettingsResetMsg = stringResource(R.string.all_settings_reset)
         AlertDialog(
-            onDismissRequest = { showResetDialog = false },
+            onDismissRequest = { if (!resettingSettings) showResetDialog = false },
             title = { Text(stringResource(R.string.reset_settings)) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(stringResource(R.string.choose_reset))
+                    settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     Spacer(Modifier.height(16.dp))
                     Text(stringResource(R.string.reset_ui_settings), style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
@@ -315,66 +326,90 @@ fun BatterySettingsScreen(
                 }
             },
             confirmButton = {
-                Row {
-                    TextButton(onClick = {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(enabled = !resettingSettings, onClick = {
+                        resettingSettings = true
                         scope.launch {
-                            vm.resetUISettings()
-                            snackbarHost.showSnackbar(uiSettingsResetMsg)
-                            showResetDialog = false
+                            try { if (vm.resetUISettings()) {
+                                showResetDialog = false
+                                snackbarHost.showSnackbar(uiSettingsResetMsg)
+                            } } finally { resettingSettings = false }
                         }
                     }) { Text(stringResource(R.string.reset_ui)) }
                     Spacer(Modifier.width(8.dp))
                     TextButton(
+                        enabled = !resettingSettings,
                         onClick = {
+                            resettingSettings = true
                             scope.launch {
-                                vm.resetAll()
-                                snackbarHost.showSnackbar(allSettingsResetMsg)
-                                showResetDialog = false
+                                try { if (vm.resetAll()) {
+                                    showResetDialog = false
+                                    snackbarHost.showSnackbar(allSettingsResetMsg)
+                                } } finally { resettingSettings = false }
                             }
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) { Text(stringResource(R.string.reset_all)) }
                 }
             },
-            dismissButton = { TextButton(onClick = { showResetDialog = false }) { Text(stringResource(R.string.cancel)) } }
+            dismissButton = { TextButton(enabled = !resettingSettings, onClick = { showResetDialog = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
     // Import Dialog
     if (showImportDialog) {
         var jsonInput by remember { mutableStateOf("") }
-        val settingsImportedMsg = stringResource(R.string.settings_imported)
-        val importFailedMsg = stringResource(R.string.import_failed)
+        var inputTooLong by remember { mutableStateOf(false) }
+        var importing by remember { mutableStateOf(false) }
+        var importError by remember { mutableStateOf<String?>(null) }
         AlertDialog(
-            onDismissRequest = { showImportDialog = false },
+            onDismissRequest = { if (!importing) showImportDialog = false },
             title = { Text(stringResource(R.string.import_settings)) },
             text = {
-                Column {
+                Column(Modifier.verticalScroll(rememberScrollState())) {
                     Text(stringResource(R.string.paste_json))
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = jsonInput,
-                        onValueChange = { jsonInput = it },
-                        modifier = Modifier.fillMaxWidth().height(200.dp),
-                        placeholder = { Text(stringResource(R.string.paste_json_hint)) }
+                        onValueChange = {
+                            importError = null
+                            inputTooLong = it.length > SettingsImportPolicy.MAX_BYTES
+                            if (!inputTooLong) jsonInput = it
+                        },
+                        enabled = !importing,
+                        isError = inputTooLong,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp, max = 200.dp),
+                        placeholder = { Text(stringResource(R.string.paste_json_hint)) },
+                        supportingText = { Text(stringResource(R.string.settings_import_limit)) }
                     )
+                    importError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             },
             confirmButton = {
                 TextButton(
                     onClick = {
+                        importing = true
+                        importError = null
                         scope.launch {
-                            when (val result = vm.import(jsonInput)) {
-                                is ImportResult.Success -> snackbarHost.showSnackbar("${result.appliedCount} $settingsImportedMsg")
-                                is ImportResult.Error -> snackbarHost.showSnackbar("$importFailedMsg: ${result.error}")
-                            }
-                            showImportDialog = false
+                            try {
+                                when (val result = vm.import(jsonInput)) {
+                                    is ImportResult.Success -> {
+                                        showImportDialog = false
+                                        snackbarHost.showSnackbar(context.getString(R.string.settings_import_result,
+                                            result.appliedCount, result.skippedCount, result.errors.size))
+                                    }
+                                    is ImportResult.Error -> importError = context.getString(R.string.settings_import_rejected, result.error.name)
+                                }
+                            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                            catch (_: IllegalArgumentException) { importError = context.getString(R.string.settings_invalid_import) }
+                            catch (_: Exception) { importError = context.getString(R.string.settings_import_failed) }
+                            finally { importing = false }
                         }
                     },
-                    enabled = jsonInput.isNotBlank()
+                    enabled = jsonInput.isNotBlank() && !inputTooLong && !importing
                 ) { Text(stringResource(R.string.import_action)) }
             },
-            dismissButton = { TextButton(onClick = { showImportDialog = false }) { Text(stringResource(R.string.cancel)) } }
+            dismissButton = { TextButton(enabled = !importing, onClick = { showImportDialog = false }) { Text(stringResource(R.string.cancel)) } }
         )
     }
 
@@ -441,7 +476,7 @@ private fun RenderSettingField(
             if (meta.options.isNotEmpty()) {
                 SettingsItem(
                     title = meta.title,
-                    subtitle = meta.options.getOrNull(index) ?: "Unknown",
+                    subtitle = meta.options.getOrNull(index) ?: stringResource(R.string.settings_unknown_option),
                     description = meta.description.takeIf { it.isNotBlank() },
                     enabled = enabled,
                     onClick = onOpenDropdown
@@ -459,7 +494,12 @@ private fun RenderSettingField(
             }
             SettingsItem(
                 title = meta.title,
-                subtitle = subtitle,
+                subtitle = subtitle + when (field.name) {
+                    "lowBatteryThreshold", "highBatteryThreshold" -> "%"
+                    "temperatureThreshold" -> " °C"
+                    "dischargeCurrentThreshold" -> " mA"
+                    else -> ""
+                },
                 description = meta.description.takeIf { it.isNotBlank() },
                 enabled = enabled,
                 onClick = onOpenSlider
