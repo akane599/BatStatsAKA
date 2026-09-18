@@ -4,7 +4,7 @@
 - Starting revision `76bc831328572c81717b97ffb0e280b10b14b8ad` (source6.2.6/code734). Branch `codex/android16-reliability`. No unrelated changes at start.
 - Deliver accurate, efficient Android16/API36 monitoring with Shizuku primary and ordinary/ADB/Root preserved; useful rich notification, accessible UI, reliable history/diagnostics/export, installable debug/nondebug APKs, signing guide and locally prepared PR/manual workflow.
 - Follow AGENTS.md: focused stages; update this record and commit relevant work after each; reread before next. After compaction read this and AUDIT_REPORT, inspect status/recent commits/all uncommitted diffs and reconcile before implementation.
-- Local task edits/refactors/branches/commits/dependencies/builds/tests/disposable emulators authorized, within environment permissions. Preserve unrelated work and secrets. **No GitHub writes/pushes/Actions approved or performed.** Finish local validation before proposing exact remote actions and automatic triggers.
+- Local task edits/refactors/branches/commits/dependencies/builds/tests/disposable emulators authorized, within environment permissions. Preserve unrelated work and secrets. **User explicitly approved branch publication, draft PR and validation runs on2026-09-18.** Scope and exclusions are recorded below.
 - No physical Samsung; do not request phone testing. Distinguish injected test inputs, reported values, estimates and missing readings. No unsupported hardware/energy-saving claims. UI improvements are explicitly authorized beyond the generic audit skill.
 - Commit identity per command: `git -c user.name=Codex -c user.email=codex@openai.com commit`. Never print environment/full process arguments.
 
@@ -55,7 +55,9 @@
 - Physical Samsung current calibration, capacity, AOD/background restrictions, vendor kernel access and energy overhead remain unverified; no phone required/requested.16KiB runtime and native-speaker locale review remain open.
 - Existing Dependabot auto-review/merge workflow is constrained by repository policy (automatic reviews disabled); no settings changed. This is separate from app validation.
 
-## Outstanding approval and exact next action
-**GitHub approval requested asynchronously, still unanswered. No GitHub mutation or Actions run has been performed.** Proposed scope: push/update codex/android16-reliability to akane599/BatStatsAKA; create/update its draft PR; run/rerun validation for verified task fixes. Push and PR events may each automatically start the shared APK/Android16/Shizuku workflow and upload artifacts. No merge, release, settings changes or cancellation authority requested. Never treat elapsed time or a suggested option as approval.
+## Approved publication and exact next action
+The user replied **Approved** to publishing this branch, opening its draft PR, and running/rerunning validation in akane599/BatStatsAKA. The approved scope includes task branch/PR updates for verified fixes and automatic push/PR APK + Android16/Shizuku workflows and artifacts. **Merging, releases, repository settings changes and cancellation are not approved.** Do not request the same permission again.
 
-Next: obtain the explicit answer to that publication/validation request. If approved, push the current committed branch, open a draft PR with `docs/PR_DESCRIPTION.md`, inspect actual CI device reports/screenshots, investigate failures locally and update records/commits. If continuing locally, start the retained task emulator alone, verify complete boot, inspect the baseline, then run `ANDROID_SERIAL=emulator-5580 bash scripts/check_android_device.sh --prebuilt`; no success is presumed. Do not restart implementation after a new session without the recovery checks above.
+Stage6a: recovered clean74c0710, reviewed reports and prepared workflows; verified origin repository/main and no changed tracked signing/credential filenames. Hosted results remain pending. Publication checkpoint commit follows; no remote mutation yet at this record.
+
+Next: push codex/android16-reliability, create its draft PR against main with docs/PR_DESCRIPTION.md, record URLs/run IDs, inspect actual CI reports and screenshots, investigate failures locally, and update records/commits. Keep the PR draft while runtime verification is incomplete. After any compaction perform the recovery checks above before implementation.
