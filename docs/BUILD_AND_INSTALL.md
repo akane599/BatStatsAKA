@@ -44,3 +44,9 @@ On memory-constrained hosts, add `--no-daemon -Dorg.gradle.jvmargs=-Xmx1024m --m
 Local stable preview signing uses `PREVIEW_KEYSTORE_PATH`, `PREVIEW_STORE_PASSWORD`, `PREVIEW_KEY_ALIAS`, `PREVIEW_KEY_PASSWORD`. Keep the file outside the repository. `assembleRelease` requires the original `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; preview signing never supplies production credentials.
 
 Actual results and hardware limits are recorded in [VALIDATION.md](VALIDATION.md). Android emulator success does not validate Samsung current calibration, battery capacity or physical monitoring overhead.
+
+## Android device checks
+
+Use a disposable API36 `google_apis` emulator (not ATD: notification review needs SystemUI). Set `ANDROID_SERIAL=emulator-5554`, then run `bash scripts/check_android_device.sh`. It runs ordinary checks, installs checksum-pinned official Shizuku13.6 as shell UID2000, then runs real authorization/helper restart/access loss/reconnection checks. The tests change simulated battery and font settings and restore them afterward; never run these tests on a personal device. Reports and screenshots are saved under `app/build/reports/device-validation/`. Each phase must pass; an unavailable Shizuku service fails its suite.
+
+On constrained hosts build APKs first and use `adb install`/`am instrument` separately from Gradle so the build JVM and emulator do not compete for memory. Actual execution status is in VALIDATION.md; compiled tests alone do not establish compatibility.

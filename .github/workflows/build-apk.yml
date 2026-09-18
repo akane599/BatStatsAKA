@@ -73,7 +73,7 @@ jobs:
           profile: pixel_2
           ram-size: 2048M
           disable-animations: true
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace
+          script: bash scripts/check_android_device.sh
       - name: Record APK checksums and certificates
         run: |
           mkdir -p artifacts
