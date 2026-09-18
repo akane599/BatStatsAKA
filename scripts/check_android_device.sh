@@ -47,20 +47,45 @@ collect_screenshots() {
   fi
 }
 trap collect_screenshots EXIT
+collect_diagnostics() {
+  # A crashed process produces almost no instrumentation output, so the phase report
+  # alone cannot identify the failure. Keep Android's own log and the installed
+  # native/ABI state; these are the only records of a startup or linker crash.
+  local phase="$1"
+  local directory="${batstats_report_dir}/${phase}-diagnostics"
+  mkdir -p "$directory"
+  adb logcat -d -v threadtime 2>/dev/null | tail -c 4000000 > "$directory/logcat.txt" || true
+  adb logcat -d -v threadtime -b crash 2>/dev/null | tail -c 1000000 > "$directory/crash.txt" || true
+  {
+    adb shell dumpsys package org.mlm.batstats.debug 2>/dev/null \
+      | grep -E 'versionCode|primaryCpuAbi|legacyNativeLibraryDir|codePath' || true
+    adb shell getprop ro.product.cpu.abilist 2>/dev/null || true
+    adb shell getconf PAGE_SIZE 2>/dev/null || true
+    adb shell ls -l /data/tombstones 2>/dev/null || true
+  } > "$directory/device.txt" || true
+  echo "Saved Android diagnostics for the $phase phase under $directory" >&2
+}
 run_prebuilt_phase() {
   local phase="$1"
   shift
   local report="${batstats_report_dir}/${phase}-instrumentation.txt"
+  local result=0
+  adb logcat -c >/dev/null 2>&1 || true
   adb shell am instrument -w -r -e expectedPageSize "$batstats_page_size" "$@" \
-    org.mlm.batstats.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$report" || return 1
+    org.mlm.batstats.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$report" || result=1
   # adb can exit successfully even when the test runner crashed or assertions failed.
-  python3 scripts/check_instrumentation_result.py "$report"
+  if [[ "$result" == 0 ]]; then
+    python3 scripts/check_instrumentation_result.py "$report" || result=$?
+  fi
+  [[ "$result" == 0 ]] || collect_diagnostics "$phase"
+  return "$result"
 }
 run_gradle_phase() {
   local result=0
   # Save each phase before AGP replaces its output with the following phase's results.
   rm -rf app/build/outputs/androidTest-results app/build/reports/androidTests \
     app/build/outputs/connected_android_test_additional_output
+  adb logcat -c >/dev/null 2>&1 || true
   ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace \
     -Pandroid.testInstrumentationRunnerArguments.expectedPageSize="$batstats_page_size" \
     -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/sdcard/Download/batstats-validation-screenshots \
@@ -72,6 +97,7 @@ run_gradle_phase() {
     cp -R app/build/reports/androidTests "${batstats_report_dir}/${batstats_phase}-html" || return 1
   fi
   collect_screenshots || return 1
+  [[ "$result" == 0 ]] || collect_diagnostics "$batstats_phase"
   return "$result"
 }
 batstats_ordinary_result=0

@@ -2,7 +2,17 @@
 
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
-## Latest runtime checkpoint: e52daf9
+## Latest runtime checkpoint: d3ced0d
+
+Standard API36 validation **passes**: push35338814265 and PR35338819113 each execute28 ordinary methods with0 failures,0 errors and0 skips, and each real Shizuku phase passes1/1. The stage6l corrections resolved the landscape reset-dialog failure at NavigationDeviceTest.kt122, and both runs reached the second image for the first time.
+
+The **16 KiB phase fails and its cause is unidentified**. On `google_apis_ps16k` both phases print only `INSTRUMENTATION_RESULT: shortMsg=Process crashed.` and `INSTRUMENTATION_CODE: 0`, seven to nine seconds after `adb install`, with no test output; `device-info.txt` confirms api=36, hardware=ranchu, page_size=16384. The app process therefore dies during startup on that image. The runner captured no Android log for the crashed process, so the retained report contains no evidence of what failed. This is recorded as an open failure, not as a16 KiB result.
+
+Static inspection excludes the obvious explanation. The dependency set contains exactly two native libraries, `androidx.graphics:graphics-path` and `androidx.datastore:datastore-core:1.2.1`; both declare PT_LOAD `p_align 0x4000` for arm64-v8a and x86_64, matching the earlier stage5g APK checks. The 4 KiB-aligned `librish.so` present in this machine's shared Gradle cache comes from an unrelated project and is not resolved by `:app`. The graphics-path RELRO-end warning is unchanged and remains an inference, not a reproduction.
+
+Both phases now clear the log beforehand and, on failure only, retain `logcat.txt`, the crash buffer and device/ABI/page-size state under `device-validation/<group>/<phase>-diagnostics/`. Host verification for this checkpoint: 16 orchestration/parser regressions pass (`python3 -B -m unittest discover -s scripts`), `bash -n scripts/check_android_device.sh` passes, and `:app:compileDebugKotlin` passes locally. No emulator ran locally; this machine has no KVM and 392 MiB free.
+
+## Earlier runtime checkpoint: e52daf9
 
 Both API36 builds passed. Push35336121659 and PR35336125428 each execute28 ordinary methods:27pass/1fail,0errors/skips. Both real Shizuku integration phases pass1/1, covering authorization, shellUID2000, commands, helper restart, server loss/restart/reconnection and ordinary-data survival. Native library loading and4KiB process page-size assertions pass.16KiB phases did not run because standard validation failed.
 

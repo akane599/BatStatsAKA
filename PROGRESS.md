@@ -1,9 +1,14 @@
 # BatStats Development Progress
 
-## User-requested final publication
-- User stopped testing, then explicitly requested pushing the current work. Prepare one final local commit and push `codex/android16-reliability`; update existing draft PR1. Push/PR CI runs automatically, as disclosed. Do not run further local tests/builds, monitor CI, or trigger/rerun validation.
+## Current task: make hosted CI pass
+- User discarded the earlier stop-and-publish instruction and asked to fix the failing GitHub checks and push. Local builds/tests and pushes to this branch are authorized again; merging, releases and repository settings are not.
+- `d3ced0d` hosted results (push35338814265, PR35338819113): the stage6l corrections work. The standard API36 phase now passes **28 ordinary methods,0 failures/errors/skips**, and its real Shizuku phase passes. The landscape reset-dialog failure at NavigationDeviceTest.kt122 is resolved.
+- The only remaining red step is **Android16 with16 KiB pages**, executing for the first time. Both its phases report `INSTRUMENTATION_RESULT: shortMsg=Process crashed.` / `INSTRUMENTATION_CODE: 0` within7-9s of `adb install`, with no test output at all, so the app process dies at startup on the `google_apis_ps16k` image.
+- Cause is **not yet identified**, because the runner captured no Android log for a crashed process; `16k/ordinary-instrumentation.txt` contains only those two lines. Static evidence excludes misaligned app native libraries: the only two `.so` in the dependency set (`androidx.graphics:graphics-path`, `androidx.datastore:datastore-core:1.2.1`) carry PT_LOAD `p_align 0x4000` on arm64-v8a/x86_64. The4 KiB-aligned `librish.so` in the shared Gradle cache belongs to another project and is not a BatStats dependency.
 - Stage6l notification/reset-layout and test changes are included in this checkpoint but remain unverified. Validation stopped with Ctrl-C (exit130) before tests completed; no new pass. Existing collected APKs are from e52daf9 and exclude these changes.
-- Exact next action: commit this checkpoint, push the branch, update the draft PR description, then stop. Further implementation/validation requires a new user request. No merge, release or settings change is authorized.
+- This checkpoint makes the failure diagnosable instead of guessing at it. `scripts/check_android_device.sh` now clears the Android log before each phase and, **on failure only**, saves `logcat.txt`, the crash buffer and device/ABI/page-size state under `app/build/reports/device-validation/<group>/<phase>-diagnostics/`, which the existing reports artifact already uploads. Two host regressions cover the new records and their absence on success (16 host tests pass).
+- It also removes one startup crash path that matches the symptom exactly: `BatteryApp.onCreate` launched `migrationManager.migrate()` as an unguarded root coroutine, so any failure there reaches Android's default handler and kills the process before a screen or reading exists. A failed settings migration is now reported and non-fatal. This is defensible hardening; it is **not** a confirmed fix for the16 KiB crash.
+- Exact next action: push this checkpoint, then read `16k/ordinary-diagnostics/logcat.txt` from the run's validation-reports artifact and fix the identified crash. Claim no16 KiB runtime pass until a green16 KiB phase exists.
 
 ## Scope, baseline and authorization
 - Starting source: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-reliability`. No unrelated changes at start. Current history is authoritative.

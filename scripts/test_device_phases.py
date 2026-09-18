@@ -98,6 +98,20 @@ sys.exit(int(os.environ['BATSTATS_TEST_SETUP']))
         self.assertTrue((reports / "ordinary-results/ordinary.txt").is_file())
         self.assertEqual("Earlier image evidence", (root / "app/build/reports/device-validation/other-image/retained.txt").read_text())
 
+    def test_failed_phase_keeps_android_diagnostics(self):
+        root, result, _ = self.run_phases(ordinary=3)
+        self.assertNotEqual(0, result.returncode)
+        diagnostics = root / "app/build/reports/device-validation/standard/ordinary-diagnostics"
+        for record in ("logcat.txt", "crash.txt", "device.txt"):
+            self.assertTrue((diagnostics / record).is_file(), record)
+
+    def test_successful_phases_do_not_fabricate_diagnostics(self):
+        root, result, _ = self.run_phases()
+        self.assertEqual(0, result.returncode, result.stderr)
+        reports = root / "app/build/reports/device-validation/standard"
+        self.assertFalse((reports / "ordinary-diagnostics").exists())
+        self.assertFalse((reports / "shizuku-diagnostics").exists())
+
     def test_wrong_page_size_is_a_failure_before_test_execution(self):
         _, result, calls = self.run_phases(expected_page="16384")
         self.assertNotEqual(0, result.returncode)
