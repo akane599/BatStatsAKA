@@ -6,6 +6,12 @@ Results identify local versus GitHub Actions execution. None establish physical 
 
 **Both hosted runs pass.** Push35348444065 and PR35348449882 each complete Verify-and-build, the standard API36 device phases, the Android16 16 KiB phase, checksum collection and APK upload. Counting the marginal2048M pass at35346293477, three16 KiB executions have now succeeded, two of them at4096M. This is the first reproducible16 KiB runtime result for this branch; it remains an x86_64 emulator result and establishes nothing about ARM64 or physical Samsung hardware.
 
+## Widget bind race on the 16 KiB image
+
+`WidgetDeliveryDeviceTest` failed at `99bc10b` and `d150962` with `Widget failure during paused scripted values; values=[100%, 25.0 °C, —]`, where80% was the scripted level and100% is the emulator's real battery. Binding a widget makes `BatteryLevelWidget.onUpdate` call `WidgetUpdater.refresh`, which reads the real battery asynchronously through `refreshNow`. When that push lands after a scripted push it replaces it and the expected values are stranded for the remaining120s; the test's existing refresh barrier only flushes its own callback, not the provider's earlier `goAsync` push. Each scripted phase now re-applies its state every two seconds while waiting, so a late real reading cannot win. Asserted values are unchanged. Twelve low-memory kills occurred in that run, all of incidental processes - neither the launcher hosting the widgets nor the app was killed - so this is not the memory failure fixed for the16 KiB emulator.
+
+The `d150962` push run35354943706 confirms the two standard-phase fixes: `ordinary_exit=0` and `shizuku_exit=0`, with the widget race the only remaining failure. The16 KiB record stands at three passes and two failures.
+
 ## Standard-phase flakiness at 4d03cec
 
 The docs-only commit `4d03cec` touches four markdown files and no code, yet push35350723002 passed and PR35350728383 failed, so the standard API36 phase is nondeterministic rather than regressed. The failing run reports28 tests,2 failures,0 errors: `NavigationDeviceTest.largeTextDarkThemeKeepsActionsAndResetExplanationReachable` raised `ComposeTimeoutException: Condition still not satisfied after120000 ms` inside `awaitDashboard`, and `MonitoringLifecycleDeviceTest...DoNotInventOffTimeOrKeepRecordingAfterStop` failed at the notification tap. The captured log records zero low-memory kills and `Davey! duration=1276ms` frames, so this is software-rendering latency, not the memory failure fixed for the16 KiB image.

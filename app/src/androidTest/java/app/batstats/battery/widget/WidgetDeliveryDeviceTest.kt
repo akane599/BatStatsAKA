@@ -45,12 +45,19 @@ class WidgetDeliveryDeviceTest {
         val widgets = mutableListOf<AppWidgetHostView>()
         var host: AppWidgetHost? = null
         var phase = "bind and receive initial widget views"
-        suspend fun awaitViews(condition: () -> Boolean) = withTimeout(120_000) {
+        // Binding a widget makes its provider schedule its own refresh from the real
+        // battery, and that push can land after a scripted one and replace it, stranding
+        // the expected values for the rest of the wait. Re-apply the scripted state every
+        // two seconds so a late real reading cannot win the race. The values each phase
+        // asserts are unchanged; only their delivery is repeated.
+        suspend fun awaitViews(reapply: () -> Unit = {}, condition: () -> Boolean) = withTimeout(120_000) {
+            var polls = 0
             while (true) {
                 var ready = false
                 scenario.onActivity { ready = condition() }
                 if (ready) break
                 delay(100)
+                if (++polls % 20 == 0) reapply()
             }
         }
         fun value(index: Int) = widgets[index].findViewById<TextView>(R.id.value)?.text?.toString()
@@ -97,18 +104,21 @@ class WidgetDeliveryDeviceTest {
             val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(sample.timestamp))
             phase = "paused scripted values"
             WidgetUpdater.push(context, sample, monitoring = false, fahrenheit = false)
-            awaitViews { value(0) == "80%" && value(1) == "25.0 °C" && value(2) == "—" &&
-                captions().all { it == context.getString(R.string.widget_paused_at, date) } }
+            awaitViews(reapply = { WidgetUpdater.push(context, sample, monitoring = false, fahrenheit = false) }) {
+                value(0) == "80%" && value(1) == "25.0 °C" && value(2) == "—" &&
+                    captions().all { it == context.getString(R.string.widget_paused_at, date) } }
             DeviceEnvironment.screenshot("widgets-paused-scripted")
             phase = "Fahrenheit and estimate"
             WidgetUpdater.push(context, sample, monitoring = true, fahrenheit = true)
-            awaitViews { value(1) == "77.0 °F" && value(2) == context.getString(R.string.monitor_eta_remaining, "2h 0m") &&
-                captions().all { it == context.getString(R.string.widget_read_at, date) } }
+            awaitViews(reapply = { WidgetUpdater.push(context, sample, monitoring = true, fahrenheit = true) }) {
+                value(1) == "77.0 °F" && value(2) == context.getString(R.string.monitor_eta_remaining, "2h 0m") &&
+                    captions().all { it == context.getString(R.string.widget_read_at, date) } }
             DeviceEnvironment.screenshot("widgets-fahrenheit-estimate-scripted")
             phase = "unavailable values"
             WidgetUpdater.showPlaceholder(context)
-            awaitViews { widgets.indices.all { value(it) == "—" } && captions().all {
-                it == context.getString(R.string.widget_paused_at, context.getString(R.string.widget_no_reading)) } }
+            awaitViews(reapply = { WidgetUpdater.showPlaceholder(context) }) {
+                widgets.indices.all { value(it) == "—" } && captions().all {
+                    it == context.getString(R.string.widget_paused_at, context.getString(R.string.widget_no_reading)) } }
             DeviceEnvironment.screenshot("widgets-unavailable-scripted")
         } catch (failure: Throwable) {
             runCatching { DeviceEnvironment.screenshot("widgets-failure") }
