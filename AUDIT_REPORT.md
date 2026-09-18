@@ -9,7 +9,8 @@ Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-re
 - [x] Advanced collectors, Android16 producer layout, UID attribution and kernel ABI reviewed; vendor outputs unverified.
 - [x] ViewModels/navigation/layout/theme/widget/alert/settings/resource source reviewed; locale inventory corrected by comparing actual baseline values.
 - [x] Actual Android16 screens, accessibility, loading/empty/partial/error/recovery and notification/widget interactions (all28 ordinary methods pass at `d3ced0d`).
-- [x] Android16 with16 KiB pages: `google_apis_ps16k` passes in three runs (35346293477 at2048M, then35348444065/35348449882 at4096M). The earlier failure was Android's low-memory killer terminating the foreground app, not an app or native-alignment defect. ARM64 and physical Samsung behavior remain unverified.
+- [x] Android16 with16 KiB pages: `google_apis_ps16k` passes, most recently in the fully green pair35357019386/35357026514. Failures along the way were Android's low-memory killer terminating the foreground app and a widget bind race in the test, not app or native-alignment defects. ARM64 and physical Samsung behavior remain unverified.
+- [ ] Device-suite stability: four independent flake mechanisms were confirmed and fixed, but only one green run pair exists. Several consecutive passes are needed before the suite is called stable.
 - [x] Final host tests/full lint and signed Debug/Preview APK assembly/collection.
 - [x] Real Shizuku Binder authorization, command validation, helper/server recovery on API36 (both0e9b301 runs). Visual and16KiB checks remain pending.
 
