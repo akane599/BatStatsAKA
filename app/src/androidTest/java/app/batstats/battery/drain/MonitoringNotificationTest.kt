@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.batstats.R
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.BatteryRepository
@@ -37,7 +38,7 @@ class MonitoringNotificationTest {
         assertEquals(1, notification.actions.size)
         val expanded = notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
         assertTrue(expanded.contains(labels.bucket(summary.screenOn)))
-        assertTrue(expanded.contains(labels.since(summary)))
+        assertTrue(expanded.contains(labels.window(summary)))
         assertTrue(expanded.contains(labels.cpuSuspend(summary)))
         assertNull(summary.screenOff.rateMa)
         val widgetIntent = PendingIntent.getActivity(context, 0, Intent(context, BatteryMainActivity::class.java),
@@ -45,6 +46,11 @@ class MonitoringNotificationTest {
         assertNotEquals(widgetIntent, notification.contentIntent)
         val failed = manager.getNotification(BatteryRepository.Realtime(sample), summary, "Test source", "Collection interrupted")
         assertEquals(0L, failed.`when`)
-        assertEquals("Collection interrupted", failed.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        assertEquals(context.getString(R.string.monitor_notification_issue), failed.extras.getCharSequence(Notification.EXTRA_TEXT).toString())
+        val failedBody = failed.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
+        assertTrue(failedBody.contains(labels.window(summary)))
+        assertTrue(failedBody.contains(labels.bucket(summary.screenOn)))
+        assertTrue(failedBody.indexOf(labels.window(summary)) < failedBody.indexOf(labels.bucket(summary.screenOn)))
+        assertFalse("Raw instructions must not crowd out readings", failedBody.contains("Collection interrupted"))
     }
 }

@@ -493,4 +493,7 @@
     <string name="chart_help">Lecturas representativas; no se conectan las lagunas ni los tramos de continuidad desconocida.</string>
     <string name="monitor_direction_conflict">El signo de la corriente contradice el estado de carga de Android. Se muestra el signo informado; el sentido físico no está verificado.</string>
     <string name="diag_notification_failed">Falló la actualización de la notificación o del widget de monitorización</string>
+    <string name="monitor_notification_issue">Problema de recopilación · consulta Fuentes y diagnóstico</string>
+    <string name="monitor_notification_advanced_issue">Acceso avanzado no disponible · consulta Configurar acceso</string>
+    <string name="monitor_window_range">Observado %1$s–%2$s</string>
 </resources>

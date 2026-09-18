@@ -85,11 +85,10 @@ Both APKs pass16KiB ZIP/PT_LOAD alignment. The stricter documented RELRO-end che
 ## Existing GitHub automation constraint
 Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]. Actual run35320371541 failed before any job: requested contents:write/pull-requests:write exceed caller contents:read/pull-requests:none. Disabled automatic-review policy is a separate constraint. No settings changed or privileges broadened. The new APK workflow uses contents:read, has no publication steps, and is reused by push/PR CI with Android16 tests mandatory and no signing secrets passed. actionlint passes; hosted execution approved; pending results. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
 
-## Remaining work
-1. Branch published and draft PR1 open under explicit approval; fix confirmed CI blockers and inspect hardware-accelerated CI. Local software-emulator attempts are exhausted for this checkpoint; retained AVD can be retried without Gradle. No phone is required.
-2. Run final device checks. APK signatures/artifact metadata are verified. Host/JVM/full lint/assemblies pass; do not repeat without new changes or evidence. Preserve failures and limitations honestly.
-3. Complete visual/accessibility review and actual screenshot artifacts; finalize PR description, signing/artifact metadata and delivery records.
-4. User approved branch/draft-PR publication and validation runs on2026-09-18. Record actual remote outcomes; no merge, release, settings change or cancellation is authorized.
+## Unresolved at requested handoff
+- Stage6l has not completed compilation or tests. Its reset layout, compact notification and synchronization changes need future validation; no pass is claimed.
+- Last hosted checkpoint has one ordinary navigation failure; landscape, settled-frame visual review and16KiB runtime checks remain incomplete. Samsung hardware, real current/capacity accuracy and energy overhead remain unverified.
+- Deliver current source through the approved branch/draft PR only. Existing APKs remain e52daf9. Stop after publication; do not continue these tasks without a new request.
 
 Unused helpers and general cleanup are independent low-priority opportunities, not a reason to expand the change. Additional per-UID component transport would need its own validated schema/window; current activity counters cannot support arbitrary energy attribution.
 
@@ -141,3 +140,9 @@ At0e9b301 both hosted builds and Shizuku1/1 pass. PR35331604578 ordinary25pass/2
 - Stage6k next: integrate/test sequencer and stale screen event handling, repair capture/cleanup, add widget failure phase diagnostics; then full local checks, focused commit and approved CI push. Held landscape/16KiB commits bebe479/a59149c compiled but not runtime validated.
 
 Stage6k full local validation PASSED15m10s:105 JVM regressions in each Debug/Preview variant (0fail/error/skip), all29 device methods compile, both full lint variants0errors/201+200warnings, Debug/optimized Preview/test APKs assembled. Fourteen host runner tests and actionlint pass. Sequencer, capture-pipe byte verification and exact ActivityScenario intent cleanup are ready for device execution; widget phase diagnostics retain every assertion. No device/visual pass is inferred from local compilation.
+
+Stage6k device proof: both e52daf9 runs pass27/28 ordinary plus1/1 Shizuku. B36 lifecycle/screen-off/stop/restart and native4KiB loading pass; widgets pass both. Capture byte verification works (62 nonempty PNGs); actual visual review started. Only NavigationDeviceTest reset-Cancel→system-Back fails (new stage6i path), landscape not reached;16KiB phase skipped by failed standard step.
+**B37 Medium confirmed:** reset-dialog confirm FlowRow and dismiss button overlap at200% font (PNG and XML bounds). Use a single vertical action column, assert non-overlap. Test sends external Back before explicitly waiting for dialog teardown; synchronize before retaining its exact navigation assertion and add failure capture.
+**B38 Medium confirmed:** notification's full permission instructions consume its expanded height and clip period/activity values. Compact failure summary, prioritize observed window and retain rich measurement sections; verify actual screenshots. Widget PNG/XML inconsistency is a frame-capture timing issue (correct fields/assertions/XML), add UI-idle capture barrier.
+
+User requested stopping testing; stage6l validation was interrupted with Ctrl-C (exit130) before tests completed. No new pass is claimed. The user subsequently explicitly requested pushing the current work. Stage6l edits are included in the final publication checkpoint, unverified; collected APKs remain e52daf9 and exclude these edits. Push-triggered CI is automatic and was disclosed; no further tests/builds, CI monitoring or reruns are requested. The existing PR remains a draft.

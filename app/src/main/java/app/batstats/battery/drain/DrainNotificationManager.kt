@@ -33,7 +33,8 @@ class DrainNotificationManager(private val context: Context, private val reposit
         reading: BatteryRepository.Realtime = repository.realtimeFlow.value,
         summary: ObservationSummary = repository.observation.value,
         access: String = context.getString(R.string.monitor_standard),
-        error: String? = repository.error.value
+        error: String? = repository.error.value,
+        advancedIssue: Boolean = false
     ): Notification {
         val content = PendingIntent.getActivity(context, NOTIFICATION_ID,
             Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
@@ -45,15 +46,17 @@ class DrainNotificationManager(private val context: Context, private val reposit
         val freshness = reading.sample?.timestamp?.let {
             context.getString(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)))
         } ?: context.getString(R.string.monitor_waiting_battery)
+        val issue = error?.let { context.getString(if (advancedIssue)
+            R.string.monitor_notification_advanced_issue else R.string.monitor_notification_issue) }
         val expanded = buildString {
-            appendLine("$freshness · $access")
-            error?.let { appendLine(context.getString(R.string.monitor_collection_issue, it)) }
-            append(text.expanded(summary))
+            issue?.let { appendLine(it) }
+            appendLine(text.expanded(summary))
+            append("$freshness · $access")
         }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
             .setContentTitle("${reading.level?.let { "$it%" } ?: "—"} · ${text.state(reading.powerState)}")
-            .setContentText(error ?: context.getString(R.string.monitor_collapsed, formatDrainRate(summary.screenOn.rateMa), formatDrainRate(summary.screenOff.rateMa), freshness))
+            .setContentText(issue ?: context.getString(R.string.monitor_collapsed, formatDrainRate(summary.screenOn.rateMa), formatDrainRate(summary.screenOff.rateMa), freshness))
             .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
             .setContentIntent(content).setOngoing(true).setOnlyAlertOnce(true)
             .setWhen(0L).setShowWhen(false).setSilent(true)

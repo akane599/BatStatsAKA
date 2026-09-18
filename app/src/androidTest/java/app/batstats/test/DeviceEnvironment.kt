@@ -28,6 +28,7 @@ object DeviceEnvironment {
         val xml = File(directory, "$name.xml")
         val output = "/sdcard/Download/batstats-validation-screenshots"
         try {
+            device.waitForIdle() // Let remote-view/layout frames settle before capturing PNG and hierarchy.
             assertTrue("Screenshot capture failed: $name", device.takeScreenshot(png))
             device.dumpWindowHierarchy(xml)
             val expectedSizes = listOf(png.length(), xml.length())

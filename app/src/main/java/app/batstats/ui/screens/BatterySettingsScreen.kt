@@ -328,8 +328,8 @@ fun BatterySettingsScreen(
                 }
             },
             confirmButton = {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(enabled = !resettingSettings, onClick = {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(modifier = Modifier.fillMaxWidth(), enabled = !resettingSettings, onClick = {
                         resettingSettings = true
                         scope.launch {
                             try { if (vm.resetUISettings()) {
@@ -338,8 +338,8 @@ fun BatterySettingsScreen(
                             } } finally { resettingSettings = false }
                         }
                     }) { Text(stringResource(R.string.reset_ui)) }
-                    Spacer(Modifier.width(8.dp))
                     TextButton(
+                        modifier = Modifier.fillMaxWidth(),
                         enabled = !resettingSettings,
                         onClick = {
                             resettingSettings = true
@@ -352,9 +352,10 @@ fun BatterySettingsScreen(
                         },
                         colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                     ) { Text(stringResource(R.string.reset_all)) }
+                    TextButton(modifier = Modifier.fillMaxWidth(), enabled = !resettingSettings,
+                        onClick = { showResetDialog = false }) { Text(stringResource(R.string.cancel)) }
                 }
-            },
-            dismissButton = { TextButton(enabled = !resettingSettings, onClick = { showResetDialog = false }) { Text(stringResource(R.string.cancel)) } }
+            }
         )
     }
 

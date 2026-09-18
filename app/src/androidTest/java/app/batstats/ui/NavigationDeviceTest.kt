@@ -37,7 +37,19 @@ class NavigationDeviceTest {
         }
         compose.onNodeWithContentDescription(label(R.string.settings)).assertIsDisplayed()
     }
-    private fun backToDashboard() { DeviceEnvironment.device.pressBack(); awaitDashboard() }
+    private fun backToDashboard() {
+        // A semantics click completes before recomposition removes a Dialog window.
+        // Settle that window before sending Back through the separate Android input path.
+        compose.waitForIdle()
+        DeviceEnvironment.device.waitForIdle()
+        DeviceEnvironment.device.pressBack()
+        try { awaitDashboard() }
+        catch (failure: Throwable) {
+            runCatching { DeviceEnvironment.screenshot("navigation-back-failure") }
+                .exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
+        }
+    }
     private fun capture(name: String) { compose.waitForIdle(); DeviceEnvironment.screenshot(name) }
 
     @Before fun prepare() = runBlocking {
@@ -117,6 +129,10 @@ class NavigationDeviceTest {
         compose.onNodeWithText(label(R.string.reset_all_settings)).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(label(R.string.reset_all)).assertIsDisplayed()
         compose.onNodeWithText(label(R.string.cancel)).assertIsDisplayed()
+        val resetVisible = compose.onNodeWithText(label(R.string.reset_ui)).fetchSemanticsNode().boundsInRoot
+        val resetAll = compose.onNodeWithText(label(R.string.reset_all)).fetchSemanticsNode().boundsInRoot
+        val cancel = compose.onNodeWithText(label(R.string.cancel)).fetchSemanticsNode().boundsInRoot
+        Assert.assertTrue("Reset actions must not overlap at200% font", resetVisible.bottom <= resetAll.top && resetAll.bottom <= cancel.top)
         capture("settings-reset-dark-font200")
         click(R.string.cancel) // Inspect the destructive control without resetting preferences.
         backToDashboard()

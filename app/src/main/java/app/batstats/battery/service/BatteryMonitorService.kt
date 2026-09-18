@@ -124,7 +124,7 @@ class BatteryMonitorService : Service() {
                     val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
                     try {
                         getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
-                            notifications.getNotification(reading, observation, label, issue))
+                            notifications.getNotification(reading, observation, label, issue, advancedIssue = historyError == null && accessError != null))
                         reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,
                             fahrenheit = repository.getSettings().temperatureUnitIndex == 1) }
                     } catch (e: CancellationException) {

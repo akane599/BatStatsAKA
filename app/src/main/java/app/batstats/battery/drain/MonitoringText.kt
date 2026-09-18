@@ -7,6 +7,7 @@ import app.batstats.battery.measurement.ObservedBucket
 import app.batstats.battery.measurement.PowerState
 import java.text.DateFormat
 import java.util.Date
+import java.util.Calendar
 
 /** One resource-backed presentation shared by monitoring screens and notification. */
 class MonitoringText(private val resolve: (Int, Array<out Any>) -> String) {
@@ -31,28 +32,40 @@ class MonitoringText(private val resolve: (Int, Array<out Any>) -> String) {
         return text(R.string.monitor_since, format.format(Date(start))) +
             (summary.latest?.let { "\n" + text(R.string.monitor_through, format.format(Date(it.wallMs))) } ?: "")
     }
+    fun window(summary: ObservationSummary): String {
+        val start = summary.startedAt ?: return text(R.string.monitor_waiting_observation)
+        val end = summary.latest?.wallMs ?: return since(summary)
+        val first = Calendar.getInstance().apply { timeInMillis = start }
+        val last = Calendar.getInstance().apply { timeInMillis = end }
+        val sameDay = first.get(Calendar.ERA) == last.get(Calendar.ERA) &&
+            first.get(Calendar.YEAR) == last.get(Calendar.YEAR) &&
+            first.get(Calendar.DAY_OF_YEAR) == last.get(Calendar.DAY_OF_YEAR)
+        val dateTime = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        val endText = if (sameDay) DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(end)) else dateTime.format(Date(end))
+        return text(R.string.monitor_window_range, dateTime.format(Date(start)), endText)
+    }
     fun cpuSuspend(summary: ObservationSummary): String = if (summary.cpuObservedMs > 0)
         text(R.string.monitor_cpu_coverage, formatDuration(summary.cpuSuspendMs), formatDuration(summary.cpuObservedMs))
         else text(R.string.monitor_no_interval)
     fun doze(summary: ObservationSummary): String = if (summary.cpuObservedMs > 0) formatDuration(summary.dozeMs)
         else text(R.string.monitor_no_interval)
     fun expanded(summary: ObservationSummary): String = buildString {
+        // Put the interval before values: SystemUI limits expanded notification height.
+        appendLine(window(summary))
         appendLine("━━ ${text(R.string.monitor_drain_heading)} ━━")
         appendLine(text(R.string.monitor_screen_on, bucket(summary.screenOn)))
-        appendLine(coverage(summary.screenOn))
+        if (summary.screenOn.durationMs == 0L || summary.screenOn.chargeCoveredMs < summary.screenOn.durationMs)
+            appendLine(coverage(summary.screenOn))
         appendLine(text(R.string.monitor_screen_off, bucket(summary.screenOff)))
-        appendLine(coverage(summary.screenOff))
-        appendLine()
+        if (summary.screenOff.durationMs == 0L || summary.screenOff.chargeCoveredMs < summary.screenOff.durationMs)
+            appendLine(coverage(summary.screenOff))
+        appendLine(text(R.string.monitor_discharge, bucket(summary.discharge)))
+        if (summary.discharge.chargeCoveredMs < summary.discharge.durationMs)
+            appendLine(coverage(summary.discharge))
         appendLine("━━ ${text(R.string.monitor_activity_heading)} ━━")
         appendLine(text(R.string.monitor_cpu, cpuSuspend(summary)))
         appendLine(text(R.string.monitor_doze, doze(summary)))
         appendLine(text(R.string.monitor_charging, formatDuration(summary.chargingMs), formatCharge(summary.charging.chargeMah)))
-        appendLine()
-        appendLine("━━ ${text(R.string.monitor_window_heading)} ━━")
-        appendLine(since(summary))
-        appendLine(text(R.string.monitor_discharge, bucket(summary.discharge)))
-        appendLine(coverage(summary.discharge))
         if (summary.gaps > 0) appendLine(text(R.string.monitor_gaps_excluded, summary.gaps))
-        append(text(R.string.monitor_aod_brief))
     }
 }

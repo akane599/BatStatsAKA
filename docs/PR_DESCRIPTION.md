@@ -12,15 +12,17 @@ Build preparation includes separate debug and optimized nondebug Preview package
 
 ## Validation at this draft checkpoint
 
-Hosted builds pass on0e9b301. Both real Android16 Shizuku integration runs pass: authorization, shellUID2000, command validation, helper recovery, server loss/restart/reconnect and ordinary-data survival. Ordinary tests report25pass/2fail in PR and26pass/1fail in push (27 methods, no skips). All5 storage recovery tests pass; widget delivery passes one run and has an unresolved timeout in the other. Poll-before-screen-event ordering and ActivityScenario cleanup after a notification tap are corrected locally without weakening assertions. Exported screenshots were empty due to SELinux; the corrected shell copy now requires exact nonzero byte counts. Device revalidation and visual review remain open. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
+The user requested stopping testing and publishing the current source. The final notification/reset-layout and test synchronization changes are **unverified**: local validation was interrupted before completion. No passing result is claimed for these edits, and no further testing or CI monitoring is planned for this handoff. Push/PR events automatically run CI.
 
-- 105 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips, including11 event-ordering cases.29 Android methods are prepared, including native loading/page-size checks on standard and16KiB images. JVM inputs are synthetic, not physical measurements.
-- Fourteen synthetic instrumentation-result parser and phase-orchestration regressions pass; prebuilt ADB execution rejects empty, failed, skipped, crashed or incomplete runs.
-- Host SQLite checks pass migrations, identity/deduplication, history paging and bounded chart queries.
-- Fresh Debug, nondebuggable/minified Preview and Android test APKs assembled from the current source; universal signatures and checksums verified. Corrected local APKs include the enforced stable Compose BOM; final delivery provenance will accompany the artifacts.
-- APK ZIP/native LOAD alignment passes for16KiB; graphics-path RELRO-end warning remains a runtime-validation limitation (see VALIDATION).
-- Resource completeness/format checks and direct AAPT2 compilation pass for493 Spanish and493 Turkish strings. Workflow actionlint passes.
-- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Hosted Android tests execute with remaining failures described above; visual review remains pending. Local software emulation never completed boot; hosted acceleration is now used. No physical Samsung compatibility conclusion follows.
+The last completed checkpoint is e52daf9:
+
+- Local build passed with105 JVM cases in each Debug/Preview configuration, no failures/skips; full lint had zero errors and201/200 warnings. Debug, optimized Preview and Android test APKs assembled.29 device methods compile.
+- Both hosted API36 runs built successfully:27/28 ordinary methods passed, with one navigation failure after cancelling the large-font reset dialog. Both real Shizuku integration phases passed1/1, including authorization, shellUID2000, command validation, helper restart, server loss/reconnection and ordinary-data survival.
+- Lifecycle/screen-state sequencing, notification tap/stop/restart, all5 storage recovery cases, widgets and native loading on4KiB passed.16KiB phases did not run because standard validation failed; landscape checks were not reached.
+- 62 nonempty screenshots were retained. Review confirmed overlapping reset actions at200% font and notification error text crowding out readings. The final edits stack reset controls and compact the notification while preserving its measurements and interval. Some captured frames were stale; a capture-idle barrier is included but unverified.
+- Fourteen host runner regressions and actionlint passed. APK ZIP/native LOAD alignment passed; graphics-path RELRO-end warning remains. Resource completeness/format checks passed for496 Spanish/Turkish keys, but the final application build did not complete.
+
+Existing collected APKs are from e52daf9 and exclude the final UI changes. Simulated test inputs and emulator results do not establish physical battery accuracy. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
 
 ## Limits and delivery
 
@@ -28,4 +30,4 @@ No physical Samsung device is available. Current polarity/calibration, capacity 
 
 Debug (`org.mlm.batstats.debug`) and Preview (`org.mlm.batstats.preview`) install alongside the supplied package. The original release signing key is unavailable, so these cannot update that package in place. Preview updates need a stable matching certificate; ephemeral GitHub runner keys may differ between runs. See [BUILD_AND_INSTALL.md](https://github.com/akane599/BatStatsAKA/blob/codex/android16-reliability/docs/BUILD_AND_INSTALL.md).
 
-This PR remains a draft until Android runtime checks and screenshot review are complete. Push/PR CI performs the same build and device checks as the phone workflow. The manual workflow must reach the default branch before its Run workflow control appears.
+This PR remains a draft with the unresolved validation items above; the user requested ending testing and publishing the work as it stands. Push/PR CI performs the same build and device checks as the phone workflow. The manual workflow must reach the default branch before its Run workflow control appears.

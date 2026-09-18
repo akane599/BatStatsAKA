@@ -504,4 +504,7 @@
     <string name="chart_help">Representative readings; gaps and unknown continuity are not connected.</string>
     <string name="monitor_direction_conflict">Current direction conflicts with Android’s charging state. Values show the reported sign; physical direction is unverified.</string>
     <string name="diag_notification_failed">Monitoring notification or widget update failed</string>
+    <string name="monitor_notification_issue">Collection issue · see Sources and diagnostics</string>
+    <string name="monitor_notification_advanced_issue">Advanced access unavailable · see Access setup</string>
+    <string name="monitor_window_range">Observed %1$s–%2$s</string>
 </resources>
