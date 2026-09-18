@@ -1,5 +1,7 @@
 package app.batstats.battery.service
 
+import app.batstats.battery.diagnostics.DiagnosticCode
+import app.batstats.battery.diagnostics.DiagnosticStore
 import android.app.Service
 import android.app.NotificationManager
 import android.content.Intent
@@ -32,6 +34,7 @@ class BatteryMonitorService : Service() {
     private val shell: ShellRunner by inject()
     private val shizuku: ShizukuBridge by inject()
     private val collector: DetailedStatsCollector by inject()
+    private val diagnostics: DiagnosticStore by inject()
     private var started = false
     private var monitoringStartedElapsed = 0L
 
@@ -44,6 +47,7 @@ class BatteryMonitorService : Service() {
                 notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             else startForeground(DrainNotificationManager.NOTIFICATION_ID, notification)
         } catch (e: RuntimeException) {
+            diagnostics.record(DiagnosticCode.START_FAILED)
             Log.e("BatteryMonitorService", "Could not start monitoring", e)
             Notifier.promptStartOnBoot(this)
             stopSelf()
@@ -86,6 +90,7 @@ class BatteryMonitorService : Service() {
                         events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, sample, settings) }
                     } catch (e: RuntimeException) {
                         alerts.restoreLatches(before)
+                        diagnostics.record(DiagnosticCode.ALERT_FAILED)
                         Log.w("BatteryAlerts", "Alert delivery failed (${e.javaClass.simpleName})")
                     }
                     if (alerts.latches != before) preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet()).apply()

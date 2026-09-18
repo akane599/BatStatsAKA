@@ -1,6 +1,7 @@
 package app.batstats.di
 
 import android.os.Build
+import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.ExportImportManager
 import app.batstats.battery.data.HistoryMaintenance
@@ -44,7 +45,8 @@ val appModule = module {
 
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
-    single { DetailedStatsCollector(get(), get(), androidContext(), get()) }
+    single { DiagnosticStore(androidContext(), get()) }
+    single { DetailedStatsCollector(get(), get()) }
 
     single<SettingsRepository<AppSettings>> {
         SettingsRepository(dataStore = get(), schema = AppSettingsSchema)
@@ -81,7 +83,7 @@ val appModule = module {
 
     single { HistoryMaintenance() }
     single { ExportImportManager(androidContext(), get(), get()) }
-    single { BatteryRepository(androidContext(), get(), get(), get(), get()) }
+    single { BatteryRepository(androidContext(), get(), get(), get(), get(), get()) }
 
     single { AdvancedDrainTracker(androidContext(), get()) }
     single { DrainNotificationManager(androidContext(), get()) }

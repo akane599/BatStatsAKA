@@ -1,12 +1,10 @@
 package app.batstats.battery.util
 
-import android.content.Context
+import app.batstats.battery.diagnostics.DiagnosticCode
+import app.batstats.battery.diagnostics.DiagnosticStore
 import android.util.Log
 import android.os.SystemClock
-import app.batstats.battery.data.db.BatteryDatabase
-import app.batstats.battery.shizuku.ShizukuBridge
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,10 +19,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 class DetailedStatsCollector(
     private val shellRunner: ShellRunner,
-    private val db: BatteryDatabase,
-    private val context: Context,
-    // NOTE: only for direct checks (if later used)
-    private val shizuku: ShizukuBridge? = null
+    private val diagnostics: DiagnosticStore
 ) {
     companion object {
         private const val TAG = "DetailedStatsCollector"
@@ -60,6 +55,12 @@ class DetailedStatsCollector(
     @Volatile private var lastAttemptElapsed = Long.MIN_VALUE
 
     fun accessChanged(mode: ShellRunner.Mode) {
+        if (mode != _mode.value) diagnostics.record(when (mode) {
+            ShellRunner.Mode.NONE -> DiagnosticCode.ACCESS_NONE
+            ShellRunner.Mode.SHIZUKU -> DiagnosticCode.ACCESS_SHIZUKU
+            ShellRunner.Mode.ROOT -> DiagnosticCode.ACCESS_ROOT
+            ShellRunner.Mode.ADB -> DiagnosticCode.ACCESS_ADB
+        })
         if (mode != _mode.value || mode == ShellRunner.Mode.NONE) {
             accessGeneration.incrementAndGet()
             _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
@@ -84,6 +85,7 @@ class DetailedStatsCollector(
         _isRefreshing.value = true
         Log.d(TAG, "Starting refresh...")
 
+        val previousError = _error.value
         return try {
             val selectedMode = shellRunner.detectMode(forceRefresh = true)
             if (selectedMode == ShellRunner.Mode.NONE) {
@@ -107,6 +109,7 @@ class DetailedStatsCollector(
                     Log.d(TAG, "Parsing batterystats (${stats.output.length} chars, via ${stats.mode})...")
                     val parsed = BatteryStatsParser.parseCheckin(stats.output)
                     if (!parsed.hasValidWindow) {
+                        diagnostics.record(DiagnosticCode.ADVANCED_FORMAT_INVALID)
                         failures += "Battery statistics format unavailable or incomplete"
                     } else {
                         newSnapshot = parsed.copy(source = "Android batterystats · ${stats.mode.name}")
@@ -154,10 +157,14 @@ class DetailedStatsCollector(
             _lastRefresh.value = newSnapshot?.capturedAt ?: 0
             _error.value = failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
+            if (failures.isNotEmpty()) diagnostics.record(DiagnosticCode.ADVANCED_READ_FAILED)
+            else if (previousError != null && hasData) diagnostics.record(DiagnosticCode.ADVANCED_RECOVERED)
             hasData
         } catch (ce: CancellationException) {
+            diagnostics.record(DiagnosticCode.ADVANCED_INTERRUPTED)
             throw ce
         } catch (e: Exception) {
+            diagnostics.record(DiagnosticCode.ADVANCED_READ_FAILED)
             Log.e(TAG, "Refresh failed with exception", e)
             _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null; _lastRefresh.value = 0
             _error.value = "Collection failed: ${e.javaClass.simpleName}"
@@ -186,6 +193,7 @@ class DetailedStatsCollector(
         return try {
             val outcome = shellRunner.exec("dumpsys batterystats --reset", allowEmpty = true)
             if (outcome is ShellRunner.Outcome.Success) {
+                diagnostics.record(DiagnosticCode.SYSTEM_STATS_RESET)
                 accessGeneration.incrementAndGet()
                 _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
                 _lastRefresh.value = 0; lastAttemptElapsed = Long.MIN_VALUE

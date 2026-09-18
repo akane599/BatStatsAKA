@@ -7,6 +7,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import app.batstats.ui.screens.BatterySettingsScreen
+import app.batstats.ui.screens.DiagnosticsScreen
 import app.batstats.ui.screens.DashboardScreen
 import app.batstats.ui.screens.DataScreen
 import app.batstats.ui.screens.DetailedStatsScreen
@@ -36,7 +37,8 @@ fun NavGraph(
                     onOpenSettings = { backStack.add(Screen.Settings()) },
                     onOpenData = { backStack.add(Screen.Data) },
                     onOpenDetailedStats = { backStack.add(Screen.DetailedStats) },
-                    onOpenDrainStats = { backStack.add(Screen.DrainStats) }
+                    onOpenDrainStats = { backStack.add(Screen.DrainStats) },
+                    onOpenDiagnostics = { backStack.add(Screen.Diagnostics) }
                 )
             }
 
@@ -71,6 +73,10 @@ fun NavGraph(
                 DetailedStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
             }
 
+            entry<Screen.Diagnostics> {
+                DiagnosticsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+            }
+
             entry<Screen.DrainStats> {
                 DrainStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
             }
@@ -103,4 +109,7 @@ sealed interface Screen: NavKey {
 
     @Serializable
     data object DrainStats : Screen
+
+    @Serializable
+    data object Diagnostics : Screen
 }

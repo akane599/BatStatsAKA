@@ -1,5 +1,7 @@
 package app.batstats.battery.data
 
+import app.batstats.battery.diagnostics.DiagnosticCode
+import app.batstats.battery.diagnostics.DiagnosticStore
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -27,7 +29,8 @@ class BatteryRepository(
     private val db: BatteryDatabase,
     private val settingsRepository: SettingsRepository<AppSettings>,
     private val scope: CoroutineScope,
-    private val maintenance: HistoryMaintenance
+    private val maintenance: HistoryMaintenance,
+    private val diagnostics: DiagnosticStore
 ) {
     private val batteryDao = db.batteryDao()
     val sessionDao = db.sessionDao()
@@ -112,6 +115,7 @@ class BatteryRepository(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
+                    diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
                     _error.value = "History collection failed (${e.javaClass.simpleName}); live battery readings remain available"
                     overflow = true
                 }
@@ -140,6 +144,7 @@ class BatteryRepository(
             val generation = UUID.randomUUID().toString()
             activeGeneration = generation
             _isMonitoring.value = true
+            diagnostics.record(DiagnosticCode.MONITORING_STARTED)
             _error.value = null
             events.send(Event.Start(generation))
             val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED).apply {
@@ -150,6 +155,7 @@ class BatteryRepository(
                 ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
                 receiverRegistered = true
             } catch (e: RuntimeException) {
+                diagnostics.record(DiagnosticCode.STATE_EVENTS_UNAVAILABLE)
                 _error.value = "State events unavailable; intervals with unobserved changes will be excluded"
             }
             samplingJob = scope.launch(Dispatchers.Main.immediate) {
@@ -166,6 +172,7 @@ class BatteryRepository(
 
     fun stopSampling() {
         scope.launch(Dispatchers.Main.immediate) {
+            if (activeGeneration != null) diagnostics.record(DiagnosticCode.MONITORING_STOPPED)
             activeGeneration = null // Queued samples become invalid immediately.
             _isMonitoring.value = false
             samplingJob?.cancel(); samplingJob = null
@@ -179,7 +186,7 @@ class BatteryRepository(
     fun refreshNow(onComplete: suspend (Realtime) -> Unit = {}) {
         scope.launch(Dispatchers.Main.immediate) {
             try { capture(Boundary.SAMPLE) }
-            catch (e: RuntimeException) { _error.value = "Battery reading failed (${e.javaClass.simpleName})" }
+            catch (e: RuntimeException) { diagnostics.record(DiagnosticCode.BATTERY_READ_FAILED); _error.value = "Battery reading failed (${e.javaClass.simpleName})" }
             finally { onComplete(_realtime.value) }
         }
     }
@@ -220,7 +227,7 @@ class BatteryRepository(
 
     private fun capture(boundary: Boundary, screenOverride: Boolean? = null) {
         val intent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        if (intent == null) { _error.value = "Android has not supplied a battery reading"; overflow = true; return }
+        if (intent == null) { diagnostics.record(DiagnosticCode.BATTERY_UNAVAILABLE); _error.value = "Android has not supplied a battery reading"; overflow = true; return }
         fun extra(name: String): Int? = if (intent.hasExtra(name)) intent.getIntExtra(name, Int.MIN_VALUE) else null
         fun property(id: Int): Long = runCatching { batteryManager.getLongProperty(id) }.getOrDefault(Long.MIN_VALUE)
         val elapsed = SystemClock.elapsedRealtime()
@@ -260,6 +267,8 @@ class BatteryRepository(
         val summary = engine.accept(event.point)
         val changed = old.latest?.power != event.point.power
         val gap = old.gaps != summary.gaps
+        if (gap) diagnostics.record(DiagnosticCode.OBSERVATION_GAP)
+        if (old.counterGaps != summary.counterGaps) diagnostics.record(DiagnosticCode.CHARGE_UNAVAILABLE)
         if (session != null && (changed || gap)) {
             if (changed && !gap) session = reportSession(session!!, event.sample, sessionEngine.accept(event.point))
             finishSession(if (gap) summary.lastIssue ?: "Observation gap" else "Power state changed")

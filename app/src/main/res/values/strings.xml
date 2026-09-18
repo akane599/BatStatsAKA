@@ -324,4 +324,48 @@
     <string name="widget_no_reading">No reading</string>
     <string name="widget_read_at">Read %1$s</string>
     <string name="widget_paused_at">Monitoring stopped · %1$s</string>
+    <string name="diagnostics_title">Sources and diagnostics</string>
+    <string name="diagnostic_privacy">Inspect the data behind your readings. Reports stay on this device unless you choose Share report. Package lists, raw system dumps and device identifiers are excluded.</string>
+    <string name="diagnostic_refresh">Refresh battery reading</string>
+    <string name="diagnostic_share">Share report</string>
+    <string name="diagnostic_share_failed">No app is available to share this report.</string>
+    <string name="diagnostic_readings">Android battery readings</string>
+    <string name="diagnostic_source_help">These are Android-reported values, not independent measurements. Positive current flows into the battery, negative flows out; vendor implementations may differ. The averaging period for hardware current is device-specific. Unsupported or rejected values are unavailable. No battery-health percentage is inferred.</string>
+    <string name="diagnostic_observation">Current observation</string>
+    <string name="diagnostic_period_help">Only observed intervals are counted. Charge uses counter differences; energy is estimated from charge and average voltage. Screen off includes noninteractive Always On Display. CPU suspend and Android Doze are separate. Rates and estimates need enough consistent data; gaps are excluded.</string>
+    <string name="diagnostic_access">Privileged access and report window</string>
+    <string name="diagnostic_access_values">Selected access: %1$s
+Shizuku running: %2$s
+Shizuku authorized: %3$s</string>
+    <string name="diagnostic_advanced_values">Android report captured: %1$s
+System window start: %2$s
+Reset/start counter: %3$s
+Battery time: %4$s ms
+Rejected records: %5$d</string>
+    <string name="diagnostic_no_advanced">No current advanced report is available.</string>
+    <string name="diagnostic_access_help">App energy estimates, wakelocks and system activity require Shizuku, Root or ADB grants. Android batterystats uses its own since-charge/reset window, which can differ from this app’s observation. Activity counts alone do not prove battery drain.</string>
+    <string name="diagnostic_events">Recent collection events</string>
+    <string name="diagnostic_log_help">Up to 60 local events; repeated conditions are grouped. Writes are coalesced, so a process interruption may lose the latest minute. Codes and UTC times help identify failures without collecting raw dumps.</string>
+    <string name="diagnostic_storage_failed">Diagnostic storage is unavailable; recent events may only be held in memory.</string>
+    <string name="diagnostic_empty">No collection events recorded yet.</string>
+    <string name="diag_started">Monitoring started</string>
+    <string name="diag_stopped">Monitoring stopped</string>
+    <string name="diag_start_failed">Monitoring could not start</string>
+    <string name="diag_battery_unavailable">Android battery reading unavailable</string>
+    <string name="diag_battery_failed">Battery read failed</string>
+    <string name="diag_state_unavailable">Screen or power events unavailable</string>
+    <string name="diag_history_failed">History storage or maintenance failed</string>
+    <string name="diag_gap">Observation gap excluded</string>
+    <string name="diag_charge_unavailable">Charge counter missing, reset or inconsistent</string>
+    <string name="diag_access_none">Advanced access unavailable</string>
+    <string name="diag_access_shizuku">Shizuku access selected</string>
+    <string name="diag_access_root">Root access selected</string>
+    <string name="diag_access_adb">ADB-granted access selected</string>
+    <string name="diag_advanced_failed">Advanced collection failed or incomplete</string>
+    <string name="diag_format_invalid">Android report format invalid or unsupported</string>
+    <string name="diag_interrupted">Advanced collection interrupted</string>
+    <string name="diag_recovered">Advanced collection recovered</string>
+    <string name="diag_reset">Android battery statistics reset</string>
+    <string name="diag_alert_failed">Battery alert delivery failed</string>
+    <string name="diag_log_failed">Saved diagnostics could not be read</string>
 </resources>

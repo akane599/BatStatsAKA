@@ -6,6 +6,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import app.batstats.R
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -26,7 +28,7 @@ import java.util.Locale
 @Composable
 fun DashboardScreen(
     onOpenHistory: () -> Unit, onOpenAlarms: () -> Unit, onOpenSettings: () -> Unit,
-    onOpenData: () -> Unit, onOpenDetailedStats: () -> Unit, onOpenDrainStats: () -> Unit,
+    onOpenData: () -> Unit, onOpenDetailedStats: () -> Unit, onOpenDrainStats: () -> Unit, onOpenDiagnostics: () -> Unit,
     vm: DashboardViewModel = koinViewModel()
 ) {
     val reading by vm.realtime.collectAsStateWithLifecycle()
@@ -40,7 +42,6 @@ fun DashboardScreen(
     val running by shizuku.running.collectAsStateWithLifecycle()
     val granted by shizuku.granted.collectAsStateWithLifecycle()
     val access by shell.access.collectAsStateWithLifecycle()
-    var showSources by remember { mutableStateOf(false) }
     LifecycleResumeEffect(Unit) { vm.refresh(); onPauseOrDispose {} }
     LaunchedEffect(running, granted) { shell.detectMode(forceRefresh = true) }
     Scaffold(topBar = {
@@ -82,7 +83,7 @@ fun DashboardScreen(
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (running && !granted) TextButton(onClick = { shizuku.requestPermission() }) { Text("Authorize Shizuku") }
                             TextButton(onClick = onOpenDetailedStats) { Text("Advanced statistics") }
-                            TextButton(onClick = { showSources = true }) { Text("Reading sources") }
+                            TextButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.diagnostics_title)) }
                         }
                     }
                 }
@@ -124,15 +125,7 @@ fun DashboardScreen(
             }
         }
     }
-    if (showSources) AlertDialog(onDismissRequest = { showSources = false }, title = { Text("Reading sources and limits") },
-        text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("BatteryManager and Android's battery broadcast provide level, status, voltage, temperature and supported counters. No privileged access is needed.")
-            Text("Charge counter: ${reading.sample?.chargeCounterUah?.let { "$it µAh" } ?: "Unavailable"}")
-            Text("Hardware average current: ${reading.sample?.currentAverageUa?.let { "$it µA" } ?: "Unavailable"}")
-            Text("Remaining energy: ${reading.sample?.energyNwh?.let { String.format(Locale.getDefault(), "%.1f mWh", it / 1_000_000.0) } ?: "Unavailable"}")
-            Text("Cycle count: ${reading.sample?.cycleCount ?: "Unavailable"}")
-            Text("${reading.sample?.etaBasis ?: "No stable remaining-time estimate"}. Discharge estimates need at least 10 minutes of consistent counter data. These readings do not measure battery-health percentage.")
-        } }, confirmButton = { TextButton(onClick = { showSources = false }) { Text("Close") } })
+
 }
 
 @Composable

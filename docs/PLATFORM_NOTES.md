@@ -51,3 +51,13 @@ Sources: [Linux power supply class](https://cdn.kernel.org/doc/html/latest/power
 Android backs up databases and app files by default. Both the pre-Android12 backup rules and Android12+ cloud/device-transfer rules explicitly include only the settings DataStore directory. Battery databases and diagnostic files are not included; future diagnostics belong in noBackupFilesDir. Explicit exports remain the user-controlled transfer path. See [Auto Backup rules](https://developer.android.com/identity/data/autobackup).
 
 Android notification-channel sound and vibration are controlled by the user after channel creation. A working settings screen must open the channel settings rather than imply that unrelated preference switches override Android. See [notification channels](https://developer.android.com/develop/ui/compose/notifications/channels).
+
+## Local diagnostics and sharing
+
+Sources and diagnostics shows raw, validated Android battery units and UTC capture times, together with the app observation window and Android's separate batterystats window. These reports do not infer a battery-health percentage or attribute drain from activity duration alone. Unsupported readings remain unavailable.
+
+The local diagnostic log accepts fixed event codes only, keeps the latest 60 entries, groups adjacent repeated conditions and bounds the file to 32 KiB. An AtomicFile in noBackupFilesDir survives normal app restarts without entering Android cloud or device-transfer backups. Writes are coalesced to at most once per minute without a wake lock or alarm; a process interruption can lose recent events. Storage failure is shown in the screen.
+
+Share report opens Android's chooser only after a user tap. The report contains app/API version, reading units/timestamps, observation coverage, privilege availability and fixed event codes. It excludes app/UID lists, raw system dumps, internal observation/session IDs and device identifiers. Source read failures are represented by status/codes rather than copied command output or exception messages. History clearing does not clear diagnostic events or change Android system statistics.
+
+Implementation references: [AtomicFile integrity and caller-owned synchronization](https://developer.android.com/reference/android/util/AtomicFile), [Room observable query invalidation](https://developer.android.com/training/data-storage/room/async-queries). The diagnostic store has one writer after its initial read; AtomicFile itself supplies no lock.
