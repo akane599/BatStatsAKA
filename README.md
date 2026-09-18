@@ -47,6 +47,8 @@ Clearing history stops monitoring and deletes battery samples, sessions and stor
 
 See the [phone build and signing guide](docs/BUILD_AND_INSTALL.md) for the manual APK workflow, Preview installation and update compatibility. No workflow has been published or run for this development work.
 
+The [measurement guide](docs/MEASUREMENTS.md) explains sources, units, observation periods and estimates. See [actual validation](docs/VALIDATION.md) for completed checks and hardware limitations, and [localization](docs/LOCALIZATION.md) for supported translations and English fallback.
+
 ## Development
 
 Use JDK 21 and Android SDK 37 for compilation; target API 36, minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).
