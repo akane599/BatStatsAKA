@@ -60,7 +60,7 @@ Source review confirms these defects unless runtime reproduction is stated. Impl
 ## Hosted validation
 - Approved publication created draft PR1 and branch91c6053. First push/PR CI runs35320355939/35320370581 failed before building: wrong SDK package platforms;android-37. Correct path platforms;android-37.0 matches installed metadata. Workflow corrected; new execution pending. This was setup failure, not a device assertion failure.
 
-- Hosted push35320644172 passed both94-case JVM suites/full lint, then packageDebug hit Java heap OOM. Parallel PR35320646877 completed build and reached device tests. One-worker/in-process/3GiB CI configuration prepared; no assertions changed.
+- Hosted push35320644172 passed both94-case JVM suites/full lint, then packageDebug hit Java heap OOM. Parallel PR35320646877 completed build and booted API36, but device tests were blocked by overlapping APK task outputs. One-worker/in-process/3GiB CI configuration prepared; no assertions changed.
 
 ## Actual validation
 - Baseline dependency metadata failed: alpha Compose required SDK37.1. Stable Compose fixes compilation against37 with target36/min26.
@@ -81,7 +81,7 @@ Both APKs pass16KiB ZIP/PT_LOAD alignment. The stricter documented RELRO-end che
 Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]. Actual run35320371541 failed before any job: requested contents:write/pull-requests:write exceed caller contents:read/pull-requests:none. Disabled automatic-review policy is a separate constraint. No settings changed or privileges broadened. The new APK workflow uses contents:read, has no publication steps, and is reused by push/PR CI with Android16 tests mandatory and no signing secrets passed. actionlint passes; hosted execution approved; pending results. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
 
 ## Remaining work
-1. Execute the explicitly approved branch/draft-PR publication and inspect hardware-accelerated CI. Local software-emulator attempts are exhausted for this checkpoint; retained AVD can be retried without Gradle. No phone is required.
+1. Branch published and draft PR1 open under explicit approval; fix confirmed CI blockers and inspect hardware-accelerated CI. Local software-emulator attempts are exhausted for this checkpoint; retained AVD can be retried without Gradle. No phone is required.
 2. Run final device checks. APK signatures/artifact metadata are verified. Host/JVM/full lint/assemblies pass; do not repeat without new changes or evidence. Preserve failures and limitations honestly.
 3. Complete visual/accessibility review and actual screenshot artifacts; finalize PR description, signing/artifact metadata and delivery records.
 4. User approved branch/draft-PR publication and validation runs on2026-09-18. Record actual remote outcomes; no merge, release, settings change or cancellation is authorized.
@@ -97,3 +97,5 @@ Unused helpers and general cleanup are independent low-priority opportunities, n
 - [Android 16 checkin producer](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/android/os/BatteryStats.java), local reference `/tmp/batstats-BatteryStats-android16.java`.
 
 Additional sources/contracts and privacy constraints: [docs/PLATFORM_NOTES.md](docs/PLATFORM_NOTES.md). Do not treat source review or emulator success as proof of physical battery accuracy.
+
+Hosted build finding B32 (High): APK-dist defaults its copy output to the AGP input directory. PR35320646877 failed connectedDebugAndroidTest with an implicit-dependency validation error before any tests ran. Local task-path inspection reproduces the overlap. Configure separate build/outputs/distribution/{variant} copies; standard AGP outputs remain unchanged. Local Gradle verification passes for all three variants; hosted revalidation pending.

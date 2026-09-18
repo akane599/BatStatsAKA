@@ -12,7 +12,7 @@ Build preparation includes separate debug and optimized nondebug Preview package
 
 ## Validation at this draft checkpoint
 
-Initial hosted CI failed before building because SDK37 is published as platforms;android-37.0. The installation argument is corrected and locally verified; hosted revalidation is pending. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
+Hosted CI now installs the correct platforms;android-37.0 SDK and passes both JVM suites and full lint. One run hit packaging heap exhaustion; the parallel PR run built all APKs and booted API36, then Gradle rejected overlapping APK distribution outputs before tests. CI now limits build concurrency and separates distribution copies from Android artifacts. Local path verification passes; hosted device revalidation is pending. The inherited Dependabot workflow separately fails permission validation; no repository privileges were expanded.
 
 - 94 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips; all25 Android test methods compile. These are synthetic/host checks, not physical measurements.
 - Six synthetic instrumentation-result parser regressions pass; prebuilt ADB execution rejects empty, failed, skipped, crashed or incomplete runs.

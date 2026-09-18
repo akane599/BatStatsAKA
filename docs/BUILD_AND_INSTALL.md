@@ -41,6 +41,8 @@ Use JDK21 and Android SDK37.0 (`sdkmanager 'platforms;android-37.0'`) with build
 python3 scripts/collect_apks.py
 ```
 
+Original APKs remain under `app/build/outputs/apk/{variant}/`; the APK-dist plugin places renamed distribution copies separately under `app/build/outputs/distribution/{variant}/` so it does not overwrite Android build-task outputs.
+
 On memory-constrained hosts, add `--no-daemon -Dorg.gradle.jvmargs=-Xmx1024m --max-workers=1` and stop the emulator while building. Do not edit sources during Kotlin/KSP compilation.
 
 Local stable preview signing uses `PREVIEW_KEYSTORE_PATH`, `PREVIEW_STORE_PASSWORD`, `PREVIEW_KEY_ALIAS`, `PREVIEW_KEY_PASSWORD`. Keep the file outside the repository. `assembleRelease` requires the original `KEYSTORE_PATH`, `STORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`; preview signing never supplies production credentials.

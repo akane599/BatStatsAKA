@@ -129,6 +129,8 @@ android {
 
 apkDist {
     artifactNamePrefix = "batstats"
+    // Keep distribution copies separate from AGP artifacts consumed by device tests/install tasks.
+    distDirectory.set(layout.buildDirectory.dir("outputs/distribution"))
 }
 
 androidComponents {
