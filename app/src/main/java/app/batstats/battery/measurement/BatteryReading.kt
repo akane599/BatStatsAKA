@@ -19,7 +19,8 @@ object BatteryReading {
         if (currentUa != null && voltageMv != null) currentUa.toDouble() * voltageMv / 1_000_000 else null
 
     fun powerState(status: Int, plugged: Int?): PowerState = when {
-        plugged == null || status == 1 -> PowerState.UNKNOWN
+        plugged == null || plugged !in 0..15 || status !in 2..5 -> PowerState.UNKNOWN
+        status == 3 -> PowerState.DISCHARGING // A connected supply may be insufficient; honor reported discharge.
         plugged == 0 && status != 2 -> PowerState.DISCHARGING
         plugged > 0 && status == 2 -> PowerState.CHARGING
         plugged > 0 -> PowerState.PLUGGED

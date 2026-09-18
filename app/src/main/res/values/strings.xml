@@ -308,4 +308,14 @@
     <string name="history_operation_failed">History operation failed: %1$s</string>
     <string name="history_clear_failed">History could not be cleared. Try again.</string>
     <string name="history_clear_warning">Stops monitoring and permanently deletes battery samples, sessions and stored app statistics. Settings and alarm rules remain. Android system battery statistics are unaffected. Export first if you want a copy.</string>
+    <string name="alert_channel_name">Battery alerts</string>
+    <string name="alert_channel_description">Threshold alerts while monitoring; sound and vibration are controlled by Android</string>
+    <string name="alert_level_reported">Android reports %1$d%% battery.</string>
+    <string name="alert_temperature_reported">Reported battery temperature: %1$s.</string>
+    <string name="alert_discharge_reported">Several discharge-current readings above your threshold spanning at least 1 minute. Latest: %1$s. This does not identify an app as the cause.</string>
+    <string name="alert_full_reported">Android reports the plugged-in battery as full.</string>
+    <string name="alert_settings_open">Sound, vibration and notification permission</string>
+    <string name="alert_settings_description">Open Android notification settings. Alerts only run while monitoring is active.</string>
+    <string name="monitoring_settings_help">Monitoring keeps a quiet, detailed notification. Ordinary readings and screen accounting work without privileged access. Per-app statistics use Advanced statistics → Access setup.</string>
+    <string name="alert_settings_unavailable">Android notification settings could not be opened.</string>
 </resources>

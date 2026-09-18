@@ -31,6 +31,12 @@ Return to Advanced statistics and refresh. Grants may be refused by a device pol
 
 See [platform and source notes](docs/PLATFORM_NOTES.md) for contracts and limits. Existing production installations require the original signing key for an in-place update; development APKs use a separate package/signature.
 
+## Monitoring and alerts
+
+Ordinary sampling defaults to30 seconds; privileged collection defaults to5 minutes. Shorter intervals improve responsiveness and add monitoring work. Sampling does not wake the CPU; gaps remain explicit. No measured battery-saving percentage is claimed.
+
+Battery alerts run only while monitoring is active. Low/high level and temperature alerts use hysteresis and remember the current alert episode across service restarts. Full means Android reports FULL, not merely100%. High-discharge alerts require at least3 readings spanning1 minute and do not identify the cause. Sound, vibration and permission are controlled in Android notification settings. The monitoring notification stays quiet and detailed; ineffective legacy display/heuristic switches have been retired while saved keys remain compatible.
+
 ## History and privacy
 
 History export is deliberate: JSON and CSV include units, UTC timestamps, data sources and reporting periods. Date filters select samples and overlapping sessions; session totals keep their full original windows. Imports validate the complete file before committing, skip identical records, reject conflicts, and never resume imported sessions. Files are limited to64MiB and imports cannot exceed100,000 stored samples or10,000 sessions.

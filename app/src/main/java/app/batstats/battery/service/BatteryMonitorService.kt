@@ -15,6 +15,11 @@ import app.batstats.settings.detailedStatsIntervalMs
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.Notifier
+import app.batstats.battery.measurement.BatteryAlerts
+import app.batstats.battery.measurement.BatteryAlert
+import app.batstats.battery.measurement.BatteryAlertSettings
+import app.batstats.battery.measurement.AlertReading
+import app.batstats.settings.monitoringIntervalMs
 import app.batstats.battery.widget.WidgetUpdater
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -28,6 +33,7 @@ class BatteryMonitorService : Service() {
     private val shizuku: ShizukuBridge by inject()
     private val collector: DetailedStatsCollector by inject()
     private var started = false
+    private var monitoringStartedElapsed = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (repository.isClearingHistory) { stopSelf(); return START_NOT_STICKY }
@@ -44,6 +50,7 @@ class BatteryMonitorService : Service() {
             return START_NOT_STICKY
         }
         started = true
+        monitoringStartedElapsed = SystemClock.elapsedRealtime()
         repository.startSampling()
         serviceScope.launch {
             repository.settingsFlow.map { it.detailedStatsIntervalMs }.distinctUntilChanged().collectLatest { interval ->
@@ -56,6 +63,32 @@ class BatteryMonitorService : Service() {
                     val mode = shell.detectMode(forceRefresh = true)
                     collector.accessChanged(mode)
                     if (mode != ShellRunner.Mode.NONE) collector.refresh(force = true)
+                }
+        }
+        serviceScope.launch(Dispatchers.IO) {
+            // Private, excluded from automatic backup; changes are written only at episode boundaries.
+            val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)
+            val saved = preferences.getStringSet("latched", emptySet()).orEmpty()
+            val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet())
+            combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading.sample to settings }
+                .collect { (sample, settings) ->
+                    if (sample == null || sample.elapsedMs == null || sample.elapsedMs < monitoringStartedElapsed) return@collect
+                    Notifier.ensureAlertChannel(this@BatteryMonitorService, settings)
+                    if (!Notifier.canPostAlerts(this@BatteryMonitorService)) return@collect
+                    val before = alerts.latches
+                    val events = alerts.accept(AlertReading(sample.elapsedMs, sample.levelPercent,
+                        sample.status, sample.plugged, sample.currentNowUa, sample.temperatureDeciC, settings.monitoringIntervalMs),
+                        BatteryAlertSettings(settings.lowBatteryAlertEnabled, settings.lowBatteryThreshold,
+                            settings.highBatteryAlertEnabled, settings.highBatteryThreshold,
+                            settings.temperatureWarningEnabled, settings.temperatureThreshold.toDouble(),
+                            settings.dischargeAlertEnabled, settings.dischargeCurrentThreshold, settings.chargingCompleteAlert))
+                    try {
+                        events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, sample, settings) }
+                    } catch (e: RuntimeException) {
+                        alerts.restoreLatches(before)
+                        Log.w("BatteryAlerts", "Alert delivery failed (${e.javaClass.simpleName})")
+                    }
+                    if (alerts.latches != before) preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet()).apply()
                 }
         }
         serviceScope.launch {

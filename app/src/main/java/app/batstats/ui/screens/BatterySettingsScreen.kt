@@ -1,6 +1,9 @@
 package app.batstats.ui.screens
 
 import android.net.Uri
+import android.content.Intent
+import android.provider.Settings
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -62,6 +65,8 @@ fun BatterySettingsScreen(
     vm: SettingsViewModel = koinViewModel(),
     stringProvider: StringResourceProvider = koinInject()
 ) {
+    val context = LocalContext.current
+    val alertSettingsUnavailable = stringResource(R.string.alert_settings_unavailable)
     val settings by vm.settings.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -191,6 +196,23 @@ fun BatterySettingsScreen(
                                 )
                             }
 
+                            if (categoryClass == General::class) {
+                                Text(stringResource(R.string.monitoring_settings_help), Modifier.padding(16.dp), style = MaterialTheme.typography.bodyMedium)
+                            }
+                            if (categoryClass == Notifications::class) {
+                                SettingsAction(
+                                    title = stringResource(R.string.alert_settings_open),
+                                    description = stringResource(R.string.alert_settings_description),
+                                    onClick = {
+                                        try {
+                                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+                                        } catch (_: android.content.ActivityNotFoundException) {
+                                            scope.launch { snackbarHost.showSnackbar(alertSettingsUnavailable) }
+                                        }
+                                    }
+                                )
+                            }
                             if (categoryClass == Data::class) {
                                 SettingsAction(
                                     title = "Export Battery Data",
