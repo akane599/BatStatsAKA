@@ -60,8 +60,8 @@ fun ObservationCards(state: ObservationSummary) {
                 Text(MonitoringText.coverage(state.discharge), style = MaterialTheme.typography.bodyMedium)
                 Text("Charging: ${formatDuration(state.chargingMs)} · gained ${formatCharge(state.charging.chargeMah)}")
                 Text("Plugged in without charging: ${formatDuration(state.pluggedMs)}")
-                Text("CPU suspend: ${if (state.cpuObservedMs > 0) formatDuration(state.cpuSuspendMs) else "—"} in ${formatDuration(state.cpuObservedMs)} observed")
-                Text("Android Doze: ${if (state.cpuObservedMs > 0) formatDuration(state.dozeMs) else "—"}")
+                Text("CPU suspend: ${MonitoringText.cpuSuspend(state)}")
+                Text("Android Doze: ${MonitoringText.doze(state)}")
                 if (state.gaps > 0 || state.counterGaps > 0) {
                     Text("${state.gaps} observation gaps · ${state.counterGaps} intervals without valid charge", color = MaterialTheme.colorScheme.error)
                     state.lastIssue?.let { Text(it, style = MaterialTheme.typography.bodySmall) }

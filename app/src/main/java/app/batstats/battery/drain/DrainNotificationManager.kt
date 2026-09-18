@@ -33,14 +33,15 @@ class DrainNotificationManager(private val context: Context, private val reposit
         access: String = "Standard battery readings",
         error: String? = repository.error.value
     ): Notification {
-        val content = PendingIntent.getActivity(context, 0,
-            Intent(context, BatteryMainActivity::class.java).putExtra("open_drain_stats", true),
+        val content = PendingIntent.getActivity(context, NOTIFICATION_ID,
+            Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("open_drain_stats", true),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val reset = PendingIntent.getBroadcast(context, 1,
             Intent(context, DrainNotificationReceiver::class.java).setAction(DrainNotificationReceiver.ACTION_RESET),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val freshness = reading.sample?.timestamp?.let {
-            "Reading ${DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(it))}"
+            "Reading ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))}"
         } ?: "Waiting for Android battery data"
         val expanded = buildString {
             appendLine("$freshness · $access")

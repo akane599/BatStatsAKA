@@ -40,7 +40,7 @@
 - Emulator battery100%,5000mV,25°C,900000µA are injected values, not physical measurements. Timeout accommodation is not app/device performance evidence.
 
 ## Remaining work / exact next action
-1. Stage4b1 ready for focused local commit:73 JVM tests pass; Android-test compilation passes. Commit, reread PROGRESS, then4b2 notification/diagnostics/widgets. Stage4a committed `a2b9021`.
+1. Stage4b2 validated and ready for focused commit. Re-read this record, then implement4b3 bounded local diagnostics/source/freshness screen and deliberate sharing.
 2. Stage4b: notification/collector failures, source/freshness diagnostics, settings/alerts, remaining efficiency/retention details. Stage4c: complete resource extraction/real translations and remaining UI/accessibility/history controls.
 3. Device/API36/Shizuku/Binder integration and UI screenshots as emulator permits. Build debug+nondebug `.preview`, verify signatures/update guidance; prepare local manual Actions workflow/reports and PR description. Reconcile full audit coverage. No remote mutation without explicit approval.
 
@@ -66,11 +66,11 @@ Stage4a final validation: rerun session59049 PASSED2m6s (`/tmp/batstats-stage4a-
 
 Stage4b1 decisions: alert settings exist but no collection path calls Notifier alert functions. Implement alerts from validated ordinary readings only while monitoring, with persistent episode latches, hysteresis and repeated/time-qualified high-discharge readings; no wake locks/timers beyond existing sampling. Android channel controls sound/vibration after creation, so replace ineffective switches with a channel-settings action. Retain old settings fields as persisted compatibility data, remove their misleading visible controls.
 
-## Stage4b1 checkpoint (alerts and effective settings)
+## Stage4b1 checkpoint (`d628a90`, alerts and effective settings)
 - Added pure BatteryAlerts engine: validated nullable values/power state, low/high/temperature hysteresis, Android FULL status (not percentage alone), repeated high discharge over3 readings/1min with gap/missing/sign checks; fixed IDs, saved episode latches across service restarts, coalesced full/high alerts. Service ignores samples predating its start; no extra timer/wakeup. Sound/vibration use Android notification settings; old preference values seed channel creation only.
 - Removed ineffective visible controls for notification hiding/style, old foreground heuristic, compact view and export defaults; fields/keys remain persisted for compatibility. Rich foreground notification remains the useful default. Added sampling/retention guidance. Normal VIBRATE permission added for user-configured alert channel.
-- Eight new JVM alert regressions authored. Full JVM/Android-test compilation running session98211, log `/tmp/batstats-stage4b1-tests.log`; no result yet. Main sources must remain unchanged until compile completes.
-- Next: inspect tests, review delivery/latch error handling, update audit/progress and commit4b1; reread PROGRESS then4b2 notification/diagnostics/widgets. Emulator remains stopped; run heavy builds and emulator sequentially.
+- Ten new JVM alert regressions now pass; final total73 tests and Android-test compilation pass. Both Gradle runs completed; no build currently running.
+- Next:4b2 notification/diagnostics/widgets. Emulator remains stopped; run heavy builds and emulator sequentially.
 - Additional confirmed UI localization issue: generated SettingMeta titleRes/descriptionRes/optionsRes are0 and RenderSettingField uses raw English metadata. Resource provider wrapper does not localize those raw titles. Correct all settings titles/options/descriptions via resources during4c, preserving current values/keys.
 
 Stage4b1 initial validation PASSED2m7s (`/tmp/batstats-stage4b1-tests.log`),71 JVM tests and Android-test compilation. Follow-up: honor Android DISCHARGING status even with external power connected (insufficient supply); reject unknown status/negative plug flags; add connected-discharge and failed-delivery latch retry tests. Revalidation required before commit. Removed redundant Elvis warning; clarified high-current observations span1min, not continuous measurement.
@@ -78,3 +78,9 @@ Stage4b1 initial validation PASSED2m7s (`/tmp/batstats-stage4b1-tests.log`),71 J
 Stage4b1 final validation PASSED1m46s (`/tmp/batstats-stage4b1-retest.log`),73 JVM tests/0fail/error/skip and Android-test compilation. Ten new alert tests cover missing values vs zero, hysteresis, charging/unplugging/full coalescing, persistent latches, high-current duration/gaps/vendor-sign uncertainty, connected discharge and retry after failed delivery. Generated schema confirms retired controls have meta=null while original persisted keys remain. New alert strings still need actual translations in4c; no device notification execution claimed.
 
 Exact next stage4b2: fix collector coalescing timestamp/access-help path/root stale flag; preserve fractional mA; publish collector failures in rich notification; unify empty CPU/Doze reporting; correct notification destination and use a distinct PendingIntent identity (widget currently shares activity request0 and can overwrite notification extras); add bounded local diagnostic log/source screen and deliberate sharing; fix widget stopped/empty/freshness/temperature states. Review errors without logging raw per-app dumps. Heavy emulator work remains deferred until builds are finished.
+
+## Stage4b2 checkpoint (notification and widgets)
+- Collector coalescing/help/root stale state corrected; fractional current retained. Shared CPU/Doze text distinguishes missing intervals from observed zero. Rich notification includes collector failures, reading date and a distinct activity PendingIntent; initial/reused activity consumes the drain destination.
+- Widgets request an ordinary snapshot under goAsync, show freshness/stopped state, hide ETA after stopping, honor temperature preference and use a valid common initial RemoteViews layout. No periodic widget alarm added.
+- Gradle JVM tests and Android-test compilation PASSED2m19s (`/tmp/batstats-stage4b2-tests.log`):76 tests,0fail/error/skip. Three new engine-to-display regressions cover fictional screen-off consumption, reset/missing counters and empty CPU/Doze. Android notification construction/identity test compiles; device navigation/rendering remains unverified.
+- Recovery checked full uncommitted diff and test results. Next stage4b3: bounded local diagnostics/source/freshness screen with deliberate sharing, then stage4c UI/localization. Emulator remains stopped during builds. No diagnostic store implemented yet.

@@ -30,7 +30,7 @@ class DetailedStatsCollector(
         private const val TAG = "DetailedStatsCollector"
 
         const val NO_ACCESS_MESSAGE =
-            "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Settings > Advanced Stats."
+            "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Advanced statistics > Access setup."
     }
 
     private val refreshing = AtomicBoolean(false)
@@ -57,7 +57,7 @@ class DetailedStatsCollector(
     private val _mode = MutableStateFlow(ShellRunner.Mode.NONE)
     val mode: StateFlow<ShellRunner.Mode> = _mode.asStateFlow()
 
-    private var lastAttemptElapsed = Long.MIN_VALUE
+    @Volatile private var lastAttemptElapsed = Long.MIN_VALUE
 
     fun accessChanged(mode: ShellRunner.Mode) {
         if (mode != _mode.value || mode == ShellRunner.Mode.NONE) {
@@ -88,9 +88,11 @@ class DetailedStatsCollector(
             val selectedMode = shellRunner.detectMode(forceRefresh = true)
             if (selectedMode == ShellRunner.Mode.NONE) {
                 accessChanged(ShellRunner.Mode.NONE)
+                lastAttemptElapsed = SystemClock.elapsedRealtime()
                 return false
             }
             accessChanged(selectedMode)
+            lastAttemptElapsed = SystemClock.elapsedRealtime()
             val generation = accessGeneration.get()
             var newSnapshot: BatteryStatsParser.FullSnapshot? = null
             var newIdle: BatteryStatsParser.DeviceIdleInfo? = null

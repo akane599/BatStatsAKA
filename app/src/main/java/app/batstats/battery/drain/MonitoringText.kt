@@ -24,6 +24,9 @@ object MonitoringText {
     fun since(summary: ObservationSummary): String = summary.startedAt?.let {
         "Observed since ${DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))}"
     } ?: "Waiting for an observation"
+    fun cpuSuspend(summary: ObservationSummary): String = if (summary.cpuObservedMs > 0)
+        "${formatDuration(summary.cpuSuspendMs)} / ${formatDuration(summary.cpuObservedMs)} observed" else "— · no interval observed"
+    fun doze(summary: ObservationSummary): String = if (summary.cpuObservedMs > 0) formatDuration(summary.dozeMs) else "— · no interval observed"
     fun expanded(summary: ObservationSummary): String = buildString {
         appendLine("━━ Drain while discharging ━━")
         appendLine("Screen on: ${bucket(summary.screenOn)}")
@@ -32,8 +35,8 @@ object MonitoringText {
         appendLine(coverage(summary.screenOff))
         appendLine()
         appendLine("━━ Observed device activity ━━")
-        appendLine("CPU suspend: ${formatDuration(summary.cpuSuspendMs)} / ${formatDuration(summary.cpuObservedMs)}")
-        appendLine("Android Doze: ${formatDuration(summary.dozeMs)}")
+        appendLine("CPU suspend: ${cpuSuspend(summary)}")
+        appendLine("Android Doze: ${doze(summary)}")
         appendLine("Charging: ${formatDuration(summary.chargingMs)} · gained ${formatCharge(summary.charging.chargeMah)}")
         appendLine()
         appendLine("━━ Observation window ━━")

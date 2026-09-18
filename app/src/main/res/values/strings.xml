@@ -318,4 +318,10 @@
     <string name="alert_settings_description">Open Android notification settings. Alerts only run while monitoring is active.</string>
     <string name="monitoring_settings_help">Monitoring keeps a quiet, detailed notification. Ordinary readings and screen accounting work without privileged access. Per-app statistics use Advanced statistics → Access setup.</string>
     <string name="alert_settings_unavailable">Android notification settings could not be opened.</string>
+    <string name="widget_battery">Battery</string>
+    <string name="widget_temperature">Temperature</string>
+    <string name="widget_estimate">Time estimate</string>
+    <string name="widget_no_reading">No reading</string>
+    <string name="widget_read_at">Read %1$s</string>
+    <string name="widget_paused_at">Monitoring stopped · %1$s</string>
 </resources>

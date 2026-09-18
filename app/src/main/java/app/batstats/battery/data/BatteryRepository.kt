@@ -176,7 +176,13 @@ class BatteryRepository(
     }
 
     /** Activity resume/manual refresh gives ordinary information without starting background work. */
-    fun refreshNow() { scope.launch(Dispatchers.Main.immediate) { capture(Boundary.SAMPLE) } }
+    fun refreshNow(onComplete: suspend (Realtime) -> Unit = {}) {
+        scope.launch(Dispatchers.Main.immediate) {
+            try { capture(Boundary.SAMPLE) }
+            catch (e: RuntimeException) { _error.value = "Battery reading failed (${e.javaClass.simpleName})" }
+            finally { onComplete(_realtime.value) }
+        }
+    }
 
     fun resetObservation() { scope.launch(Dispatchers.Main.immediate) {
         events.send(Event.Reset)
@@ -339,7 +345,7 @@ class BatteryRepository(
     data class Realtime(val sample: BatterySample? = null) {
         val level: Int? get() = sample?.levelPercent
         val plugged: Int? get() = sample?.plugged
-        val currentMa: Int? get() = sample?.currentNowUa?.div(1000)?.toInt()
+        val currentMa: Double? get() = sample?.currentNowUa?.div(1000.0)
         val voltageMv: Int? get() = sample?.voltageMv
         val powerMw: Double? get() = BatteryReading.powerMw(sample?.currentNowUa, sample?.voltageMv)
         val temperatureC: Float? get() = sample?.temperatureDeciC?.div(10f)

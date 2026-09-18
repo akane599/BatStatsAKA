@@ -46,6 +46,8 @@ class DetailedStatsViewModel(
             combine(shizuku.running, shizuku.granted) { running, granted -> running to granted }.collect {
                 // Drop stale values immediately, before potentially slow mode probing.
                 collector.accessChanged(ShellRunner.Mode.NONE)
+                _hasRoot.value = false
+                _kernelBattery.value = null
                 refreshJob?.cancel()
                 refreshJob = null
                 shell.invalidateMode()

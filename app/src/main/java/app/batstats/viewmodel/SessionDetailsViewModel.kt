@@ -17,7 +17,7 @@ class SessionDetailsViewModel(
     private val sessionId: String
 ) : AndroidViewModel(app) {
 
-    data class Point(val currentMa: Int?, val voltageMv: Int?, val tempC: Double?, val timestamp: Long, val observationId: String?, val gap: Boolean)
+    data class Point(val currentMa: Double?, val voltageMv: Int?, val tempC: Double?, val timestamp: Long, val observationId: String?, val gap: Boolean)
     data class Ui(
         val type: String = "",
         val start: Long = 0L,
@@ -62,7 +62,7 @@ class SessionDetailsViewModel(
     private fun aggregatePerMinute(samples: List<BatterySample>): List<Point> {
         val step = (samples.size / 360).coerceAtLeast(1)
         return samples.filterIndexed { index, _ -> index % step == 0 }.map { sample ->
-            Point(sample.currentNowUa?.div(1000)?.toInt(), sample.voltageMv,
+            Point(sample.currentNowUa?.div(1000.0), sample.voltageMv,
                 sample.temperatureDeciC?.div(10.0), sample.timestamp, sample.observationId,
                 sample.boundaryReason != null)
         }

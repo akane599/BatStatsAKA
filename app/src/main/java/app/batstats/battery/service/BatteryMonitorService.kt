@@ -94,9 +94,12 @@ class BatteryMonitorService : Service() {
         serviceScope.launch {
             var lastPush = 0L
             var previousImportant: String? = null
-            combine(repository.realtimeFlow, repository.observation, repository.error, shell.access, shell.lastError) {
-                    reading, observation, historyError, access, accessError ->
-                Triple(reading, observation, Triple(access, historyError, accessError))
+            val advanced = combine(shell.access, shell.lastError, collector.error) { access, shellError, collectorError ->
+                access to (collectorError ?: shellError)
+            }
+            combine(repository.realtimeFlow, repository.observation, repository.error, advanced) {
+                    reading, observation, historyError, accessState ->
+                Triple(reading, observation, Triple(accessState.first, historyError, accessState.second))
             }.collect { (reading, observation, state) ->
                 val (access, historyError, accessError) = state
                 val issue = historyError ?: accessError?.let { "Advanced statistics: $it" }
@@ -106,7 +109,8 @@ class BatteryMonitorService : Service() {
                     val label = if (access == ShellRunner.Mode.NONE) "Standard · advanced access unavailable" else "Advanced source: $access"
                     getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
                         notifications.getNotification(reading, observation, label, issue))
-                    reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it) }
+                    reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,
+                        fahrenheit = repository.getSettings().temperatureUnitIndex == 1) }
                     previousImportant = important; lastPush = now
                 }
             }
@@ -119,6 +123,7 @@ class BatteryMonitorService : Service() {
         repository.stopSampling()
         serviceScope.cancel()
         notifications.stopNotification()
+        WidgetUpdater.push(this, repository.realtimeFlow.value.sample, monitoring = false)
         super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder? = null
