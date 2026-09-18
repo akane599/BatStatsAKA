@@ -118,6 +118,9 @@ fun DashboardScreen(
                     }
                 }
                 Text(stringResource(R.string.monitor_direction_help), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+                if (app.batstats.battery.measurement.BatteryReading.directionConflicts(reading.sample?.currentNowUa, reading.powerState)) {
+                    Text(stringResource(R.string.monitor_direction_conflict), color = MaterialTheme.colorScheme.error)
+                }
             }
             item {
                 Text(text.since(summary), style = MaterialTheme.typography.titleMedium)

@@ -139,5 +139,6 @@ private fun DiagnosticCode.labelResource(): Int = when (this) {
     DiagnosticCode.ADVANCED_RECOVERED -> R.string.diag_recovered
     DiagnosticCode.SYSTEM_STATS_RESET -> R.string.diag_reset
     DiagnosticCode.ALERT_FAILED -> R.string.diag_alert_failed
+    DiagnosticCode.NOTIFICATION_FAILED -> R.string.diag_notification_failed
     DiagnosticCode.LOG_READ_FAILED -> R.string.diag_log_failed
 }

@@ -18,6 +18,10 @@ object BatteryReading {
     fun powerMw(currentUa: Long?, voltageMv: Int?): Double? =
         if (currentUa != null && voltageMv != null) currentUa.toDouble() * voltageMv / 1_000_000 else null
 
+    /** Flag conflicting reports without guessing a vendor multiplier or flipping the sign. */
+    fun directionConflicts(currentUa: Long?, power: PowerState): Boolean = currentUa != null &&
+        ((power == PowerState.DISCHARGING && currentUa > 0) || (power == PowerState.CHARGING && currentUa < 0))
+
     fun powerState(status: Int, plugged: Int?): PowerState = when {
         plugged == null || plugged !in 0..15 || status !in 2..5 -> PowerState.UNKNOWN
         status == 3 -> PowerState.DISCHARGING // A connected supply may be insufficient; honor reported discharge.

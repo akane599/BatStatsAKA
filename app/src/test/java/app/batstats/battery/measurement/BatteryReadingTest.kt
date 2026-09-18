@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BatteryReadingTest {
+    @Test fun conflictingCurrentDirectionIsFlaggedWithoutChangingTheReportedValue() {
+        assertTrue(BatteryReading.directionConflicts(500, PowerState.DISCHARGING))
+        assertTrue(BatteryReading.directionConflicts(-500, PowerState.CHARGING))
+        assertFalse(BatteryReading.directionConflicts(-500, PowerState.DISCHARGING))
+        assertFalse(BatteryReading.directionConflicts(500, PowerState.CHARGING))
+        for (state in PowerState.entries) {
+            assertFalse(BatteryReading.directionConflicts(null, state))
+            assertFalse(BatteryReading.directionConflicts(0, state))
+        }
+        assertEquals(500L, BatteryReading.currentUa(500))
+    }
     @Test fun missingAndInvalidLevelAreNotEmptyBattery() {
         assertNull(BatteryReading.percentage(-1, 100))
         assertNull(BatteryReading.percentage(10, 0))

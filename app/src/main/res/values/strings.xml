@@ -502,4 +502,6 @@
     <string name="chart_empty">No supported readings in this period.</string>
     <string name="chart_range">%1$s %2$s · %3$d plotted readings</string>
     <string name="chart_help">Representative readings; gaps and unknown continuity are not connected.</string>
+    <string name="monitor_direction_conflict">Current direction conflicts with Android’s charging state. Values show the reported sign; physical direction is unverified.</string>
+    <string name="diag_notification_failed">Monitoring notification or widget update failed</string>
 </resources>

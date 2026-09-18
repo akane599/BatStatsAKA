@@ -92,7 +92,7 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                                 DetailRow(R.string.adv_screen_on, duration(snapshot?.screenOnTimeMs))
                                 DetailRow(R.string.adv_screen_off, duration(snapshot?.screenOffTimeMs))
                                 DetailRow(R.string.adv_aod, duration(snapshot?.screenDozeTimeMs))
-                                DetailRow(R.string.adv_capacity, snapshot?.estimatedCapacityMah?.let { "$it mAh" })
+                                DetailRow(R.string.adv_capacity, snapshot?.estimatedCapacityMah?.let { app.batstats.battery.drain.formatCharge(it) })
                                 DetailRow(R.string.adv_on_drop, snapshot?.screenOnDischargePercent?.let { "$it pp" })
                                 DetailRow(R.string.adv_off_drop, snapshot?.screenOffDischargePercent?.let { "$it pp" })
                                 Text(stringResource(R.string.adv_capacity_note), style = MaterialTheme.typography.bodySmall)

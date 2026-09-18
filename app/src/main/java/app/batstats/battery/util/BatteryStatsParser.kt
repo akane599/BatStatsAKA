@@ -29,9 +29,9 @@ object BatteryStatsParser {
         val screenOnTimeMs: Long? = null,
         val screenOffTimeMs: Long? = null,
         val screenDozeTimeMs: Long? = null,
-        val screenOffDischargePercent: Float? = null,
-        val screenOnDischargePercent: Float? = null,
-        val estimatedCapacityMah: Int? = null,
+        val screenOffDischargePercent: Int? = null,
+        val screenOnDischargePercent: Int? = null,
+        val estimatedCapacityMah: Double? = null,
         val learnedMinCapacityUah: Long? = null,
         val learnedMaxCapacityUah: Long? = null,
         val reportedTags: Set<String> = emptySet(),
@@ -284,8 +284,8 @@ object BatteryStatsParser {
                     if (deep != null && light != null && dc != null && lc != null && sum(deep, light) != null && dc.toLong() + lc <= Int.MAX_VALUE)
                         doze = DozeStats(deep + light, dc + lc, deep, dc, light, lc)
                 }
-                "dc" -> if (uid == 0) snapshot = snapshot.copy(screenOnDischargePercent = p.number(6)?.toFloat(), screenOffDischargePercent = p.number(7)?.toFloat())
-                "pws" -> if (uid == 0) snapshot = snapshot.copy(estimatedCapacityMah = p.number(4)?.takeIf { it > 0 && it <= 200_000 }?.toInt())
+                "dc" -> if (uid == 0) snapshot = snapshot.copy(screenOnDischargePercent = p.int(6), screenOffDischargePercent = p.int(7))
+                "pws" -> if (uid == 0) snapshot = snapshot.copy(estimatedCapacityMah = p.number(4)?.takeIf { it > 0 && it <= 200_000 })
                 "pwi" -> {
                     val energy = p.number(5)
                     if (energy == null) { rejected++; return@forEach }

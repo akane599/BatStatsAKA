@@ -1,79 +1,39 @@
 # BatStats Development Progress
 
 ## Scope and authority
-- Baseline revision: `76bc831328572c81717b97ffb0e280b10b14b8ad` (source6.2.6/code734). Branch: `codex/android16-reliability`. No unrelated changes at start.
-- Goal: accurate, efficient Android16/API36 monitoring, Shizuku primary; ordinary/ADB/Root preserved, useful rich notification, modern accessible UI, reliable history/export/diagnostics, meaningful tests and installable APKs.
-- Follow AGENTS.md: focused stages, update this record and commit locally after each stage, reread before continuing; after compaction inspect records/status/recent commits/full diff before implementation.
-- Local edits, dependencies, builds, tests, disposable emulators and commits authorized. **No GitHub writes/pushes/Actions approved or performed.** Finish local validation before proposing exact remote actions and automatic workflow triggers.
-- No physical Samsung. Do not request phone testing or claim emulator values validate hardware current/capacity/energy savings/One UI behavior. User-requested UX work overrides generic audit skill enhancement restriction.
-- Per-commit identity: `git -c user.name=Codex -c user.email=codex@openai.com commit`; preserve unrelated work/processes and never commit signing keys/secrets.
+- Starting revision `76bc831328572c81717b97ffb0e280b10b14b8ad` (source6.2.6/code734); branch `codex/android16-reliability`. No unrelated changes at start.
+- Deliver accurate, efficient Android16/API36 monitoring with Shizuku primary, ordinary/ADB/Root preserved, useful rich notification, accessible UI, reliable history/diagnostics/export, tested installable debug/nondebug APKs, signing guide and local PR/manual-workflow preparation.
+- Follow AGENTS.md: focused stages, update this record and commit locally after each stage; reread before the next. After compaction read this and AUDIT_REPORT, status/recent commits/full uncommitted diff; reconcile before implementation.
+- Local task work/builds/dependencies/emulators/commits authorized. **No GitHub writes/pushes/Actions approved or performed.** Finish local work before proposing exact remote actions and automatic triggers. No routine local approval needed.
+- No physical Samsung; do not request phone testing. Distinguish simulated inputs, estimates, missing values and measurements. No emulator-based hardware/energy-saving claims. User-requested UX improvements are authorized beyond the generic audit skill.
+- Commit identity: `git -c user.name=Codex -c user.email=codex@openai.com commit`. Preserve unrelated work/processes; never commit keys/secrets.
 
-## Baseline artifacts and signing
-- Supplied6.2.6 APK: `/tmp/batstats-artifacts/baseline-6.2.6.apk`, package `org.mlm.batstats`, code735/target37/min26. SHA256 `4009bc1f13d7c871ddc1c61f3696ed224f1ad5fbfe547ed452fc2aeaca86b3c5`.
-- Verified original signerSHA256 `4aed2f691df64a7b0fea25a6b8c80183c6dc520e049dac0178defa1d6472228f`; key unavailable. Debug `.debug` coexists; still prepare signed nondebug `.preview` and explain update compatibility.
-- Official Shizuku13.6.0: `/tmp/batstats-artifacts/shizuku-13.6.0.apk`, SHA256 `6e273ab0e991c4e79bc8b1bbb9b9dd739ccac1a8712a541a214078886b7b790f`, signerSHA256 `268b5590e868fb08bae7e0ac413564cd1ff88f5ccff74af9dbd0dc918e30db30`. Not installed yet.
+## Baseline artifacts
+- `/tmp/batstats-artifacts/baseline-6.2.6.apk`: supplied release, `org.mlm.batstats`, code735/target37/min26. SHA256 `4009bc1f13d7c871ddc1c61f3696ed224f1ad5fbfe547ed452fc2aeaca86b3c5`; signerSHA256 `4aed2f691df64a7b0fea25a6b8c80183c6dc520e049dac0178defa1d6472228f`. Original key unavailable. Debug `.debug` coexists; nondebug `.preview` still to prepare.
+- `/tmp/batstats-artifacts/shizuku-13.6.0.apk`: official RikkaApps release. SHA256 `6e273ab0e991c4e79bc8b1bbb9b9dd739ccac1a8712a541a214078886b7b790f`; signerSHA256 `268b5590e868fb08bae7e0ac413564cd1ff88f5ccff74af9dbd0dc918e30db30`. Not installed.
 
-## Committed stages
-- `31c9a55`: instructions and progress. `8ebc074`: baseline APK/source audit.
-- `6e7e801`: API36 specialUse FGS/boot handling, stable Compose, bounded Shizuku-first command transport with explicit source/failure.
-- `08307d4`: nullable validated units, monotonic ObservationEngine, counter-based stable ETA. No fixed4000mAh or cycle-based health.
-- `e0d1eb3`: repository single-owner bounded actor, automatic sessions/shared observation for UI/notification, DB4 nondestructive migration, unique active session/observed points, bounded charts/history. Removed unsupported80/20mA per-app heuristic and unused duplicate hourly dumper; detailed UID capability retained.
-- `e95273c`: Android16 ADB permission/app-op gate, non-consuming `-c --charged`, producer-backed parser units/windows/UID mappings, advanced UI. Synthetic regressions reproduced12 parser failures before correction.
-- `3584abc`: cancellable request-ID Shizuku helper/bridge, interruptible Root/ADB, current-generation collector, actual curated su/kernel reads with validated ABI units/source/errors. Binder/vendor hardware verification pending.
-- `a2b9021`: transactional bounded JSON/CSV import/export, deterministic import identity/dedup/conflict rollback, source-separated local charts, serialized clear/start gate, bounded retention and settings-only automatic backup. Imports close foreign active sessions; native totals remain authoritative.
-- `d628a90`: working battery alerts with saved episode latches/hysteresis/current qualification, Android FULL semantics, connected discharge; ineffective controls retired while keys retained; channel controls sound/vibration.
-- `1f32614`: bounded local diagnostics/source/freshness/sharing.
-- `4ce8957`: complete history browsing, bounded linked session charts, honest legacy/missing states, small nonzero formatting.
-- `53f9894`: collector failures in rich notification, shared empty/zero labels, fractional current, distinct PendingIntent/open-drain navigation; widget snapshot/freshness/stopped/temperature handling and valid initial layout. Runtime rendering/navigation pending.
+## Completed stages and decisions
+- `31c9a55` instructions; `8ebc074` baseline audit; `6e7e801` stable Compose/API36 specialUse FGS/boot/bounded source-aware access.
+- `08307d4` nullable units/monotonic observation/stable ETA; `e0d1eb3` single actor/automatic sessions/DB4/nondestructive migrations/shared totals. No fixed4000mAh, cycle-health or80/20mA app heuristic; detailed UID capability retained.
+- `e95273c` Android16 parser/ADB gate/non-consuming `-c --charged`; `3584abc` cancellable request-ID Shizuku helper and real bounded Root/kernel reads. Runtime/vendor checks pending.
+- `a2b9021` bounded transactional history/import/export/dedup/clear gate/retention/settings-only backup; `d628a90` validated persistent alert episodes and effective settings.
+- `53f9894` rich stable notification/navigation/widget freshness; `1f32614` bounded local fixed-code diagnostics/provenance/sharing; `4ce8957` complete paged history/bounded linked charts/legacy and missing states.
+- `9c07740` localized settings metadata, bounded validated preferences import and palette contrast; `0a1e566` shared resource-backed monitoring/notification labels with explicit endpoints, responsive cards and tiny nonzero formatting.
+- Stage4d1 now validated, ready to commit: queued SQL cannot overwrite a newer live point; fractional capacity retained and invalid discharge counters rejected; current-direction contradictions flagged without guessing; recoverable notification errors and alert-channel work only on delivery attempts. Four new synthetic regressions pass.
+- Technical diagnostic-report keys remain stable English identifiers; explanatory screens are localizable. Preserve17 locale directories/16 languages; real translations needed, no placeholder English copies or lint suppression. Banner.svg exists; old missing-link suspicion disproved.
 
-## Actual verification
-- Baseline dependency metadata FAILED57s: alpha Compose1.13a03 required SDK37.1 while configured37.0. Stable BOM2026.09.00/UI1.12.1 now compiles with compile37/target36/min26, version6.2.7-dev/code736.
-- Stage3b debug APK assembled at `app/build/outputs/apk/debug/batstats-debug-6.2.7-dev-universal.apk` plus ABI splits. **Older than current source; final APK builds required.**
-- Stage3c45 and3d51 JVM tests passed. Stage3d combined tests/lint/assemble FAILED10m29s:125 MissingTranslation errors/216 warnings; assembly after lint did not run. API28/min26 charge-time error fixed. Real translations required; no suppressions/English placeholder copies.
-- Stage4a63 JVM tests + Android compilation PASSED2m6s (`/tmp/batstats-stage4a-retest.log`). Initial test compilation failed because RoomDatabase is not Closeable; explicit try/finally fixed cleanup, assertions unchanged.
-- Stage4b1 final73 JVM tests + Android compilation PASSED1m46s (`/tmp/batstats-stage4b1-retest.log`). Covers alert hysteresis/missing data/full/current gaps/vendor direction/connected discharge/delivery retry.
-- Stage4b2 final76 JVM tests + Android compilation PASSED2m19s (`/tmp/batstats-stage4b2-tests.log`),0fail/error/skip. Adds engine-to-display screen-off/reset/empty CPU/Doze regressions; actual notification construction test compiled only.
-- `python3 scripts/check_migrations.py` and `python3 scripts/check_history_queries.py` PASS actual SQL/schema/indices/row preservation, unique points/rollback, source filtering, overlap and retention. Host SQLite is not Android execution.
-- Android migration/import/notification tests compile; **none executed on device yet.** Last XML check76 files parsed; diff checks pass.
-- Standard validation: `./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin --no-daemon -Dorg.gradle.jvmargs=-Xmx1024m --max-workers=1`.
+## Actual validation and environment
+- Latest stage4d1:94 JVM tests,0fail/error/skip. Initial Gradle client interrupted(exit143) after tests; unchanged rerun passed Android compilation in44s. `/tmp/batstats-stage4d1-tests.log`, `/tmp/batstats-stage4d1-retest.log`.
+- Host migration/history SQL checks pass. **Android tests compiled only, none executed.** Latest assembled debug APK is stage3b, older than source. Last lint failed missing translations. Full historic results and commands: [docs/VALIDATION.md](docs/VALIDATION.md).
+- JDK21, SDK37 compilation/target36/min26, stable Compose BOM2026.09.00/UI1.12.1. Host3.8GiB RAM+4GiBswap,~2.4GiB free disk. Builds use heap1024/workers1. **Builds and emulator sequentially; do not edit main/DAO during KSP/Kotlin.** Preserve unrelated Java98543/other AVDs. Never print env/full process args.
+- Task AVD `batstats_atd36`, port5580, software `-accel off`,1536MiB/noKVM/sparse6GiB userdata. One verified boot before pause using watchdog multiplier100; baseline install interrupted/status unknown. Resumed emulator105403 stopped after memory exhaustion. **Currently stopped, no active build.** Log `/tmp/batstats-emulator-resumed.log`; return adbd to shell before Shizuku checks.
+- Actual app screens, Shizuku Binder/reconnection, widgets/alerts, One UI/current calibration/capacity/energy use remain unverified. Legacy store screenshots reviewed, cannot validate current build.
 
-## Environment and runtime limits
-- JDK21; SDK35/36/37/build-tools36; Gradle9.7.1. Host3.8GiB RAM+4GiBswap, limited disk. **Builds and emulator must run sequentially.** Preserve unrelated Java process98543/other AVDs.
-- Task AVD `batstats_atd36`, port5580, software `-accel off`,1536MiB, noKVM; sparse6GiB userdata. First boot~85min repeatedly hit watchdog. Setting documented `ro.hw_timeout_multiplier=100` on disposable ATD/restarting zygote allowed one verified `sys.boot_completed=1` before user pause.
-- Baseline install attempts failed before package service/boot; third interrupted at pause, installed status unknown. No screenshots/UI/instrumentation/Shizuku runtime success claimed.
-- User resumed; emulator105403/session97691 restarted, timeout100 restored, then stopped when combined build/emulator exhaustedRAM/swap. **Currently stopped.** `/tmp/batstats-emulator-resumed.log`. Return adbd to shell before Shizuku shell-mode tests.
-- Emulator battery100%,5000mV,25°C,900000µA injected; timeout accommodation is not performance evidence.
-- Never edit main/DAO sources while Kotlin/KSP runs: previous stale generated adapters resolved after source changes stopped. Do not print environment/full process arguments; use safe PID/comm inspection.
+## Exact next action
+1. Commit validated stage4d1, reread this record. Prepare preview build/signing and local manual Actions checks/artifacts; remove only confirmed unused background dependencies/permissions. Existing release workflow is unsafe by default and ignores upload/prerelease inputs; see PLATFORM_NOTES.
+2. Author API36 UI/Shizuku integration checks and build fresh debug/test/preview APKs. Run emulator separately; use long software boot time for translations/docs. Do not weaken tests or silently skip failed compatibility checks.
+3. Complete genuine translations across17locale directories (about330 new strings each); inspect actual English/localized, light/dark/large-font screens, loading/empty/error/recovery. Correct stale ja/zh README/store claims and replace old screenshots with actual captures where possible.
+4. Final JVM/SQL/lint/build/Android checks; signatures/checksums and actual results. Complete AUDIT_REPORT/this record, signing/phone-build guide, locally prepared PR description and focused commits.
+5. Only after concrete local validation, request explicit approval for exact GitHub actions. Existing push/PR CI runs automatically; a new workflow_dispatch file must reach the default branch before GitHub exposes Run workflow, then branches can be selected. Continue local work while approval is pending.
 
-## Stage4b3 checkpoint — diagnostics
-- Fixed-code local DiagnosticLog:60 events/32KiB input, repeat coalescing, bounded actor queue, AtomicFile in noBackupFilesDir, at most one write/minute without alarms/wake locks. Recent events can be lost on process death. Codes only, no command/package/exception payloads.
-- Repository/collector/service emit failure/access/recovery events. Dashboard source dialog replaced with scrolling Sources and diagnostics screen: raw units/UTC timestamps, ordinary refresh, distinct local/system windows, limitations, deliberate share chooser. Reports omit internal UUIDs/device identifiers/app lists/raw dumps.
-- Six new JVM log/report tests and one Android AtomicFile persistence test authored. Technical report fields currently English; full locale work pending4c.
-- Validation PASSED2m27s:82 JVM tests,0fail/error/skip plus Android-test compilation (`/tmp/batstats-stage4b3-tests.log`). Android AtomicFile persistence test compiles, not executed. Diff checked; emulator stopped, no active build.
-
-## Exact next action and remaining work
-1. Stage4c2 committed `9c07740`, PROGRESS reread. Stage4c3a shared monitoring presentation/resources passed JVM/Android compilation; commit, reread this record, then finish remaining accuracy/resource checks and real translations.
-2. Stage4c remaining: ordinary UI/notification/report strings and real translations across17locale directories (16 languages). History/contrast/settings bindings implemented; actual screens and interactions still need emulator review.
-3. Remaining reliability/efficiency follow-ups: fractional current/rate formatting; parser sub-mAh capacity/overflow edge cases; notification snapshot coherence; alert channel setup failures; remove only confirmed unused background dependencies. Review all store assets/docs and stale localized README claims. Banner.svg is tracked and exists; the earlier missing-link suspicion was incorrect.
-4. Final lint/debug/nondebug/Android test APKs; API36/Shizuku/Binder disconnect/reconnect/UI/large fonts/dark-light/screenshots as environment supports. Do not silently skip failing assertions; distinguish compilation, synthetic data and actual execution.
-5. Prepare local phone-launchable manual Actions artifact/test-report workflow, signing/update guide and PR description. Existing push/PR workflows auto-run; no GitHub writes/Actions without explicit approval after concrete local validation.
-
-Audit findings/coverage: AUDIT_REPORT.md. Platform contracts/privacy: docs/PLATFORM_NOTES.md. No pending user approval blocks local work.
-
-## Stage4c1 checkpoint — history browsing
-- History now queries50+1 rows with full-database filters/source-ID search and Load50more; loading/error/empty states and scrollable wrapping filters. SessionCard now wraps vertically and labels actual recording/imported/legacy origins, without promoting old capacity as current health.
-- Session details query at most~360 representative session-linked readings per record update; closed sessions no longer reload from realtimeFlow. Preserve bucket discontinuities. Null/deleted session has explicit unavailable state. Legacy records no longer borrow unrelated time-overlapping samples or claim observed zero-duration/counter quality. Stored legacy capacity is labeled undocumented.
-- Four JVM evidence/format regressions and two Android query tests added. Actual host DAO SQL passes paging across125 records, filters, bounded projections and hidden-gap preservation. New strings await4c localization. Gradle JVM tests/Android compilation PASSED2m38s (`/tmp/batstats-stage4c1-tests.log`),86 tests/0fail/error/skip. Android browse tests compile only. Diff checked; emulator stopped; no active build.
-
-## Stage4c2 checkpoint — settings, contrast and import safety
-- SettingsText binds20 visible generated setting titles/descriptions/options to Android resources without changing keys, ordering or stored types. Categories localized, threshold units explicit. Toolbar actions use an overflow menu; dialogs scroll/buttons wrap and show errors inline; repeated reset/import taps blocked. Old nonfinite values cannot crash slider construction.
-- Theme normal/fixed colors and control outlines corrected for contrast; wrapped Activity contexts no longer cast unsafely. Both palette contrast regressions pass; screenshots pending.
-- B29 confirmed from settings0.8.3 bytecode: import decodes/writes fields without slider/dropdown range checks, raw JSON unbounded, partial errors hidden. Added64KiB/depth/encoded-field guard and whole-input value validation before existing library checksum/app/schema validation. Reset/update/export failures visible. Legacy app.batstats backup identity retained.
-- Final Gradle tests + Android compilation PASSED1m24s (`/tmp/batstats-stage4c2-final.log`):90 JVM tests,0fail/error/skip. Includes3 import guard and1 palette contrast regressions. Android localized metadata test compiles, not executed. Earlier89-test and90-test checks also passed; final run includes inline dialog error fixes.
-- Localization inventory:435 translatable base strings; each17locale directories lacks273 new strings. No fake English copies or lint suppressions. Technical report fields and ordinary monitoring text still need localization. Source frozen only during builds; no build/emulator currently running.
-- Read-only shared release workflow review recorded in docs/PLATFORM_NOTES.md: it can push changes/publish releases even with Play disabled; new phone build workflow must be separate. Dispatch workflow must reach default branch for GitHub Run workflow UI, then branch selectable. No remote action performed.
-
-## Stage4c3a checkpoint — shared monitoring presentation
-- MonitoringText now resolves actual Android resources through an injected string function; app/notification share the same wording and show the last observed endpoint as well as the start. JVM presentation assertions retained using the real English XML templates, no copied fake translations or weakened assertions.
-- Dashboard/drain/widget ETA/notification/chart text extracted; dashboard cards stack at font scale>1.3 or narrow width; small current/power/chart range values stay nonzero. Stopped discharge ETA hidden. Diagnostics XML newlines fixed; removed overstrong promise that the most recent minute alone can be lost while CPU sleeps.
-- Resource extraction adds56 strings; actual translations still pending across17directories. Technical report keys remain stable English identifiers for portable diagnostics. Gradle tests and Android compilation PASSED1m59s (`/tmp/batstats-stage4c3a-tests.log`):90 JVM tests,0fail/error/skip. Emulator stopped; Android rendering still pending. Next: remaining numeric/notification edge cases and actual locale translations.
+No pending approval blocks local work. Audit findings: AUDIT_REPORT.md. Source contracts/privacy/release-workflow evidence: docs/PLATFORM_NOTES.md.

@@ -24,7 +24,7 @@ object Notifier {
         if (mgr.getNotificationChannel(CH_ID) == null) {
             val ch = NotificationChannel(
                 CH_ID,
-                "Battery Monitor",
+                ctx.getString(R.string.monitor_channel),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 enableLights(false)

@@ -5,6 +5,20 @@ import org.junit.Test
 
 /** Synthetic records follow android16-release BatteryStats.java; they are not device measurements. */
 class BatteryStatsParserTest {
+    @Test fun capacitiesKeepFractionsAndDischargeUsesIntegerPercentagePoints() {
+        val small = BatteryStatsParser.parseCheckin("9,0,l,pws,0.75\n9,0,l,dc,0,0,120,0")
+        assertEquals(0.75, small.estimatedCapacityMah!!, 0.0)
+        assertEquals(120, small.screenOnDischargePercent)
+        assertEquals(0, small.screenOffDischargePercent)
+        for (value in listOf("1e300", "NaN", "Infinity", "-1", "0.5")) {
+            val snapshot = BatteryStatsParser.parseCheckin("9,0,l,dc,0,0,$value,$value")
+            assertNull(snapshot.screenOnDischargePercent)
+            assertNull(snapshot.screenOffDischargePercent)
+        }
+        for (value in listOf("0", "-1", "200001", "Infinity", "NaN")) {
+            assertNull(BatteryStatsParser.parseCheckin("9,0,l,pws,$value").estimatedCapacityMah)
+        }
+    }
     @Test fun jobAndSyncTimePrecedeCountAndKeepBackgroundValues() {
         val snapshot = BatteryStatsParser.parseCheckin("""
             9,10001,l,jb,"job,with,commas",12345,7,4321,3

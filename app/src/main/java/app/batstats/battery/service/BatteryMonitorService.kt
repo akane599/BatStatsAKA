@@ -50,7 +50,7 @@ class BatteryMonitorService : Service() {
         } catch (e: RuntimeException) {
             diagnostics.record(DiagnosticCode.START_FAILED)
             Log.e("BatteryMonitorService", "Could not start monitoring", e)
-            Notifier.promptStartOnBoot(this)
+            runCatching { Notifier.promptStartOnBoot(this) }
             stopSelf()
             return START_NOT_STICKY
         }
@@ -75,11 +75,10 @@ class BatteryMonitorService : Service() {
             val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)
             val saved = preferences.getStringSet("latched", emptySet()).orEmpty()
             val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet())
+            var alertChannelReady = false
             combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading.sample to settings }
                 .collect { (sample, settings) ->
                     if (sample == null || sample.elapsedMs == null || sample.elapsedMs < monitoringStartedElapsed) return@collect
-                    Notifier.ensureAlertChannel(this@BatteryMonitorService, settings)
-                    if (!Notifier.canPostAlerts(this@BatteryMonitorService)) return@collect
                     val before = alerts.latches
                     val events = alerts.accept(AlertReading(sample.elapsedMs, sample.levelPercent,
                         sample.status, sample.plugged, sample.currentNowUa, sample.temperatureDeciC, settings.monitoringIntervalMs),
@@ -88,7 +87,17 @@ class BatteryMonitorService : Service() {
                             settings.temperatureWarningEnabled, settings.temperatureThreshold.toDouble(),
                             settings.dischargeAlertEnabled, settings.dischargeCurrentThreshold, settings.chargingCompleteAlert))
                     try {
-                        events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, sample, settings) }
+                        if (events.isNotEmpty()) {
+                            if (!alertChannelReady) {
+                                Notifier.ensureAlertChannel(this@BatteryMonitorService, settings)
+                                alertChannelReady = true
+                            }
+                            if (Notifier.canPostAlerts(this@BatteryMonitorService)) {
+                                events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, sample, settings) }
+                            } else alerts.restoreLatches(before)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
                     } catch (e: RuntimeException) {
                         alerts.restoreLatches(before)
                         diagnostics.record(DiagnosticCode.ALERT_FAILED)
@@ -113,10 +122,18 @@ class BatteryMonitorService : Service() {
                 val now = SystemClock.elapsedRealtime()
                 if (important != previousImportant || now - lastPush >= 30_000) {
                     val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
-                    getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
-                        notifications.getNotification(reading, observation, label, issue))
-                    reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,
-                        fahrenheit = repository.getSettings().temperatureUnitIndex == 1) }
+                    try {
+                        getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
+                            notifications.getNotification(reading, observation, label, issue))
+                        reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,
+                            fahrenheit = repository.getSettings().temperatureUnitIndex == 1) }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: RuntimeException) {
+                        diagnostics.record(DiagnosticCode.NOTIFICATION_FAILED)
+                        Log.w("BatteryMonitorService", "Monitoring display update failed (${e.javaClass.simpleName})")
+                    }
+                    // Failed display updates retry on the next cadence or important state change.
                     previousImportant = important; lastPush = now
                 }
             }

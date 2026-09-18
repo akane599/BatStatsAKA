@@ -289,7 +289,7 @@ class BatteryRepository(
         val updated = reportSession(session!!, sample, sessionSummary)
         val inserted = db.withTransaction { sessionDao.upsert(updated); batteryDao.insertSample(sample) }
         session = updated; lastPersisted = sample
-        _realtime.value = Realtime(sample)
+        _realtime.update { Realtime(mergePersistedReading(it.sample, sample)) }
         _observation.value = summary
         _error.value = null
         if (inserted != -1L) { sampleCount++; samplesSinceCleanup++ }
