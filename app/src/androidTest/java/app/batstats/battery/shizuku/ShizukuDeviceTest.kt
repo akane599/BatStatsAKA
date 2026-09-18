@@ -30,6 +30,8 @@ class ShizukuDeviceTest {
 
     @Test fun shellServiceAuthorizationHelperRestartAndAccessLossPreserveOrdinaryReadings() = runBlocking {
         DeviceEnvironment.requireDisposableEmulator()
+        device.wakeUp()
+        device.executeShellCommand("wm dismiss-keyguard")
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
         val bridge = GlobalContext.get().get<ShizukuBridge>()
         val shell = GlobalContext.get().get<ShellRunner>()
@@ -87,6 +89,10 @@ class ShizukuDeviceTest {
             assertTrue(collector.refresh(force = true))
             assertNotNull(collector.snapshot.value)
             DeviceEnvironment.screenshot("shizuku-reconnected")
+        } catch (failure: Throwable) {
+            runCatching { DeviceEnvironment.screenshot("shizuku-failure") }
+                .exceptionOrNull()?.let(failure::addSuppressed)
+            throw failure
         } finally {
             if (stoppedServer) device.executeShellCommand("/data/local/tmp/batstats-shizuku-starter")
             bridge.unbind()

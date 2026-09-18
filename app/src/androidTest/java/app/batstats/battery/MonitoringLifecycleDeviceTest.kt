@@ -8,6 +8,8 @@ import android.os.PowerManager
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
+import androidx.test.uiautomator.By
+import androidx.test.uiautomator.Until
 import app.batstats.R
 import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.drain.MonitoringText
@@ -36,6 +38,7 @@ class MonitoringLifecycleDeviceTest {
         val settings = BatteryGraph.settings.flow.first()
         val service = Intent(context, BatteryMonitorService::class.java)
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
+        var phase = "start monitoring"
         try {
             context.stopService(service); repo.stopSampling()
             await { !repo.isMonitoringFlow.value }
@@ -46,6 +49,7 @@ class MonitoringLifecycleDeviceTest {
             device.executeShellCommand("dumpsys battery set level 80")
             BatteryGraph.settings.update { it.copy(monitoringIntervalIndex = 0) }
             scenario.onActivity { it.startForegroundService(service) }
+            phase = "first screen-on observation and notification"
             withTimeout(120_000) { repo.observation.first { it.screenOn.durationMs > 0 } }
             assertEquals(PowerState.DISCHARGING, repo.realtimeFlow.value.powerState)
             assertEquals(0L, repo.observation.value.screenOff.durationMs)
@@ -56,12 +60,15 @@ class MonitoringLifecycleDeviceTest {
             assertTrue(notification()!!.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
             val notificationKey = notification()!!.key
             DeviceEnvironment.screenshot("monitoring-screen-on-simulated-battery")
+            phase = "screen off"
             device.sleep()
             withTimeout(120_000) { repo.observation.first { it.latest?.interactive == false } }
             delay(1_500)
+            phase = "screen on after wake"
             device.wakeUp(); device.executeShellCommand("wm dismiss-keyguard")
             withTimeout(120_000) { repo.observation.first { it.latest?.interactive == true && it.screenOff.durationMs > 0 } }
             val screenOff = repo.observation.value.screenOff.durationMs
+            phase = "charging transition"
             device.executeShellCommand("dumpsys battery set ac 1")
             device.executeShellCommand("dumpsys battery set status 2")
             withTimeout(120_000) { repo.observation.first { it.chargingMs > 0 } }
@@ -70,23 +77,35 @@ class MonitoringLifecycleDeviceTest {
                 ?.contains(MonitoringText(context).state(PowerState.CHARGING)) == true }
             assertEquals(notificationKey, notification()!!.key)
             assertEquals(0L, notification()!!.notification.`when`)
-            device.openNotification(); DeviceEnvironment.screenshot("notification-charging-simulated-battery"); device.pressBack()
-            // PendingIntent must open the observed-drain destination even after widget intent creation.
-            notification()!!.notification.contentIntent.send()
-            assertTrue(device.wait(androidx.test.uiautomator.Until.hasObject(androidx.test.uiautomator.By.text(context.getString(R.string.monitor_drain_title))), 120_000))
+            phase = "notification tap opens observation"
+            val title = notification()!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+            assertTrue("Notification shade did not open", device.openNotification())
+            val row = device.wait(Until.findObject(By.text(title)), 120_000)
+            DeviceEnvironment.screenshot("notification-charging-simulated-battery")
+            assertNotNull("Monitoring notification is missing from SystemUI", row)
+            row!!.click()
+            val opened = device.wait(Until.hasObject(By.text(context.getString(R.string.monitor_drain_title))), 120_000)
             DeviceEnvironment.screenshot("notification-opens-observation")
+            assertTrue("Tapping the monitoring notification must open observed drain", opened)
+            phase = "stop monitoring"
             context.stopService(service)
             withTimeout(120_000) { repo.observation.first { it.stopped } }
             await { notification() == null }
             val count = BatteryGraph.db.batteryDao().count()
             delay(6_500)
             assertEquals("Stopped monitoring must not write another periodic sample", count, BatteryGraph.db.batteryDao().count())
+            phase = "restart monitoring with a new window"
             device.executeShellCommand("dumpsys battery unplug")
             device.executeShellCommand("dumpsys battery set status 3")
-            scenario.onActivity { it.startForegroundService(service) }
+            context.startForegroundService(service)
             withTimeout(120_000) { repo.observation.first { !it.stopped && it.latest?.power == PowerState.DISCHARGING } }
             assertEquals("Restart starts a new observed window", 0L, repo.observation.value.screenOff.durationMs)
             assertNull(repo.observation.value.screenOff.chargeMah)
+        } catch (failure: Throwable) {
+            runCatching { DeviceEnvironment.screenshot("monitoring-failure") }
+                .exceptionOrNull()?.let(failure::addSuppressed)
+            throw AssertionError("Failed during $phase; observation=${repo.observation.value}; " +
+                "live=${repo.realtimeFlow.value}; errors=${repo.error.first()}", failure)
         } finally {
             context.stopService(service); repo.stopSampling()
             BatteryGraph.settings.update { settings }

@@ -20,6 +20,7 @@ object DeviceEnvironment {
     fun screenshot(name: String) {
         val directory = File(context.getExternalFilesDir(null), "validation-screenshots").apply { mkdirs() }
         assertTrue("Screenshot capture failed: $name", device.takeScreenshot(File(directory, "$name.png")))
+        device.dumpWindowHierarchy(File(directory, "$name.xml"))
     }
 }
 

@@ -29,11 +29,19 @@ class NavigationDeviceTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(id)))
         compose.onNodeWithText(label(id)).assertIsDisplayed()
     }
-    private fun back() { DeviceEnvironment.device.pressBack(); compose.waitForIdle() }
+    private fun awaitDashboard() {
+        compose.waitUntil(120_000) {
+            compose.onAllNodesWithContentDescription(label(R.string.settings)).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription(label(R.string.settings)).assertIsDisplayed()
+    }
+    private fun backToDashboard() { DeviceEnvironment.device.pressBack(); awaitDashboard() }
     private fun capture(name: String) { compose.waitForIdle(); DeviceEnvironment.screenshot(name) }
 
     @Before fun prepare() = runBlocking {
         DeviceEnvironment.requireDisposableEmulator()
+        DeviceEnvironment.device.wakeUp()
+        DeviceEnvironment.device.executeShellCommand("wm dismiss-keyguard")
         savedFont = DeviceEnvironment.device.executeShellCommand("settings get system font_scale").trim()
         savedSettings = BatteryGraph.settings.flow.first()
         DeviceEnvironment.context.stopService(Intent(DeviceEnvironment.context, BatteryMonitorService::class.java))
@@ -57,19 +65,24 @@ class NavigationDeviceTest {
         click(R.string.adv_access_help)
         compose.onNodeWithText(label(R.string.adv_copy_commands)).assertIsDisplayed()
         capture("access-instructions")
-        back(); back()
+        DeviceEnvironment.device.pressBack()
+        compose.waitUntil(120_000) {
+            compose.onAllNodesWithText(label(R.string.adv_copy_commands)).fetchSemanticsNodes().isEmpty()
+        }
+        backToDashboard()
         scroll(R.string.diagnostics_title); click(R.string.diagnostics_title)
         scroll(R.string.diagnostic_events); capture("diagnostics-events")
-        back()
+        backToDashboard()
         scroll(R.string.history); click(R.string.history)
         compose.onNode(hasSetTextAction()).performTextInput("no-such-observation-device-test")
         compose.waitUntil(120_000) { compose.onAllNodesWithText(label(R.string.history_no_matches)).fetchSemanticsNodes().isNotEmpty() }
         scroll(R.string.history_no_matches); capture("history-empty-filter")
         compose.onNodeWithContentDescription(label(R.string.back)).performClick()
+        awaitDashboard()
         scroll(R.string.data_export_import); click(R.string.data_export_import)
         compose.onNodeWithText(label(R.string.import_csv)).performScrollTo().assertIsDisplayed()
         capture("history-export-import")
-        back()
+        backToDashboard()
         compose.onNodeWithContentDescription(label(R.string.settings)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
         click(R.string.import_settings_desc)
@@ -91,7 +104,7 @@ class NavigationDeviceTest {
         capture("dashboard-dark-font200")
         scroll(R.string.monitor_details); click(R.string.monitor_details)
         scroll(R.string.monitor_counter_help); capture("observation-dark-font200")
-        back()
+        backToDashboard()
         compose.onNodeWithContentDescription(label(R.string.settings)).performClick()
         compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
         click(R.string.reset_settings_desc)
