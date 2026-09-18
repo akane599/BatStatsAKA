@@ -60,6 +60,8 @@ Source review confirms these defects unless runtime reproduction is stated. Impl
 ## Hosted validation
 - Approved publication created draft PR1 and branch91c6053. First push/PR CI runs35320355939/35320370581 failed before building: wrong SDK package platforms;android-37. Correct path platforms;android-37.0 matches installed metadata. Workflow corrected; new execution pending. This was setup failure, not a device assertion failure.
 
+- Hosted push35320644172 passed both94-case JVM suites/full lint, then packageDebug hit Java heap OOM. Parallel PR35320646877 completed build and reached device tests. One-worker/in-process/3GiB CI configuration prepared; no assertions changed.
+
 ## Actual validation
 - Baseline dependency metadata failed: alpha Compose required SDK37.1. Stable Compose fixes compilation against37 with target36/min26.
 - Producer-based parser tests reproduced12 baseline failures before fixes. Latest JVM suites each pass94 tests in Debug and Preview,0fail/error/skip. Host migration/history SQL checks pass. These inputs are synthetic, not physical measurements.

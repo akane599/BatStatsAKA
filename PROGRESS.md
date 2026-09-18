@@ -62,4 +62,8 @@ Stage6a published91c6053 and opened [draft PR1](https://github.com/akane599/BatS
 
 Validation: local sdkmanager platforms;android-37 reproduced exit1; platforms;android-37.0 exited0. actionlint and git diff --check pass.
 
-Next: commit/push the SDK fix, inspect the new CI runs, download actual device reports/screenshots and investigate any failures. Keep PR draft. API job-log download works when gh run log returns empty; use the jobs/<id>/logs endpoint. After any compaction perform recovery checks before implementation.
+32a01ae SDK fix pushed. Current push run35320644172 (job105522153453) and PR run35320646877 are in Verify and build after SDK installation passed. PR1 body updated through REST; gh pr edit failed only because its older GraphQL query requests deprecated Projects classic fields. Use gh api PATCH with a JSON body file for further PR edits.
+
+Next: inspect these CI runs, download actual device reports/screenshots and investigate any failures. Keep PR draft. API job-log download works when gh run log returns empty; use the jobs/<id>/logs endpoint. After any compaction perform recovery checks before implementation.
+
+Stage6b: push35320644172 failed packageDebug with Java heap OOM after both94-test JVM suites and full lint passed; artifact validation-reports-3 downloaded to /tmp/batstats-ci-35320644172. PR35320646877 passed the build and reached Android16 device tests. Prepared CI one-worker/in-process compilation with3GiB heap (the local successful build used one worker); actionlint passes. Hold publication of this configuration until the current PR device results are inspected, so any confirmed runtime fix can share the next push. No app source has changed.
