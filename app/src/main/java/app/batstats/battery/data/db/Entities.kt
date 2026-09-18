@@ -100,3 +100,14 @@ data class AppDrainAggregate(
     val energyMah: Double,
     val samples: Int
 )
+
+/** Bounded representative chart rows; bucket discontinuities must remain visible. */
+data class SessionChartReading(
+    val timestamp: Long,
+    val currentNowUa: Long?,
+    val voltageMv: Int?,
+    val temperatureDeciC: Int?,
+    val observationId: String?,
+    val source: String,
+    val discontinuity: Boolean
+)

@@ -83,3 +83,7 @@ Stage4b2 validation PASSED2m19s:76 JVM tests/0fail/error/skip plus Android-test 
 Stage4b3 working tree: bounded local fixed-code log/source screen/explicit sharing; diagnostic timestamps/units and distinct observation windows exposed. Six JVM and one Android persistence regression authored; validation pending. Technical report field localization is still pending with4c.
 
 Stage4b3 validation PASSED2m27s:82 JVM tests/0fail/error/skip plus Android-test compilation. Six diagnostics/report regressions pass; Android AtomicFile recreation test compiles only. Bounded local diagnostics/report sharing implemented; locale/visual/runtime verification pending. Next4c1: history pagination and bounded session-only charts with honest legacy/loading/deleted states.
+
+B28 (Medium, confirmed): session details combine live readings with full raw sample loads, including closed sessions; missing session is filtered out and leaves an apparently current/old detail. History only exposes100 newest rows. Working4c1 fixes database paging, bounded session-only snapshots and explicit loading/missing/errors; imported/legacy quality labels and narrow-layout cards revised. Host SQL passes; Gradle/device verification pending.
+
+Stage4c1 validation PASSED2m38s:86 JVM tests/0fail/error/skip and Android-test compilation. Four new evidence/precision regressions pass; two Android browse tests compile only. Host SQL confirms full-history pagination/filtering, bounded same-session charts and preservation of missing/gap buckets. B28 implemented; actual layouts/interactions pending emulator.

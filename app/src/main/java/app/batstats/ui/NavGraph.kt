@@ -51,7 +51,6 @@ fun NavGraph(
 
             entry<Screen.SessionDetails> { args ->
                 SessionDetailsScreen(
-                    sessionId = args.sessionId,
                     onBack = { backStack.removeAt(backStack.lastIndex) },
                     vm = koinViewModel(parameters = { parametersOf(args.sessionId) })
                 )

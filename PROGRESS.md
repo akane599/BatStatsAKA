@@ -50,10 +50,15 @@
 - Validation PASSED2m27s:82 JVM tests,0fail/error/skip plus Android-test compilation (`/tmp/batstats-stage4b3-tests.log`). Android AtomicFile persistence test compiles, not executed. Diff checked; emulator stopped, no active build.
 
 ## Exact next action and remaining work
-1. Stage4b3 validated, ready for focused commit; reread this file before4c1 history/session UI corrections.
+1. Stage4c1 validated; make focused commit and reread this file, then4c2 settings localization/contrast and ordinary UI wording.
 2. Stage4c history/UI: paginate/filter all history; bounded session-only charts without reloading closed history on live samples; loading/deleted/error states; label imported/legacy continuity and old capacity honestly. Correct dark secondary contrast, settings localized metadata/options, ordinary UI/notification/report strings and real translations across16locale directories. Inspect actual screens when emulator ready.
 3. Remaining reliability/efficiency follow-ups: fractional current/rate formatting; parser sub-mAh capacity/overflow edge cases; notification snapshot coherence; alert channel setup failures; remove only confirmed unused background dependencies. Review all store assets/docs/README broken banner link and stale localized claims.
 4. Final lint/debug/nondebug/Android test APKs; API36/Shizuku/Binder disconnect/reconnect/UI/large fonts/dark-light/screenshots as environment supports. Do not silently skip failing assertions; distinguish compilation, synthetic data and actual execution.
 5. Prepare local phone-launchable manual Actions artifact/test-report workflow, signing/update guide and PR description. Existing push/PR workflows auto-run; no GitHub writes/Actions without explicit approval after concrete local validation.
 
 Audit findings/coverage: AUDIT_REPORT.md. Platform contracts/privacy: docs/PLATFORM_NOTES.md. No pending user approval blocks local work.
+
+## Stage4c1 checkpoint — history browsing
+- History now queries50+1 rows with full-database filters/source-ID search and Load50more; loading/error/empty states and scrollable wrapping filters. SessionCard now wraps vertically and labels actual recording/imported/legacy origins, without promoting old capacity as current health.
+- Session details query at most~360 representative session-linked readings per record update; closed sessions no longer reload from realtimeFlow. Preserve bucket discontinuities. Null/deleted session has explicit unavailable state. Legacy records no longer borrow unrelated time-overlapping samples or claim observed zero-duration/counter quality. Stored legacy capacity is labeled undocumented.
+- Four JVM evidence/format regressions and two Android query tests added. Actual host DAO SQL passes paging across125 records, filters, bounded projections and hidden-gap preservation. New strings await4c localization. Gradle JVM tests/Android compilation PASSED2m38s (`/tmp/batstats-stage4c1-tests.log`),86 tests/0fail/error/skip. Android browse tests compile only. Diff checked; emulator stopped; no active build.

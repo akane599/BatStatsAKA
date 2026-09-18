@@ -32,6 +32,9 @@ interface BatteryDao {
     @Query("SELECT * FROM battery_samples WHERE sessionId = :sessionId ORDER BY elapsedMs, id")
     fun samplesForSession(sessionId: String): Flow<List<BatterySample>>
 
+    @Query("WITH buckets AS (SELECT MAX(id) AS representativeId, MAX(CASE WHEN observationId IS NULL OR boundaryReason IS NOT NULL OR currentNowUa IS NULL OR voltageMv IS NULL OR temperatureDeciC IS NULL THEN 1 ELSE 0 END) OR COUNT(DISTINCT observationId) > 1 AS discontinuity FROM battery_samples WHERE sessionId = :sessionId AND timestamp BETWEEN :from AND :to GROUP BY (timestamp - :from) / :bucketMs) SELECT s.timestamp, s.currentNowUa, s.voltageMv, s.temperatureDeciC, s.observationId, s.source, b.discontinuity FROM battery_samples s JOIN buckets b ON s.id = b.representativeId ORDER BY s.timestamp, s.id")
+    suspend fun sessionChartSamples(sessionId: String, from: Long, to: Long, bucketMs: Long): List<SessionChartReading>
+
     @Query("DELETE FROM battery_samples WHERE id NOT IN (SELECT id FROM battery_samples ORDER BY timestamp DESC LIMIT :limit)")
     suspend fun boundStorage(limit: Int = 100_000)
 
@@ -84,6 +87,9 @@ interface SessionDao {
 
     @Query("SELECT * FROM charge_sessions ORDER BY startTime DESC LIMIT :limit OFFSET :offset")
     fun sessionsPaged(limit: Int, offset: Int): Flow<List<ChargeSession>>
+
+    @Query("SELECT * FROM charge_sessions WHERE (:type IS NULL OR type = :type) AND (:query = '' OR instr(lower(sessionId), lower(:query)) > 0 OR instr(lower(source), lower(:query)) > 0) ORDER BY startTime DESC, sessionId LIMIT :limit")
+    fun filteredSessions(type: SessionType?, query: String, limit: Int): Flow<List<ChargeSession>>
 
     @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
     fun session(id: String): Flow<ChargeSession?>

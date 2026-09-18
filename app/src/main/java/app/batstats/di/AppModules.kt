@@ -95,5 +95,5 @@ val appModule = module {
     viewModel { DataViewModel(get(), androidContext()) }
     viewModel { DrainStatsViewModel(get()) }
 
-    viewModel { (sessionId: String) -> SessionDetailsViewModel(androidApplication(), get(), get(), sessionId) }
+    viewModel { (sessionId: String) -> SessionDetailsViewModel(get(), get(), sessionId) }
 }

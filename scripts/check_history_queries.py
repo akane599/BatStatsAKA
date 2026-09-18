@@ -50,3 +50,28 @@ with sqlite3.connect(':memory:') as db:
     assert db.execute('SELECT COUNT(*) FROM charge_sessions').fetchone()[0] == 3, 'Session bound not enforced'
     assert db.execute('SELECT sessionId FROM charge_sessions WHERE activeKey=1').fetchone()[0] == '0', 'Old active session was evicted'
 print('PASS actual DAO SQL: source-separated charts, positive local IDs, unique points/rollback, overlapping windows, bounded sessions retaining active state')
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for i in range(125):
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,source) VALUES(?,?,?,?,?)",
+                   (str(i), 'CHARGE' if i == 0 else 'DISCHARGE', i * 1000, i * 1000, 'import:saved_origin' if i == 0 else 'BatteryManager observed interval'))
+    args = {'type': None, 'query': '', 'limit': 51}
+    assert len(db.execute(query('filteredSessions'), args).fetchall()) == 51
+    args['limit'] = 151
+    assert len(db.execute(query('filteredSessions'), args).fetchall()) == 125, 'Older history is inaccessible'
+    args.update({'type': 'CHARGE', 'query': 'SAVED_', 'limit': 51})
+    assert [r['sessionId'] for r in db.execute(query('filteredSessions'), args)] == ['0'], 'Filter only searched recent page or mishandled literal underscore'
+    for i in range(1001):
+        db.execute("INSERT INTO battery_samples(timestamp,status,screenOn,sessionId,observationId,currentNowUa,voltageMv,temperatureDeciC,boundaryReason) VALUES(?,3,1,'chart','o',?,4000,250,?)",
+                   (i * 1000, None if i == 400 else -123, 'interrupted' if i == 501 else None))
+    db.execute("INSERT INTO battery_samples(timestamp,status,screenOn,sessionId,currentNowUa) VALUES(900000,3,1,'foreign',999999)")
+    rows = db.execute(query('sessionChartSamples'), {'sessionId': 'chart', 'from': 0, 'to': 1000000, 'bucketMs': 1000000 // 360 + 1}).fetchall()
+    assert len(rows) <= 361, 'Session chart was unbounded'
+    assert all(r['currentNowUa'] != 999999 for r in rows), 'Session chart mixed unrelated time-overlapping readings'
+    assert sum(r['discontinuity'] for r in rows) >= 2, 'Downsampling hid missing samples or explicit gaps'
+print('PASS actual history UI queries: paging/filter across125 records, bounded session-only charts preserving discontinuities')

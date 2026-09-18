@@ -16,5 +16,14 @@ fun formatDuration(ms: Long): String {
         else -> "${seconds}s"
     }
 }
-fun formatDrainRate(rate: Double?): String = rate?.let { String.format(Locale.getDefault(), "%.0f mA", it) } ?: "—"
-fun formatCharge(mah: Double?): String = mah?.let { String.format(Locale.getDefault(), "%.1f mAh", it) } ?: "—"
+/** Two significant digits for small rates avoid turning nonzero drain into a displayed zero. */
+fun formatDrainRate(rate: Double?): String {
+    val value = rate?.takeIf(Double::isFinite) ?: return "—"
+    val pattern = if (kotlin.math.abs(value) in 0.0..<1.0 && value != 0.0) "%.2g mA" else "%.0f mA"
+    return String.format(Locale.getDefault(), pattern, if (value == 0.0) 0.0 else value)
+}
+fun formatCharge(mah: Double?): String {
+    val value = mah?.takeIf(Double::isFinite) ?: return "—"
+    val pattern = if (kotlin.math.abs(value) in 0.0..<0.1 && value != 0.0) "%.1g mAh" else "%.1f mAh"
+    return String.format(Locale.getDefault(), pattern, if (value == 0.0) 0.0 else value)
+}
