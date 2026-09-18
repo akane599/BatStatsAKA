@@ -17,29 +17,41 @@ batstats_hardware="$(adb shell getprop ro.hardware | tr -d '\r')"
   echo 'Android has not completed boot; no device tests were started.' >&2
   exit 1
 }
+batstats_page_size="$(adb shell getconf PAGE_SIZE | tr -d '\r')"
+[[ "$batstats_page_size" == 4096 || "$batstats_page_size" == 16384 ]] || {
+  echo "Unexpected Android page size: $batstats_page_size" >&2; exit 1
+}
+if [[ -n "${BATSTATS_EXPECTED_PAGE_SIZE:-}" && "$batstats_page_size" != "$BATSTATS_EXPECTED_PAGE_SIZE" ]]; then
+  echo "Expected $BATSTATS_EXPECTED_PAGE_SIZE-byte pages, found $batstats_page_size; no tests started." >&2
+  exit 1
+fi
+batstats_report_group="${BATSTATS_REPORT_GROUP:-standard}"
+[[ "$batstats_report_group" =~ ^[a-z0-9-]+$ ]] || { echo 'Invalid device report group.' >&2; exit 1; }
+batstats_report_dir="app/build/reports/device-validation/$batstats_report_group"
 # These are only this script's generated reports and test screenshots. A rerun must
 # not inherit old images or nest a previous phase's results inside the new report.
-rm -rf app/build/reports/device-validation
+rm -rf "$batstats_report_dir"
 rm -rf app/build/outputs/connected_android_test_additional_output
-mkdir -p app/build/reports/device-validation
+mkdir -p "$batstats_report_dir"
+printf 'api=36\nhardware=%s\npage_size=%s\n' "$batstats_hardware" "$batstats_page_size" > "$batstats_report_dir/device-info.txt"
 adb shell rm -rf /sdcard/Download/batstats-validation-screenshots
 batstats_phase=ordinary
 collect_screenshots() {
-  adb pull /sdcard/Download/batstats-validation-screenshots app/build/reports/device-validation/ >/dev/null 2>&1 || true
+  adb pull /sdcard/Download/batstats-validation-screenshots "${batstats_report_dir}/" >/dev/null 2>&1 || true
   # AGP can uninstall the app before this shell regains control. Its additional-output
   # collector copies screenshots before uninstalling, including after failed tests.
   local collected=app/build/outputs/connected_android_test_additional_output
   if [[ -d "$collected" ]]; then
-    mkdir -p "app/build/reports/device-validation/${batstats_phase}-screenshots"
-    cp -R "$collected"/. "app/build/reports/device-validation/${batstats_phase}-screenshots/"
+    mkdir -p "${batstats_report_dir}/${batstats_phase}-screenshots"
+    cp -R "$collected"/. "${batstats_report_dir}/${batstats_phase}-screenshots/"
   fi
 }
 trap collect_screenshots EXIT
 run_prebuilt_phase() {
   local phase="$1"
   shift
-  local report="app/build/reports/device-validation/${phase}-instrumentation.txt"
-  adb shell am instrument -w -r "$@" \
+  local report="${batstats_report_dir}/${phase}-instrumentation.txt"
+  adb shell am instrument -w -r -e expectedPageSize "$batstats_page_size" "$@" \
     org.mlm.batstats.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$report" || return 1
   # adb can exit successfully even when the test runner crashed or assertions failed.
   python3 scripts/check_instrumentation_result.py "$report"
@@ -50,13 +62,14 @@ run_gradle_phase() {
   rm -rf app/build/outputs/androidTest-results app/build/reports/androidTests \
     app/build/outputs/connected_android_test_additional_output
   ./gradlew :app:connectedDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace \
+    -Pandroid.testInstrumentationRunnerArguments.expectedPageSize="$batstats_page_size" \
     -Pandroid.testInstrumentationRunnerArguments.additionalTestOutputDir=/sdcard/Download/batstats-validation-screenshots \
     "$@" || result=$?
   if [[ -d app/build/outputs/androidTest-results ]]; then
-    cp -R app/build/outputs/androidTest-results "app/build/reports/device-validation/${batstats_phase}-results" || return 1
+    cp -R app/build/outputs/androidTest-results "${batstats_report_dir}/${batstats_phase}-results" || return 1
   fi
   if [[ -d app/build/reports/androidTests ]]; then
-    cp -R app/build/reports/androidTests "app/build/reports/device-validation/${batstats_phase}-html" || return 1
+    cp -R app/build/reports/androidTests "${batstats_report_dir}/${batstats_phase}-html" || return 1
   fi
   collect_screenshots || return 1
   return "$result"
@@ -87,5 +100,5 @@ else
   echo 'Shizuku setup failed; integration assertions could not run.' >&2
 fi
 printf 'ordinary_exit=%s\nshizuku_exit=%s\n' "$batstats_ordinary_result" "$batstats_shizuku_result" \
-  | tee app/build/reports/device-validation/phase-status.txt
+  | tee ${batstats_report_dir}/phase-status.txt
 [[ "$batstats_ordinary_result" == 0 && "$batstats_shizuku_result" == 0 ]]

@@ -91,6 +91,18 @@ jobs:
           ram-size: 2048M
           disable-animations: true
           script: bash scripts/check_android_device.sh
+      - name: Android 16 with 16 KiB pages
+        if: inputs.run_android_tests
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 36
+          target: google_apis_ps16k
+          arch: x86_64
+          avd-name: batstats16k
+          profile: pixel_2
+          ram-size: 2048M
+          disable-animations: true
+          script: BATSTATS_REPORT_GROUP=16k BATSTATS_EXPECTED_PAGE_SIZE=16384 bash scripts/check_android_device.sh --prebuilt
       - name: Record APK checksums and certificates
         run: |
           mkdir -p artifacts
