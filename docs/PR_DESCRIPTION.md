@@ -13,11 +13,12 @@ Build preparation includes separate debug and optimized nondebug Preview package
 ## Validation at this draft checkpoint
 
 - 94 JVM regression cases pass in each Debug and Preview configuration, with no failures/skips; all25 Android test methods compile. These are synthetic/host checks, not physical measurements.
+- Six synthetic instrumentation-result parser regressions pass; prebuilt ADB execution rejects empty, failed, skipped, crashed or incomplete runs.
 - Host SQLite checks pass migrations, identity/deduplication, history paging and bounded chart queries.
 - Fresh Debug, nondebuggable/minified Preview and Android test APKs assembled from the current source; universal signatures and checksums verified (source commit dd7f2c0).
 - APK ZIP/native LOAD alignment passes for16KiB; graphics-path RELRO-end warning remains a runtime-validation limitation (see VALIDATION).
 - Resource completeness/format checks and direct AAPT2 compilation pass for493 Spanish and493 Turkish strings. Workflow actionlint passes.
-- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. This remains a draft while those device checks are pending. Local software-emulator startup is exceptionally slow; baseline installation was rejected because Android was still booting. No app compatibility conclusion is drawn from that host limitation.
+- Full Debug/Preview lint passes with zero errors and201/200 reviewed warnings. Actual Android16 UI/screenshots and Shizuku execution remain pending. This remains a draft while those device checks are pending. Local software emulation did not complete boot during approximately68minutes; both baseline installation attempts were rejected. The only returned screenshot was a blank background, and no app was installed. The task emulator has been stopped. No app compatibility conclusion is drawn from that host limitation.
 
 ## Limits and delivery
 
