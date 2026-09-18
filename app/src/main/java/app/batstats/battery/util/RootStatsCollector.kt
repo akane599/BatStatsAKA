@@ -1,311 +1,86 @@
 package app.batstats.battery.util
 
 import android.os.SystemClock
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.File
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 
-/**
- * Collects root-only battery statistics.
- * These require actual root access, not just Shizuku/ADB.
- */
+/** Curated, bounded reads execute inside su; app-UID File access is not a root read. */
 object RootStatsCollector {
-
-    private const val TAG = "RootStatsCollector"
-    private const val ROOT_PROBE_TIMEOUT_MS = 4_000L
-    private const val CMD_TIMEOUT_MS = 20_000L
-
-    private const val NEGATIVE_CACHE_MS = 60_000L
-
-    private val rootProbeLock = Mutex()
-
-    @Volatile
-    private var cachedRoot: Boolean? = null
-
-    @Volatile
-    private var cachedRootAt = 0L
-
-    data class KernelBatteryInfo(
-        val technology: String?,
-        val cycleCount: Int?,
-        val chargeFullDesign: Long?, // μAh
-        val chargeFull: Long?, // μAh (actual current capacity)
-        val chargeNow: Long?, // μAh
-        val currentNow: Long?, // μA
-        val voltageNow: Int?, // μV
-        val tempNow: Int?, // 0.1°C
-        val health: String?,
-        val status: String?,
-        val capacityLevel: String?,
-        val timeToEmptyNow: Long?, // secs
-        val timeToFullNow: Long?, // secs
-        val batteryAge: Double? // percentage of design capacity
-    )
-
-    data class KernelWakelockInfo(
-        val name: String,
-        val count: Int,
-        val expireCount: Int,
-        val wakeCount: Int,
-        val activeCount: Int,
-        val totalTime: Long, // nanosecs
-        val sleepTime: Long, // nanosecs
-        val maxTime: Long, // nanosecs
-        val lastChange: Long // nanosecs
-    )
-
-    data class CpuInfo(
-        val cluster: Int,
-        val currentFreq: Long, // kHz
-        val minFreq: Long,
-        val maxFreq: Long,
-        val governor: String,
-        val timeInState: Map<Long, Long> // freq -> time in jiffies
-    )
-
-    data class ThermalZone(
-        val name: String,
-        val type: String,
-        val tempMilliC: Int,
-        val tripPoints: List<TripPoint>
-    )
-
-    data class TripPoint(
-        val type: String,
-        val tempMilliC: Int
-    )
+    private val probeLock = Mutex()
+    private val readLock = Mutex()
+    @Volatile private var cachedRoot: Boolean? = null
+    @Volatile private var cachedAt = 0L
+    private val _errors = MutableStateFlow<Map<String, String>>(emptyMap())
+    val errors = _errors.asStateFlow()
+    private val _collectedAt = MutableStateFlow<Map<String, Long>>(emptyMap())
+    val collectedAt = _collectedAt.asStateFlow()
 
     suspend fun isRootAvailable(): Boolean {
-        cachedRoot?.let { cached ->
-            if (cached || SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) return cached
-        }
-        return rootProbeLock.withLock {
-            cachedRoot?.let { cached ->
-                if (cached || SystemClock.elapsedRealtime() - cachedRootAt < NEGATIVE_CACHE_MS) {
-                    return@withLock cached
-                }
-            }
-            val available = withContext(Dispatchers.IO) {
-                exec("id", ROOT_PROBE_TIMEOUT_MS)?.contains("uid=0") == true
-            }
-            cachedRoot = available
-            cachedRootAt = SystemClock.elapsedRealtime()
+        cachedRoot?.let { if (SystemClock.elapsedRealtime() - cachedAt < 60_000) return it }
+        return probeLock.withLock {
+            cachedRoot?.let { if (SystemClock.elapsedRealtime() - cachedAt < 60_000) return@withLock it }
+            val result = runInterruptible(Dispatchers.IO) { CommandOutput.run(listOf("su", "-c", "id"), 4_000, 4096) }
+            val available = result.successful && Regex("(?:^|\\s)uid=0(?:\\D|$)").containsMatchIn(result.output)
+            cachedRoot = available; cachedAt = SystemClock.elapsedRealtime()
             available
         }
     }
+    fun invalidateRootCache() { cachedRoot = null; cachedAt = 0 }
 
-    fun invalidateRootCache() {
-        cachedRoot = null
-        cachedRootAt = 0L
-    }
-
-    suspend fun resetBatteryStats(): Boolean = withContext(Dispatchers.IO) {
-        val result = exec("dumpsys batterystats --reset", CMD_TIMEOUT_MS) ?: return@withContext false
-        result.contains("Battery stats reset") || result.isBlank()
-    }
-
-    suspend fun getKernelBatteryInfo(): KernelBatteryInfo? = withContext(Dispatchers.IO) {
-        try {
-            val batteryPath = "/sys/class/power_supply/battery"
-            if (!File(batteryPath).exists()) return@withContext null
-
-            fun readFile(name: String): String? = try {
-                File("$batteryPath/$name").readText().trim()
-            } catch (_: Exception) { null }
-
-            val chargeFullDesign = readFile("charge_full_design")?.toLongOrNull()
-            val chargeFull = readFile("charge_full")?.toLongOrNull()
-
-            KernelBatteryInfo(
-                technology = readFile("technology"),
-                cycleCount = readFile("cycle_count")?.toIntOrNull(),
-                chargeFullDesign = chargeFullDesign,
-                chargeFull = chargeFull,
-                chargeNow = readFile("charge_now")?.toLongOrNull(),
-                currentNow = readFile("current_now")?.toLongOrNull(),
-                voltageNow = readFile("voltage_now")?.toIntOrNull(),
-                tempNow = readFile("temp")?.toIntOrNull(),
-                health = readFile("health"),
-                status = readFile("status"),
-                capacityLevel = readFile("capacity_level"),
-                timeToEmptyNow = readFile("time_to_empty_now")?.toLongOrNull(),
-                timeToFullNow = readFile("time_to_full_now")?.toLongOrNull(),
-                batteryAge = if (chargeFullDesign != null && chargeFull != null && chargeFullDesign > 0) {
-                    (chargeFull.toDouble() / chargeFullDesign) * 100
-                } else null
-            )
-        } catch (_: Exception) {
+    private suspend fun read(label: String, command: String): String? = readLock.withLock {
+        val result = runInterruptible(Dispatchers.IO) { CommandOutput.run(listOf("su", "-c", command), 20_000, 256 * 1024) }
+        _collectedAt.value = _collectedAt.value - label
+        if (!result.successful || result.output.isBlank()) {
+            _errors.value = _errors.value + (label to (result.error ?: "No supported readable kernel nodes"))
             null
+        } else {
+            _errors.value = _errors.value - label
+            _collectedAt.value = _collectedAt.value + (label to System.currentTimeMillis())
+            result.output
         }
     }
-
-    suspend fun getKernelWakelocks(): List<KernelWakelockInfo> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<KernelWakelockInfo>()
-        try {
-            val wakelockPath = when {
-                File("/sys/kernel/wakelock_stats").exists() -> "/sys/kernel/wakelock_stats"
-                File("/proc/wakelocks").exists() -> "/proc/wakelocks"
-                else -> null
-            }
-
-            if (wakelockPath != null) {
-                File(wakelockPath).bufferedReader().useLines { lines ->
-                    lines.drop(1).forEach { line ->
-                        val parts = line.split(Regex("\\s+"))
-                        if (parts.size >= 6) {
-                            result.add(
-                                KernelWakelockInfo(
-                                    name = parts[0].trim('"'),
-                                    count = parts.getOrNull(1)?.toIntOrNull() ?: 0,
-                                    expireCount = parts.getOrNull(2)?.toIntOrNull() ?: 0,
-                                    wakeCount = parts.getOrNull(3)?.toIntOrNull() ?: 0,
-                                    activeCount = parts.getOrNull(4)?.toIntOrNull() ?: 0,
-                                    totalTime = parts.getOrNull(5)?.toLongOrNull() ?: 0L,
-                                    sleepTime = parts.getOrNull(6)?.toLongOrNull() ?: 0L,
-                                    maxTime = parts.getOrNull(7)?.toLongOrNull() ?: 0L,
-                                    lastChange = parts.getOrNull(8)?.toLongOrNull() ?: 0L
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        } catch (_: Exception) { }
-        result.sortedByDescending { it.totalTime }
-    }
-
-    suspend fun getCpuInfo(): List<CpuInfo> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<CpuInfo>()
-        try {
-            val cpuDir = File("/sys/devices/system/cpu")
-            val cpuDirs = cpuDir.listFiles { f -> f.name.matches(Regex("cpu\\d+")) }
-                ?.sortedBy { it.name.removePrefix("cpu").toIntOrNull() ?: 0 }
-                ?: return@withContext result
-
-            val clusters = mutableMapOf<Int, MutableList<Int>>()
-            cpuDirs.forEach { cpu ->
-                val cpuNum = cpu.name.removePrefix("cpu").toIntOrNull() ?: return@forEach
-                val policyPath = File("${cpu.absolutePath}/cpufreq/affected_cpus")
-                val cluster = if (policyPath.exists()) {
-                    policyPath.readText().trim().split(" ").firstOrNull()?.toIntOrNull() ?: cpuNum
-                } else cpuNum
-                clusters.getOrPut(cluster) { mutableListOf() }.add(cpuNum)
-            }
-
-            clusters.forEach { (clusterNum, _) ->
-                val cpuPath = "/sys/devices/system/cpu/cpu$clusterNum/cpufreq"
-                if (!File(cpuPath).exists()) return@forEach
-
-                fun read(name: String) = try {
-                    File("$cpuPath/$name").readText().trim()
-                } catch (_: Exception) { null }
-
-                val timeInState = mutableMapOf<Long, Long>()
-                try {
-                    File("$cpuPath/stats/time_in_state").bufferedReader().useLines { lines ->
-                        lines.forEach { line ->
-                            val parts = line.split(" ")
-                            if (parts.size >= 2) {
-                                val freq = parts[0].toLongOrNull() ?: return@forEach
-                                val time = parts[1].toLongOrNull() ?: 0L
-                                timeInState[freq] = time
-                            }
-                        }
-                    }
-                } catch (_: Exception) { }
-
-                result.add(
-                    CpuInfo(
-                        cluster = clusterNum,
-                        currentFreq = read("scaling_cur_freq")?.toLongOrNull() ?: 0L,
-                        minFreq = read("scaling_min_freq")?.toLongOrNull() ?: 0L,
-                        maxFreq = read("scaling_max_freq")?.toLongOrNull() ?: 0L,
-                        governor = read("scaling_governor") ?: "unknown",
-                        timeInState = timeInState
-                    )
-                )
-            }
-        } catch (_: Exception) { }
-        result
-    }
-
-    suspend fun getThermalZones(): List<ThermalZone> = withContext(Dispatchers.IO) {
-        val result = mutableListOf<ThermalZone>()
-        try {
-            val thermalDir = File("/sys/class/thermal")
-            val zones = thermalDir.listFiles { f -> f.name.startsWith("thermal_zone") }
-                ?: return@withContext result
-
-            zones.forEach { zone ->
-                fun read(name: String) = try {
-                    File("${zone.absolutePath}/$name").readText().trim()
-                } catch (_: Exception) { null }
-
-                val tripPoints = mutableListOf<TripPoint>()
-                var i = 0
-                while (true) {
-                    val tripType = read("trip_point_${i}_type") ?: break
-                    val tripTemp = read("trip_point_${i}_temp")?.toIntOrNull() ?: break
-                    tripPoints.add(TripPoint(tripType, tripTemp))
-                    i++
-                }
-
-                result.add(
-                    ThermalZone(
-                        name = zone.name,
-                        type = read("type") ?: "unknown",
-                        tempMilliC = read("temp")?.toIntOrNull() ?: 0,
-                        tripPoints = tripPoints
-                    )
-                )
-            }
-        } catch (_: Exception) { }
-        result.sortedBy { it.name }
-    }
-
-    suspend fun runAsRoot(command: String): String? = withContext(Dispatchers.IO) {
-        exec(command, CMD_TIMEOUT_MS)
-    }
-
-    private fun exec(command: String, timeoutMs: Long): String? {
-        var process: Process? = null
-        var watchdog: Thread? = null
-        val timedOut = AtomicBoolean(false)
-        return try {
-            val p = ProcessBuilder("su", "-c", command)
-                .redirectErrorStream(true)
-                .start()
-            process = p
-            runCatching { p.outputStream.close() }
-
-            watchdog = Thread {
-                try {
-                    if (!p.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
-                        timedOut.set(true)
-                        Log.w(TAG, "su timed out after $timeoutMs ms: $command")
-                        p.destroyForcibly()
-                    }
-                } catch (_: InterruptedException) {
-                }
-            }.apply {
-                isDaemon = true
-                start()
-            }
-
-            val out = p.inputStream.bufferedReader().use(BufferedReader::readText)
-            if (timedOut.get()) null else out
-        } catch (e: Exception) {
-            Log.d(TAG, "su failed for '$command': ${e.message}")
-            null
-        } finally {
-            watchdog?.interrupt()
-            runCatching { process?.destroy() }
+    suspend fun getKernelBatteryInfo(): KernelStats.Battery? {
+        val raw = read("Battery", "cat /sys/class/power_supply/battery/uevent") ?: return null
+        return KernelStats.battery(raw, System.currentTimeMillis()).also {
+            if (it == null) _errors.value = _errors.value + ("Battery" to "Unrecognized battery uevent format")
         }
     }
+    suspend fun getCpuInfo(): List<KernelStats.Cpu> = read("CPU", CPU_COMMAND)?.let(KernelStats::cpu).orEmpty()
+    suspend fun getThermalZones(): List<KernelStats.Thermal> = read("Thermal", THERMAL_COMMAND)?.let(KernelStats::thermal).orEmpty()
+    suspend fun getKernelWakelocks(): List<KernelStats.Wakelock> = read("Wake sources", WAKE_COMMAND)?.let(KernelStats::wakelocks).orEmpty()
+
+    // Paths/field names are fixed. No caller-provided strings are interpolated into these scripts.
+    private val CPU_COMMAND = """
+        for p in /sys/devices/system/cpu/cpufreq/policy*; do
+          [ -d "${'$'}p" ] || continue
+          printf 'policy=%s\n' "${'$'}{p##*/}"
+          for f in scaling_cur_freq scaling_min_freq scaling_max_freq scaling_governor; do
+            [ -r "${'$'}p/${'$'}f" ] || continue
+            printf '%s=' "${'$'}f"; cat "${'$'}p/${'$'}f"
+          done
+          [ ! -r "${'$'}p/stats/time_in_state" ] || sed 's/^/state=/' "${'$'}p/stats/time_in_state"
+        done
+    """.trimIndent()
+    private val THERMAL_COMMAND = """
+        for p in /sys/class/thermal/thermal_zone*; do
+          [ -d "${'$'}p" ] || continue
+          printf 'zone=%s\n' "${'$'}{p##*/}"
+          for f in type temp trip_point_*_type trip_point_*_temp; do
+            for n in "${'$'}p"/${'$'}f; do
+              [ -r "${'$'}n" ] || continue
+              printf '%s=' "${'$'}{n##*/}"; cat "${'$'}n"
+            done
+          done
+        done
+    """.trimIndent()
+    private val WAKE_COMMAND = """
+        for p in /sys/kernel/debug/wakeup_sources /d/wakeup_sources /proc/wakelocks; do
+          if [ -r "${'$'}p" ]; then printf 'source=%s\n' "${'$'}p"; cat "${'$'}p"; exit ${'$'}?; fi
+        done
+        exit 1
+    """.trimIndent()
 }

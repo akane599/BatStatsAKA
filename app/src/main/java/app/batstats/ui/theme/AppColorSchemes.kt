@@ -32,7 +32,7 @@ val AurDarkTheme = darkColorScheme(
     onPrimaryContainer = Color(0xFF70F5D9),
 
     secondary = ThemeColors.AuroraPurple,
-    onSecondary = Color(0xFF3B1F70),
+    onSecondary = Color(0xFF170038),
     secondaryContainer = Color(0xFF523895),
     onSecondaryContainer = Color(0xFFE4D4FF),
 
@@ -54,7 +54,7 @@ val AurDarkTheme = darkColorScheme(
     surfaceVariant = ThemeColors.DarkSurfaceVariant,
     onSurfaceVariant = Color(0xFFC4C7CE),
 
-    outline = Color(0xFF3E4759),
+    outline = Color(0xFF7F8CA3),
     outlineVariant = Color(0xFF2B3142),
 
     scrim = Color(0xFF000000),
@@ -72,20 +72,20 @@ val AurDarkTheme = darkColorScheme(
     surfaceContainerHigh = Color(0xFF1E2435),
     surfaceContainerHighest = Color(0xFF2A3040),
 
-    primaryFixed = ThemeColors.AuroraTeal,
-    onPrimaryFixed = Color(0xFF003830),
-    primaryFixedDim = Color(0xFF005047),
-    onPrimaryFixedVariant = Color(0xFF70F5D9),
+    primaryFixed = Color(0xFF62F4D6),
+    onPrimaryFixed = Color(0xFF00201A),
+    primaryFixedDim = ThemeColors.AuroraTeal,
+    onPrimaryFixedVariant = Color(0xFF004D41),
 
-    secondaryFixed = ThemeColors.AuroraPurple,
-    onSecondaryFixed = Color(0xFF3B1F70),
-    secondaryFixedDim = Color(0xFF523895),
-    onSecondaryFixedVariant = Color(0xFFE4D4FF),
+    secondaryFixed = Color(0xFFD7BAFF),
+    onSecondaryFixed = Color(0xFF21005D),
+    secondaryFixedDim = Color(0xFFBA9AF7),
+    onSecondaryFixedVariant = Color(0xFF432171),
 
-    tertiaryFixed = ThemeColors.AuroraGreen,
-    onTertiaryFixed = Color(0xFF003A2B),
-    tertiaryFixedDim = Color(0xFF005141),
-    onTertiaryFixedVariant = Color(0xFF8CF5D3)
+    tertiaryFixed = Color(0xFF8CF5D3),
+    onTertiaryFixed = Color(0xFF002117),
+    tertiaryFixedDim = ThemeColors.AuroraGreen,
+    onTertiaryFixedVariant = Color(0xFF005141)
 )
 
 val AurLightTheme = lightColorScheme(
@@ -135,20 +135,20 @@ val AurLightTheme = lightColorScheme(
     surfaceContainerHigh = Color(0xFFDDE3EE),
     surfaceContainerHighest = Color(0xFFD1D9E6),
 
-    primaryFixed = ThemeColors.AuroraTeal,
-    onPrimaryFixed = Color(0xFF003830),
-    primaryFixedDim = Color(0xFF005047),
-    onPrimaryFixedVariant = Color(0xFF70F5D9),
+    primaryFixed = Color(0xFF62F4D6),
+    onPrimaryFixed = Color(0xFF00201A),
+    primaryFixedDim = ThemeColors.AuroraTeal,
+    onPrimaryFixedVariant = Color(0xFF004D41),
 
-    secondaryFixed = ThemeColors.AuroraPurple,
-    onSecondaryFixed = Color(0xFF3B1F70),
-    secondaryFixedDim = Color(0xFF523895),
-    onSecondaryFixedVariant = Color(0xFFE4D4FF),
+    secondaryFixed = Color(0xFFD7BAFF),
+    onSecondaryFixed = Color(0xFF21005D),
+    secondaryFixedDim = Color(0xFFBA9AF7),
+    onSecondaryFixedVariant = Color(0xFF432171),
 
-    tertiaryFixed = ThemeColors.AuroraGreen,
-    onTertiaryFixed = Color(0xFF003A2B),
-    tertiaryFixedDim = Color(0xFF005141),
-    onTertiaryFixedVariant = Color(0xFF8CF5D3)
+    tertiaryFixed = Color(0xFF8CF5D3),
+    onTertiaryFixed = Color(0xFF002117),
+    tertiaryFixedDim = ThemeColors.AuroraGreen,
+    onTertiaryFixedVariant = Color(0xFF005141)
 )
 
 

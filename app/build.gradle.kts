@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
 }
 
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
 kotlin {
     jvmToolchain(21)
     compilerOptions {
@@ -29,12 +31,13 @@ android {
     defaultConfig {
         applicationId = "org.mlm.batstats"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 734
-        versionName = "6.2.6"
+        targetSdk = 36
+        versionCode = 736
+        versionName = "6.2.7-dev"
+        manifestPlaceholders["appLabel"] = "BatStats"
 
         androidResources {
-            localeFilters += setOf("en", "ar", "de", "es-rES", "es-rUS", "fr", "hr", "hu", "in", "it", "ja", "pl", "pt-rBR", "ru-rRU", "sv", "tr", "uk", "zh")
+            localeFilters += setOf("en", "es", "tr")
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -61,6 +64,18 @@ android {
     }
 
     signingConfigs {
+        val previewVariables = listOf("PREVIEW_KEYSTORE_PATH", "PREVIEW_STORE_PASSWORD", "PREVIEW_KEY_ALIAS", "PREVIEW_KEY_PASSWORD")
+        if (previewVariables.any { !System.getenv(it).isNullOrBlank() }) {
+            require(previewVariables.all { !System.getenv(it).isNullOrBlank() }) {
+                "Preview signing requires all four PREVIEW_* signing variables; see docs/BUILD_AND_INSTALL.md"
+            }
+            create("preview") {
+                storeFile = file(System.getenv("PREVIEW_KEYSTORE_PATH"))
+                storePassword = System.getenv("PREVIEW_STORE_PASSWORD")
+                keyAlias = System.getenv("PREVIEW_KEY_ALIAS")
+                keyPassword = System.getenv("PREVIEW_KEY_PASSWORD")
+            }
+        }
         create("release") {
             storeFile = file(System.getenv("KEYSTORE_PATH") ?: "${rootProject.projectDir}/release.keystore")
             storePassword = System.getenv("STORE_PASSWORD")
@@ -86,7 +101,15 @@ android {
             isDebuggable = true
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "BatStats Debug"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "BatStats Preview"
+            signingConfig = signingConfigs.findByName("preview") ?: signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
         }
     }
 
@@ -106,6 +129,15 @@ android {
 
 apkDist {
     artifactNamePrefix = "batstats"
+    // Keep distribution copies separate from AGP artifacts consumed by device tests/install tasks.
+    distDirectory.set(layout.buildDirectory.dir("outputs/distribution"))
+}
+
+androidComponents {
+    beforeVariants(selector().withBuildType("preview")) { variant ->
+        // AGP 9 defaults host tests to the instrumentation build type (debug).
+        variant.hostTests[com.android.build.api.variant.HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
+    }
 }
 
 // Configure all tasks that are instances of AbstractArchiveTask
@@ -129,9 +161,6 @@ dependencies {
     // Android lifecycle
     implementation(libs.lifecycle.viewmodel.ktx)
 
-    // Work Manager
-    implementation(libs.work.runtime.ktx)
-
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.material.icons.extended)
@@ -147,15 +176,14 @@ dependencies {
     implementation(libs.material3.android)
 
     // Compose dependencies
-    val composeBom = platform(libs.androidx.compose.bom)
+    // Settings UI otherwise upgrades Material3 alone to an alpha with an incompatible Style ABI.
+    // Its Material3 references are available in the stable BOM; enforce the same set in app/tests.
+    val composeBom = enforcedPlatform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.viewmodel.compose)
-    implementation(libs.navigation.compose)
-    implementation(libs.constraintlayout.compose.android)
-    implementation(libs.androidbrowserhelper)
     implementation(libs.androidx.datastore.preferences.core)
 
     // Shizuku
@@ -166,8 +194,16 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
-    // Testing
-//    androidTestImplementation(libs.androidx.ui.test.junit4)
+    // JVM regression tests and device integration/UI checks.
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(composeBom)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.androidx.ui.tooling)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 

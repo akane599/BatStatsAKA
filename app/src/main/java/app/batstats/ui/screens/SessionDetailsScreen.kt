@@ -1,159 +1,80 @@
 package app.batstats.ui.screens
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Share
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.batstats.R
+import app.batstats.battery.data.SessionEvidence
+import app.batstats.battery.drain.formatDrainRate
+import app.batstats.battery.drain.formatCharge
+import app.batstats.battery.drain.formatDuration
+import app.batstats.ui.components.ChartPoint
+import app.batstats.ui.components.TelemetryChart
+import app.batstats.ui.components.sessionTypeLabel
 import app.batstats.viewmodel.SessionDetailsViewModel
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.abs
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.util.*
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SessionDetailsScreen(
-    sessionId: String,
-    onBack: () -> Unit,
-    vm: SessionDetailsViewModel
-) {
-    val ui by vm.ui.collectAsState()
-
-    Scaffold(topBar = {
-        LargeTopAppBar(
-            title = { Text("Session details") },
-            navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-            actions = {
-//                IconButton(onClick = { /* share later */ }) { Icon(Icons.Outlined.Share, null) }
-//                IconButton(onClick = { /* export later */ }) { Icon(Icons.Outlined.Download, null) }
-            }
-        )
-    }) { pv ->
-        Column(
-            Modifier.padding(pv).fillMaxSize().padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            val dateTimeFormatter = remember(Locale.getDefault()) {
-                DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm", Locale.getDefault())
-            }
-            val startStr = remember(ui.start) {
-                Instant.ofEpochMilli(ui.start)
-                    .atZone(ZoneId.systemDefault())
-                    .format(dateTimeFormatter)
-            }
-            val endStr = remember(ui.end) {
-                ui.end?.let {
-                    Instant.ofEpochMilli(it)
-                        .atZone(ZoneId.systemDefault())
-                        .format(dateTimeFormatter)
-                } ?: "Active"
-            }
-
-            ElevatedCard {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("${ui.type} • ${ui.levelRange}", style = MaterialTheme.typography.titleMedium)
-                    Text("Start: $startStr", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("End: $endStr", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                        ui.capacityMah?.let {
-                            AssistChip(onClick = {}, label = { Text("~${it} mAh") })
-                        }
-                        ui.avgCurrent?.let {
-                            AssistChip(onClick = {}, label = { Text("${it / 1000} mA avg") })
-                        }
+fun SessionDetailsScreen(onBack: () -> Unit, vm: SessionDetailsViewModel) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    val recording by vm.recordingObservation.collectAsStateWithLifecycle()
+    val session = ui.session
+    val format = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
+    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.session_details)) }, navigationIcon = {
+        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back)) }
+    }, actions = { IconButton(onClick = vm::refresh, enabled = !ui.loading) { Icon(Icons.Outlined.Refresh, stringResource(R.string.refresh)) } }) }) { padding ->
+        LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            when {
+                ui.loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.history_loading)) }
+                ui.failed -> item {
+                    Text(stringResource(R.string.history_load_failed), color = MaterialTheme.colorScheme.error)
+                    OutlinedButton(onClick = vm::refresh) { Text(stringResource(R.string.retry)) }
+                }
+                session == null -> item { Text(stringResource(R.string.session_missing)) }
+                else -> {
+                    item {
+                        val coverageKnown = SessionEvidence.hasCoverage(session)
+                        Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(sessionTypeLabel(session.type), style = MaterialTheme.typography.titleLarge)
+                            Text("${session.startLevel?.let { "$it%" } ?: "—"} → ${session.endLevel?.let { "$it%" } ?: "—"}")
+                            Text(stringResource(R.string.session_start, format.format(Date(session.startTime))))
+                            Text(stringResource(R.string.session_last_evidence, format.format(Date(SessionEvidence.lastEvidence(session)))))
+                            if (SessionEvidence.isRecording(session, recording)) Text(stringResource(R.string.session_recording))
+                            else session.endTime?.let { Text(stringResource(R.string.session_end, format.format(Date(it)))) }
+                                ?: Text(stringResource(R.string.session_interrupted))
+                            Text(stringResource(if (session.source.startsWith("import:")) R.string.session_imported_source else R.string.session_source, session.source))
+                            if (!coverageKnown) Text(stringResource(R.string.session_legacy_help))
+                            else {
+                                Text(stringResource(R.string.session_observed, formatDuration(session.observedMs)))
+                                Text(stringResource(R.string.session_counter_coverage, formatDuration(session.counterCoveredMs), formatDuration(session.observedMs)))
+                                Text(stringResource(R.string.session_charge, formatCharge(session.deltaUah?.takeIf { session.counterCoveredMs > 0 }?.div(1000.0))))
+                                Text(stringResource(R.string.session_average, formatDrainRate(session.avgCurrentUa?.takeIf { session.counterCoveredMs >= 60_000 }?.let { abs(it / 1000.0) })))
+                                Text(stringResource(R.string.session_screen_times, formatDuration(session.screenOnMs), formatDuration(session.screenOffMs)))
+                            }
+                            // Preserve old capacity fields for inspection without endorsing their undocumented algorithm.
+                            session.estCapacityMah?.let { Text(stringResource(R.string.session_legacy_capacity, it), style = MaterialTheme.typography.bodySmall) }
+                            session.closeReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        } }
+                    }
+                    if (ui.points.isEmpty()) item { Text(stringResource(R.string.session_no_linked_samples)) }
+                    else {
+                        item { Text(stringResource(R.string.session_chart_sources, ui.points.map { it.source }.distinct().joinToString()), style = MaterialTheme.typography.bodySmall) }
+                        item { TelemetryChart(stringResource(R.string.session_net_current), "mA", ui.points.map { ChartPoint(it.timestamp, it.currentNowUa?.div(1000.0), it.observationId, it.discontinuity) }) }
+                        item { TelemetryChart(stringResource(R.string.session_voltage), "mV", ui.points.map { ChartPoint(it.timestamp, it.voltageMv?.toDouble(), it.observationId, it.discontinuity) }) }
+                        item { TelemetryChart(stringResource(R.string.session_temperature), "°C", ui.points.map { ChartPoint(it.timestamp, it.temperatureDeciC?.div(10.0), it.observationId, it.discontinuity) }) }
                     }
                 }
             }
-
-            val primaryColor = MaterialTheme.colorScheme.primary
-            val tertiaryColor = MaterialTheme.colorScheme.tertiary
-            val errorColor = MaterialTheme.colorScheme.error
-
-            ChartCard("Current (mA)") {
-                val values = ui.points.map { it.currentMa?.toFloat() ?: 0f }
-                drawSeries(values, primaryColor)
-            }
-            ChartCard("Voltage (mV)") {
-                val values = ui.points.map { it.voltageMv?.toFloat() ?: 0f }
-                drawSeries(values, tertiaryColor)
-            }
-            ChartCard("Temperature (°C)") {
-                val values = ui.points.map { it.tempC?.toFloat() ?: 0f }
-                drawSeries(values, errorColor)
-            }
-
-            AnimatedVisibility(visible = ui.points.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                Text(
-                    "No data points captured yet.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(4.dp)
-                )
-            }
         }
-    }
-}
-
-@Composable
-private fun ChartCard(
-    title: String,
-    drawBlock: DrawScope.() -> Unit
-) {
-    ElevatedCard {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            val scroll = rememberScrollState()
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .horizontalScroll(scroll)
-            ) {
-                Canvas(modifier = Modifier.width(1100.dp).height(180.dp)) {
-                    drawBlock()
-                }
-            }
-        }
-    }
-}
-
-private fun DrawScope.drawSeries(values: List<Float>, color: Color) {
-    if (values.isEmpty()) return
-    val count = values.size
-    val min = values.minOrNull() ?: 0f
-    val max = values.maxOrNull() ?: 1f
-    val hasRange = abs(max - min) > 1e-6f
-    val range = if (hasRange) (max - min) else 1f
-    val stepX = if (count > 1) size.width / (count - 1) else 0f
-
-    fun mapY(v: Float) = if (hasRange) {
-        size.height - ((v - min) / range) * size.height
-    } else size.height * 0.5f
-
-    var prev: Offset? = null
-    values.forEachIndexed { i, v ->
-        val x = if (count > 1) i * stepX else size.width * 0.5f
-        val p = Offset(x, mapY(v))
-        prev?.let {
-            drawLine(color = color, start = it, end = p, strokeWidth = 3f)
-        } ?: if (count == 1) {
-            drawCircle(color = color, radius = 4.dp.toPx(), center = p)
-        } else {
-
-        }
-        prev = p
     }
 }

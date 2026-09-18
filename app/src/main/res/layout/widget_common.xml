@@ -4,7 +4,7 @@
     android:id="@+id/root"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="16dp"
+    android:padding="10dp"
     android:background="@drawable/widget_background_gradient"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
@@ -19,7 +19,7 @@
             android:id="@+id/icon"
             android:layout_width="20dp"
             android:layout_height="20dp"
-            android:contentDescription="Battery icon"
+            android:importantForAccessibility="no"
             android:src="@drawable/ic_battery"
             android:layout_marginEnd="8dp"
             app:tint="#00D9B5" />
@@ -39,13 +39,14 @@
         android:id="@+id/value"
         android:textColor="#FFFFFF"
         android:textStyle="bold"
-        android:textSize="28sp"
+        android:textSize="24sp"
+        android:maxLines="2"
+        android:autoSizeTextType="uniform"
+        android:autoSizeMinTextSize="12sp"
+        android:autoSizeMaxTextSize="24sp"
+        android:autoSizeStepGranularity="1sp"
         android:fontFamily="sans-serif-black"
         android:layout_marginTop="8dp"
-        android:shadowColor="#00D9B5"
-        android:shadowDx="0"
-        android:shadowDy="0"
-        android:shadowRadius="10"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 

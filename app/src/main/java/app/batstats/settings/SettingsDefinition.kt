@@ -22,6 +22,7 @@ data class AppSettings(
 
     @Setting(
         title = "Monitoring Interval",
+        description = "Shorter intervals improve responsiveness and use more battery. Sampling does not wake the CPU.",
         category = General::class,
         type = Dropdown::class,
         options = ["5 seconds", "10 seconds", "30 seconds", "1 minute", "5 minutes"],
@@ -29,44 +30,21 @@ data class AppSettings(
     )
     val monitoringIntervalIndex: Int = 2,
 
-    @Setting(
-        title = "Show Persistent Notification",
-        category = General::class,
-        type = Toggle::class,
-        key = "show_notification"
-    )
+    @Persisted(key = "show_notification")
     val showNotification: Boolean = true,
 
-    @Setting(
-        title = "Show Drain Stats Notification",
-        description = "Show detailed drain statistics in notification (requires Shizuku, Root or ADB)",
-        category = General::class,
-        type = Toggle::class,
-        key = "show_drain_notification"
-    )
+    @Persisted(key = "show_drain_notification")
     val showDrainNotification: Boolean = false,
 
-    @Setting(
-        title = "Notification Style",
-        category = General::class,
-        type = Dropdown::class,
-        options = ["Minimal", "Compact", "Detailed"],
-        dependsOn = "showNotification",
-        key = "notification_style_index"
-    )
+    @Persisted(key = "notification_style_index")
     val notificationStyleIndex: Int = 1,
 
-    @Setting(
-        title = "Track Foreground Apps",
-        category = General::class,
-        type = Toggle::class,
-        key = "track_foreground_apps"
-    )
+    @Persisted(key = "track_foreground_apps")
     val trackForegroundApps: Boolean = true,
 
     @Setting(
         title = "Detailed Stats Interval",
-        description = "How often to collect detailed battery stats via Shizuku/Root/ADB.",
+        description = "Privileged collection is more expensive than ordinary readings. Longer intervals reduce overhead.",
         category = General::class,
         type = Dropdown::class, // Timepicker might be better later (but does not store in secs)
         options = ["1 minute", "5 minutes", "15 minutes", "30 minutes"],
@@ -141,7 +119,7 @@ data class AppSettings(
 
     @Setting(
         title = "Discharge Threshold",
-        description = "Alert when discharge exceeds this (mA)",
+        description = "Alert after at least 3 high-current readings over at least 1 minute (mA). This is not per-app energy attribution.",
         category = Notifications::class,
         type = Slider::class,
         min = 200f, max = 2000f, step = 50f,
@@ -158,20 +136,10 @@ data class AppSettings(
     )
     val chargingCompleteAlert: Boolean = true,
 
-    @Setting(
-        title = "Alert Sound",
-        category = Notifications::class,
-        type = Toggle::class,
-        key = "alert_sound_enabled"
-    )
+    @Persisted(key = "alert_sound_enabled")
     val alertSoundEnabled: Boolean = true,
 
-    @Setting(
-        title = "Alert Vibration",
-        category = Notifications::class,
-        type = Toggle::class,
-        key = "alert_vibration_enabled"
-    )
+    @Persisted(key = "alert_vibration_enabled")
     val alertVibrationEnabled: Boolean = true,
 
     // DISPLAY
@@ -226,17 +194,13 @@ data class AppSettings(
     )
     val temperatureUnitIndex: Int = 0,
 
-    @Setting(
-        title = "Compact Stats View",
-        category = Display::class,
-        type = Toggle::class,
-        key = "compact_stats_view"
-    )
+    @Persisted(key = "compact_stats_view")
     val compactStatsView: Boolean = false,
 
     // DATA
     @Setting(
         title = "Data Retention",
+        description = "Also applies to imported history. Storage is periodically trimmed to 100,000 samples and 10,000 sessions, including with Forever selected.",
         category = Data::class,
         type = Dropdown::class,
         options = ["1 week", "1 month", "3 months", "6 months", "1 year", "Forever"],
@@ -252,21 +216,10 @@ data class AppSettings(
     )
     val autoCleanupEnabled: Boolean = true,
 
-    @Setting(
-        title = "Export Format",
-        category = Data::class,
-        type = Dropdown::class,
-        options = ["CSV", "JSON"],
-        key = "export_format_index"
-    )
+    @Persisted(key = "export_format_index")
     val exportFormatIndex: Int = 0,
 
-    @Setting(
-        title = "Include Raw Samples",
-        category = Data::class,
-        type = Toggle::class,
-        key = "export_include_raw_samples"
-    )
+    @Persisted(key = "export_include_raw_samples")
     val exportIncludeRawSamples: Boolean = false,
 
     // PERSISTED STATE

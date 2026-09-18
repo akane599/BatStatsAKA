@@ -1,0 +1,66 @@
+package app.batstats.battery.drain
+
+import app.batstats.battery.measurement.*
+import app.batstats.support.EnglishStrings
+import org.junit.Assert.*
+import org.junit.Test
+import java.util.Locale
+import java.text.DateFormat
+import java.util.Date
+
+class MonitoringTextTest {
+    private val labels = MonitoringText(EnglishStrings::get)
+    private fun point(t: Long, counter: Long?, screen: Boolean = true, boundary: Boundary = Boundary.SAMPLE) =
+        Observation(1_000_000 + t, t, t, 80, counter, -60_000, 4000, PowerState.DISCHARGING, screen, false, "observation", boundary = boundary)
+    private fun english(block: () -> Unit) {
+        val old = Locale.getDefault()
+        try { Locale.setDefault(Locale.US); block() } finally { Locale.setDefault(old) }
+    }
+    @Test fun screenNeverTurnedOffDoesNotCreateAnIdleRateInNotificationText() = english {
+        val engine = ObservationEngine()
+        engine.accept(point(0, 4_000_000))
+        val summary = engine.accept(point(60_000, 3_999_000))
+        val text = labels.expanded(summary)
+        assertTrue(text.contains("Screen on: 60 mA · 1.0 mAh · 1m 0s"))
+        assertTrue(text.contains("Screen off: — · — · 0s"))
+        assertFalse(text.contains("Idle:"))
+        assertTrue(text.contains("Discharge: 60 mA · 1.0 mAh · 1m 0s"))
+    }
+    @Test fun missingCountersAndResetNeverRetainPreviousConsumption() = english {
+        val engine = ObservationEngine()
+        engine.accept(point(0, 4_000_000))
+        engine.accept(point(60_000, 3_999_000))
+        engine.reset()
+        engine.accept(point(120_000, null))
+        val summary = engine.accept(point(180_000, null))
+        assertEquals(1_120_000L, summary.startedAt)
+        assertTrue(labels.expanded(summary).contains("Discharge: — · — · 1m 0s"))
+        assertEquals("Charge unavailable", labels.coverage(summary.discharge))
+    }
+    @Test fun noObservationAndMeasuredZeroRemainDistinctForCpuAndDoze() {
+        val empty = ObservationSummary()
+        assertTrue(labels.cpuSuspend(empty).contains("—"))
+        assertTrue(labels.doze(empty).contains("—"))
+        val observed = empty.copy(cpuObservedMs = 60_000)
+        assertEquals("0s / 1m 0s observed", labels.cpuSuspend(observed))
+        assertEquals("0s", labels.doze(observed))
+    }
+    @Test fun compactNotificationKeepsTheWindowFirstAndPartialCounterCoverageVisible() = english {
+        val engine = ObservationEngine()
+        listOf(point(0, 4_000_000), point(60_000, 3_999_000), point(120_000, null),
+            point(180_000, 3_997_000), point(240_000, 3_996_000)).forEach { engine.accept(it) }
+        val summary = engine.summary
+        val text = labels.expanded(summary)
+        assertTrue(text.startsWith(labels.window(summary)))
+        assertTrue(text.contains("Counter coverage 2m 0s / 4m 0s"))
+        assertTrue(text.contains("Screen off: — · — · 0s\nNo period observed"))
+        assertTrue(text.contains(labels.cpuSuspend(summary)))
+    }
+    @Test fun windowIncludesBothDatesWhenObservationCrossesMidnight() = english {
+        val first = point(0, 4_000_000)
+        val last = point(86_400_000, 3_999_000)
+        val summary = ObservationSummary(startedAt = first.wallMs, latest = last)
+        val format = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT)
+        assertEquals("Observed ${format.format(Date(first.wallMs))}–${format.format(Date(last.wallMs))}", labels.window(summary))
+    }
+}

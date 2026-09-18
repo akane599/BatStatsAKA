@@ -1,14 +1,15 @@
 package app.batstats.battery
 
 import android.app.Application
+import android.util.Log
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.di.appModule
-import app.batstats.insights.ForegroundDrainTracker
 import app.batstats.settings.AppSettings
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.managers.MigrationManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -33,9 +34,18 @@ class BatteryApp : Application() {
 
         shizukuBridge.warmUp()
 
-        // Run migrations
+        // Run migrations. This is a root coroutine: an uncaught failure here reaches
+        // Android's default handler and kills the process during startup, before any
+        // screen or reading exists. A failed migration must leave the stored values
+        // untouched and the app usable, so it is reported, not fatal.
         appScope.launch {
-            migrationManager.migrate()
+            try {
+                migrationManager.migrate()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                Log.w("BatteryApp", "Settings migration failed (${t.javaClass.simpleName}); stored values are unchanged", t)
+            }
         }
     }
 }
@@ -47,5 +57,4 @@ object BatteryGraph : KoinComponent {
     val db: BatteryDatabase by inject()
     val repo: BatteryRepository by inject()
     val settings: SettingsRepository<AppSettings> by inject()
-    val drainTracker: ForegroundDrainTracker by inject()
 }
