@@ -49,7 +49,7 @@ jobs:
       - uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
       - uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
       - name: Install compile SDK
-        run: sdkmanager 'platforms;android-37' 'build-tools;36.0.0' 'platform-tools'
+        run: sdkmanager 'platforms;android-37.0' 'build-tools;36.0.0' 'platform-tools'
       - name: Configure optional stable preview signing
         env:
           PREVIEW_KEYSTORE_BASE64: ${{ secrets.PREVIEW_KEYSTORE_BASE64 }}

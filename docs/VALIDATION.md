@@ -1,6 +1,6 @@
 # Validation record
 
-Results below are local execution, not GitHub Actions or physical Samsung validation.
+Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
 | Stage | Actual checks | Result |
 | --- | --- | --- |
@@ -61,3 +61,7 @@ The second baseline installation also returned `Error: device is still booting` 
 Stage5h runner preparation: `--prebuilt` mode installs existing Debug/test APKs and executes the same ordinary/Shizuku phases without Gradle. Six Python host regressions for instrumentation result parsing pass (`python3 -B -m unittest discover -s scripts -p 'test_*.py'`); these simulate runner output and are not Android execution. Bash syntax, actionlint and diff checks pass. Boot screenshot attempt timed out90s with an empty output file; graphics log/backtrace requests timed out45s. Window/activity dumps did return: launcher RESUMED/reportedDrawn and window policy systemBooted=true, but sys.boot_completed was still absent. No current app was installed or visually reviewed.
 
 Final local emulator checkpoint: approximately68minutes without sys.boot_completed. Animation settings completed, but no application installed. A second screenshot eventually returned a384×800 blank pale background; visually inspected, and not presented as a BatStats screenshot. Window dump reported its10000ms service timeout. Stopped the task emulator through `adb emu kill`; it acknowledged shutdown, saved no snapshot, then its wrapper returned139. Task-owned expired crash_dump64 was terminated after the diagnostic timeout; no app/system-server process was deliberately killed. Userdata/configuration/logs remain available. These are emulator/environment failures, not failed BatStats assertions. Runtime/visual/Shizuku validation remains open; prepared hardware-accelerated CI awaits explicit GitHub approval.
+
+Approved hosted stage6a: branch91c6053 published and draft PR1 opened. CI push35320355939 and PR35320370581 both failed at Install compile SDK: `Failed to find package platforms;android-37`. No builds or device tests ran and no APKs were uploaded. The local installed SDK is platforms;android-37.0; workflow install argument corrected to that exact package. Existing Dependabot run35320371541 failed at startup separately; no job logs were available. No repository settings changed.
+
+SDK correction reproduced locally: `sdkmanager 'platforms;android-37'` exit1/unknown package; `sdkmanager 'platforms;android-37.0'` exit0. actionlint/diff checks pass. Dependabot's public run annotation confirms a reusable-workflow permission mismatch (requested contents/pull-requests write exceeds caller read/none); it is separate from app CI. No privilege expansion or setting change attempted.

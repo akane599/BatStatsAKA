@@ -57,6 +57,9 @@ Source review confirms these defects unless runtime reproduction is stated. Impl
 - Preview is optimized/nondebuggable with a separate package and explicit signing configuration. Removed unused direct WorkManager/navigation/constraint/browser dependencies and unused permissions after checking callers; Shizuku provider protection remains.
 - Existing locale folders were162 English duplicates each, not translated support. Consolidation preserves English fallback.493 Spanish and493 Turkish resources are complete; format/XML/AAPT2 checks pass. No native-speaker review or translated-screen success is claimed.
 
+## Hosted validation
+- Approved publication created draft PR1 and branch91c6053. First push/PR CI runs35320355939/35320370581 failed before building: wrong SDK package platforms;android-37. Correct path platforms;android-37.0 matches installed metadata. Workflow corrected; new execution pending. This was setup failure, not a device assertion failure.
+
 ## Actual validation
 - Baseline dependency metadata failed: alpha Compose required SDK37.1. Stable Compose fixes compilation against37 with target36/min26.
 - Producer-based parser tests reproduced12 baseline failures before fixes. Latest JVM suites each pass94 tests in Debug and Preview,0fail/error/skip. Host migration/history SQL checks pass. These inputs are synthetic, not physical measurements.
@@ -73,7 +76,7 @@ A prebuilt-APK ADB runner avoids a competing Gradle JVM; six synthetic runner-re
 Both APKs pass16KiB ZIP/PT_LOAD alignment. The stricter documented RELRO-end check flags graphics-path (arm64/x86_64); inspected headers contain no trailing writable data in the rounded protection range. This is an unresolved runtime question, not a confirmed crash or a compatibility pass. See VALIDATION for exact evidence; no binary or dependency changed.
 
 ## Existing GitHub automation constraint
-Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]; its auto-review capability is therefore constrained by current repository policy. No settings changed or workflow triggered. The new APK workflow uses contents:read, has no publication steps, and is reused by push/PR CI with Android16 tests mandatory and no signing secrets passed. actionlint passes; hosted execution approved; pending results. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
+Read-only inspection of akane599/BatStatsAKA confirms default branch main, workflow-token permissions read, and can_approve_pull_request_reviews=false. The inherited Dependabot reusable workflow requests write permissions and attempts automatic approval/merge only for dependabot[bot]. Actual run35320371541 failed before any job: requested contents:write/pull-requests:write exceed caller contents:read/pull-requests:none. Disabled automatic-review policy is a separate constraint. No settings changed or privileges broadened. The new APK workflow uses contents:read, has no publication steps, and is reused by push/PR CI with Android16 tests mandatory and no signing secrets passed. actionlint passes; hosted execution approved; pending results. This existing automation issue remains separate from app validation; enabling remote approvals would require explicit authorization.
 
 ## Remaining work
 1. Execute the explicitly approved branch/draft-PR publication and inspect hardware-accelerated CI. Local software-emulator attempts are exhausted for this checkpoint; retained AVD can be retried without Gradle. No phone is required.

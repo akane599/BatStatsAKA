@@ -33,7 +33,7 @@ For repeatable preview updates, a maintainer can configure four repository secre
 
 ## Local build
 
-Use JDK21 and Android SDK37 with build-tools36.0.0. Set `ANDROID_HOME` or untracked `local.properties`.
+Use JDK21 and Android SDK37.0 (`sdkmanager 'platforms;android-37.0'`) with build-tools36.0.0. Set `ANDROID_HOME` or untracked `local.properties`.
 
 ```sh
 ./gradlew :app:testDebugUnitTest :app:testPreviewUnitTest :app:lintDebug :app:lintPreview
