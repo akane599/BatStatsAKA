@@ -2,7 +2,7 @@
 activityCompose = "1.13.0"
 coreKtx = "1.19.0"
 datastorePreferences = "1.2.1"
-androidGradlePlugin = "9.4.0"
+androidGradlePlugin = "9.5.0-alpha07"
 desugar_jdk_libs = "2.1.5"
 kmpSettingsCore = "0.8.3"
 koinBom = "4.2.2"
@@ -23,6 +23,7 @@ shizuku = "13.1.5"
 documentfile = "1.1.0"
 apkDist = "0.5.2"
 composeBom = "2026.09.00"
+screenshot = "0.0.1-alpha16"
 
 [libraries]
 junit = { module = "junit:junit", version = "4.13.2" }
@@ -33,6 +34,7 @@ androidx-test-junit = { module = "androidx.test.ext:junit", version = "1.3.0" }
 androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version = "2.3.0" }
 compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
 compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+screenshot-validation-api = { module = "com.android.tools.screenshot:screenshot-validation-api", version.ref = "screenshot" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }

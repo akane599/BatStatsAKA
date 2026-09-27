@@ -120,6 +120,19 @@ android {
 
     namespace = "app.batstats"
 
+    testOptions {
+        // Required by the screenshot suite: layoutlib resolves themes/layouts from compiled resources.
+        unitTests.isIncludeAndroidResources = true
+        // Compose Preview Screenshot Testing as an AGP test suite: @PreviewTest previews live in src/screenshotTest.
+        screenshotTests.create("screenshotTest") {
+            engineVersion = libs.versions.screenshot.get()
+            targetVariants.add("debug")
+            dependencies {
+                implementation(libs.androidx.ui.tooling)
+                implementation(libs.screenshot.validation.api)
+            }
+        }
+    }
 
     dependenciesInfo {
         includeInApk = false
@@ -137,6 +150,15 @@ androidComponents {
     beforeVariants(selector().withBuildType("preview")) { variant ->
         // AGP 9 defaults host tests to the instrumentation build type (debug).
         variant.hostTests[com.android.build.api.variant.HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
+    }
+}
+
+// Screenshot suites render in the host test JVM: pin timezone/locale so formatted dates match on every machine.
+tasks.withType<Test>().configureEach {
+    if (name.contains("ScreenshotTest")) {
+        systemProperty("user.timezone", "UTC")
+        systemProperty("user.language", "en")
+        systemProperty("user.country", "US")
     }
 }
 
