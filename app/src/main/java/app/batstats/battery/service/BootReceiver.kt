@@ -3,30 +3,33 @@ package app.batstats.battery.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.util.Notifier
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
+import android.util.Log
 
 class BootReceiver : BroadcastReceiver() {
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
-
-        Notifier.ensureChannel(context)
-        val repository = BatteryGraph.settings
-
-        GlobalScope.launch {
-            val config = repository.flow.first()
-            if (!config.autoStartOnBoot) return@launch
-
-            if (Build.VERSION.SDK_INT >= 35) {
-                Notifier.promptStartOnBoot(context)
-            } else {
-                context.startForegroundService(Intent(context, BatteryMonitorService::class.java))
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.Default).launch {
+            try {
+                val settings = withTimeout(8_000) { BatteryGraph.settings.flow.first() }
+                if (settings.autoStartOnBoot) {
+                    try {
+                        context.startForegroundService(Intent(context, BatteryMonitorService::class.java))
+                    } catch (_: RuntimeException) {
+                        Notifier.promptStartOnBoot(context)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("BootReceiver", "Could not resume battery monitoring", e)
+            } finally {
+                pending.finish()
             }
         }
     }

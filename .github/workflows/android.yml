@@ -3,25 +3,25 @@ on:
   workflow_dispatch:
     inputs:
       upload_releases:
-        description: 'Upload releases'
+        description: 'Publish a release (may push a version commit; use Build installable APK for downloads only)'
         required: true
-        default: true
+        default: false
         type: boolean
       mark_prerelease:
         description: 'Mark as prerelease'
         required: true
-        default: false
+        default: true
         type: boolean
       play_track:
         description: 'Google Play track'
         required: true
-        default: 'production'
+        default: 'none'
         type: choice
         options: [none, internal, alpha, beta, production]
       bump_type:
         description: 'Version bump type'
         required: true
-        default: "patch"
+        default: "none"
         type: choice
         options:
           - none
@@ -29,17 +29,24 @@ on:
           - minor
           - major
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   release:
+    if: ${{ inputs.upload_releases }}
+    permissions:
+      contents: write
     uses: mlm-games/ci/.github/workflows/android-release.yml@v1
     with:
       app-name: BatStats
       app-slug: batstats
-      application-id: app.batstats
+      application-id: org.mlm.batstats
+      prerelease: ${{ inputs.mark_prerelease }}
       play-track: ${{ inputs.play_track || 'none' }}
       bump-type: ${{ inputs.bump_type }}
     secrets:

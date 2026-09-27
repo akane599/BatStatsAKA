@@ -8,11 +8,38 @@ interface BatteryDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSample(sample: BatterySample): Long
 
+    @Query("SELECT * FROM battery_samples WHERE id = :id")
+    suspend fun byId(id: Long): BatterySample?
+
+    @Query("SELECT * FROM battery_samples WHERE timestamp = :timestamp")
+    suspend fun atTimestamp(timestamp: Long): List<BatterySample>
+
+    @Query("SELECT * FROM battery_samples WHERE observationId = :observationId AND elapsedMs = :elapsedMs LIMIT 1")
+    suspend fun observedPoint(observationId: String, elapsedMs: Long): BatterySample?
+
+    @Query("SELECT COUNT(*) FROM battery_samples")
+    suspend fun count(): Int
+
     @Query("SELECT * FROM battery_samples ORDER BY timestamp DESC LIMIT 1")
     suspend fun lastSample(): BatterySample?
 
     @Query("SELECT * FROM battery_samples WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
     fun samplesBetween(from: Long, to: Long): Flow<List<BatterySample>>
+
+    @Query("SELECT * FROM battery_samples WHERE id IN (SELECT MAX(id) FROM battery_samples WHERE timestamp BETWEEN :from AND :to AND source = 'BatteryManager' GROUP BY timestamp / :bucketMs) ORDER BY timestamp")
+    fun chartSamples(from: Long, to: Long, bucketMs: Long): Flow<List<BatterySample>>
+
+    @Query("SELECT * FROM battery_samples WHERE sessionId = :sessionId ORDER BY elapsedMs, id")
+    fun samplesForSession(sessionId: String): Flow<List<BatterySample>>
+
+    @Query("WITH buckets AS (SELECT MAX(id) AS representativeId, MAX(CASE WHEN observationId IS NULL OR boundaryReason IS NOT NULL OR currentNowUa IS NULL OR voltageMv IS NULL OR temperatureDeciC IS NULL THEN 1 ELSE 0 END) OR COUNT(DISTINCT observationId) > 1 AS discontinuity FROM battery_samples WHERE sessionId = :sessionId AND timestamp BETWEEN :from AND :to GROUP BY (timestamp - :from) / :bucketMs) SELECT s.timestamp, s.currentNowUa, s.voltageMv, s.temperatureDeciC, s.observationId, s.source, b.discontinuity FROM battery_samples s JOIN buckets b ON s.id = b.representativeId ORDER BY s.timestamp, s.id")
+    suspend fun sessionChartSamples(sessionId: String, from: Long, to: Long, bucketMs: Long): List<SessionChartReading>
+
+    @Query("DELETE FROM battery_samples WHERE id NOT IN (SELECT id FROM battery_samples ORDER BY timestamp DESC LIMIT :limit)")
+    suspend fun boundStorage(limit: Int = 100_000)
+
+    @Query("DELETE FROM battery_samples")
+    suspend fun clearAll()
 
     @Query("DELETE FROM battery_samples WHERE timestamp < :olderThan")
     suspend fun purge(olderThan: Long)
@@ -20,23 +47,55 @@ interface BatteryDao {
 
 @Dao
 interface SessionDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(session: ChargeSession)
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insert(session: ChargeSession)
 
-    @Query("SELECT * FROM charge_sessions WHERE endTime IS NULL LIMIT 1")
+    @Update
+    suspend fun update(session: ChargeSession): Int
+
+    @Transaction
+    suspend fun upsert(session: ChargeSession) {
+        if (update(session) == 0) insert(session)
+    }
+
+    @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
+    suspend fun byId(id: String): ChargeSession?
+
+    @Query("SELECT COUNT(*) FROM charge_sessions")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM charge_sessions WHERE activeKey IS NULL AND sessionId NOT IN (SELECT sessionId FROM charge_sessions ORDER BY activeKey IS NOT NULL DESC, startTime DESC LIMIT :limit)")
+    suspend fun boundStorage(limit: Int = 10_000)
+
+    @Query("SELECT * FROM charge_sessions WHERE activeKey = 1 LIMIT 1")
     suspend fun active(): ChargeSession?
 
-    @Query("SELECT * FROM charge_sessions WHERE endTime IS NULL LIMIT 1")
+    @Query("SELECT * FROM charge_sessions WHERE activeKey = 1 LIMIT 1")
     fun activeFlow(): Flow<ChargeSession?>
+
+    @Query("SELECT * FROM charge_sessions WHERE startTime <= :to AND COALESCE(endTime, lastSampleTime, startTime) >= :from ORDER BY startTime")
+    suspend fun sessionsBetween(from: Long, to: Long): List<ChargeSession>
+
+    @Query("UPDATE charge_sessions SET endTime=COALESCE(lastSampleTime, startTime), activeKey=NULL, closeReason=:reason WHERE activeKey=1")
+    suspend fun closeInterrupted(reason: String)
+
+    @Query("DELETE FROM charge_sessions WHERE activeKey IS NULL AND COALESCE(endTime,startTime) < :olderThan")
+    suspend fun purge(olderThan: Long)
+
+    @Query("DELETE FROM charge_sessions")
+    suspend fun clearAll()
 
     @Query("SELECT * FROM charge_sessions ORDER BY startTime DESC LIMIT :limit OFFSET :offset")
     fun sessionsPaged(limit: Int, offset: Int): Flow<List<ChargeSession>>
 
+    @Query("SELECT * FROM charge_sessions WHERE (:type IS NULL OR type = :type) AND (:query = '' OR instr(lower(sessionId), lower(:query)) > 0 OR instr(lower(source), lower(:query)) > 0) ORDER BY startTime DESC, sessionId LIMIT :limit")
+    fun filteredSessions(type: SessionType?, query: String, limit: Int): Flow<List<ChargeSession>>
+
     @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
     fun session(id: String): Flow<ChargeSession?>
 
-    @Query("UPDATE charge_sessions SET endTime=:end, endLevel=:endLevel, deltaUah=:delta, avgCurrentUa=:avg, estCapacityMah=:cap WHERE sessionId=:id")
-    suspend fun complete(id: String, end: Long, endLevel: Int, delta: Long?, avg: Long?, cap: Int?)
+    @Query("UPDATE charge_sessions SET endTime=:end, activeKey=NULL, endLevel=:endLevel, deltaUah=:delta, avgCurrentUa=:avg, estCapacityMah=:cap WHERE sessionId=:id")
+    suspend fun complete(id: String, end: Long, endLevel: Int?, delta: Long?, avg: Long?, cap: Int?)
 }
 
 @Dao

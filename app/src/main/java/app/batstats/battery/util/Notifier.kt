@@ -6,6 +6,11 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Build
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import app.batstats.battery.measurement.BatteryAlert
+import app.batstats.battery.data.db.BatterySample
+import app.batstats.settings.AppSettings
+import java.util.Locale
 import app.batstats.R
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.service.BatteryMonitorService
@@ -19,7 +24,7 @@ object Notifier {
         if (mgr.getNotificationChannel(CH_ID) == null) {
             val ch = NotificationChannel(
                 CH_ID,
-                "Battery Monitor",
+                ctx.getString(R.string.monitor_channel),
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 enableLights(false)
@@ -67,45 +72,53 @@ object Notifier {
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
             .setContentIntent(pi)
+            .setWhen(0L)
+            .setShowWhen(false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .build()
     }
 
-    fun notifyChargeLimit(ctx: Context, limit: Int) {
-        ensureChannel(ctx)
-        val n = NotificationCompat.Builder(ctx, CH_ID)
-            .setContentTitle(ctx.getString(R.string.charge_limit_reached))
-            .setContentText(ctx.getString(R.string.battery_at_percent, limit))
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setAutoCancel(true)
-            .setOnlyAlertOnce(true)
-            .build()
-        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(1001, n)
+    const val ALERT_CHANNEL_ID = "battery_alerts"
+
+    fun ensureAlertChannel(ctx: Context, settings: AppSettings) {
+        val manager = ctx.getSystemService(NotificationManager::class.java)
+        if (manager.getNotificationChannel(ALERT_CHANNEL_ID) != null) return
+        manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL_ID,
+            ctx.getString(R.string.alert_channel_name), NotificationManager.IMPORTANCE_DEFAULT).apply {
+            description = ctx.getString(R.string.alert_channel_description)
+            enableVibration(settings.alertVibrationEnabled)
+            if (!settings.alertSoundEnabled) setSound(null, null)
+            setShowBadge(false)
+        })
     }
 
-    fun notifyTempHigh(ctx: Context, tempC: Int) {
-        ensureChannel(ctx)
-        val n = NotificationCompat.Builder(ctx, CH_ID)
-            .setContentTitle(ctx.getString(R.string.high_temperature))
-            .setContentText(ctx.getString(R.string.temperature_high, tempC))
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setOnlyAlertOnce(true)
-            .build()
-        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(1002, n)
-    }
+    fun canPostAlerts(ctx: Context): Boolean = NotificationManagerCompat.from(ctx).areNotificationsEnabled() &&
+        ctx.getSystemService(NotificationManager::class.java).getNotificationChannel(ALERT_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
 
-    fun notifyDischargeHigh(ctx: Context, ma: Int) {
-        ensureChannel(ctx)
-        val n = NotificationCompat.Builder(ctx, CH_ID)
-            .setContentTitle(ctx.getString(R.string.high_discharge))
-            .setContentText(ctx.getString(R.string.heavy_drain, ma))
-            .setSmallIcon(android.R.drawable.stat_sys_warning)
-            .setOnlyAlertOnce(true)
-            .build()
-        (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(1003, n)
+    fun batteryAlert(ctx: Context, type: BatteryAlert, sample: BatterySample, settings: AppSettings) {
+        val (title, text) = when (type) {
+            BatteryAlert.LOW -> R.string.low_battery_alert to ctx.getString(R.string.alert_level_reported, sample.levelPercent)
+            BatteryAlert.HIGH -> R.string.high_battery_alert to ctx.getString(R.string.alert_level_reported, sample.levelPercent)
+            BatteryAlert.FULL -> R.string.charging_complete_alert to ctx.getString(R.string.alert_full_reported)
+            BatteryAlert.TEMPERATURE -> {
+                val celsius = sample.temperatureDeciC!! / 10.0
+                val value = if (settings.temperatureUnitIndex == 1) String.format(Locale.getDefault(), "%.1f °F", celsius * 1.8 + 32)
+                    else String.format(Locale.getDefault(), "%.1f °C", celsius)
+                R.string.high_temperature to ctx.getString(R.string.alert_temperature_reported, value)
+            }
+            BatteryAlert.DISCHARGE -> R.string.high_discharge to ctx.getString(R.string.alert_discharge_reported,
+                String.format(Locale.getDefault(), "%.0f mA", -sample.currentNowUa!! / 1000.0))
+        }
+        val content = PendingIntent.getActivity(ctx, 20, Intent(ctx, BatteryMainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(ctx, ALERT_CHANNEL_ID)
+            .setContentTitle(ctx.getString(title)).setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setSmallIcon(android.R.drawable.stat_sys_warning).setContentIntent(content)
+            .setAutoCancel(true).setOnlyAlertOnce(true).setWhen(sample.timestamp)
+            .setCategory(NotificationCompat.CATEGORY_STATUS).build()
+        // One stable ID per condition; successive observations do not create new notifications.
+        ctx.getSystemService(NotificationManager::class.java).notify(1100 + type.ordinal, notification)
     }
 }

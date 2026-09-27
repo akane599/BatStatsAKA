@@ -1,16 +1,16 @@
 package app.batstats.di
 
 import android.os.Build
+import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.ExportImportManager
+import app.batstats.battery.data.HistoryMaintenance
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.drain.AdvancedDrainTracker
 import app.batstats.battery.drain.DrainNotificationManager
-import app.batstats.battery.shizuku.BstatsCollector
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
-import app.batstats.insights.ForegroundDrainTracker
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.viewmodel.DashboardViewModel
@@ -45,8 +45,8 @@ val appModule = module {
 
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
-    single { DetailedStatsCollector(get(), get(), androidContext(), get()) }
-    single { BstatsCollector(get<BatteryDatabase>().appEnergyDao(), get(), get()) }
+    single { DiagnosticStore(androidContext(), get()) }
+    single { DetailedStatsCollector(get(), get()) }
 
     single<SettingsRepository<AppSettings>> {
         SettingsRepository(dataStore = get(), schema = AppSettingsSchema)
@@ -81,19 +81,19 @@ val appModule = module {
         )
     }
 
-    single { ExportImportManager(androidContext(), get()) }
-    single { BatteryRepository(androidContext(), get(), get(), get()) }
-    single { ForegroundDrainTracker(androidContext(), get(), get<BatteryDatabase>().appEnergyDao()) }
+    single { HistoryMaintenance() }
+    single { ExportImportManager(androidContext(), get(), get()) }
+    single { BatteryRepository(androidContext(), get(), get(), get(), get(), get()) }
 
-    single { AdvancedDrainTracker(androidContext(), get(), get(), get(), get()) }
+    single { AdvancedDrainTracker(androidContext(), get()) }
     single { DrainNotificationManager(androidContext(), get()) }
 
     viewModel { DashboardViewModel(androidApplication(), get(), get()) }
-    viewModel { SettingsViewModel(androidContext(), get(), get(), get()) }
+    viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
     viewModel { HistoryViewModel(get()) }
-    viewModel { DataViewModel(get()) }
+    viewModel { DataViewModel(get(), androidContext()) }
     viewModel { DrainStatsViewModel(get()) }
 
-    viewModel { (sessionId: String) -> SessionDetailsViewModel(androidApplication(), get(), get(), sessionId) }
+    viewModel { (sessionId: String) -> SessionDetailsViewModel(get(), get(), sessionId) }
 }

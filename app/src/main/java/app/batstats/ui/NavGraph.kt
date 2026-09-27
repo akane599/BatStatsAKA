@@ -7,6 +7,7 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import app.batstats.ui.screens.BatterySettingsScreen
+import app.batstats.ui.screens.DiagnosticsScreen
 import app.batstats.ui.screens.DashboardScreen
 import app.batstats.ui.screens.DataScreen
 import app.batstats.ui.screens.DetailedStatsScreen
@@ -22,9 +23,11 @@ fun NavGraph(
     backStack: NavBackStack<NavKey>,
     decorators: List<NavEntryDecorator<Any>>
 ) {
+    // NavDisplay owns system/predictive back; every pop preserves the dashboard root.
+    val popBack: () -> Unit = { if (backStack.size > 1) backStack.removeAt(backStack.lastIndex) }
     NavDisplay(
         backStack = backStack,
-        onBack = { backStack.removeAt(backStack.lastIndex) },
+        onBack = popBack,
         entryDecorators = decorators,
         entryProvider = entryProvider {
 
@@ -36,43 +39,47 @@ fun NavGraph(
                     onOpenSettings = { backStack.add(Screen.Settings()) },
                     onOpenData = { backStack.add(Screen.Data) },
                     onOpenDetailedStats = { backStack.add(Screen.DetailedStats) },
-                    onOpenDrainStats = { backStack.add(Screen.DrainStats) }
+                    onOpenDrainStats = { backStack.add(Screen.DrainStats) },
+                    onOpenDiagnostics = { backStack.add(Screen.Diagnostics) }
                 )
             }
 
             entry<Screen.History> {
                 HistoryScreen(
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     onOpenSession = { id -> backStack.add(Screen.SessionDetails(id)) }
                 )
             }
 
             entry<Screen.SessionDetails> { args ->
                 SessionDetailsScreen(
-                    sessionId = args.sessionId,
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     vm = koinViewModel(parameters = { parametersOf(args.sessionId) })
                 )
             }
 
             entry<Screen.Data> {
-                DataScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DataScreen(onBack = popBack)
             }
 
             entry<Screen.Settings> { args ->
                 BatterySettingsScreen(
-                    onBack = { backStack.removeAt(backStack.lastIndex) },
+                    onBack = popBack,
                     onExportData = { backStack.add(Screen.Data) },
                     initialCategory = args.initialCategory
                 )
             }
 
             entry<Screen.DetailedStats> {
-                DetailedStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DetailedStatsScreen(onBack = popBack)
+            }
+
+            entry<Screen.Diagnostics> {
+                DiagnosticsScreen(onBack = popBack)
             }
 
             entry<Screen.DrainStats> {
-                DrainStatsScreen(onBack = { backStack.removeAt(backStack.lastIndex) })
+                DrainStatsScreen(onBack = popBack)
             }
         }
     )
@@ -103,4 +110,7 @@ sealed interface Screen: NavKey {
 
     @Serializable
     data object DrainStats : Screen
+
+    @Serializable
+    data object Diagnostics : Screen
 }

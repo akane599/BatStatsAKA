@@ -1,67 +1,40 @@
 package app.batstats.viewmodel
 
 import android.net.Uri
+import android.content.Context
+import app.batstats.R
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.data.ExportImportManager
+import app.batstats.battery.data.HistoryImportResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class DataViewModel(
-    private val exportImportManager: ExportImportManager
-) : ViewModel() {
-
+class DataViewModel(private val manager: ExportImportManager, private val context: Context) : ViewModel() {
     private val _isBusy = MutableStateFlow(false)
-    val isBusy: StateFlow<Boolean> = _isBusy.asStateFlow()
-
+    val isBusy = _isBusy.asStateFlow()
     private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
-
-    fun clearMessage() {
-        _message.value = null
-    }
-
-    fun exportJson(
-        uri: Uri,
-        from: Long,
-        to: Long,
-        includeSamples: Boolean,
-        includeSessions: Boolean
-    ) {
+    val message = _message.asStateFlow()
+    fun clearMessage() { _message.value = null }
+    private fun operation(block: suspend () -> String) {
+        if (_isBusy.value) return
+        _isBusy.value = true
         viewModelScope.launch {
-            _isBusy.value = true
-            val success = exportImportManager.exportJson(uri, from, to, includeSamples, includeSessions)
-            _message.value = if (success) "JSON Exported Successfully" else "Export Failed"
-            _isBusy.value = false
+            try { _message.value = block() }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { _message.value = context.getString(R.string.history_operation_failed, (if (e is IllegalArgumentException || e is IllegalStateException) e.message else e.javaClass.simpleName)?.take(200).orEmpty()) }
+            finally { _isBusy.value = false }
         }
     }
-
-    fun exportCsv(uri: Uri, from: Long, to: Long) {
-        viewModelScope.launch {
-            _isBusy.value = true
-            val success = exportImportManager.exportCsvToFolder(uri, from, to)
-            _message.value = if (success) "CSV Exported Successfully" else "Export Failed"
-            _isBusy.value = false
-        }
+    fun exportJson(uri: Uri, from: Long, to: Long, includeSamples: Boolean, includeSessions: Boolean) = operation {
+        manager.exportJson(uri, from, to, includeSamples, includeSessions); context.getString(R.string.history_json_exported)
     }
-
-    fun importJson(uri: Uri) {
-        viewModelScope.launch {
-            _isBusy.value = true
-            val success = exportImportManager.importJson(uri)
-            _message.value = if (success) "JSON Imported Successfully" else "Import Failed"
-            _isBusy.value = false
-        }
+    fun exportCsv(uri: Uri, from: Long, to: Long, includeSamples: Boolean = true, includeSessions: Boolean = true) = operation {
+        manager.exportCsvToFolder(uri, from, to, includeSamples, includeSessions); context.getString(R.string.history_csv_exported)
     }
-
-    fun importCsv(uri: Uri) {
-        viewModelScope.launch {
-            _isBusy.value = true
-            val success = exportImportManager.importCsv(uri)
-            _message.value = if (success) "CSV Imported Successfully" else "Import Failed"
-            _isBusy.value = false
-        }
-    }
+    fun importJson(uri: Uri) = operation { describe(manager.importJson(uri)) }
+    fun importCsv(uri: Uri) = operation { describe(manager.importCsv(uri)) }
+    private fun describe(r: HistoryImportResult) = context.getString(R.string.history_imported, r.samplesAdded, r.sessionsAdded, r.sessionsUpdated, r.unchanged)
 }

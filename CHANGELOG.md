@@ -1,3 +1,10 @@
+## 6.2.7-dev — Android 16 reliability snapshot (unreleased)
+
+- Reworked validated readings, observed intervals, automatic sessions, Shizuku/access recovery and Android 16 statistics parsing.
+- Added safe history migrations/import/export, diagnostics, effective alerts, clearer notification/widgets, responsive UI and Spanish/Turkish resources.
+- Added Debug/Preview delivery, build workflows and regression/device coverage.
+- Final reset-dialog/notification changes remain unverified; saved APKs predate those changes. See the [ordered baseline-to-current changelog and remaining tasks](docs/BASELINE_TO_CURRENT.md) for details and actual validation limits.
+
 ## v6.2.6
 
 - Cleanup old data and show Shared UIDs as System

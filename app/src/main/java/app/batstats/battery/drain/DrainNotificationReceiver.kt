@@ -3,9 +3,6 @@ package app.batstats.battery.drain
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -19,13 +16,10 @@ class DrainNotificationReceiver : BroadcastReceiver(), KoinComponent {
 
     private val drainTracker: AdvancedDrainTracker by inject()
 
-    @OptIn(DelicateCoroutinesApi::class)
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             ACTION_RESET -> {
-                GlobalScope.launch {
-                    drainTracker.resetSession()
-                }
+                drainTracker.resetSession()
             }
         }
     }

@@ -1,9 +1,10 @@
 package app.batstats.ui.theme
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.os.Build
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -45,7 +46,7 @@ fun MainTheme(
             surfaceContainerHigh = Color(0xFF1A1A1A),
             surfaceContainerHighest = Color(0xFF222222),
             surfaceVariant = Color(0xFF121212),
-            outline = Color(0xFF2A2A2A),
+            outline = Color(0xFF707070),
             outlineVariant = Color(0xFF1A1A1A),
             scrim = Color.Black,
             primaryContainer = Color(0xFF00251E),
@@ -60,7 +61,7 @@ fun MainTheme(
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
-            val window = (view.context as Activity).window
+            val window = view.context.findActivity()?.window ?: return@SideEffect
             @Suppress("DEPRECATION")
             window.statusBarColor = colorScheme.surface.toArgb()
             @Suppress("DEPRECATION")
@@ -79,10 +80,16 @@ fun MainTheme(
         extraLarge = RoundedCornerShape(28.dp)
     )
 
-    MaterialExpressiveTheme(
+    MaterialTheme(
         colorScheme = colorScheme,
         typography = MaterialTheme.typography,
         shapes = shapes,
         content = content
     )
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> if (baseContext !== this) baseContext.findActivity() else null
+    else -> null
 }
