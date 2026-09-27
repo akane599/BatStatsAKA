@@ -1,5 +1,3 @@
-[English](README.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
-
 # BatStats
 
 ![Banner](fastlane/metadata/android/en-US/images/banner.svg)
@@ -51,7 +49,7 @@ The [measurement guide](docs/MEASUREMENTS.md) explains sources, units, observati
 
 ## Development
 
-Use JDK 21 and Android SDK 37 for compilation; target API 36, minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`). Contributor/workflow rules are in [AGENTS.md](AGENTS.md).
+Use JDK 21 and Android SDK 37 for compilation; target API 36, minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`).
 
 ## Contributing and license
 

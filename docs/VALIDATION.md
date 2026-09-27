@@ -2,6 +2,8 @@
 
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
+Local log and report paths below (`/tmp/batstats-*`) refer to the previous build host and were not carried over to the current environment.
+
 ## Latest runtime checkpoint: e52daf9
 
 Both API36 builds passed. Push35336121659 and PR35336125428 each execute28 ordinary methods:27pass/1fail,0errors/skips. Both real Shizuku integration phases pass1/1, covering authorization, shellUID2000, commands, helper restart, server loss/restart/reconnection and ordinary-data survival. Native library loading and4KiB process page-size assertions pass.16KiB phases did not run because standard validation failed.
