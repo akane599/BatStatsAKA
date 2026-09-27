@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -64,7 +65,14 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Settings categories in display order; each renders as a header item plus a section item. */
+private val settingsCategoryOrder = listOf(
+    General::class to "General",
+    Notifications::class to "Notifications",
+    Display::class to "Display",
+    Data::class to "Data & Export",
+)
+
 @Composable
 fun BatterySettingsScreen(
     onBack: () -> Unit,
@@ -74,15 +82,92 @@ fun BatterySettingsScreen(
     stringProvider: StringResourceProvider = koinInject()
 ) {
     val context = LocalContext.current
-    val resources = LocalResources.current
     val alertSettingsUnavailable = stringResource(R.string.alert_settings_unavailable)
     val settings by vm.settings.collectAsStateWithLifecycle()
     val settingsError by vm.error.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbarHost = remember { SnackbarHostState() }
 
     LaunchedEffect(settingsError) { settingsError?.let { snackbarHost.showSnackbar(it) } }
+
+    // Launcher for exporting settings (backup)
+    val createSettingsBackup = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val message = vm.exportToFile(uri)
+                snackbarHost.showSnackbar(message)
+            }
+        }
+    }
+
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(initialCategory) {
+        if (initialCategory != null) {
+            val idx = settingsCategoryOrder.indexOfFirst { it.second == initialCategory }
+            if (idx >= 0) {
+                val target = idx * 2
+                // delay to allow LazyColumn to be composed
+                kotlinx.coroutines.delay(100)
+                listState.animateScrollToItem(target)
+            }
+        }
+    }
+
+    BatterySettingsContent(
+        settings = settings,
+        settingsError = settingsError,
+        stringProvider = stringProvider,
+        onBack = onBack,
+        onExportData = onExportData,
+        onExportSettings = { createSettingsBackup.launch("BatStats_Settings_Backup.json") },
+        onOpenAlertSettings = {
+            try {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
+            } catch (_: android.content.ActivityNotFoundException) {
+                scope.launch { snackbarHost.showSnackbar(alertSettingsUnavailable) }
+            }
+        },
+        onUpdateSetting = { name, value -> vm.updateSetting(name, value) },
+        onResetUiSettings = { vm.resetUISettings() },
+        onResetAll = { vm.resetAll() },
+        onImportSettings = { json -> vm.import(json) },
+        onClearHistory = { vm.clearHistory() },
+        snackbarHostState = snackbarHost,
+        listState = listState,
+    )
+}
+
+/**
+ * Stateless settings UI. Suspend callbacks back the reset/import/clear dialogs so their
+ * in-progress and error state stays local; the host owns snackbars, scrolling and Intents.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun BatterySettingsContent(
+    settings: AppSettings,
+    settingsError: String?,
+    stringProvider: StringResourceProvider,
+    onBack: () -> Unit,
+    onExportData: () -> Unit,
+    onExportSettings: () -> Unit,
+    onOpenAlertSettings: () -> Unit,
+    onUpdateSetting: (name: String, value: Any) -> Unit,
+    onResetUiSettings: suspend () -> Boolean,
+    onResetAll: suspend () -> Boolean,
+    onImportSettings: suspend (json: String) -> ImportResult,
+    onClearHistory: suspend () -> Unit,
+    modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
+    listState: LazyListState = rememberLazyListState(),
+) {
+    val context = LocalContext.current
+    val resources = LocalResources.current
+    val scope = rememberCoroutineScope()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     var showActions by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
@@ -98,44 +183,12 @@ fun BatterySettingsScreen(
     val schema = AppSettingsSchema
     val grouped = remember { schema.groupedByCategory() }
 
-    // Launcher for exporting settings (backup)
-    val createSettingsBackup = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument("application/json")
-    ) { uri: Uri? ->
-        if (uri != null) {
-            scope.launch {
-                val message = vm.exportToFile(uri)
-                snackbarHost.showSnackbar(message)
-            }
-        }
-    }
-
     val categoryTitles = mapOf("General" to stringResource(R.string.settings_general),
         "Notifications" to stringResource(R.string.settings_notifications), "Display" to stringResource(R.string.settings_display),
         "Data & Export" to stringResource(R.string.settings_data))
-    val categoryOrder = listOf(
-        General::class to "General",
-        Notifications::class to "Notifications",
-        Display::class to "Display",
-        Data::class to "Data & Export"
-    )
-
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(initialCategory) {
-        if (initialCategory != null) {
-            val idx = categoryOrder.indexOfFirst { it.second == initialCategory }
-            if (idx >= 0) {
-                val target = idx * 2
-                // delay to allow LazyColumn to be composed
-                kotlinx.coroutines.delay(100)
-                listState.animateScrollToItem(target)
-            }
-        }
-    }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             LargeTopAppBar(
                 title = { Text(stringResource(R.string.settings)) },
@@ -148,7 +201,7 @@ fun BatterySettingsScreen(
                     IconButton(onClick = { showActions = true }) { Icon(Icons.Outlined.MoreVert, stringResource(R.string.settings_more)) }
                     DropdownMenu(expanded = showActions, onDismissRequest = { showActions = false }) {
                         DropdownMenuItem(text = { Text(stringResource(R.string.export_settings)) }, onClick = {
-                            showActions = false; createSettingsBackup.launch("BatStats_Settings_Backup.json")
+                            showActions = false; onExportSettings()
                         }, leadingIcon = { Icon(Icons.Outlined.Backup, null) })
                         DropdownMenuItem(text = { Text(stringResource(R.string.import_settings_desc)) }, onClick = {
                             showActions = false; showImportDialog = true
@@ -161,7 +214,7 @@ fun BatterySettingsScreen(
                 scrollBehavior = scrollBehavior
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHost) }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         ProvideStringResources(stringProvider) {
             LazyColumn(
@@ -169,7 +222,7 @@ fun BatterySettingsScreen(
                 modifier = Modifier.padding(padding),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                categoryOrder.forEach { (categoryClass, categoryTitle) ->
+                settingsCategoryOrder.forEach { (categoryClass, categoryTitle) ->
                     val fields = grouped[categoryClass].orEmpty()
                     if (fields.isEmpty()) return@forEach
 
@@ -194,7 +247,7 @@ fun BatterySettingsScreen(
                                     settings = settings,
                                     enabled = enabled,
                                     onToggle = { value ->
-                                        vm.updateSetting(field.name, value)
+                                        onUpdateSetting(field.name, value)
                                     },
                                     onOpenDropdown = {
                                         currentField = field
@@ -215,14 +268,7 @@ fun BatterySettingsScreen(
                                 SettingsAction(
                                     title = stringResource(R.string.alert_settings_open),
                                     description = stringResource(R.string.alert_settings_description),
-                                    onClick = {
-                                        try {
-                                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-                                                .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName))
-                                        } catch (_: android.content.ActivityNotFoundException) {
-                                            scope.launch { snackbarHost.showSnackbar(alertSettingsUnavailable) }
-                                        }
-                                    }
+                                    onClick = onOpenAlertSettings
                                 )
                             }
                             if (categoryClass == Data::class) {
@@ -267,7 +313,7 @@ fun BatterySettingsScreen(
                 selectedIndex = index,
                 onDismiss = { showDropdown = false },
                 onOptionSelected = { idx ->
-                    vm.updateSetting(cf.name, idx)
+                    onUpdateSetting(cf.name, idx)
                     showDropdown = false
                 }
             )
@@ -300,10 +346,10 @@ fun BatterySettingsScreen(
             onDismiss = { showSlider = false },
             onValueSelected = { v ->
                 when (value) {
-                    is Float -> vm.updateSetting(cf.name, v)
-                    is Int -> vm.updateSetting(cf.name, v.toInt())
-                    is Long -> vm.updateSetting(cf.name, v.toLong())
-                    is Double -> vm.updateSetting(cf.name, v.toDouble())
+                    is Float -> onUpdateSetting(cf.name, v)
+                    is Int -> onUpdateSetting(cf.name, v.toInt())
+                    is Long -> onUpdateSetting(cf.name, v.toLong())
+                    is Double -> onUpdateSetting(cf.name, v.toDouble())
                 }
                 showSlider = false
             }
@@ -332,9 +378,9 @@ fun BatterySettingsScreen(
                     TextButton(modifier = Modifier.fillMaxWidth(), enabled = !resettingSettings, onClick = {
                         resettingSettings = true
                         scope.launch {
-                            try { if (vm.resetUISettings()) {
+                            try { if (onResetUiSettings()) {
                                 showResetDialog = false
-                                snackbarHost.showSnackbar(uiSettingsResetMsg)
+                                snackbarHostState.showSnackbar(uiSettingsResetMsg)
                             } } finally { resettingSettings = false }
                         }
                     }) { Text(stringResource(R.string.reset_ui)) }
@@ -344,9 +390,9 @@ fun BatterySettingsScreen(
                         onClick = {
                             resettingSettings = true
                             scope.launch {
-                                try { if (vm.resetAll()) {
+                                try { if (onResetAll()) {
                                     showResetDialog = false
-                                    snackbarHost.showSnackbar(allSettingsResetMsg)
+                                    snackbarHostState.showSnackbar(allSettingsResetMsg)
                                 } } finally { resettingSettings = false }
                             }
                         },
@@ -395,10 +441,10 @@ fun BatterySettingsScreen(
                         importError = null
                         scope.launch {
                             try {
-                                when (val result = vm.import(jsonInput)) {
+                                when (val result = onImportSettings(jsonInput)) {
                                     is ImportResult.Success -> {
                                         showImportDialog = false
-                                        snackbarHost.showSnackbar(resources.getString(R.string.settings_import_result,
+                                        snackbarHostState.showSnackbar(resources.getString(R.string.settings_import_result,
                                             result.appliedCount, result.skippedCount, result.errors.size))
                                     }
                                     is ImportResult.Error -> importError = resources.getString(R.string.settings_import_rejected, result.error.name)
@@ -432,11 +478,11 @@ fun BatterySettingsScreen(
                         clearingHistory = true
                         scope.launch {
                             try {
-                                vm.clearHistory()
+                                onClearHistory()
                                 showClearDataDialog = false
-                                snackbarHost.showSnackbar(dataClearedMsg)
+                                snackbarHostState.showSnackbar(dataClearedMsg)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                            catch (_: Exception) { snackbarHost.showSnackbar(clearFailedMsg) }
+                            catch (_: Exception) { snackbarHostState.showSnackbar(clearFailedMsg) }
                             finally { clearingHistory = false }
                         }
                     },

@@ -13,6 +13,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.data.SessionEvidence
+import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionChartReading
 import app.batstats.battery.drain.formatDrainRate
 import app.batstats.battery.drain.formatCharge
 import app.batstats.battery.drain.formatDuration
@@ -28,17 +30,38 @@ import kotlin.math.abs
 fun SessionDetailsScreen(onBack: () -> Unit, vm: SessionDetailsViewModel) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     val recording by vm.recordingObservation.collectAsStateWithLifecycle()
-    val session = ui.session
+    SessionDetailsContent(
+        loading = ui.loading,
+        failed = ui.failed,
+        session = ui.session,
+        points = ui.points,
+        recordingObservation = recording,
+        onBack = onBack,
+        onRefresh = vm::refresh,
+    )
+}
+
+@Composable
+fun SessionDetailsContent(
+    loading: Boolean,
+    failed: Boolean,
+    session: ChargeSession?,
+    points: List<SessionChartReading>,
+    recordingObservation: String?,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val format = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.session_details)) }, navigationIcon = {
+    Scaffold(modifier = modifier, topBar = { TopAppBar(title = { Text(stringResource(R.string.session_details)) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back)) }
-    }, actions = { IconButton(onClick = vm::refresh, enabled = !ui.loading) { Icon(Icons.Outlined.Refresh, stringResource(R.string.refresh)) } }) }) { padding ->
+    }, actions = { IconButton(onClick = onRefresh, enabled = !loading) { Icon(Icons.Outlined.Refresh, stringResource(R.string.refresh)) } }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             when {
-                ui.loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.history_loading)) }
-                ui.failed -> item {
+                loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.history_loading)) }
+                failed -> item {
                     Text(stringResource(R.string.history_load_failed), color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = vm::refresh) { Text(stringResource(R.string.retry)) }
+                    OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.retry)) }
                 }
                 session == null -> item { Text(stringResource(R.string.session_missing)) }
                 else -> {
@@ -49,7 +72,7 @@ fun SessionDetailsScreen(onBack: () -> Unit, vm: SessionDetailsViewModel) {
                             Text("${session.startLevel?.let { "$it%" } ?: "—"} → ${session.endLevel?.let { "$it%" } ?: "—"}")
                             Text(stringResource(R.string.session_start, format.format(Date(session.startTime))))
                             Text(stringResource(R.string.session_last_evidence, format.format(Date(SessionEvidence.lastEvidence(session)))))
-                            if (SessionEvidence.isRecording(session, recording)) Text(stringResource(R.string.session_recording))
+                            if (SessionEvidence.isRecording(session, recordingObservation)) Text(stringResource(R.string.session_recording))
                             else session.endTime?.let { Text(stringResource(R.string.session_end, format.format(Date(it)))) }
                                 ?: Text(stringResource(R.string.session_interrupted))
                             Text(stringResource(if (session.source.startsWith("import:")) R.string.session_imported_source else R.string.session_source, session.source))
@@ -66,12 +89,12 @@ fun SessionDetailsScreen(onBack: () -> Unit, vm: SessionDetailsViewModel) {
                             session.closeReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                         } }
                     }
-                    if (ui.points.isEmpty()) item { Text(stringResource(R.string.session_no_linked_samples)) }
+                    if (points.isEmpty()) item { Text(stringResource(R.string.session_no_linked_samples)) }
                     else {
-                        item { Text(stringResource(R.string.session_chart_sources, ui.points.map { it.source }.distinct().joinToString()), style = MaterialTheme.typography.bodySmall) }
-                        item { TelemetryChart(stringResource(R.string.session_net_current), "mA", ui.points.map { ChartPoint(it.timestamp, it.currentNowUa?.div(1000.0), it.observationId, it.discontinuity) }) }
-                        item { TelemetryChart(stringResource(R.string.session_voltage), "mV", ui.points.map { ChartPoint(it.timestamp, it.voltageMv?.toDouble(), it.observationId, it.discontinuity) }) }
-                        item { TelemetryChart(stringResource(R.string.session_temperature), "°C", ui.points.map { ChartPoint(it.timestamp, it.temperatureDeciC?.div(10.0), it.observationId, it.discontinuity) }) }
+                        item { Text(stringResource(R.string.session_chart_sources, points.map { it.source }.distinct().joinToString()), style = MaterialTheme.typography.bodySmall) }
+                        item { TelemetryChart(stringResource(R.string.session_net_current), "mA", points.map { ChartPoint(it.timestamp, it.currentNowUa?.div(1000.0), it.observationId, it.discontinuity) }) }
+                        item { TelemetryChart(stringResource(R.string.session_voltage), "mV", points.map { ChartPoint(it.timestamp, it.voltageMv?.toDouble(), it.observationId, it.discontinuity) }) }
+                        item { TelemetryChart(stringResource(R.string.session_temperature), "°C", points.map { ChartPoint(it.timestamp, it.temperatureDeciC?.div(10.0), it.observationId, it.discontinuity) }) }
                     }
                 }
             }

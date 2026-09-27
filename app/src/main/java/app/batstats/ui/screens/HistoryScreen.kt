@@ -26,7 +26,33 @@ fun HistoryScreen(onBack: () -> Unit, onOpenSession: (String) -> Unit, vm: Histo
     val ui by vm.ui.collectAsStateWithLifecycle()
     val filter by vm.filter.collectAsStateWithLifecycle()
     val recording by vm.recordingObservation.collectAsStateWithLifecycle()
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.history)) }, navigationIcon = {
+    HistoryContent(
+        ui = ui,
+        filter = filter,
+        recording = recording,
+        onBack = onBack,
+        onOpenSession = onOpenSession,
+        onFilterBy = vm::filterBy,
+        onSearch = vm::search,
+        onRetry = vm::retry,
+        onLoadMore = vm::loadMore,
+    )
+}
+
+@Composable
+fun HistoryContent(
+    ui: HistoryViewModel.Ui,
+    filter: HistoryViewModel.Filter,
+    recording: String?,
+    onBack: () -> Unit,
+    onOpenSession: (String) -> Unit,
+    onFilterBy: (SessionType?) -> Unit,
+    onSearch: (String) -> Unit,
+    onRetry: () -> Unit,
+    onLoadMore: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Scaffold(modifier = modifier, topBar = { TopAppBar(title = { Text(stringResource(R.string.history)) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back)) }
     }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
@@ -34,12 +60,12 @@ fun HistoryScreen(onBack: () -> Unit, onOpenSession: (String) -> Unit, vm: Histo
             item(key = "filters") {
                 Text(stringResource(R.string.history_scope), style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = filter.type == null, onClick = { vm.filterBy(null) }, label = { Text(stringResource(R.string.history_all)) })
+                    FilterChip(selected = filter.type == null, onClick = { onFilterBy(null) }, label = { Text(stringResource(R.string.history_all)) })
                     SessionType.entries.forEach { type ->
-                        FilterChip(selected = filter.type == type, onClick = { vm.filterBy(type) }, label = { Text(sessionTypeLabel(type)) })
+                        FilterChip(selected = filter.type == type, onClick = { onFilterBy(type) }, label = { Text(sessionTypeLabel(type)) })
                     }
                 }
-                OutlinedTextField(value = filter.text, onValueChange = vm::search, singleLine = true,
+                OutlinedTextField(value = filter.text, onValueChange = onSearch, singleLine = true,
                     label = { Text(stringResource(R.string.history_search)) },
                     leadingIcon = { Icon(Icons.Outlined.Search, null) }, modifier = Modifier.fillMaxWidth())
             }
@@ -47,7 +73,7 @@ fun HistoryScreen(onBack: () -> Unit, onOpenSession: (String) -> Unit, vm: Histo
                 ui.loading -> item { LinearProgressIndicator(Modifier.fillMaxWidth()); Text(stringResource(R.string.history_loading)) }
                 ui.failed -> item {
                     Text(stringResource(R.string.history_load_failed), color = MaterialTheme.colorScheme.error)
-                    OutlinedButton(onClick = vm::retry) { Text(stringResource(R.string.retry)) }
+                    OutlinedButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
                 }
                 ui.sessions.isEmpty() -> item {
                     Text(stringResource(if (filter.type != null || filter.text.isNotBlank()) R.string.history_no_matches else R.string.history_empty),
@@ -60,7 +86,7 @@ fun HistoryScreen(onBack: () -> Unit, onOpenSession: (String) -> Unit, vm: Histo
                             modifier = Modifier.fillMaxWidth().clickable { onOpenSession(session.sessionId) })
                     }
                     item {
-                        if (ui.hasMore) OutlinedButton(onClick = vm::loadMore, modifier = Modifier.fillMaxWidth()) {
+                        if (ui.hasMore) OutlinedButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.history_load_more))
                         } else Text(stringResource(R.string.history_end, ui.sessions.size), style = MaterialTheme.typography.bodySmall)
                     }

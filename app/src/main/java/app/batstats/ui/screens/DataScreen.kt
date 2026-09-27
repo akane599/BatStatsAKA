@@ -18,7 +18,6 @@ import app.batstats.R
 import app.batstats.viewmodel.DataViewModel
 import org.koin.androidx.compose.koinViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
     val isBusy by vm.isBusy.collectAsStateWithLifecycle()
@@ -28,7 +27,6 @@ fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
     var includeSamples by rememberSaveable { mutableStateOf(true) }
     var includeSessions by rememberSaveable { mutableStateOf(true) }
     fun fromNow() = if (days == 0) 0L else System.currentTimeMillis() - days * 86_400_000L
-    val canExport = !isBusy && (includeSamples || includeSessions)
     LaunchedEffect(message) {
         message?.let { snackbarHost.showSnackbar(it); vm.clearMessage() }
     }
@@ -44,13 +42,50 @@ fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
     val openCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.importCsv(uri)
     }
+    DataContent(
+        isBusy = isBusy,
+        days = days,
+        includeSamples = includeSamples,
+        includeSessions = includeSessions,
+        snackbarHostState = snackbarHost,
+        onBack = onBack,
+        onDaysChange = { days = it },
+        onToggleSamples = { includeSamples = !includeSamples },
+        onToggleSessions = { includeSessions = !includeSessions },
+        onExportJson = { createJson.launch("BatStats-${System.currentTimeMillis()}.json") },
+        onExportCsv = { folderCsv.launch(null) },
+        onImportJson = { openJson.launch(arrayOf("application/json", "application/octet-stream")) },
+        onImportCsv = { openCsv.launch(arrayOf("text/*", "application/octet-stream")) },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DataContent(
+    isBusy: Boolean,
+    days: Int,
+    includeSamples: Boolean,
+    includeSessions: Boolean,
+    snackbarHostState: SnackbarHostState,
+    onBack: () -> Unit,
+    onDaysChange: (Int) -> Unit,
+    onToggleSamples: () -> Unit,
+    onToggleSessions: () -> Unit,
+    onExportJson: () -> Unit,
+    onExportCsv: () -> Unit,
+    onImportJson: () -> Unit,
+    onImportCsv: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val canExport = !isBusy && (includeSamples || includeSessions)
     Scaffold(
+        modifier = modifier,
         topBar = {
             TopAppBar(title = { Text(stringResource(R.string.data_export_import)) }, navigationIcon = {
                 IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
             })
         },
-        snackbarHost = { SnackbarHost(snackbarHost) }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -59,12 +94,12 @@ fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
                     Text(stringResource(R.string.date_range), style = MaterialTheme.typography.titleMedium)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(0 to R.string.all, 7 to R.string.last_7_days, 30 to R.string.last_30_days).forEach { (value, label) ->
-                            FilterChip(selected = days == value, enabled = !isBusy, onClick = { days = value }, label = { Text(stringResource(label)) })
+                            FilterChip(selected = days == value, enabled = !isBusy, onClick = { onDaysChange(value) }, label = { Text(stringResource(label)) })
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = includeSamples, enabled = !isBusy, onClick = { includeSamples = !includeSamples }, label = { Text(stringResource(R.string.samples)) })
-                        FilterChip(selected = includeSessions, enabled = !isBusy, onClick = { includeSessions = !includeSessions }, label = { Text(stringResource(R.string.sessions)) })
+                        FilterChip(selected = includeSamples, enabled = !isBusy, onClick = onToggleSamples, label = { Text(stringResource(R.string.samples)) })
+                        FilterChip(selected = includeSessions, enabled = !isBusy, onClick = onToggleSessions, label = { Text(stringResource(R.string.sessions)) })
                     }
                     Text(stringResource(R.string.history_range_help), style = MaterialTheme.typography.bodyMedium)
                 }
@@ -74,10 +109,10 @@ fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
                     Text(stringResource(R.string.export), style = MaterialTheme.typography.titleMedium)
                     Text(stringResource(R.string.history_export_help))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { createJson.launch("BatStats-${System.currentTimeMillis()}.json") }, enabled = canExport) {
+                        Button(onClick = onExportJson, enabled = canExport) {
                             Text(stringResource(R.string.export_json))
                         }
-                        OutlinedButton(onClick = { folderCsv.launch(null) }, enabled = canExport) { Text(stringResource(R.string.export_csv_folder)) }
+                        OutlinedButton(onClick = onExportCsv, enabled = canExport) { Text(stringResource(R.string.export_csv_folder)) }
                     }
                 }
             }
@@ -86,10 +121,10 @@ fun DataScreen(onBack: () -> Unit, vm: DataViewModel = koinViewModel()) {
                     Text(stringResource(R.string.import_string), style = MaterialTheme.typography.titleMedium)
                     Text(stringResource(R.string.history_import_help))
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { openJson.launch(arrayOf("application/json", "application/octet-stream")) }, enabled = !isBusy) {
+                        Button(onClick = onImportJson, enabled = !isBusy) {
                             Text(stringResource(R.string.import_json))
                         }
-                        OutlinedButton(onClick = { openCsv.launch(arrayOf("text/*", "application/octet-stream")) }, enabled = !isBusy) { Text(stringResource(R.string.import_csv)) }
+                        OutlinedButton(onClick = onImportCsv, enabled = !isBusy) { Text(stringResource(R.string.import_csv)) }
                     }
                 }
             }

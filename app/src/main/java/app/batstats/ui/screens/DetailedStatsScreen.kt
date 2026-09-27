@@ -24,13 +24,40 @@ import app.batstats.R
 import app.batstats.battery.util.BatteryStatsParser
 import app.batstats.battery.util.RootStatsCollector
 import app.batstats.battery.util.KernelStats
+import app.batstats.battery.util.ShellRunner
 import app.batstats.viewmodel.DetailedStatsViewModel
 import org.koin.androidx.compose.koinViewModel
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private const val KERNEL_TAB = 6
+
+/** Advanced-access readings shown by [DetailedStatsContent]; mirrors the [DetailedStatsViewModel] flows. */
+data class DetailedStatsUiState(
+    val snapshot: BatteryStatsParser.FullSnapshot?,
+    val deviceIdle: BatteryStatsParser.DeviceIdleInfo?,
+    val powerManager: BatteryStatsParser.PowerManagerInfo?,
+    val refreshing: Boolean,
+    val error: String?,
+    val mode: ShellRunner.Mode,
+    val shizukuRunning: Boolean,
+    val shizukuAuthorized: Boolean,
+    val adbCommands: String,
+)
+
+/** Root-only kernel readings for the kernel tab; [cpu], [thermal] and [wakelocks] are read while that tab is shown. */
+data class KernelDetailsState(
+    val root: Boolean,
+    val battery: KernelStats.Battery?,
+    val cpu: List<KernelStats.Cpu> = emptyList(),
+    val thermal: List<KernelStats.Thermal> = emptyList(),
+    val wakelocks: List<KernelStats.Wakelock> = emptyList(),
+    val busy: Boolean = false,
+    val errors: Map<String, String> = emptyMap(),
+    val collectedAt: Map<String, Long> = emptyMap(),
+)
+
 @Composable
 fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinViewModel()) {
     val snapshot by vm.snapshot.collectAsStateWithLifecycle()
@@ -46,6 +73,87 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var kernelRefreshKey by remember { mutableIntStateOf(0) }
+    LifecycleResumeEffect(Unit) { vm.recheck(); onPauseOrDispose {} }
+    DetailedStatsContent(
+        state = DetailedStatsUiState(
+            snapshot = snapshot,
+            deviceIdle = idle,
+            powerManager = power,
+            refreshing = refreshing,
+            error = error,
+            mode = mode,
+            shizukuRunning = running,
+            shizukuAuthorized = authorized,
+            adbCommands = vm.adbCommands,
+        ),
+        tab = tab,
+        onTabSelected = { tab = it },
+        onBack = onBack,
+        onRefresh = { vm.refresh(true) },
+        onRequestShizukuPermission = vm::requestShizukuPermission,
+        onCopyAdbCommands = {
+            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("BatStats ADB", vm.adbCommands))
+        },
+        onResetStats = { scope.launch { if (vm.resetStats()) vm.refresh(true) } },
+        // Composed only inside the kernel tab's list item, so root reads and their recompositions stay scoped there.
+        kernelContent = {
+            KernelDetails(
+                state = collectKernelDetails(root, kernel, kernelRefreshKey),
+                refresh = { vm.refreshRootStats(); kernelRefreshKey++ },
+            )
+        },
+    )
+}
+
+@Composable
+private fun collectKernelDetails(root: Boolean, battery: KernelStats.Battery?, refreshKey: Int): KernelDetailsState {
+    val errors by RootStatsCollector.errors.collectAsStateWithLifecycle()
+    val collected by RootStatsCollector.collectedAt.collectAsStateWithLifecycle()
+    var cpu by remember { mutableStateOf(emptyList<KernelStats.Cpu>()) }
+    var thermal by remember { mutableStateOf(emptyList<KernelStats.Thermal>()) }
+    var locks by remember { mutableStateOf(emptyList<KernelStats.Wakelock>()) }
+    var busy by remember { mutableStateOf(false) }
+    LaunchedEffect(root, refreshKey) {
+        if (root) { busy = true
+            try { cpu = RootStatsCollector.getCpuInfo(); thermal = RootStatsCollector.getThermalZones(); locks = RootStatsCollector.getKernelWakelocks() }
+            finally { busy = false }
+        } else { cpu = emptyList(); thermal = emptyList(); locks = emptyList() }
+    }
+    return KernelDetailsState(
+        root = root,
+        battery = battery,
+        cpu = cpu,
+        thermal = thermal,
+        wakelocks = locks,
+        busy = busy,
+        errors = errors,
+        collectedAt = collected,
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DetailedStatsContent(
+    state: DetailedStatsUiState,
+    tab: Int,
+    onTabSelected: (Int) -> Unit,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onRequestShizukuPermission: () -> Unit,
+    onCopyAdbCommands: () -> Unit,
+    onResetStats: () -> Unit,
+    kernelContent: @Composable () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val snapshot = state.snapshot
+    val idle = state.deviceIdle
+    val power = state.powerManager
+    val refreshing = state.refreshing
+    val error = state.error
+    val mode = state.mode
+    val running = state.shizukuRunning
+    val authorized = state.shizukuAuthorized
     var showAccess by rememberSaveable { mutableStateOf(false) }
     var showReset by rememberSaveable { mutableStateOf(false) }
     var sort by rememberSaveable { mutableIntStateOf(0) }
@@ -54,18 +162,17 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
     var selected by remember { mutableStateOf<BatteryStatsParser.AppPowerStats?>(null) }
     val tabs = listOf(R.string.adv_overview, R.string.adv_apps, R.string.adv_wakelocks,
         R.string.adv_network, R.string.adv_scheduled, R.string.adv_system, R.string.adv_kernel)
-    LifecycleResumeEffect(Unit) { vm.recheck(); onPauseOrDispose {} }
-    Scaffold(topBar = {
+    Scaffold(modifier = modifier, topBar = {
         TopAppBar(title = { Text(stringResource(R.string.adv_title)) }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.adv_back)) }
-        }, actions = { IconButton(onClick = { vm.refresh(true) }, enabled = !refreshing) {
+        }, actions = { IconButton(onClick = onRefresh, enabled = !refreshing) {
             Icon(Icons.Default.Refresh, stringResource(R.string.adv_refresh))
         } })
     }) { padding ->
         Column(Modifier.padding(padding)) {
             if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth())
             SecondaryScrollableTabRow(selectedTabIndex = tab, edgePadding = 0.dp) {
-                tabs.forEachIndexed { index, label -> Tab(selected = tab == index, onClick = { tab = index }, text = { Text(stringResource(label)) }) }
+                tabs.forEachIndexed { index, label -> Tab(selected = tab == index, onClick = { onTabSelected(index) }, text = { Text(stringResource(label)) }) }
             }
             key(tab) {
                 LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
@@ -82,7 +189,7 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                             if (tab == 0) TextButton(onClick = { showReset = true }, enabled = !refreshing && mode != app.batstats.battery.util.ShellRunner.Mode.NONE) {
                                 Text(stringResource(R.string.adv_reset_android))
                             }
-                            if (running && !authorized) Button(onClick = vm::requestShizukuPermission) { Text(stringResource(R.string.adv_authorize)) }
+                            if (running && !authorized) Button(onClick = onRequestShizukuPermission) { Text(stringResource(R.string.adv_authorize)) }
                         }
                     }
                     when (tab) {
@@ -213,7 +320,7 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
                                 Text("${s.packageName} · UID ${s.uid}"); DetailRow(R.string.adv_pooled_duration, duration(s.totalTimeMs)); DetailRow(R.string.adv_count, s.count.toString())
                             } }
                         }
-                        6 -> item { KernelDetails(root, kernel, vm::refreshRootStats) }
+                        KERNEL_TAB -> item { kernelContent() }
                     }
                     item { Spacer(Modifier.height(16.dp)) }
                 }
@@ -223,14 +330,14 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
     if (showAccess) AlertDialog(onDismissRequest = { showAccess = false }, title = { Text(stringResource(R.string.adv_access_help)) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.adv_access_instructions))
-            Text(vm.adbCommands, style = MaterialTheme.typography.bodySmall)
+            Text(state.adbCommands, style = MaterialTheme.typography.bodySmall)
         } }, confirmButton = { TextButton(onClick = {
-            context.getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("BatStats ADB", vm.adbCommands))
+            onCopyAdbCommands()
         }) { Text(stringResource(R.string.adv_copy_commands)) } }, dismissButton = { TextButton(onClick = { showAccess = false }) { Text(stringResource(R.string.adv_close)) } })
     if (showReset) AlertDialog(onDismissRequest = { showReset = false }, title = { Text(stringResource(R.string.adv_reset_android)) },
         text = { Text(stringResource(R.string.adv_reset_warning)) }, confirmButton = { TextButton(onClick = {
             showReset = false
-            scope.launch { if (vm.resetStats()) vm.refresh(true) }
+            onResetStats()
         }) { Text(stringResource(R.string.adv_reset_confirm)) } }, dismissButton = { TextButton(onClick = { showReset = false }) { Text(stringResource(R.string.adv_cancel)) } })
     selected?.let { app -> AlertDialog(onDismissRequest = { selected = null }, title = { Text(app.packageName) },
         text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -253,27 +360,22 @@ fun DetailedStatsScreen(onBack: () -> Unit, vm: DetailedStatsViewModel = koinVie
         } }, confirmButton = { TextButton(onClick = { selected = null }) { Text(stringResource(R.string.adv_close)) } }) }
 }
 
-@Composable private fun KernelDetails(root: Boolean, battery: KernelStats.Battery?, refresh: () -> Unit) {
-    val errors by RootStatsCollector.errors.collectAsStateWithLifecycle()
-    val collected by RootStatsCollector.collectedAt.collectAsStateWithLifecycle()
-    var cpu by remember { mutableStateOf(emptyList<KernelStats.Cpu>()) }
-    var thermal by remember { mutableStateOf(emptyList<KernelStats.Thermal>()) }
-    var locks by remember { mutableStateOf(emptyList<KernelStats.Wakelock>()) }
-    var refreshKey by remember { mutableIntStateOf(0) }
-    var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(root, refreshKey) {
-        if (root) { busy = true
-            try { cpu = RootStatsCollector.getCpuInfo(); thermal = RootStatsCollector.getThermalZones(); locks = RootStatsCollector.getKernelWakelocks() }
-            finally { busy = false }
-        } else { cpu = emptyList(); thermal = emptyList(); locks = emptyList() }
-    }
+@Composable fun KernelDetails(state: KernelDetailsState, refresh: () -> Unit) {
+    val root = state.root
+    val battery = state.battery
+    val errors = state.errors
+    val collected = state.collectedAt
+    val cpu = state.cpu
+    val thermal = state.thermal
+    val locks = state.wakelocks
+    val busy = state.busy
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailCard(stringResource(R.string.adv_kernel)) {
             Text(stringResource(R.string.adv_kernel_note))
             if (!root) Text(stringResource(R.string.adv_root_needed))
             collected.forEach { (source, at) -> Text(stringResource(R.string.adv_kernel_collected, source, date(at)), style = MaterialTheme.typography.bodySmall) }
             errors.forEach { (source, error) -> Text("$source: $error", color = MaterialTheme.colorScheme.error) }
-            OutlinedButton(onClick = { refresh(); refreshKey++ }, enabled = !busy) { Text(stringResource(R.string.adv_refresh)) }
+            OutlinedButton(onClick = refresh, enabled = !busy) { Text(stringResource(R.string.adv_refresh)) }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             DetailRow(R.string.adv_cycle_count, battery?.cycleCount?.toString())
             DetailRow(R.string.adv_design, battery?.chargeFullDesign?.let { charge(it / 1000.0) })

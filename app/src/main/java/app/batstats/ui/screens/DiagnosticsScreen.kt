@@ -57,7 +57,66 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
     } ?: stringResource(R.string.diagnostic_no_advanced)
     val sourceHelp = stringResource(R.string.diagnostic_source_help)
     val periodHelp = stringResource(R.string.diagnostic_period_help)
-    Scaffold(topBar = { TopAppBar(title = { Text(stringResource(R.string.diagnostics_title)) }, navigationIcon = {
+    DiagnosticsContent(
+        state = DiagnosticsUiState(
+            readingText = readingText,
+            observationText = observationText,
+            accessText = accessText,
+            advancedText = advancedText,
+            ordinaryError = ordinaryError,
+            advancedError = advancedError,
+            storageFailed = storageFailed,
+            events = events,
+            shareFailed = shareFailed,
+        ),
+        onBack = onBack,
+        onRefresh = { repository.refreshNow() },
+        onShareReport = {
+            val report = buildString {
+                appendLine("BatStats ${BuildConfig.VERSION_NAME} · Android API ${Build.VERSION.SDK_INT}")
+                appendLine("Report generated: ${Instant.now()} (UTC)")
+                appendLine(readingText); appendLine(); appendLine(sourceHelp)
+                appendLine(observationText); appendLine(); appendLine(periodHelp)
+                appendLine(accessText); appendLine(advancedText)
+                appendLine("Current collection failure: battery=${ordinaryError != null}, advanced=${advancedError != null}")
+                appendLine("Diagnostic persistence unavailable: $storageFailed")
+                appendLine(); append(DiagnosticReport.events(events))
+            }
+            try {
+                context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
+                    putExtra(Intent.EXTRA_SUBJECT, reportTitle)
+                }, shareTitle))
+                shareFailed = false
+            } catch (_: android.content.ActivityNotFoundException) { shareFailed = true }
+        },
+    )
+}
+
+/** Display values derived by [DiagnosticsScreen]; [events] are in recorded (oldest-first) order. */
+data class DiagnosticsUiState(
+    val readingText: String,
+    val observationText: String,
+    val accessText: String,
+    val advancedText: String,
+    val ordinaryError: String?,
+    val advancedError: String?,
+    val storageFailed: Boolean,
+    val events: List<DiagnosticEvent>,
+    val shareFailed: Boolean,
+)
+
+@Composable
+fun DiagnosticsContent(
+    state: DiagnosticsUiState,
+    onBack: () -> Unit,
+    onRefresh: () -> Unit,
+    onShareReport: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val sourceHelp = stringResource(R.string.diagnostic_source_help)
+    val periodHelp = stringResource(R.string.diagnostic_period_help)
+    Scaffold(modifier = modifier, topBar = { TopAppBar(title = { Text(stringResource(R.string.diagnostics_title)) }, navigationIcon = {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, stringResource(R.string.back)) }
     }) }) { padding ->
         LazyColumn(Modifier.fillMaxSize().padding(padding), contentPadding = PaddingValues(16.dp),
@@ -65,44 +124,26 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
             item {
                 Text(stringResource(R.string.diagnostic_privacy), style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { repository.refreshNow() }) { Text(stringResource(R.string.diagnostic_refresh)) }
-                    Button(onClick = {
-                        val report = buildString {
-                            appendLine("BatStats ${BuildConfig.VERSION_NAME} · Android API ${Build.VERSION.SDK_INT}")
-                            appendLine("Report generated: ${Instant.now()} (UTC)")
-                            appendLine(readingText); appendLine(); appendLine(sourceHelp)
-                            appendLine(observationText); appendLine(); appendLine(periodHelp)
-                            appendLine(accessText); appendLine(advancedText)
-                            appendLine("Current collection failure: battery=${ordinaryError != null}, advanced=${advancedError != null}")
-                            appendLine("Diagnostic persistence unavailable: $storageFailed")
-                            appendLine(); append(DiagnosticReport.events(events))
-                        }
-                        try {
-                            context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"; putExtra(Intent.EXTRA_TEXT, report)
-                                putExtra(Intent.EXTRA_SUBJECT, reportTitle)
-                            }, shareTitle))
-                            shareFailed = false
-                        } catch (_: android.content.ActivityNotFoundException) { shareFailed = true }
-                    }) { Text(stringResource(R.string.diagnostic_share)) }
+                    OutlinedButton(onClick = onRefresh) { Text(stringResource(R.string.diagnostic_refresh)) }
+                    Button(onClick = onShareReport) { Text(stringResource(R.string.diagnostic_share)) }
                 }
-                if (shareFailed) Text(stringResource(R.string.diagnostic_share_failed), color = MaterialTheme.colorScheme.error)
+                if (state.shareFailed) Text(stringResource(R.string.diagnostic_share_failed), color = MaterialTheme.colorScheme.error)
             }
-            item { DiagnosticCard(stringResource(R.string.diagnostic_readings), readingText, sourceHelp) }
-            item { DiagnosticCard(stringResource(R.string.diagnostic_observation), observationText, periodHelp) }
+            item { DiagnosticCard(stringResource(R.string.diagnostic_readings), state.readingText, sourceHelp) }
+            item { DiagnosticCard(stringResource(R.string.diagnostic_observation), state.observationText, periodHelp) }
             item {
-                DiagnosticCard(stringResource(R.string.diagnostic_access), "$accessText\n$advancedText",
+                DiagnosticCard(stringResource(R.string.diagnostic_access), "${state.accessText}\n${state.advancedText}",
                     stringResource(R.string.diagnostic_access_help))
-                ordinaryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                advancedError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                state.ordinaryError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                state.advancedError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             }
             item {
                 Text(stringResource(R.string.diagnostic_events), style = MaterialTheme.typography.titleLarge)
                 Text(stringResource(R.string.diagnostic_log_help), style = MaterialTheme.typography.bodySmall)
-                if (storageFailed) Text(stringResource(R.string.diagnostic_storage_failed), color = MaterialTheme.colorScheme.error)
-                if (events.isEmpty()) Text(stringResource(R.string.diagnostic_empty))
+                if (state.storageFailed) Text(stringResource(R.string.diagnostic_storage_failed), color = MaterialTheme.colorScheme.error)
+                if (state.events.isEmpty()) Text(stringResource(R.string.diagnostic_empty))
             }
-            items(events.asReversed()) { event ->
+            items(state.events.asReversed()) { event ->
                 DiagnosticCard(stringResource(event.code.labelResource()),
                     "${event.code.name}\n${Instant.ofEpochMilli(event.firstAt)} → ${Instant.ofEpochMilli(event.lastAt)}\n×${event.count}")
             }

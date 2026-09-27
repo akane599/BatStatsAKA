@@ -20,12 +20,30 @@ import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun DrainStatsScreen(onBack: () -> Unit, vm: DrainStatsViewModel = koinViewModel()) {
-    val context = LocalContext.current
-    val text = remember(context) { MonitoringText(context) }
     val state by vm.drainState.collectAsStateWithLifecycle()
     val running by vm.isTracking.collectAsStateWithLifecycle()
+    DrainStatsContent(
+        state = state,
+        running = running,
+        onBack = onBack,
+        onToggleTracking = { if (running) vm.stopTracking() else vm.startTracking() },
+        onResetConfirmed = { vm.resetSession() },
+    )
+}
+
+@Composable
+fun DrainStatsContent(
+    state: ObservationSummary,
+    running: Boolean,
+    onBack: () -> Unit,
+    onToggleTracking: () -> Unit,
+    onResetConfirmed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val text = remember(context) { MonitoringText(context) }
     var confirmReset by remember { mutableStateOf(false) }
-    Scaffold(topBar = {
+    Scaffold(modifier = modifier, topBar = {
         TopAppBar(title = { Text(stringResource(R.string.monitor_drain_title)) }, navigationIcon = {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back)) }
         })
@@ -36,7 +54,7 @@ fun DrainStatsScreen(onBack: () -> Unit, vm: DrainStatsViewModel = koinViewModel
                 Text(stringResource(if (running) R.string.monitor_active else R.string.monitor_stopped), style = MaterialTheme.typography.headlineSmall)
                 Text(text.since(state), style = MaterialTheme.typography.bodyMedium)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = { if (running) vm.stopTracking() else vm.startTracking() }) {
+                    Button(onClick = onToggleTracking) {
                         Text(stringResource(if (running) R.string.monitor_stop else R.string.start_monitoring))
                     }
                     OutlinedButton(onClick = { confirmReset = true }, enabled = state.startedAt != null) { Text(stringResource(R.string.monitor_reset)) }
@@ -49,7 +67,7 @@ fun DrainStatsScreen(onBack: () -> Unit, vm: DrainStatsViewModel = koinViewModel
     }
     if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, title = { Text(stringResource(R.string.monitor_reset_title)) },
         text = { Text(stringResource(R.string.monitor_reset_help)) },
-        confirmButton = { TextButton(onClick = { vm.resetSession(); confirmReset = false }) { Text(stringResource(R.string.monitor_reset)) } },
+        confirmButton = { TextButton(onClick = { onResetConfirmed(); confirmReset = false }) { Text(stringResource(R.string.monitor_reset)) } },
         dismissButton = { TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.cancel)) } })
 }
 

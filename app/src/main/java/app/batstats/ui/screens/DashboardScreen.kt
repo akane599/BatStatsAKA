@@ -17,10 +17,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.drain.MonitoringText
+import app.batstats.battery.measurement.ObservationSummary
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.TimeEstimator
+import app.batstats.settings.AppSettings
 import app.batstats.ui.components.TelemetryChart
 import app.batstats.ui.components.ChartPoint
 import app.batstats.viewmodel.DashboardViewModel
@@ -30,14 +34,25 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
 
+/** Everything [DashboardContent] renders, as plain values collected by [DashboardScreen]. */
+data class DashboardUiState(
+    val reading: BatteryRepository.Realtime = BatteryRepository.Realtime(),
+    val observing: Boolean = false,
+    val summary: ObservationSummary = ObservationSummary(),
+    val error: String? = null,
+    val samples: List<BatterySample> = emptyList(),
+    val settings: AppSettings = AppSettings(),
+    val shizukuRunning: Boolean = false,
+    val shizukuGranted: Boolean = false,
+    val access: ShellRunner.Mode = ShellRunner.Mode.NONE,
+)
+
 @Composable
 fun DashboardScreen(
     onOpenHistory: () -> Unit, onOpenAlarms: () -> Unit, onOpenSettings: () -> Unit,
     onOpenData: () -> Unit, onOpenDetailedStats: () -> Unit, onOpenDrainStats: () -> Unit, onOpenDiagnostics: () -> Unit,
-    vm: DashboardViewModel = koinViewModel()
+    vm: DashboardViewModel = koinViewModel(),
 ) {
-    val context = LocalContext.current
-    val text = remember(context) { MonitoringText(context) }
     val reading by vm.realtime.collectAsStateWithLifecycle()
     val observing by vm.isMonitoring.collectAsStateWithLifecycle()
     val summary by vm.observation.collectAsStateWithLifecycle()
@@ -51,7 +66,59 @@ fun DashboardScreen(
     val access by shell.access.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) { vm.refresh(); onPauseOrDispose {} }
     LaunchedEffect(running, granted) { shell.detectMode(forceRefresh = true) }
-    Scaffold(topBar = {
+    DashboardContent(
+        state = DashboardUiState(
+            reading = reading,
+            observing = observing,
+            summary = summary,
+            error = error,
+            samples = samples,
+            settings = settings,
+            shizukuRunning = running,
+            shizukuGranted = granted,
+            access = access,
+        ),
+        onToggleMonitoring = vm::toggleMonitoring,
+        onRefresh = vm::refresh,
+        onRequestShizukuPermission = { shizuku.requestPermission() },
+        onOpenHistory = onOpenHistory,
+        onOpenAlarms = onOpenAlarms,
+        onOpenSettings = onOpenSettings,
+        onOpenData = onOpenData,
+        onOpenDetailedStats = onOpenDetailedStats,
+        onOpenDrainStats = onOpenDrainStats,
+        onOpenDiagnostics = onOpenDiagnostics,
+    )
+}
+
+/** Stateless dashboard body; [DashboardScreen] supplies state and routes every event. */
+@Composable
+fun DashboardContent(
+    state: DashboardUiState,
+    onToggleMonitoring: () -> Unit,
+    onRefresh: () -> Unit,
+    onRequestShizukuPermission: () -> Unit,
+    onOpenHistory: () -> Unit,
+    onOpenAlarms: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenData: () -> Unit,
+    onOpenDetailedStats: () -> Unit,
+    onOpenDrainStats: () -> Unit,
+    onOpenDiagnostics: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    val text = remember(context) { MonitoringText(context) }
+    val reading = state.reading
+    val observing = state.observing
+    val summary = state.summary
+    val error = state.error
+    val samples = state.samples
+    val settings = state.settings
+    val running = state.shizukuRunning
+    val granted = state.shizukuGranted
+    val access = state.access
+    Scaffold(modifier = modifier, topBar = {
         TopAppBar(title = { Text("BatStats") }, actions = {
             IconButton(onClick = onOpenSettings) { Icon(Icons.Outlined.Settings, stringResource(R.string.settings)) }
         })
@@ -69,8 +136,8 @@ fun DashboardScreen(
                             ?: stringResource(R.string.monitor_waiting_battery), style = MaterialTheme.typography.bodySmall)
                         Text((if (observing || reading.sample?.status == 2) TimeEstimator.etaString(context, reading.sample) else null) ?: stringResource(R.string.monitor_eta_unavailable))
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = vm::toggleMonitoring) { Text(stringResource(if (observing) R.string.monitor_stop else R.string.start_monitoring)) }
-                            TextButton(onClick = vm::refresh) { Text(stringResource(R.string.diagnostic_refresh)) }
+                            Button(onClick = onToggleMonitoring) { Text(stringResource(if (observing) R.string.monitor_stop else R.string.start_monitoring)) }
+                            TextButton(onClick = onRefresh) { Text(stringResource(R.string.diagnostic_refresh)) }
                         }
                     }
                 }
@@ -88,7 +155,7 @@ fun DashboardScreen(
                         Text(stringResource(R.string.monitor_access_help), style = MaterialTheme.typography.bodySmall)
                         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (running && !granted) TextButton(onClick = { shizuku.requestPermission() }) { Text(stringResource(R.string.adv_authorize)) }
+                            if (running && !granted) TextButton(onClick = onRequestShizukuPermission) { Text(stringResource(R.string.adv_authorize)) }
                             TextButton(onClick = onOpenDetailedStats) { Text(stringResource(R.string.adv_title)) }
                             TextButton(onClick = onOpenDiagnostics) { Text(stringResource(R.string.diagnostics_title)) }
                         }
@@ -142,7 +209,6 @@ fun DashboardScreen(
             }
         }
     }
-
 }
 
 @Composable
