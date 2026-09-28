@@ -7,16 +7,16 @@ _Claude: read this first every session. Update it before ending. Keep each secti
 Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Run ledger (rulings, deferred minors, per-task state): `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` — read it before resuming. Before-refs in `design/before/`, Wave A renders in `design/after-waveA/`.
 - [x] P0a bug fixes · P0b dead code/resources · Contracts
 - [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
-- [~] Wave B: B1a sampler (4cf382f + 833cc5a, reviewed) · B1b settings v3 + gating (ac8bb6f, reviewed) · B2 per-app repositories (**running**) · emulator cadence check
+- [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
 - [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
-- [ ] P4a Now → **visual checkpoint with user**
+- [~] P4a Now (**running**, brief `P4a-brief.md`) → **visual checkpoint with user**
 - [ ] P4b screens (6 agents) ∥ P5 notification/tile/widgets
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. B2: gate, commit, task review (ledger has state); then the emulator cadence check + B1b's device tests (MonitoringLifecycle, WidgetDelivery, RepositoryRecovery, Navigation).
-2. P4a Now (brief ready: `.superpowers/sdd/adaptive-wibbling-twilight/P4a-brief.md`) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
+1. P4a Now: gate, commit, review (ledger has state) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
+2. P4b (6 agents) ∥ P5 (3 agents): briefs not written yet.
 
 ## Blockers / open questions
 
