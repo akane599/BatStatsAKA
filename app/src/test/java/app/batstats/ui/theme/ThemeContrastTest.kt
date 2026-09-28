@@ -6,7 +6,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import kotlin.math.max
 import kotlin.math.min
@@ -115,9 +114,10 @@ class ThemeContrastTest {
         assertEquals(BatDarkColorScheme.primary, oledSurfaces(BatDarkColorScheme).primary)
     }
 
-    @Ignore("Approved outline #3A4452 is 1.95:1 on background; Switch/OutlinedTextField borders need 3:1. Smallest passing: #526074.")
     @Test
     fun controlOutlineMeetsNonTextContrast() {
-        schemes.forEach { (name, s) -> assertContrast(3.0, name, "outline on surface", s.surface, s.outline) }
+        schemes.forEach { (name, s) ->
+            s.surfaceTiers().forEach { (tier, color) -> assertContrast(3.0, name, "outline on $tier", color, s.outline) }
+        }
     }
 }

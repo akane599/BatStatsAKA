@@ -22,6 +22,9 @@ internal object BatPalette {
     val OnSurfaceVariant = Color(0xFF9AA4B2)
     val Outline = Color(0xFF3A4452)
 
+    // Deviates from the brief (#3A4452 is 1.45:1 on #232B37): control borders need ≥3:1 on every surface tier.
+    val OutlineControl = Color(0xFF63758D)
+
     // Semantic accents: energy in, energy out, heat/error, information.
     val Charge = Color(0xFFC8F25C)
     val Drain = Color(0xFFFFB35C)
@@ -82,7 +85,7 @@ val BatDarkColorScheme: ColorScheme = with(BatPalette) {
         surfaceTint = Color.Transparent,
         inverseSurface = OnSurface,
         inverseOnSurface = Container,
-        outline = Outline,
+        outline = OutlineControl,
         outlineVariant = Outline,
         scrim = Color.Black,
         surfaceBright = ContainerHighest,
