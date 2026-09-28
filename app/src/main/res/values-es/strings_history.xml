@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The History screen (ui/screens/HistoryScreen.kt). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="history_info_title">Acerca del historial</string>
+    <string name="history_info_body">Días suma cada día natural mientras la supervisión está activa. Pantalla encendida y apagada cuentan solo el tiempo con batería; cargado es la carga recibida. Los días sin supervisión quedan vacíos.\n\nLa media diaria cubre los días registrados del rango elegido, sin hoy hasta que termine. El sueño profundo es la parte del tiempo con batería en que el procesador estuvo totalmente dormido.\n\nUna sesión va de enchufar a desenchufar, o al revés. Una interrupción de la supervisión cierra la sesión y abre una nueva.</string>
+
+    <string name="history_mode_label">Vista del historial</string>
+    <string name="history_mode_days">Días</string>
+    <string name="history_mode_sessions">Sesiones</string>
+
+    <string name="history_range_label">Rango del gráfico</string>
+    <string name="history_range_week">7 días</string>
+    <string name="history_range_two_weeks">14 días</string>
+    <string name="history_range_month">30 días</string>
+    <string name="history_screen_on">Pantalla encendida</string>
+    <string name="history_screen_off">Pantalla apagada</string>
+    <string name="history_deep_sleep">Sueño profundo</string>
+    <string name="history_charged">Cargado</string>
+    <string name="history_chart_empty">No hay consumo registrado en estos días</string>
+    <string name="history_average">Media diaria</string>
+    <string name="history_today">Hoy</string>
+    <string name="history_yesterday">Ayer</string>
+    <string name="history_day_not_recorded">Sin registro</string>
+    <string name="history_days_title">Totales diarios</string>
+    <string name="history_day_detail">Pantalla encendida %1$s</string>
+    <string name="history_day_detail_charged">Pantalla encendida %1$s · cargado %2$s</string>
+    <string name="history_days_empty_title">No hay días registrados</string>
+    <string name="history_days_empty_body">Inicia la supervisión en Ahora para registrar los totales diarios.</string>
+    <string name="history_days_empty_monitoring">Los totales aparecerán aquí cuando el teléfono haya funcionado con batería.</string>
+
+    <string name="history_filter_all">Todas</string>
+    <string name="history_filter_discharge">Descarga</string>
+    <string name="history_filter_charge">Carga</string>
+    <string name="history_sessions_empty_all">Aún no hay sesiones</string>
+    <string name="history_sessions_empty_discharge">Aún no hay sesiones de descarga</string>
+    <string name="history_sessions_empty_charge">Aún no hay sesiones de carga</string>
+    <string name="history_sessions_empty_body">Se registra una sesión cada vez que el teléfono se enchufa o desenchufa con la supervisión activa.</string>
+    <string name="history_session_span">%1$s – %2$s</string>
+    <string name="history_session_span_now">%1$s – ahora</string>
+    <string name="history_session_detail">%1$s · %2$s</string>
+    <string name="history_level_change">%1$s → %2$s</string>
+    <string name="history_percent">%1$s %%</string>
+    <string name="history_type_charge">Carga</string>
+    <string name="history_type_discharge">Descarga</string>
+    <string name="history_type_plugged">Enchufado, sin cargar</string>
+    <string name="history_type_unknown">Estado de energía desconocido</string>
+    <string name="history_app_usage_no_access">Uso de apps: sin acceso</string>
+    <string name="history_app_usage_failed">Uso de apps: no se pudo leer</string>
+    <string name="history_open_session">Abrir detalles</string>
+    <string name="history_show_more">Mostrar más</string>
+
+    <string name="history_failed_title">No se pudo leer el historial</string>
+    <string name="history_failed_body">Tus registros guardados están a salvo.</string>
+    <string name="history_retry">Reintentar</string>
+</resources>

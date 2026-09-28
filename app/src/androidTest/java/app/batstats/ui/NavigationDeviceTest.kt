@@ -97,12 +97,13 @@ class NavigationDeviceTest {
         backToNow()
 
         tab(TestTags.TAB_HISTORY)
-        compose.onNode(hasSetTextAction()).performTextInput("no-such-observation-device-test")
-        compose.waitUntil(120_000) { compose.onAllNodesWithText(label(R.string.history_no_matches)).fetchSemanticsNodes().isNotEmpty() }
-        scroll(R.string.history_no_matches); capture("history-empty-filter")
-        // Back would only close the keyboard here; History's own back arrow returns to Now.
-        compose.onNodeWithContentDescription(label(R.string.back)).performClick()
-        awaitNow()
+        compose.onNodeWithText(label(R.string.history_mode_days)).assertIsSelected()
+        capture("history-days")
+        click(R.string.history_mode_sessions)
+        compose.onNodeWithText(label(R.string.history_filter_all)).assertIsDisplayed()
+        capture("history-sessions")
+        // History is a tab root: Back returns to Now.
+        backToNow()
 
         tab(TestTags.TAB_SETTINGS)
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(EXPORT_DATA_ROW))
