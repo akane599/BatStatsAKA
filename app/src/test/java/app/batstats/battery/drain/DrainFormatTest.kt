@@ -52,6 +52,26 @@ class DrainFormatTest {
         assertEquals("—", formatVoltage(null))
     }
 
+    @Test fun quantitiesKeepNumberAndUnitApartAndLargerUnitsKeepThreeSignificantDigits() {
+        assertEquals(Quantity("−612", "mA"), currentQuantity(-612.4, Locale.US))
+        assertEquals("−612 mA", Quantity("−612", "mA").toString())
+        assertEquals("94%", Quantity("94%").toString())
+        assertEquals(Quantity("+12.3", "A"), currentAmpsQuantity(12_345.0, Locale.US))
+        assertEquals(Quantity("+1.24", "A"), currentAmpsQuantity(1_240.0, Locale.US))
+        assertEquals(Quantity("−0.612", "A"), currentAmpsQuantity(-612.0, Locale.US))
+        assertEquals(Quantity("123", "A"), drainAmpsQuantity(123_456.0, Locale.US))
+        assertEquals(Quantity("0,420", "A"), drainAmpsQuantity(420.0, turkish))
+        assertEquals(Quantity("12,345", "mAh"), sessionChargeQuantity(12_345.2, Locale.US))
+        assertEquals(Quantity("9.5", "mAh"), sessionChargeQuantity(9.49, Locale.US))
+        assertEquals(Quantity("12.3", "Ah"), sessionChargeAhQuantity(12_345.2, Locale.US))
+        assertEquals(Quantity("2.4", "W"), powerQuantity(-2_412.0, Locale.US))
+        assertEquals(Quantity("88.2", "°F"), temperatureQuantity(31.24, fahrenheit = true, Locale.US))
+        assertEquals(Quantity("3.87", "V"), voltageQuantity(3_871, Locale.US))
+        assertNull(currentQuantity(Double.NaN))
+        assertNull(currentAmpsQuantity(null))
+        assertEquals("—", Quantity.NONE.toString())
+    }
+
     @Test fun numbersHaveNoSignedZeroAndSignedValuesMarkTheDirection() {
         assertEquals("0", formatNumber(-0.4, 0, Locale.US))
         assertEquals("−1,000", formatNumber(-1_000.0, 0, Locale.US))

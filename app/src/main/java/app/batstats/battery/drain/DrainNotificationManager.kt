@@ -14,17 +14,11 @@ import androidx.core.app.NotificationCompat
 import app.batstats.R
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.BatteryRepository
-import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.util.UpdateGate
-import app.batstats.settings.useFahrenheit
 import app.batstats.ui.navigation.Destinations
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.scan
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
@@ -100,20 +94,18 @@ class DrainNotificationManager(private val context: Context, private val reposit
      */
     suspend fun run(issue: Flow<NotificationIssue?>, deliver: (NotificationContent) -> Boolean) {
         val gate = UpdateGate<NotificationContent>()
-        val readings = repository.realtimeFlow.scan(EtaHold.Reading()) { held, reading -> EtaHold.next(held, reading) }.drop(1)
-        val session = repository.activeSessionFlow.map { open -> open?.takeIf { it.type == SessionType.DISCHARGE } }.distinctUntilChanged()
-        val options = repository.settingsFlow.map { it.statusIconValue to it.useFahrenheit }.distinctUntilChanged()
-        combine(readings, session, options, issue.distinctUntilChanged()) { reading, open, (icon, fahrenheit), problem ->
-            content(NotificationInput(reading, open, icon, fahrenheit, problem)) to (reading.reading.sample?.screenOn != false)
-        }.collectLatest { (content, screenOn) ->
-            if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
-            val shown = deliver(content)
-            // A failed update retries on the next change, still ≥5 s after this attempt.
-            gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())
-        }
+        NotificationInputs.of(repository.realtimeFlow, repository.activeSessionFlow, repository.settingsFlow, issue)
+            .map { content(it.input) to it.screenOn }
+            .collectLatest { (content, screenOn) ->
+                if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
+                val shown = deliver(content)
+                // A failed update retries on the next change, still ≥5 s after this attempt.
+                gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())
+            }
     }
 
-    fun build(content: NotificationContent): Notification {
+    /** [fitter] picks each slot's longest form that fits this device's shade at its font scale (tests pass their own). */
+    fun build(content: NotificationContent, fitter: NotificationFitter = NotificationFitter(context)): Notification {
         val open = PendingIntent.getActivity(context, NOTIFICATION_ID,
             Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
                 .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
@@ -121,10 +113,10 @@ class DrainNotificationManager(private val context: Context, private val reposit
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle(content.title)
-            .setContentText(content.summary ?: content.headline)
+            .setContentText(content.summary.firstOrNull() ?: content.headline.first())
             .setStyle(NotificationCompat.DecoratedCustomViewStyle())
-            .setCustomContentView(collapsed(content))
-            .setCustomBigContentView(expanded(content))
+            .setCustomContentView(collapsed(content, fitter))
+            .setCustomBigContentView(expanded(content, fitter))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setWhen(0L).setShowWhen(false).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -147,26 +139,29 @@ class DrainNotificationManager(private val context: Context, private val reposit
         Intent(context, DrainNotificationReceiver::class.java).setAction(action),
         PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
-    private fun collapsed(content: NotificationContent) = RemoteViews(context.packageName, R.layout.notification_collapsed).apply {
-        setTextViewText(R.id.notification_headline, content.headline)
-        setTextViewText(R.id.notification_level, content.level)
-        setText(R.id.notification_summary, content.summary)
-    }
-
-    private fun expanded(content: NotificationContent) = RemoteViews(context.packageName, R.layout.notification_expanded).apply {
-        setTextViewText(R.id.notification_state, content.state)
-        setTextViewText(R.id.notification_level, content.level)
-        CELLS.zip(content.cells).forEach { (ids, cell) ->
-            setTextViewText(ids.first, cell.label)
-            setTextViewText(ids.second, cell.value)
+    private fun collapsed(content: NotificationContent, fitter: NotificationFitter) =
+        RemoteViews(context.packageName, R.layout.notification_collapsed).apply {
+            setText(R.id.notification_headline, fitter.headline(content))
+            setTextViewText(R.id.notification_level, content.level)
+            setText(R.id.notification_summary, fitter.summary(content))
         }
-        setText(R.id.notification_footer, content.footer)
-        setText(R.id.notification_issue, content.issue)
-    }
+
+    private fun expanded(content: NotificationContent, fitter: NotificationFitter) =
+        RemoteViews(context.packageName, R.layout.notification_expanded).apply {
+            setText(R.id.notification_state, fitter.state(content))
+            setTextViewText(R.id.notification_level, content.level)
+            CELLS.zip(content.cells).forEach { (ids, cell) ->
+                setTextViewText(ids.first, cell.label)
+                // The unit is drawn smaller than the number, as on Now.
+                setTextViewText(ids.second, fitter.value(cell))
+            }
+            setText(R.id.notification_footer, fitter.footer(content))
+            setText(R.id.notification_issue, fitter.issue(content))
+        }
 
     /** Shows [text], or hides the view when there is none. */
-    private fun RemoteViews.setText(id: Int, text: String?) {
-        setTextViewText(id, text.orEmpty())
+    private fun RemoteViews.setText(id: Int, text: CharSequence?) {
+        setTextViewText(id, text ?: "")
         setViewVisibility(id, if (text == null) View.GONE else View.VISIBLE)
     }
 

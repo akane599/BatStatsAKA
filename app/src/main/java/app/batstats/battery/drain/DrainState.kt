@@ -10,6 +10,18 @@ const val NO_VALUE = "—"
 /** The typographic minus, as in the app's charts; `ui.components.chart.MINUS_SIGN` is the same character. */
 const val MINUS_SIGN = "−"
 
+/**
+ * A formatted reading: its number and unit kept apart, so a view can draw the unit smaller (as Now's StatCell
+ * does). [toString] is the plain "number unit" text.
+ */
+data class Quantity(val number: String, val unit: String? = null) {
+    override fun toString() = if (unit == null) number else "$number $unit"
+
+    companion object {
+        val NONE = Quantity(NO_VALUE)
+    }
+}
+
 fun formatDuration(ms: Long): String {
     val seconds = ms.coerceAtLeast(0) / 1000
     val minutes = seconds / 60
@@ -46,37 +58,61 @@ fun formatSigned(value: Double, decimals: Int, locale: Locale = Locale.getDefaul
 
 private fun Double?.finite(): Double? = this?.takeIf(Double::isFinite)
 
-/** Two significant digits for small rates avoid turning nonzero drain into a displayed zero. */
-fun formatDrainRate(rate: Double?, locale: Locale = Locale.getDefault()): String {
-    val value = rate.finite() ?: return NO_VALUE
-    val number = if (abs(value) < 1.0 && value != 0.0) {
-        String.format(locale, "%.2g", abs(value)).let { if (value < 0) MINUS_SIGN + it else it }
-    } else formatNumber(value, 0, locale)
-    return "$number mA"
+/** Three significant digits for a value shown in the larger unit (A, Ah): "0.612", "1.24", "12.3", "123". */
+private fun significantDecimals(value: Double) = when {
+    abs(value) < 1 -> 3
+    abs(value) < 10 -> 2
+    abs(value) < 100 -> 1
+    else -> 0
 }
 
-fun formatCharge(mah: Double?, locale: Locale = Locale.getDefault()): String {
-    val value = mah.finite() ?: return NO_VALUE
-    val number = if (abs(value) < 0.1 && value != 0.0) {
-        String.format(locale, "%.1g", abs(value)).let { if (value < 0) MINUS_SIGN + it else it }
-    } else formatNumber(value, 1, locale)
-    return "$number mAh"
-}
+/** Two significant digits for small values avoid turning a nonzero reading into a displayed zero. */
+private fun smallOrGrouped(value: Double, smallBelow: Double, pattern: String, decimals: Int, locale: Locale): String =
+    if (abs(value) < smallBelow && value != 0.0) {
+        String.format(locale, pattern, abs(value)).let { if (value < 0) MINUS_SIGN + it else it }
+    } else formatNumber(value, decimals, locale)
 
-/** Calibrated current, signed as Android defines it: "+1,240 mA" charging, "−612 mA" draining. */
-fun formatCurrent(ma: Double?, locale: Locale = Locale.getDefault()): String =
-    ma.finite()?.let { "${formatSigned(it, 0, locale)} mA" } ?: NO_VALUE
+fun drainRateQuantity(rate: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    rate.finite()?.let { Quantity(smallOrGrouped(it, 1.0, "%.2g", 0, locale), "mA") }
 
-/** Power magnitude (the current carries the direction): "2.4 W", "0.35 W" below 1 W. */
-fun formatPower(mw: Double?, locale: Locale = Locale.getDefault()): String {
-    val watts = mw.finite()?.let { abs(it) / 1_000 } ?: return NO_VALUE
-    return "${formatNumber(watts, if (watts < 1) 2 else 1, locale)} W"
-}
+fun chargeQuantity(mah: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    mah.finite()?.let { Quantity(smallOrGrouped(it, 0.1, "%.1g", 1, locale), "mAh") }
 
-fun formatTemperature(celsius: Double?, fahrenheit: Boolean, locale: Locale = Locale.getDefault()): String {
-    val value = celsius.finite() ?: return NO_VALUE
-    return if (fahrenheit) "${formatNumber(value * 1.8 + 32, 1, locale)} °F" else "${formatNumber(value, 1, locale)} °C"
-}
+/** Calibrated current, signed as Android defines it: "+1,240" charging, "−612" draining (mA). */
+fun currentQuantity(ma: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    ma.finite()?.let { Quantity(formatSigned(it, 0, locale), "mA") }
 
-fun formatVoltage(mv: Int?, locale: Locale = Locale.getDefault()): String =
-    mv?.let { "${formatNumber(it / 1_000.0, 2, locale)} V" } ?: NO_VALUE
+/** The same current in amps, three significant digits: "+1.24 A". */
+fun currentAmpsQuantity(ma: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    ma.finite()?.let { it / 1_000 }?.let { Quantity(formatSigned(it, significantDecimals(it), locale), "A") }
+
+/** A drain rate in amps (unsigned), three significant digits: "0.42 A". */
+fun drainAmpsQuantity(ma: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    ma.finite()?.let { it / 1_000 }?.let { Quantity(formatNumber(it, significantDecimals(it), locale), "A") }
+
+/** A session's charge: "412 mAh" (one decimal below 10 mAh), or in Ah, three significant digits: "1.23 Ah". */
+fun sessionChargeQuantity(mah: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    mah.finite()?.let { Quantity(formatNumber(it, if (abs(it) < 10) 1 else 0, locale), "mAh") }
+
+fun sessionChargeAhQuantity(mah: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    mah.finite()?.let { it / 1_000 }?.let { Quantity(formatNumber(it, significantDecimals(it), locale), "Ah") }
+
+/** Power magnitude (the current carries the direction): "2.4", "0.35" below 1 W. */
+fun powerQuantity(mw: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    mw.finite()?.let { abs(it) / 1_000 }?.let { Quantity(formatNumber(it, if (it < 1) 2 else 1, locale), "W") }
+
+fun temperatureQuantity(celsius: Double?, fahrenheit: Boolean, locale: Locale = Locale.getDefault()): Quantity? =
+    celsius.finite()?.let {
+        if (fahrenheit) Quantity(formatNumber(it * 1.8 + 32, 1, locale), "°F") else Quantity(formatNumber(it, 1, locale), "°C")
+    }
+
+fun voltageQuantity(mv: Int?, locale: Locale = Locale.getDefault()): Quantity? =
+    mv?.let { Quantity(formatNumber(it / 1_000.0, 2, locale), "V") }
+
+fun formatDrainRate(rate: Double?, locale: Locale = Locale.getDefault()): String = drainRateQuantity(rate, locale)?.toString() ?: NO_VALUE
+fun formatCharge(mah: Double?, locale: Locale = Locale.getDefault()): String = chargeQuantity(mah, locale)?.toString() ?: NO_VALUE
+fun formatCurrent(ma: Double?, locale: Locale = Locale.getDefault()): String = currentQuantity(ma, locale)?.toString() ?: NO_VALUE
+fun formatPower(mw: Double?, locale: Locale = Locale.getDefault()): String = powerQuantity(mw, locale)?.toString() ?: NO_VALUE
+fun formatVoltage(mv: Int?, locale: Locale = Locale.getDefault()): String = voltageQuantity(mv, locale)?.toString() ?: NO_VALUE
+fun formatTemperature(celsius: Double?, fahrenheit: Boolean, locale: Locale = Locale.getDefault()): String =
+    temperatureQuantity(celsius, fahrenheit, locale)?.toString() ?: NO_VALUE

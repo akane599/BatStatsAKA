@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The ongoing monitoring notification. Machine-quality translation; flagged for native review. -->
+<!-- The ongoing monitoring notification. Machine-quality translation; flagged for native review. Keep the
+     …_short / …_minimal forms and the grid labels short (see values/strings_notification.xml). -->
 <resources>
     <string name="notification_percent">%%%1$s</string>
     <string name="notification_headline">%1$s · %2$s</string>
@@ -8,6 +9,7 @@
     <string name="notification_state_charging">Şarj oluyor</string>
     <string name="notification_state_discharging">Pilde</string>
     <string name="notification_state_plugged">Takılı, şarj olmuyor</string>
+    <string name="notification_state_plugged_short">Şarj olmuyor</string>
     <string name="notification_state_full">Tamamen dolu</string>
     <string name="notification_state_unknown">Durum bilinmiyor</string>
     <string name="notification_state_with_charger">%1$s · %2$s</string>
@@ -17,16 +19,19 @@
     <string name="notification_charger_dock">Yuva</string>
 
     <string name="notification_summary_drain">Açık %1$s · Kapalı %2$s</string>
+    <string name="notification_summary_drain_short">Açık %1$s · Kapalı %2$s</string>
     <string name="notification_summary_drain_left">Açık %1$s · Kapalı %2$s · %3$s kaldı</string>
-    <string name="notification_summary_to_full">Dolmasına %1$s · %2$s · %3$s</string>
-    <string name="notification_summary_state">%1$s · %2$s · %3$s</string>
+    <string name="notification_summary_drain_left_short">Açık %1$s · Kapalı %2$s · %3$s kaldı</string>
+    <string name="notification_summary_left">%1$s kaldı</string>
+    <string name="notification_summary_to_full">Dolmasına %1$s · %2$s</string>
+    <string name="notification_summary_state">%1$s · %2$s</string>
 
     <string name="notification_label_current">Akım</string>
     <string name="notification_label_power">Güç</string>
     <string name="notification_label_temperature">Sıcaklık</string>
     <string name="notification_label_voltage">Voltaj</string>
-    <string name="notification_label_screen_on">Ekran açık</string>
-    <string name="notification_label_screen_off">Ekran kapalı</string>
+    <string name="notification_label_screen_on">Ekr. açık</string>
+    <string name="notification_label_screen_off">Ekr. kapalı</string>
     <string name="notification_label_deep_sleep">Derin uyku</string>
     <string name="notification_label_session">Oturum</string>
     <string name="notification_label_time_left">Kalan süre</string>
@@ -36,12 +41,19 @@
     <string name="notification_duration_hours_minutes">%1$s sa %2$s dk</string>
     <string name="notification_duration_minutes">%1$s dk</string>
     <string name="notification_duration_under_minute">&lt;1 dk</string>
-    <string name="notification_duration_compact_hours">%1$s sa</string>
+    <string name="notification_unit_hours">sa</string>
+    <string name="notification_unit_minutes">dk</string>
 
     <string name="notification_footer">Başlangıç %1$s · güncellendi %2$s</string>
+    <string name="notification_footer_range">%1$s–%2$s</string>
+    <string name="notification_footer_since">Başlangıç %1$s</string>
     <string name="notification_footer_updated">Güncellendi %1$s</string>
     <string name="notification_issue_collection">Bazı okumalar alınamadı. Ayrıntılar için uygulamayı açın.</string>
+    <string name="notification_issue_collection_short">Okuma sorunu · uygulamayı açın</string>
+    <string name="notification_issue_collection_minimal">Okuma sorunu</string>
     <string name="notification_issue_advanced">Gelişmiş erişim kullanılamıyor. Ayrıntılar için uygulamayı açın.</string>
+    <string name="notification_issue_advanced_short">Gelişmiş erişim yok · uygulamayı açın</string>
+    <string name="notification_issue_advanced_minimal">Gelişmiş erişim yok</string>
 
     <string name="notification_action_stop">Durdur</string>
     <string name="notification_action_reset">Sıfırla</string>

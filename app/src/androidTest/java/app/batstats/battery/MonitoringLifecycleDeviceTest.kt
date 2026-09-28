@@ -91,7 +91,7 @@ class MonitoringLifecycleDeviceTest {
             phase = "notification tap opens Now"
             assertTrue("Notification shade did not open", device.openNotification())
             // The custom views show the headline ("+1,240 mA · 5.2 W", collapsed) or the state ("Charging · AC charger", expanded).
-            val shown = Pattern.compile(".+ mA · .+ W|" + Pattern.quote(charging) + "( · .+)?")
+            val shown = Pattern.compile(".+ m?A · .+ W|" + Pattern.quote(charging) + "( · .+)?")
             val row = device.wait(Until.findObject(By.pkg("com.android.systemui").text(shown)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
