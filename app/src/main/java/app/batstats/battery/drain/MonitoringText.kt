@@ -9,7 +9,7 @@ import java.text.DateFormat
 import java.util.Date
 import java.util.Calendar
 
-/** One resource-backed presentation shared by monitoring screens and notification. */
+/** Resource-backed observation text for the old monitoring screens; the notification uses [NotificationContent]. */
 class MonitoringText(private val resolve: (Int, Array<out Any>) -> String) {
     constructor(context: Context) : this({ id, arguments -> context.getString(id, *arguments) })
     private fun text(id: Int, vararg arguments: Any) = resolve(id, arguments)
@@ -49,23 +49,4 @@ class MonitoringText(private val resolve: (Int, Array<out Any>) -> String) {
         else text(R.string.monitor_no_interval)
     fun doze(summary: ObservationSummary): String = if (summary.cpuObservedMs > 0) formatDuration(summary.dozeMs)
         else text(R.string.monitor_no_interval)
-    fun expanded(summary: ObservationSummary): String = buildString {
-        // Put the interval before values: SystemUI limits expanded notification height.
-        appendLine(window(summary))
-        appendLine("━━ ${text(R.string.monitor_drain_heading)} ━━")
-        appendLine(text(R.string.monitor_screen_on, bucket(summary.screenOn)))
-        if (summary.screenOn.durationMs == 0L || summary.screenOn.chargeCoveredMs < summary.screenOn.durationMs)
-            appendLine(coverage(summary.screenOn))
-        appendLine(text(R.string.monitor_screen_off, bucket(summary.screenOff)))
-        if (summary.screenOff.durationMs == 0L || summary.screenOff.chargeCoveredMs < summary.screenOff.durationMs)
-            appendLine(coverage(summary.screenOff))
-        appendLine(text(R.string.monitor_discharge, bucket(summary.discharge)))
-        if (summary.discharge.chargeCoveredMs < summary.discharge.durationMs)
-            appendLine(coverage(summary.discharge))
-        appendLine("━━ ${text(R.string.monitor_activity_heading)} ━━")
-        appendLine(text(R.string.monitor_cpu, cpuSuspend(summary)))
-        appendLine(text(R.string.monitor_doze, doze(summary)))
-        appendLine(text(R.string.monitor_charging, formatDuration(summary.chargingMs), formatCharge(summary.charging.chargeMah)))
-        if (summary.gaps > 0) appendLine(text(R.string.monitor_gaps_excluded, summary.gaps))
-    }
 }

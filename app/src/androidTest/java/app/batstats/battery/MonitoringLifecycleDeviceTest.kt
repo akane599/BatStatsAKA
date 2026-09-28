@@ -13,7 +13,7 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 import app.batstats.R
 import app.batstats.battery.drain.DrainNotificationManager
-import app.batstats.battery.drain.MonitoringText
+import app.batstats.battery.drain.NO_VALUE
 import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.service.BatteryMonitorService
 import app.batstats.battery.service.SamplingDemand
@@ -26,6 +26,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
+import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class MonitoringLifecycleDeviceTest {
@@ -61,8 +62,11 @@ class MonitoringLifecycleDeviceTest {
             assertEquals(PowerState.DISCHARGING, repo.realtimeFlow.value.powerState)
             assertEquals(0L, repo.observation.value.screenOff.durationMs)
             assertNull(repo.observation.value.screenOff.chargeMah)
-            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                ?.contains(context.getString(R.string.monitor_screen_off, MonitoringText(context).bucket(repo.observation.value.screenOff)) + "\n" + context.getString(R.string.monitor_no_period)) == true }
+            // Line 2 ("On … · Off …"): no screen-off time yet, so no screen-off drain is invented.
+            val noOffDrain = context.getString(R.string.notification_summary_drain, "\u0000", NO_VALUE).substringAfter("\u0000")
+            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.contains(noOffDrain) == true &&
+                notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)
+                    ?.contains(context.getString(R.string.notification_state_discharging)) == true }
             assertEquals(0L, notification()!!.notification.`when`)
             assertTrue(notification()!!.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
             val notificationKey = notification()!!.key
@@ -80,14 +84,15 @@ class MonitoringLifecycleDeviceTest {
             device.executeShellCommand("dumpsys battery set status 2")
             withTimeout(120_000) { repo.observation.first { it.chargingMs > 0 } }
             assertEquals(screenOff, repo.observation.value.screenOff.durationMs)
-            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)
-                ?.contains(MonitoringText(context).state(PowerState.CHARGING)) == true }
+            val charging = context.getString(R.string.notification_state_charging)
+            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.contains(charging) == true }
             assertEquals(notificationKey, notification()!!.key)
             assertEquals(0L, notification()!!.notification.`when`)
             phase = "notification tap opens Now"
-            val title = notification()!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
             assertTrue("Notification shade did not open", device.openNotification())
-            val row = device.wait(Until.findObject(By.text(title)), 120_000)
+            // The custom views show the headline ("+1,240 mA · 5.2 W", collapsed) or the state ("Charging · AC charger", expanded).
+            val shown = Pattern.compile(".+ m?A · .+ W|" + Pattern.quote(charging) + "( · .+)?")
+            val row = device.wait(Until.findObject(By.pkg("com.android.systemui").text(shown)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
             row!!.click()
