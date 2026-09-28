@@ -35,9 +35,11 @@ import app.batstats.settings.SettingsMigrations
 import app.batstats.settings.SettingsMigrator
 import app.batstats.viewmodel.DashboardViewModel
 import app.batstats.viewmodel.DataViewModel
+import app.batstats.viewmodel.DefaultNowRepository
 import app.batstats.viewmodel.DetailedStatsViewModel
 import app.batstats.viewmodel.DrainStatsViewModel
 import app.batstats.viewmodel.HistoryViewModel
+import app.batstats.viewmodel.NowViewModel
 import app.batstats.viewmodel.SessionDetailsViewModel
 import app.batstats.viewmodel.SettingsViewModel
 import io.github.mlmgames.settings.core.SettingsRepository
@@ -122,6 +124,7 @@ val appModule = module {
     single { DrainNotificationManager(androidContext(), get()) }
 
     viewModel { DashboardViewModel(androidApplication(), get(), get(), get()) }
+    viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get()), get(), get()) }
     viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
     viewModel { HistoryViewModel(get()) }

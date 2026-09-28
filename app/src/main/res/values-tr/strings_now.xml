@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Now screen (ui/screens/now/**). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="now_level">%%%1$s</string>
+
+    <string name="now_duration_days_hours">%1$s g %2$s sa</string>
+    <string name="now_duration_hours_minutes">%1$s sa %2$s dk</string>
+    <string name="now_duration_minutes">%1$s dk</string>
+    <string name="now_duration_under_minute">&lt;1 dk</string>
+    <string name="now_unit_hours">sa</string>
+    <string name="now_unit_minutes">dk</string>
+
+    <string name="now_state_charging">Şarj oluyor</string>
+    <string name="now_state_discharging">Pilde</string>
+    <string name="now_state_plugged">Takılı, şarj olmuyor</string>
+    <string name="now_state_full">Tamamen dolu</string>
+    <string name="now_state_unknown">Durum bilinmiyor</string>
+    <string name="now_state_with_charger">%1$s · %2$s</string>
+    <string name="now_charger_ac">AC şarj cihazı</string>
+    <string name="now_charger_usb">USB</string>
+    <string name="now_charger_wireless">Kablosuz</string>
+    <string name="now_charger_dock">Yuva</string>
+    <string name="now_waiting_reading">Pil okuması bekleniyor</string>
+    <string name="now_eta_left">kaldı</string>
+    <string name="now_eta_to_full">dolmasına</string>
+    <string name="now_eta_basis_live_drain">Son tüketime göre</string>
+    <string name="now_eta_basis_live_charge">Şarj hızına göre</string>
+    <string name="now_eta_basis_typical">7 günlük ortalamanıza göre</string>
+    <string name="now_eta_basis_android">Android\'in tahmini</string>
+    <string name="now_eta_basis_taper">Bu şarj cihazının öğrenilen eğrisine göre</string>
+    <string name="now_eta_estimating">Kalan süre hesaplanıyor</string>
+    <string name="now_eta_needs_monitoring">Kalan süre için izlemeyi başlatın</string>
+    <string name="now_eta_content_description">%1$s %2$s</string>
+    <string name="now_start_monitoring">İzlemeyi başlat</string>
+    <string name="now_stop_monitoring">İzlemeyi durdur</string>
+    <string name="now_start_blocked">Android izlemenin başlamasına izin vermedi. Uygulama açıkken tekrar deneyin.</string>
+    <string name="now_hero_info_title">Seviye ve kalan süre hakkında</string>
+    <string name="now_hero_info_body">Seviye, durum ve şarj cihazı doğrudan Android\'den gelir ve bu ekran açıkken her 2 saniyede güncellenir.\n\nKalan süre, pildeki kalan şarjın yaklaşık son 45 dakikadaki ortalama tüketim hızına bölünmesidir. Yeterli canlı veri olana kadar 7 günlük ortalamanıza dayanır. Şarj sırasında telefon sunuyorsa Android\'in kendi tahmini kullanılır; yoksa yüzde 80\'e kadar şarj hızı, sonra bu şarj cihazının daha önce gösterdiği yavaş eğri.\n\nTahminler için izleme gerekir: bir kez başlatın, arka planda çalışmaya devam eder.</string>
+
+    <string name="now_range_live">Canlı</string>
+    <string name="now_range_hour">1 sa</string>
+    <string name="now_range_six_hours">6 sa</string>
+    <string name="now_range_day">24 sa</string>
+    <string name="now_range_label">Grafik aralığı</string>
+    <string name="now_trace_series">Akım</string>
+    <string name="now_trace_empty_live">Okumalar bekleniyor</string>
+    <string name="now_trace_empty">Bu aralıkta kayıtlı okuma yok</string>
+    <string name="now_readout_current">Akım</string>
+    <string name="now_readout_power">Güç</string>
+    <string name="now_readout_temperature">Sıcaklık</string>
+    <string name="now_readout_voltage">Voltaj</string>
+
+    <string name="now_since_title">%1$s itibarıyla</string>
+    <string name="now_since_title_empty">Fişten çekildiğinden beri</string>
+    <string name="now_since_paused">Duraklatıldı</string>
+    <string name="now_since_empty">Ekran açıkken ve kapalıyken pilin ne kadar hızlı boşaldığını görmek için izlemeyi başlatın.</string>
+    <string name="now_screen_on">Ekran açık</string>
+    <string name="now_screen_off">Ekran kapalı</string>
+    <string name="now_deep_sleep">Derin uyku</string>
+    <string name="now_drain_supporting">%1$s mA · %2$s</string>
+    <string name="now_reset">Sıfırla</string>
+    <string name="now_reset_title">Bu değerler sıfırlansın mı?</string>
+    <string name="now_reset_body">Ekran açık, ekran kapalı ve derin uyku şu andan itibaren yeniden başlar. Kayıtlı geçmiş korunur.</string>
+    <string name="now_reset_confirm">Sıfırla</string>
+    <string name="now_cancel">İptal</string>
+    <string name="now_since_info_title">Fişten çekildiğinden beri hakkında</string>
+    <string name="now_since_info_body">Bu değerler izlemenin başladığı andan veya son sıfırlamanızdan itibaren sayılır. Siz sıfırlayana kadar şarjlar boyunca birikmeye devam eder.\n\nEkran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar. İlk değer, pilin tam kapasitesinin payı olarak saatlik ortalama tüketimdir; mA aynı tüketimin akım olarak değeridir.\n\nDerin uyku, işlemcinin tamamen uykuda olduğu süredir. Ekran kapalıyken yüksek olmalıdır: düşükse bir şey telefonu uyanık tutuyordur.</string>
+
+    <string name="now_today_title">Bugün</string>
+    <string name="now_today_used">Kullanılan</string>
+    <string name="now_today_charged">Şarj edilen</string>
+    <string name="now_today_screen_on">Ekran açık</string>
+    <string name="now_today_empty">Bugün henüz bir şey kaydedilmedi.</string>
+
+    <string name="now_health_title">Sağlık</string>
+    <string name="now_health_capacity">Kapasite</string>
+    <string name="now_health_of_design">Tasarımın</string>
+    <string name="now_health_confidence_low">Düşük güven</string>
+    <string name="now_health_confidence_medium">Orta güven</string>
+    <string name="now_health_confidence_high">Yüksek güven</string>
+    <string name="now_health_empty">Uzun bir şarj veya deşarjdan sonra görünür.</string>
+
+    <string name="now_apps_title">En çok tüketen uygulamalar</string>
+    <string name="now_apps_all">Tümünü gör</string>
+    <string name="now_apps_basis_delta">Fişten çekildiğinden beri · %1$s güncellendi</string>
+    <string name="now_apps_basis_reset">Android istatistikleri sıfırladığından beri · %1$s güncellendi</string>
+    <string name="now_apps_basis_absolute">Son tam şarjdan beri · %1$s güncellendi</string>
+    <string name="now_apps_empty">Henüz uygulama başına veri yok.</string>
+    <string name="now_apps_open">Uygulamaları aç</string>
+    <string name="now_apps_unknown">Uygulama %1$d</string>
+
+    <string name="now_calibration_title">Akım okumaları düzeltildi</string>
+    <string name="now_calibration_unit">Bu telefon akımı miliamper olarak bildiriyor. Değerler artık dönüştürülüyor.</string>
+    <string name="now_calibration_sign">Bu telefon tüketimi pozitif olarak bildiriyor. İşaret artık çevriliyor.</string>
+    <string name="now_calibration_both">Bu telefon akımı miliamper, tüketimi pozitif olarak bildiriyor. Değerler artık dönüştürülüp çevriliyor.</string>
+    <string name="now_calibration_same">Akım okuması şarj sayacıyla karşılaştırıldı ve ayarlandı.</string>
+    <string name="now_calibration_undo">Geri al</string>
+    <string name="now_calibration_keep">Koru</string>
+</resources>

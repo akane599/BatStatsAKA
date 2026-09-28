@@ -11,13 +11,13 @@ import app.batstats.R
 import app.batstats.ui.navigation.Routes
 import app.batstats.ui.navigation.TopLevelBackStack
 import app.batstats.ui.screens.BatterySettingsScreen
-import app.batstats.ui.screens.DashboardScreen
 import app.batstats.ui.screens.DataScreen
 import app.batstats.ui.screens.DetailedStatsScreen
 import app.batstats.ui.screens.DiagnosticsScreen
 import app.batstats.ui.screens.DrainStatsScreen
 import app.batstats.ui.screens.HistoryScreen
 import app.batstats.ui.screens.SessionDetailsScreen
+import app.batstats.ui.screens.now.NowScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -40,16 +40,13 @@ fun NavGraph(
         modifier = modifier,
         entryProvider = entryProvider {
 
-            // Now (interim: DashboardScreen)
+            // Now -> Health, AppDetails (pushed); Today and "See all" switch tabs
             entry<Routes.Now> {
-                DashboardScreen(
+                NowScreen(
                     onOpenHistory = { topLevelBackStack.select(Routes.History) },
-                    onOpenAlarms = { topLevelBackStack.select(Routes.Settings) },
-                    onOpenSettings = { topLevelBackStack.select(Routes.Settings) },
-                    onOpenData = { topLevelBackStack.navigate(Routes.SettingsData) },
-                    onOpenDetailedStats = { topLevelBackStack.select(Routes.Apps) },
-                    onOpenDrainStats = { topLevelBackStack.navigate(Routes.DrainStats) },
-                    onOpenDiagnostics = { topLevelBackStack.navigate(Routes.SettingsStatus) },
+                    onOpenHealth = { topLevelBackStack.navigate(Routes.Health) },
+                    onOpenApps = { topLevelBackStack.select(Routes.Apps) },
+                    onOpenApp = { uid, packageName -> topLevelBackStack.navigate(Routes.AppDetails(uid, packageName)) },
                 )
             }
 

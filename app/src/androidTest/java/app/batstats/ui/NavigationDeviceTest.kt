@@ -32,19 +32,21 @@ class NavigationDeviceTest {
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(id)))
         compose.onNodeWithText(label(id)).assertIsDisplayed()
     }
-    private fun awaitDashboard() {
-        compose.waitUntil(120_000) {
-            compose.onAllNodesWithContentDescription(label(R.string.settings)).fetchSemanticsNodes().isNotEmpty()
-        }
-        compose.onNodeWithContentDescription(label(R.string.settings)).assertIsDisplayed()
+    private fun nowShowing() = compose.onAllNodes(
+        hasText(label(R.string.now_start_monitoring)) or hasText(label(R.string.now_stop_monitoring)),
+    ).fetchSemanticsNodes().isNotEmpty()
+    private fun awaitNow() {
+        compose.waitUntil(120_000) { nowShowing() }
+        compose.onNodeWithTag(TestTags.TAB_NOW).assertIsSelected()
     }
-    private fun backToDashboard() {
+    private fun tab(tag: String) = compose.onNodeWithTag(tag).performClick()
+    private fun backToNow() {
         // A semantics click completes before recomposition removes a Dialog window.
         // Settle that window before sending Back through the separate Android input path.
         compose.waitForIdle()
         DeviceEnvironment.device.waitForIdle()
         DeviceEnvironment.device.pressBack()
-        try { awaitDashboard() }
+        try { awaitNow() }
         catch (failure: Throwable) {
             runCatching { DeviceEnvironment.screenshot("navigation-back-failure") }
                 .exceptionOrNull()?.let(failure::addSuppressed)
@@ -77,10 +79,14 @@ class NavigationDeviceTest {
 
     @Test fun screensRemainReachableAndInvalidImportPreservesSettings() {
         compose.waitUntil(120_000) { BatteryGraph.repo.realtimeFlow.value.level != null }
-        capture("dashboard-light")
-        scroll(R.string.adv_title); click(R.string.adv_title)
+        awaitNow()
+        compose.onNodeWithText(label(R.string.now_start_monitoring)).assertIsDisplayed()
+        capture("now-dark")
+        scroll(R.string.now_apps_title); capture("now-cards")
+
+        tab(TestTags.TAB_APPS)
         compose.onNodeWithText(label(R.string.adv_access_help)).assertIsDisplayed()
-        capture("advanced-access")
+        capture("apps-access")
         click(R.string.adv_access_help)
         compose.onNodeWithText(label(R.string.adv_copy_commands)).assertIsDisplayed()
         capture("access-instructions")
@@ -88,21 +94,22 @@ class NavigationDeviceTest {
         compose.waitUntil(120_000) {
             compose.onAllNodesWithText(label(R.string.adv_copy_commands)).fetchSemanticsNodes().isEmpty()
         }
-        backToDashboard()
-        scroll(R.string.diagnostics_title); click(R.string.diagnostics_title)
-        scroll(R.string.diagnostic_events); capture("diagnostics-events")
-        backToDashboard()
-        scroll(R.string.history); click(R.string.history)
+        backToNow()
+
+        tab(TestTags.TAB_HISTORY)
         compose.onNode(hasSetTextAction()).performTextInput("no-such-observation-device-test")
         compose.waitUntil(120_000) { compose.onAllNodesWithText(label(R.string.history_no_matches)).fetchSemanticsNodes().isNotEmpty() }
         scroll(R.string.history_no_matches); capture("history-empty-filter")
+        // Back would only close the keyboard here; History's own back arrow returns to Now.
         compose.onNodeWithContentDescription(label(R.string.back)).performClick()
-        awaitDashboard()
-        scroll(R.string.data_export_import); click(R.string.data_export_import)
+        awaitNow()
+
+        tab(TestTags.TAB_SETTINGS)
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(EXPORT_DATA_ROW))
+        compose.onNodeWithText(EXPORT_DATA_ROW).performClick()
         compose.onNodeWithText(label(R.string.import_csv)).performScrollTo().assertIsDisplayed()
-        capture("history-export-import")
-        backToDashboard()
-        compose.onNodeWithContentDescription(label(R.string.settings)).performClick()
+        capture("settings-data-export-import")
+        DeviceEnvironment.device.pressBack()
         compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
         click(R.string.import_settings_desc)
         val before = runBlocking { BatteryGraph.settings.flow.first() }
@@ -119,12 +126,11 @@ class NavigationDeviceTest {
         DeviceEnvironment.device.executeShellCommand("settings put system font_scale 2.0")
         runBlocking { BatteryGraph.settings.update { it.copy(dynamicColors = false) } }
         compose.waitUntil(120_000) { compose.activity.resources.configuration.fontScale >= 1.99f }
-        compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(R.string.diagnostic_refresh)))
-        capture("dashboard-dark-font200")
-        scroll(R.string.monitor_details); click(R.string.monitor_details)
-        scroll(R.string.monitor_counter_help); capture("observation-dark-font200")
-        backToDashboard()
-        compose.onNodeWithContentDescription(label(R.string.settings)).performClick()
+        awaitNow()
+        compose.onNodeWithText(label(R.string.now_start_monitoring)).assertIsDisplayed()
+        capture("now-dark-font200")
+        scroll(R.string.now_apps_title); capture("now-cards-dark-font200")
+        tab(TestTags.TAB_SETTINGS)
         compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
         click(R.string.reset_settings_desc)
         compose.onNodeWithText(label(R.string.reset_all_settings)).performScrollTo().assertIsDisplayed()
@@ -136,40 +142,45 @@ class NavigationDeviceTest {
         Assert.assertTrue("Reset actions must not overlap at200% font", resetVisible.bottom <= resetAll.top && resetAll.bottom <= cancel.top)
         capture("settings-reset-dark-font200")
         click(R.string.cancel) // Inspect the destructive control without resetting preferences.
-        backToDashboard()
+        backToNow()
         changedOrientation = true
         DeviceEnvironment.device.setOrientationLeft()
         compose.waitUntil(120_000) {
             compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
         }
-        scroll(R.string.diagnostic_refresh)
-        capture("dashboard-dark-font200-landscape")
-        scroll(R.string.monitor_details); click(R.string.monitor_details)
-        scroll(R.string.monitor_counter_help)
-        capture("observation-dark-font200-landscape")
+        awaitNow()
+        capture("now-dark-font200-landscape")
+        scroll(R.string.now_apps_title)
+        capture("now-cards-dark-font200-landscape")
     }
 
     @Test fun tabsAreReachableBackReturnsToNowAndRetapPopsToRoot() {
         compose.waitUntil(120_000) { BatteryGraph.repo.realtimeFlow.value.level != null }
-        awaitDashboard()
+        awaitNow()
 
-        // Each tab opens its interim screen directly (no push); back from a tab root returns to Now.
-        compose.onNodeWithTag(TestTags.TAB_APPS).performClick()
+        // Each tab opens its screen directly (no push); back from a tab root returns to Now.
+        tab(TestTags.TAB_APPS)
         compose.onNodeWithText(label(R.string.adv_access_help)).assertIsDisplayed()
-        backToDashboard()
+        backToNow()
 
-        compose.onNodeWithTag(TestTags.TAB_HISTORY).performClick()
+        tab(TestTags.TAB_HISTORY)
         compose.onNode(hasSetTextAction()).assertIsDisplayed()
-        backToDashboard()
+        backToNow()
 
-        compose.onNodeWithTag(TestTags.TAB_SETTINGS).performClick()
+        tab(TestTags.TAB_SETTINGS)
         compose.onNodeWithContentDescription(label(R.string.settings_more)).assertIsDisplayed()
-        backToDashboard()
+        backToNow()
 
-        // Re-tapping the current tab pops it back to its root instead of leaving the app.
-        scroll(R.string.monitor_details); click(R.string.monitor_details)
-        scroll(R.string.monitor_counter_help)
-        compose.onNodeWithTag(TestTags.TAB_NOW).performClick()
-        awaitDashboard()
+        // Now's Health panel pushes Health onto the Now tab; re-tapping Now pops back to its root.
+        scroll(R.string.now_health_title); click(R.string.now_health_title)
+        compose.waitUntil(120_000) { !nowShowing() }
+        compose.onNodeWithText(label(R.string.battery_health)).assertIsDisplayed()
+        tab(TestTags.TAB_NOW)
+        awaitNow()
+    }
+
+    private companion object {
+        /** A literal in the interim BatterySettingsContent (replaced in P4b); it opens Settings › Data. */
+        const val EXPORT_DATA_ROW = "Export Battery Data"
     }
 }

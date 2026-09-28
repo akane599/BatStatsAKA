@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Now screen (ui/screens/now/**). Units that never change are translatable="false" (base only). -->
+<resources>
+    <!-- Units -->
+    <string name="now_unit_percent" translatable="false" formatted="false">%</string>
+    <string name="now_unit_ma" translatable="false">mA</string>
+    <string name="now_unit_mah" translatable="false">mAh</string>
+    <string name="now_unit_w" translatable="false">W</string>
+    <string name="now_unit_v" translatable="false">V</string>
+    <string name="now_unit_celsius" translatable="false">°C</string>
+    <string name="now_unit_fahrenheit" translatable="false">°F</string>
+    <string name="now_unit_percent_per_hour" translatable="false" formatted="false">%/h</string>
+    <!-- Level: %1$s is the number (the rest renders smaller) -->
+    <string name="now_level">%1$s%%</string>
+
+    <!-- Durations: numbers render large, the rest smaller -->
+    <string name="now_duration_days_hours">%1$s d %2$s h</string>
+    <string name="now_duration_hours_minutes">%1$s h %2$s min</string>
+    <string name="now_duration_minutes">%1$s min</string>
+    <string name="now_duration_under_minute">&lt;1 min</string>
+    <!-- A compact duration cell: "2:10" with this unit, or "45" with the minutes one -->
+    <string name="now_unit_hours">h</string>
+    <string name="now_unit_minutes">min</string>
+
+    <!-- Hero -->
+    <string name="now_state_charging">Charging</string>
+    <string name="now_state_discharging">On battery</string>
+    <string name="now_state_plugged">Plugged in, not charging</string>
+    <string name="now_state_full">Fully charged</string>
+    <string name="now_state_unknown">State unknown</string>
+    <string name="now_state_with_charger">%1$s · %2$s</string>
+    <string name="now_charger_ac">AC charger</string>
+    <string name="now_charger_usb">USB</string>
+    <string name="now_charger_wireless">Wireless</string>
+    <string name="now_charger_dock">Dock</string>
+    <string name="now_waiting_reading">Waiting for a battery reading</string>
+    <string name="now_eta_left">left</string>
+    <string name="now_eta_to_full">to full</string>
+    <string name="now_eta_basis_live_drain">From recent drain</string>
+    <string name="now_eta_basis_live_charge">From the charge rate</string>
+    <string name="now_eta_basis_typical">From your 7-day average</string>
+    <string name="now_eta_basis_android">Android\'s estimate</string>
+    <string name="now_eta_basis_taper">From this charger\'s learned curve</string>
+    <string name="now_eta_estimating">Estimating time left</string>
+    <string name="now_eta_needs_monitoring">Start monitoring for time left</string>
+    <string name="now_eta_content_description">%1$s %2$s</string>
+    <string name="now_start_monitoring">Start monitoring</string>
+    <string name="now_stop_monitoring">Stop monitoring</string>
+    <string name="now_start_blocked">Android didn\'t let monitoring start. Try again with the app open.</string>
+    <string name="now_hero_info_title">About the level and time left</string>
+    <string name="now_hero_info_body">Level, state and charger come straight from Android and update every 2 seconds while this screen is open.\n\nTime left is the charge still in the battery divided by how fast it has been draining, averaged over roughly the last 45 minutes. Until there is enough live data it leans on your 7-day average. While charging, Android\'s own estimate is used when the phone offers one; otherwise the charge rate up to 80 percent, then the slower curve this charger showed before.\n\nEstimates need monitoring: start it once and it keeps running in the background.</string>
+
+    <!-- Trace and readouts -->
+    <string name="now_range_live">Live</string>
+    <string name="now_range_hour">1h</string>
+    <string name="now_range_six_hours">6h</string>
+    <string name="now_range_day">24h</string>
+    <string name="now_range_label">Trace range</string>
+    <string name="now_trace_series">Current</string>
+    <string name="now_trace_empty_live">Waiting for readings</string>
+    <string name="now_trace_empty">No saved readings in this range</string>
+    <string name="now_readout_current">Current</string>
+    <string name="now_readout_power">Power</string>
+    <string name="now_readout_temperature">Temperature</string>
+    <string name="now_readout_voltage">Voltage</string>
+
+    <!-- Since unplug (the monitoring window) -->
+    <string name="now_since_title">Since %1$s</string>
+    <string name="now_since_title_empty">Since unplug</string>
+    <string name="now_since_paused">Paused</string>
+    <string name="now_since_empty">Start monitoring to see how fast the battery drains with the screen on and off.</string>
+    <string name="now_screen_on">Screen on</string>
+    <string name="now_screen_off">Screen off</string>
+    <string name="now_deep_sleep">Deep sleep</string>
+    <string name="now_drain_supporting">%1$s mA · %2$s</string>
+    <string name="now_reset">Reset</string>
+    <string name="now_reset_title">Reset these numbers?</string>
+    <string name="now_reset_body">Screen on, screen off and deep sleep start again from now. Saved history is kept.</string>
+    <string name="now_reset_confirm">Reset</string>
+    <string name="now_cancel">Cancel</string>
+    <string name="now_since_info_title">About since unplug</string>
+    <string name="now_since_info_body">These numbers count from when monitoring started, or from your last Reset. They keep adding up across charges until you reset them.\n\nScreen on and screen off count only time on battery. The first number is the average drain per hour as a share of the battery\'s full capacity; mA is the same drain as current.\n\nDeep sleep is how much of the time the processor was fully asleep. With the screen off it should be high: if it is low, something is keeping the phone awake.</string>
+
+    <!-- Today -->
+    <string name="now_today_title">Today</string>
+    <string name="now_today_used">Used</string>
+    <string name="now_today_charged">Charged</string>
+    <string name="now_today_screen_on">Screen on</string>
+    <string name="now_today_empty">Nothing recorded yet today.</string>
+
+    <!-- Health -->
+    <string name="now_health_title">Health</string>
+    <string name="now_health_capacity">Capacity</string>
+    <string name="now_health_of_design">Of design</string>
+    <string name="now_health_confidence_low">Low confidence</string>
+    <string name="now_health_confidence_medium">Medium confidence</string>
+    <string name="now_health_confidence_high">High confidence</string>
+    <string name="now_health_empty">Appears after a long charge or discharge.</string>
+
+    <!-- Top apps -->
+    <string name="now_apps_title">Top apps</string>
+    <string name="now_apps_all">See all</string>
+    <string name="now_apps_basis_delta">Since unplug · updated %1$s</string>
+    <string name="now_apps_basis_reset">Since Android\'s stats reset · updated %1$s</string>
+    <string name="now_apps_basis_absolute">Since the last full charge · updated %1$s</string>
+    <string name="now_apps_empty">No per-app data yet.</string>
+    <string name="now_apps_open">Open Apps</string>
+    <string name="now_apps_unknown">App %1$d</string>
+
+    <!-- Current calibration notice -->
+    <string name="now_calibration_title">Current readings corrected</string>
+    <string name="now_calibration_unit">This phone reports current in milliamps. Values are now converted.</string>
+    <string name="now_calibration_sign">This phone reports drain as positive. The sign is now flipped.</string>
+    <string name="now_calibration_both">This phone reports current in milliamps and drain as positive. Values are now converted and flipped.</string>
+    <string name="now_calibration_same">The current reading was checked against the charge counter and adjusted.</string>
+    <string name="now_calibration_undo">Undo</string>
+    <string name="now_calibration_keep">Keep</string>
+</resources>

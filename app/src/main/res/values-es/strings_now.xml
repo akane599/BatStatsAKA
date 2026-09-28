@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Now screen (ui/screens/now/**). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="now_level">%1$s %%</string>
+
+    <string name="now_duration_days_hours">%1$s d %2$s h</string>
+    <string name="now_duration_hours_minutes">%1$s h %2$s min</string>
+    <string name="now_duration_minutes">%1$s min</string>
+    <string name="now_duration_under_minute">&lt;1 min</string>
+    <string name="now_unit_hours">h</string>
+    <string name="now_unit_minutes">min</string>
+
+    <string name="now_state_charging">Cargando</string>
+    <string name="now_state_discharging">Con batería</string>
+    <string name="now_state_plugged">Conectado, sin cargar</string>
+    <string name="now_state_full">Carga completa</string>
+    <string name="now_state_unknown">Estado desconocido</string>
+    <string name="now_state_with_charger">%1$s · %2$s</string>
+    <string name="now_charger_ac">Cargador de CA</string>
+    <string name="now_charger_usb">USB</string>
+    <string name="now_charger_wireless">Inalámbrico</string>
+    <string name="now_charger_dock">Base</string>
+    <string name="now_waiting_reading">Esperando una lectura de la batería</string>
+    <string name="now_eta_left">restantes</string>
+    <string name="now_eta_to_full">hasta llenar</string>
+    <string name="now_eta_basis_live_drain">Según el consumo reciente</string>
+    <string name="now_eta_basis_live_charge">Según la velocidad de carga</string>
+    <string name="now_eta_basis_typical">Según tu media de 7 días</string>
+    <string name="now_eta_basis_android">Estimación de Android</string>
+    <string name="now_eta_basis_taper">Según la curva aprendida de este cargador</string>
+    <string name="now_eta_estimating">Calculando el tiempo restante</string>
+    <string name="now_eta_needs_monitoring">Inicia la supervisión para ver el tiempo restante</string>
+    <string name="now_eta_content_description">%1$s %2$s</string>
+    <string name="now_start_monitoring">Iniciar supervisión</string>
+    <string name="now_stop_monitoring">Detener supervisión</string>
+    <string name="now_start_blocked">Android no permitió iniciar la supervisión. Vuelve a intentarlo con la app abierta.</string>
+    <string name="now_hero_info_title">Sobre el nivel y el tiempo restante</string>
+    <string name="now_hero_info_body">El nivel, el estado y el cargador vienen directamente de Android y se actualizan cada 2 segundos mientras esta pantalla está abierta.\n\nEl tiempo restante es la carga que queda en la batería dividida por la velocidad de consumo, promediada aproximadamente en los últimos 45 minutos. Hasta tener suficientes datos en vivo se apoya en tu media de 7 días. Al cargar se usa la estimación de Android cuando el teléfono la ofrece; si no, la velocidad de carga hasta el 80 por ciento y después la curva más lenta que mostró este cargador.\n\nLas estimaciones necesitan la supervisión: iníciala una vez y seguirá funcionando en segundo plano.</string>
+
+    <string name="now_range_live">En vivo</string>
+    <string name="now_range_hour">1 h</string>
+    <string name="now_range_six_hours">6 h</string>
+    <string name="now_range_day">24 h</string>
+    <string name="now_range_label">Rango del gráfico</string>
+    <string name="now_trace_series">Corriente</string>
+    <string name="now_trace_empty_live">Esperando lecturas</string>
+    <string name="now_trace_empty">No hay lecturas guardadas en este rango</string>
+    <string name="now_readout_current">Corriente</string>
+    <string name="now_readout_power">Potencia</string>
+    <string name="now_readout_temperature">Temperatura</string>
+    <string name="now_readout_voltage">Voltaje</string>
+
+    <string name="now_since_title">Desde %1$s</string>
+    <string name="now_since_title_empty">Desde que se desconectó</string>
+    <string name="now_since_paused">En pausa</string>
+    <string name="now_since_empty">Inicia la supervisión para ver lo rápido que se descarga la batería con la pantalla encendida y apagada.</string>
+    <string name="now_screen_on">Pantalla encendida</string>
+    <string name="now_screen_off">Pantalla apagada</string>
+    <string name="now_deep_sleep">Sueño profundo</string>
+    <string name="now_drain_supporting">%1$s mA · %2$s</string>
+    <string name="now_reset">Restablecer</string>
+    <string name="now_reset_title">¿Restablecer estas cifras?</string>
+    <string name="now_reset_body">Pantalla encendida, pantalla apagada y sueño profundo empiezan de nuevo desde ahora. El historial guardado se conserva.</string>
+    <string name="now_reset_confirm">Restablecer</string>
+    <string name="now_cancel">Cancelar</string>
+    <string name="now_since_info_title">Sobre desde que se desconectó</string>
+    <string name="now_since_info_body">Estas cifras cuentan desde que empezó la supervisión o desde tu último restablecimiento. Siguen sumando entre cargas hasta que las restableces.\n\nPantalla encendida y pantalla apagada cuentan solo el tiempo con batería. La primera cifra es el consumo medio por hora como parte de la capacidad total de la batería; mA es el mismo consumo como corriente.\n\nEl sueño profundo es cuánto tiempo el procesador estuvo totalmente dormido. Con la pantalla apagada debería ser alto: si es bajo, algo mantiene el teléfono despierto.</string>
+
+    <string name="now_today_title">Hoy</string>
+    <string name="now_today_used">Usado</string>
+    <string name="now_today_charged">Cargado</string>
+    <string name="now_today_screen_on">Pantalla encendida</string>
+    <string name="now_today_empty">Todavía no hay nada registrado hoy.</string>
+
+    <string name="now_health_title">Salud</string>
+    <string name="now_health_capacity">Capacidad</string>
+    <string name="now_health_of_design">Del diseño</string>
+    <string name="now_health_confidence_low">Confianza baja</string>
+    <string name="now_health_confidence_medium">Confianza media</string>
+    <string name="now_health_confidence_high">Confianza alta</string>
+    <string name="now_health_empty">Aparece tras una carga o descarga larga.</string>
+
+    <string name="now_apps_title">Apps principales</string>
+    <string name="now_apps_all">Ver todo</string>
+    <string name="now_apps_basis_delta">Desde que se desconectó · actualizado %1$s</string>
+    <string name="now_apps_basis_reset">Desde que Android reinició sus estadísticas · actualizado %1$s</string>
+    <string name="now_apps_basis_absolute">Desde la última carga completa · actualizado %1$s</string>
+    <string name="now_apps_empty">Todavía no hay datos por app.</string>
+    <string name="now_apps_open">Abrir Apps</string>
+    <string name="now_apps_unknown">App %1$d</string>
+
+    <string name="now_calibration_title">Lecturas de corriente corregidas</string>
+    <string name="now_calibration_unit">Este teléfono informa la corriente en miliamperios. Ahora los valores se convierten.</string>
+    <string name="now_calibration_sign">Este teléfono informa el consumo como positivo. Ahora el signo se invierte.</string>
+    <string name="now_calibration_both">Este teléfono informa la corriente en miliamperios y el consumo como positivo. Ahora los valores se convierten e invierten.</string>
+    <string name="now_calibration_same">La lectura de corriente se comprobó con el contador de carga y se ajustó.</string>
+    <string name="now_calibration_undo">Deshacer</string>
+    <string name="now_calibration_keep">Mantener</string>
+</resources>
