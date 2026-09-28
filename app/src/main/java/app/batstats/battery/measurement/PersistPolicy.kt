@@ -8,7 +8,7 @@ enum class PersistReason {
     DOZE,
     GAP,
 
-    /** Status or plugged changed: the only kind of change labelled POWER. */
+    /** Status or plugged changed since the last row (a POWER label alone is not enough). */
     POWER,
     LEVEL,
 
@@ -24,6 +24,10 @@ enum class PersistReason {
  * and level changes always are; polls are written every 30 s with the screen on and every time
  * with it off. Anything else — e.g. a voltage- or temperature-only battery broadcast — updates
  * realtime values and alerts only. Realtime-only captures (monitoring off) never reach this.
+ *
+ * Boundary.POWER is not a reason by itself: the sampler labels every ACTION_BATTERY_CHANGED
+ * capture POWER (unchanged-state ones pass through StateEventSequencer with that label), so only
+ * an actual status or plugged difference from the last row counts.
  */
 object PersistPolicy {
     const val SCREEN_ON_SPACING_MS = 30_000L
@@ -49,7 +53,7 @@ object PersistPolicy {
         boundary == Boundary.SCREEN -> PersistReason.SCREEN
         boundary == Boundary.DOZE -> PersistReason.DOZE
         boundary == Boundary.GAP -> PersistReason.GAP
-        boundary == Boundary.POWER || last.status != current.status || last.plugged != current.plugged -> PersistReason.POWER
+        last.status != current.status || last.plugged != current.plugged -> PersistReason.POWER
         last.levelPercent != current.levelPercent -> PersistReason.LEVEL
         !poll -> null
         !screenOn -> PersistReason.SCREEN_OFF_POLL

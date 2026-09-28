@@ -4,10 +4,11 @@ import kotlin.math.roundToLong
 
 /**
  * Time to empty: the charge counter ÷ a time-weighted EWMA (τ [ETA_TAU_MS]) of the counter-derived
- * discharge rate. Sleep gaps, GAP captures, restarts, counter resets and non-discharging intervals
- * are skipped, never a reset, so the trend survives screen-off and charging. [seed] with the
- * 7-day typical rate gives an estimate before live data; the basis says which one dominates.
- * Without a seed, 10 minutes and 5 mAh of live counter data are needed first.
+ * discharge rate. Intervals the CPU slept through count (their Δq is real idle drain). Observation
+ * gaps (ObservationEngine's rule), counter resets and non-discharging intervals are skipped, never
+ * a reset, so the trend survives gaps and charging. [seed] with the 7-day typical rate gives an
+ * estimate before live data; the basis says which one dominates. Without a seed, 10 minutes and
+ * 5 mAh of live counter data are needed first.
  */
 class DischargeEta(tauMs: Long = ETA_TAU_MS) {
     private val rate = RateEwma(tauMs)
@@ -15,7 +16,9 @@ class DischargeEta(tauMs: Long = ETA_TAU_MS) {
 
     /**
      * [typicalDischargeUa]: 7-day typical drain in µA (positive), e.g.
-     * [DailySummaryAggregator.typicalDischargeUa]. Ignored once live data exists or when not positive.
+     * [DailySummaryAggregator.typicalDischargeUa]; null or ≤ 0 is ignored. May be called before or
+     * after the first [accept] (e.g. once an async load finishes): a late seed gets the weight it
+     * would have kept had it come first, so the result is the same. A new seed replaces the old.
      */
     fun seed(typicalDischargeUa: Double?) {
         if (typicalDischargeUa != null && typicalDischargeUa > 0) rate.seed(typicalDischargeUa)

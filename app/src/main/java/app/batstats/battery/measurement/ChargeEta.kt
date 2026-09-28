@@ -10,8 +10,9 @@ import kotlin.math.roundToLong
  * connection; percent → µAh comes from counter ÷ level, so levels under 10 % give no model value.
  *
  * Taper learning: within one connection, from the observed step into ≥ 80 % to the step into
- * 100 %, as ms per percent, averaged with any earlier value for that charger. Steps across a
- * GAP, a restart or a sleep gap spoil the charge's timing and teach nothing.
+ * 100 %, as ms per percent, averaged with any earlier value for that charger. Steps across a CPU
+ * suspend count; a GAP or a step across an observation gap (ObservationEngine's rule) spoils the
+ * charge's timing and teaches nothing.
  *
  * @param learnedTaperMsPerPercent earlier [ChargeEta.learnedTaperMsPerPercent], persisted by the caller
  */

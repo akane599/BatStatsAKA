@@ -15,13 +15,18 @@ class DischargeEtaTest {
         1_000_000 + elapsed, elapsed, uptime, 60, charge, -1, 4000, power, true, false, generation, 30_000, boundary,
     )
 
-    /** [steps] captures 30 s apart at a steady [rateUa] drain (1000 µAh per step at 120 mA). */
+    /** Moves 30 s ahead, awake, at a steady [rateUa] drain (1000 µAh per step at 120 mA). */
+    private fun advance(rateUa: Long) {
+        elapsed += 30_000
+        uptime += 30_000
+        charge -= rateUa * 30_000 / 3_600_000
+    }
+
+    /** [steps] captures 30 s apart at a steady [rateUa] drain. */
     private fun run(steps: Int, rateUa: Long): EtaEstimate? {
         var estimate: EtaEstimate? = null
         repeat(steps) {
-            elapsed += 30_000
-            uptime += 30_000
-            charge -= rateUa * 30_000 / 3_600_000
+            advance(rateUa)
             estimate = eta.accept(point())
         }
         return estimate
@@ -53,11 +58,23 @@ class DischargeEtaTest {
         assertEquals(2_100_000L, later.observedMs)
     }
 
-    @Test fun seedIsIgnoredOnceLiveDataExists() {
-        eta.accept(point())
-        run(20, 120_000)
-        eta.seed(typicalDischargeUa = 500_000.0)
-        assertEquals(120_000L, run(1, 120_000)?.rateUa)
+    @Test fun lateSeedWeighsAsIfGivenBeforeTheFirstCapture() {
+        val early = DischargeEta().apply { seed(typicalDischargeUa = 200_000.0) }
+        val late = DischargeEta()
+        fun both() = early.accept(point()) to late.accept(point())
+        both()
+        repeat(20) { advance(120_000); both() }
+        assertEquals(EtaBasis.LIVE_RATE, late.accept(point())?.basis) // unseeded after 10 min
+        late.seed(typicalDischargeUa = 200_000.0) // e.g. the 7-day query finished late
+        assertEquals(EtaBasis.TYPICAL_7D, late.accept(point())?.basis)
+        var result = both()
+        repeat(30) { advance(120_000); result = both() }
+        val (fromEarly, fromLate) = result
+        assertEquals(fromEarly!!.rateUa!!.toDouble(), fromLate!!.rateUa!!.toDouble(), 1.0)
+        assertEquals(fromEarly.basis, fromLate.basis)
+
+        val reseeded = DischargeEta().apply { seed(200_000.0); seed(100_000.0); seed(null); seed(-5.0) }
+        assertEquals(100_000L, reseeded.accept(point())?.rateUa)
     }
 
     @Test fun olderRatesDecayWithATauOfFortyFiveMinutes() {
@@ -69,18 +86,31 @@ class DischargeEtaTest {
         assertEquals(remainingAt(expected), estimate.remainingMs.toDouble(), remainingAt(expected) * 0.003)
     }
 
-    @Test fun sleepGapIsSkippedNotAReset() {
+    @Test fun suspendedIntervalIsRealDrainAndCounts() {
         eta.accept(point())
         val before = run(40, 120_000)!!
-        // Two hours asleep between two polls: elapsed far beyond 3 × the 30 s interval.
+        // Two hours of CPU suspend between two polls (30 s awake): 50 mAh is 25 mA of idle drain.
         elapsed += 7_200_000
         uptime += 30_000
         charge -= 50_000
         val afterSleep = eta.accept(point())!!
-        assertEquals(before.rateUa, afterSleep.rateUa)
-        assertEquals(before.observedMs, afterSleep.observedMs)
+        assertEquals(before.observedMs + 7_200_000, afterSleep.observedMs)
+        assertTrue(afterSleep.rateUa!! in 25_000L..30_000L) // the long interval dominates the time weighting
         assertEquals(EtaBasis.LIVE_RATE, afterSleep.basis)
-        assertEquals(remainingAt(120_000.0), afterSleep.remainingMs.toDouble(), 2.0)
+    }
+
+    @Test fun observationGapIsSkippedNotAReset() {
+        eta.accept(point())
+        val before = run(40, 120_000)!!
+        // Ten awake minutes without a capture: beyond max(3 × 30 s, 120 s), so not observed.
+        elapsed += 600_000
+        uptime += 600_000
+        charge -= 100_000
+        val afterGap = eta.accept(point())!!
+        assertEquals(before.rateUa, afterGap.rateUa)
+        assertEquals(before.observedMs, afterGap.observedMs)
+        assertEquals(EtaBasis.LIVE_RATE, afterGap.basis)
+        assertEquals(remainingAt(120_000.0), afterGap.remainingMs.toDouble(), 2.0)
         assertEquals(before.observedMs + 30_000, run(1, 120_000)?.observedMs)
     }
 

@@ -7,11 +7,12 @@ class ChargeEtaTest {
     private val ac = 1
     private val usb = 2
     private var elapsed = 0L
+    private var uptime = 0L
     private var charge = 2_500_000L // 5 Ah battery: 50 000 µAh per percent, starting at 50 %
 
     private fun level() = (charge / 50_000).toInt()
     private fun point(power: PowerState = PowerState.CHARGING, boundary: Boundary = Boundary.SAMPLE) = Observation(
-        1_000_000 + elapsed, elapsed, elapsed, level(), charge, 1_500_000, 4200, power, true, false, "one", 30_000, boundary,
+        1_000_000 + elapsed, elapsed, uptime, level(), charge, 1_500_000, 4200, power, true, false, "one", 30_000, boundary,
     )
 
     /** [steps] captures 30 s apart; 12 500 µAh per step is 1.5 A (1 % per 2 min). */
@@ -20,8 +21,12 @@ class ChargeEtaTest {
         var estimate: EtaEstimate? = null
         repeat(steps) {
             elapsed += 30_000
+            uptime += 30_000
             charge += stepUah()
-            estimate = accept(point(if (level() >= 100) PowerState.PLUGGED else PowerState.CHARGING), plugged, android)
+            // Reaching 100 % turns status FULL: that capture comes from the battery broadcast, labelled POWER.
+            val full = level() >= 100
+            estimate = accept(point(if (full) PowerState.PLUGGED else PowerState.CHARGING, if (full) Boundary.POWER else Boundary.SAMPLE),
+                plugged, android)
         }
         return estimate
     }
@@ -82,6 +87,21 @@ class ChargeEtaTest {
         eta.accept(point(), usb, null)
         eta.chargeToFull(usb, taperMsPerPercent = 150_000)
         assertEquals(225_000L, eta.learnedTaperMsPerPercent[usb]) // blended with the earlier charge
+    }
+
+    @Test fun taperLearnsTheStepIntoFullAcrossASuspendedInterval() {
+        charge = 3_900_000 // 78 %
+        val eta = ChargeEta()
+        eta.accept(point(), usb, null)
+        eta.feed(8, usb) // 80 %
+        eta.feed(190, usb) { 5_000 } // 99 %, 5 min per percent
+        assertEquals(99, level())
+        // The CPU sleeps; the step to 100 % (status FULL) is seen 5 min later after 30 s awake.
+        elapsed += 300_000
+        uptime += 30_000
+        charge += 50_000
+        eta.accept(point(PowerState.PLUGGED, Boundary.POWER), usb, null)
+        assertEquals(mapOf(usb to 300_000L), eta.learnedTaperMsPerPercent)
     }
 
     @Test fun partialChargesAndInterruptedTapersTeachNothing() {
