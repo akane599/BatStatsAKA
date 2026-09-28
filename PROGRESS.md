@@ -10,13 +10,14 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
 - [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
 - [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
-- [~] P4b screens (6 agents) ∥ P5 notification/tile/widgets — **running** as worktree agents off e1d7c13
+- [~] P4b ∥ P5 wave (worktree branches off e1d7c13, NOT merged yet): done+reviewed: P5b tile (f204763), P5c widgets (a12c826), Health (b9a4c21), Settings (8aca44b); implemented, review/fix pending: History (703f8dc), SessionDetails (31ff8ca), P5a notification (600dd8f + fix round); still implementing: Apps, DataStatus. Per-task state + agent ids in the ledger.
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. Collect the 9 wave reports (ledger lists agent ids), merge the worktree branches, wire NavGraph entries + DI lines from the reports, gate, device tests one class at a time (reboot emulator), then per-task reviews.
-2. P4c removal → P6 (tests, docs, reviews; user runs `/screenshot-rebaseline` + `/device-check`).
+1. Finish the wave's review loops (ledger), then merge the 9 `worktree-agent-*` branches (conflicts expected in NavigationDeviceTest/DestructiveConfirmDeviceTest/HistoryDetailsDeviceTest — ownership rules in the ledger).
+2. WAVE-INTEGRATION task (ledger ruling): NavGraph entries + DI lines from the reports, delete temp shims, shared cached DesignCapacitySource (Now+Health), SessionDao projection + per-session delete DAO, shared formatters to ui/format, ACTION_STOP manifest filter, chart 150 % level tick; gate; device tests one class at a time; emulator checks (notification, tile, widgets).
+3. P4c removal → P6.
 
 ## Blockers / open questions
 
