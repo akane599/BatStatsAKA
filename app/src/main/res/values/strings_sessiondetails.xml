@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Session details (ui/screens/SessionDetailsScreen.kt). Units come from strings_now.xml (translatable="false"). -->
+<resources>
+    <!-- Top bar and delete -->
+    <string name="sessiondetails_title">Session</string>
+    <string name="sessiondetails_back">Back</string>
+    <string name="sessiondetails_delete">Delete session</string>
+    <string name="sessiondetails_delete_title">Delete this session?</string>
+    <string name="sessiondetails_delete_body">Its readings and per-app usage are deleted with it. Daily totals stay as they are.</string>
+    <string name="sessiondetails_delete_confirm">Delete</string>
+    <string name="sessiondetails_cancel">Cancel</string>
+    <string name="sessiondetails_delete_failed">Couldn\'t delete this session</string>
+
+    <!-- Session types (top bar title) -->
+    <string name="sessiondetails_type_discharge">On battery</string>
+    <string name="sessiondetails_type_charge">Charging</string>
+    <string name="sessiondetails_type_plugged">Plugged in, not charging</string>
+    <string name="sessiondetails_type_unknown">Power state unknown</string>
+
+    <!-- Missing -->
+    <string name="sessiondetails_missing_title">Session not found</string>
+    <string name="sessiondetails_missing_body">It was deleted, or history retention removed it.</string>
+    <string name="sessiondetails_missing_action">Back to History</string>
+
+    <!-- Header: %1$s / %2$s are the numbers (the rest renders smaller) -->
+    <string name="sessiondetails_span">%1$s – %2$s</string>
+    <string name="sessiondetails_recording_since">Recording since %1$s</string>
+    <string name="sessiondetails_levels">%1$s%% → %2$s%%</string>
+    <string name="sessiondetails_levels_spoken">Level from %1$s%% to %2$s%%</string>
+    <string name="sessiondetails_used">Used</string>
+    <string name="sessiondetails_charged">Charged</string>
+    <string name="sessiondetails_average">Average</string>
+    <string name="sessiondetails_capacity">Capacity</string>
+    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_confidence_low">Low confidence</string>
+    <string name="sessiondetails_confidence_medium">Medium confidence</string>
+    <string name="sessiondetails_confidence_high">High confidence</string>
+    <string name="sessiondetails_coverage">The charge counter covered %1$s%% of this session.</string>
+    <string name="sessiondetails_legacy">Recorded by an older version, so drain wasn\'t measured.</string>
+    <string name="sessiondetails_info_title">About this session</string>
+    <string name="sessiondetails_info_body">A session is one stretch of the same power state: on battery, charging, or plugged in. It ends when that changes, when monitoring stops or misses readings, or when you reset the numbers on Now.\n\nUsed and Charged come from the battery\'s charge counter, over the time it reported. Average is that charge spread over the same time.\n\nCapacity is the full capacity this session\'s charge points to. Health combines it with other sessions.</string>
+
+    <!-- Charts -->
+    <string name="sessiondetails_chart_title">Level and current</string>
+    <string name="sessiondetails_series_current">Current</string>
+    <string name="sessiondetails_series_level">Level</string>
+    <string name="sessiondetails_temperature_title">Temperature</string>
+    <string name="sessiondetails_readings_title">Readings</string>
+    <string name="sessiondetails_no_readings">No readings are linked to this session.</string>
+    <string name="sessiondetails_chart_empty">No readings in this session</string>
+
+    <!-- Drain (on battery) -->
+    <string name="sessiondetails_drain_title">Drain</string>
+    <string name="sessiondetails_screen_on">Screen on</string>
+    <string name="sessiondetails_screen_off">Screen off</string>
+    <string name="sessiondetails_deep_sleep">Deep sleep</string>
+    <string name="sessiondetails_deep_sleep_screen_off">With the screen off</string>
+    <string name="sessiondetails_drain_supporting">%1$s mA · %2$s</string>
+    <string name="sessiondetails_drain_info_title">About drain</string>
+    <string name="sessiondetails_drain_info_body">Screen on and screen off count only time on battery. The first number is the average drain per hour as a share of the battery\'s full capacity; mA is the same drain as current.\n\nDeep sleep is how much of the time the processor was fully asleep. With the screen off it should be high: if it is low, something kept the phone awake.</string>
+
+    <!-- Charging insights -->
+    <string name="sessiondetails_charging_title">Speed and heat</string>
+    <string name="sessiondetails_charger">Charger</string>
+    <string name="sessiondetails_charger_ac">AC</string>
+    <string name="sessiondetails_charger_usb">USB</string>
+    <string name="sessiondetails_charger_wireless">Wireless</string>
+    <string name="sessiondetails_charger_dock">Dock</string>
+    <string name="sessiondetails_average_power">Average power</string>
+    <string name="sessiondetails_peak_power">Peak %1$s W</string>
+    <string name="sessiondetails_peak_temperature">Peak temperature</string>
+    <string name="sessiondetails_twenty_to_eighty" formatted="false">20 → 80%</string>
+    <string name="sessiondetails_not_covered">Not covered</string>
+    <string name="sessiondetails_charging_info_title">About charging</string>
+    <string name="sessiondetails_charging_info_body">Average power is the energy added divided by the time the charge counter reported; peak is the highest reading while monitoring.\n\nThe 20 to 80 time is how long the level took to climb from 20 to 80 percent. It shows when the session covered both.</string>
+
+    <!-- Per-app usage (on battery) -->
+    <string name="sessiondetails_apps_title">Apps</string>
+    <string name="sessiondetails_apps_basis_delta">From unplug to plug-in</string>
+    <string name="sessiondetails_apps_basis_reset">Since Android reset its stats, during this session</string>
+    <string name="sessiondetails_apps_basis_absolute">Since the last full charge (no reading at unplug)</string>
+    <string name="sessiondetails_apps_so_far">So far · updated %1$s</string>
+    <string name="sessiondetails_apps_others">Other apps</string>
+    <string name="sessiondetails_apps_show_all">Show all</string>
+    <string name="sessiondetails_apps_show_fewer">Show fewer</string>
+    <string name="sessiondetails_apps_pending">Per-app usage is read when you plug in.</string>
+    <string name="sessiondetails_apps_collecting">Reading per-app usage…</string>
+    <string name="sessiondetails_apps_no_access">No per-app usage: BatStats had no Shizuku, root or ADB access when the phone was plugged in. Shizuku without root stops when the phone restarts; open Shizuku to start it again.</string>
+    <string name="sessiondetails_apps_failed">No per-app usage: monitoring stopped before the phone was plugged in, or Android\'s stats couldn\'t be read.</string>
+    <string name="sessiondetails_apps_not_recorded">No per-app usage was recorded for this session.</string>
+    <string name="sessiondetails_apps_empty">No app used measurable power in this session.</string>
+    <string name="sessiondetails_apps_info_title">About per-app usage</string>
+    <string name="sessiondetails_apps_info_body">BatStats reads Android\'s per-app battery stats when you unplug and again when you plug in; each app\'s number is the difference. If Android reset its stats in between, the totals since the reset are shown. Without a reading at unplug, the totals since the last full charge are shown instead.\n\nReading these stats needs Shizuku, root or ADB access. Shizuku without root stops when the phone restarts: open Shizuku to start it again.\n\nThe values are Android\'s estimates. One entry can cover several apps that share an ID.</string>
+</resources>

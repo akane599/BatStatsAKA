@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Top bar and delete -->
+    <string name="sessiondetails_title">Oturum</string>
+    <string name="sessiondetails_back">Geri</string>
+    <string name="sessiondetails_delete">Oturumu sil</string>
+    <string name="sessiondetails_delete_title">Bu oturum silinsin mi?</string>
+    <string name="sessiondetails_delete_body">Okumaları ve uygulama bazında kullanımı da silinir. Günlük toplamlar değişmez.</string>
+    <string name="sessiondetails_delete_confirm">Sil</string>
+    <string name="sessiondetails_cancel">İptal</string>
+    <string name="sessiondetails_delete_failed">Bu oturum silinemedi</string>
+
+    <!-- Session types (top bar title) -->
+    <string name="sessiondetails_type_discharge">Pilde</string>
+    <string name="sessiondetails_type_charge">Şarj oluyor</string>
+    <string name="sessiondetails_type_plugged">Takılı, şarj olmuyor</string>
+    <string name="sessiondetails_type_unknown">Güç durumu bilinmiyor</string>
+
+    <!-- Missing -->
+    <string name="sessiondetails_missing_title">Oturum bulunamadı</string>
+    <string name="sessiondetails_missing_body">Silindi ya da geçmiş saklama süresi onu kaldırdı.</string>
+    <string name="sessiondetails_missing_action">Geçmişe dön</string>
+
+    <!-- Header -->
+    <string name="sessiondetails_span">%1$s – %2$s</string>
+    <string name="sessiondetails_recording_since">%1$s itibarıyla kaydediliyor</string>
+    <string name="sessiondetails_levels">%%%1$s → %%%2$s</string>
+    <string name="sessiondetails_levels_spoken">Seviye %%%1$s değerinden %%%2$s değerine</string>
+    <string name="sessiondetails_used">Kullanılan</string>
+    <string name="sessiondetails_charged">Şarj edilen</string>
+    <string name="sessiondetails_average">Ortalama</string>
+    <string name="sessiondetails_capacity">Kapasite</string>
+    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_confidence_low">Düşük güven</string>
+    <string name="sessiondetails_confidence_medium">Orta güven</string>
+    <string name="sessiondetails_confidence_high">Yüksek güven</string>
+    <string name="sessiondetails_coverage">Şarj sayacı bu oturumun %%%1$s kadarını kapsadı.</string>
+    <string name="sessiondetails_legacy">Eski bir sürümle kaydedildi, bu yüzden tüketim ölçülmedi.</string>
+    <string name="sessiondetails_info_title">Bu oturum hakkında</string>
+    <string name="sessiondetails_info_body">Oturum, aynı güç durumunun sürdüğü bir dönemdir: pilde, şarj oluyor ya da takılı. Bu durum değiştiğinde, izleme durduğunda ya da okumalar kaçırıldığında veya Şimdi ekranında sayıları sıfırladığınızda biter.\n\nKullanılan ve Şarj edilen, pilin şarj sayacından, sayacın bildirdiği süre boyunca gelir. Ortalama, bu şarjın aynı süreye yayılmış halidir.\n\nKapasite, bu oturumun şarjının gösterdiği tam kapasitedir. Sağlık bunu diğer oturumlarla birleştirir.</string>
+
+    <!-- Charts -->
+    <string name="sessiondetails_chart_title">Seviye ve akım</string>
+    <string name="sessiondetails_series_current">Akım</string>
+    <string name="sessiondetails_series_level">Seviye</string>
+    <string name="sessiondetails_temperature_title">Sıcaklık</string>
+    <string name="sessiondetails_readings_title">Okumalar</string>
+    <string name="sessiondetails_no_readings">Bu oturuma bağlı okuma yok.</string>
+    <string name="sessiondetails_chart_empty">Bu oturumda okuma yok</string>
+
+    <!-- Drain (on battery) -->
+    <string name="sessiondetails_drain_title">Tüketim</string>
+    <string name="sessiondetails_screen_on">Ekran açık</string>
+    <string name="sessiondetails_screen_off">Ekran kapalı</string>
+    <string name="sessiondetails_deep_sleep">Derin uyku</string>
+    <string name="sessiondetails_deep_sleep_screen_off">Ekran kapalıyken</string>
+    <string name="sessiondetails_drain_supporting">%1$s mA · %2$s</string>
+    <string name="sessiondetails_drain_info_title">Tüketim hakkında</string>
+    <string name="sessiondetails_drain_info_body">Ekran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar. İlk sayı, pilin tam kapasitesinin payı olarak saatlik ortalama tüketimdir; mA aynı tüketimin akım olarak değeridir.\n\nDerin uyku, işlemcinin tamamen uykuda olduğu sürenin oranıdır. Ekran kapalıyken yüksek olmalıdır: düşükse bir şey telefonu uyanık tuttu.</string>
+
+    <!-- Charging insights -->
+    <string name="sessiondetails_charging_title">Hız ve sıcaklık</string>
+    <string name="sessiondetails_charger">Şarj cihazı</string>
+    <string name="sessiondetails_charger_ac">AC</string>
+    <string name="sessiondetails_charger_usb">USB</string>
+    <string name="sessiondetails_charger_wireless">Kablosuz</string>
+    <string name="sessiondetails_charger_dock">Yuva</string>
+    <string name="sessiondetails_average_power">Ortalama güç</string>
+    <string name="sessiondetails_peak_power">En yüksek %1$s W</string>
+    <string name="sessiondetails_peak_temperature">En yüksek sıcaklık</string>
+    <string name="sessiondetails_twenty_to_eighty" formatted="false">%20 → %80</string>
+    <string name="sessiondetails_not_covered">Kapsanmadı</string>
+    <string name="sessiondetails_charging_info_title">Şarj hakkında</string>
+    <string name="sessiondetails_charging_info_body">Ortalama güç, eklenen enerjinin şarj sayacının bildirdiği süreye bölümüdür; en yüksek değer, izleme sırasındaki en yüksek okumadır.\n\n20\'den 80\'e süresi, seviyenin yüzde 20\'den yüzde 80\'e çıkmasının ne kadar sürdüğüdür. Oturum ikisini de kapsadığında gösterilir.</string>
+
+    <!-- Per-app usage (on battery) -->
+    <string name="sessiondetails_apps_title">Uygulamalar</string>
+    <string name="sessiondetails_apps_basis_delta">Fişten çekildiği andan takıldığı ana kadar</string>
+    <string name="sessiondetails_apps_basis_reset">Android bu oturum sırasında istatistiklerini sıfırladığından beri</string>
+    <string name="sessiondetails_apps_basis_absolute">Son tam şarjdan beri (fişten çekilirken okuma yok)</string>
+    <string name="sessiondetails_apps_so_far">Şu ana kadar · %1$s güncellendi</string>
+    <string name="sessiondetails_apps_others">Diğer uygulamalar</string>
+    <string name="sessiondetails_apps_show_all">Tümünü göster</string>
+    <string name="sessiondetails_apps_show_fewer">Daha az göster</string>
+    <string name="sessiondetails_apps_pending">Uygulama bazında kullanım, telefonu taktığınızda okunur.</string>
+    <string name="sessiondetails_apps_collecting">Uygulama bazında kullanım okunuyor…</string>
+    <string name="sessiondetails_apps_no_access">Uygulama bazında kullanım yok: telefon takıldığında BatStats\'in Shizuku, root veya ADB erişimi yoktu. Root olmadan Shizuku, telefon yeniden başladığında durur; yeniden başlatmak için Shizuku\'yu açın.</string>
+    <string name="sessiondetails_apps_failed">Uygulama bazında kullanım yok: izleme telefon takılmadan önce durdu ya da Android\'in istatistikleri okunamadı.</string>
+    <string name="sessiondetails_apps_not_recorded">Bu oturum için uygulama bazında kullanım kaydedilmedi.</string>
+    <string name="sessiondetails_apps_empty">Bu oturumda hiçbir uygulama ölçülebilir güç kullanmadı.</string>
+    <string name="sessiondetails_apps_info_title">Uygulama bazında kullanım hakkında</string>
+    <string name="sessiondetails_apps_info_body">BatStats, Android\'in uygulama bazında pil istatistiklerini fişten çektiğinizde ve taktığınızda yeniden okur; her uygulamanın sayısı aradaki farktır. Android arada istatistiklerini sıfırladıysa sıfırlamadan bu yana toplamlar gösterilir. Fişten çekilirken okuma yoksa son tam şarjdan bu yana toplamlar gösterilir.\n\nBu istatistikleri okumak Shizuku, root veya ADB erişimi gerektirir. Root olmadan Shizuku, telefon yeniden başladığında durur: yeniden başlatmak için Shizuku\'yu açın.\n\nDeğerler Android\'in tahminleridir. Bir kayıt, aynı kimliği paylaşan birkaç uygulamayı kapsayabilir.</string>
+</resources>
