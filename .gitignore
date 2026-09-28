@@ -21,3 +21,6 @@ google-services.json
 **/build/
 *.keystore
 /artifacts/
+
+# Overhaul before/after screenshots (local only, ~14 MB)
+/design/
