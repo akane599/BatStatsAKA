@@ -4,6 +4,9 @@
     <string name="component_chart_summary_range">%1$s ile %2$s arası.</string>
     <string name="component_chart_summary_series">%1$s: son %2$s, en düşük %3$s, en yüksek %4$s.</string>
     <string name="component_bar_summary">En yüksek: %1$s, %2$s. Son: %3$s, %4$s.</string>
+    <string name="component_bar_select">%1$s seç</string>
+    <string name="component_bar_clear">Seçimi temizle</string>
+    <string name="component_bar_selected">Seçili: %1$s, %2$s</string>
     <string name="component_breakdown_item">%1$s: %2$s</string>
     <string name="component_info_open">%1$s hakkında</string>
 </resources>

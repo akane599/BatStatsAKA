@@ -39,7 +39,7 @@ internal class XAxisMap(val left: Float, val width: Float, val startMs: Long, va
         if (spanMs <= 0L) left + width / 2 else left + ((timeMs - startMs).toDouble() / spanMs * width).toFloat()
 
     fun time(x: Float): Long =
-        startMs + ((x - left).coerceIn(0f, width) / max(width, 1f) * spanMs).toLong()
+        startMs + ((x - left).coerceIn(0f, max(width, 0f)) / max(width, 1f) * spanMs).toLong()
 }
 
 /** Maps values to y pixels between [top] (max) and [bottom] (min). */
@@ -48,7 +48,7 @@ internal class YAxisMap(val top: Float, val bottom: Float, val min: Double, val 
         if (max > min) (bottom - (value - min) / (max - min) * (bottom - top)).toFloat() else (top + bottom) / 2
 
     /** Where a fill ends and a signed series switches color: zero, clamped into the axis. */
-    val baseline: Float get() = y(0.0.coerceIn(min, max))
+    val baseline: Float get() = y(if (max < min) min else 0.0.coerceIn(min, max))
 }
 
 /** Growable x/y pairs, filled in a draw cache and drawn without allocating. */
@@ -216,8 +216,8 @@ internal fun DrawScope.drawSeriesFill(series: SeriesDrawing) {
     }
 }
 
-/** The line (split at zero for a signed series), then its dots with a see-through ring. */
-internal fun DrawScope.drawSeriesLine(series: SeriesDrawing, stroke: Stroke, dotRadius: Float, ring: Float) {
+/** The line, split at zero for a signed series. */
+internal fun DrawScope.drawSeriesLine(series: SeriesDrawing, stroke: Stroke) {
     when (val style = series.style) {
         is SeriesStyle.Solid -> drawPath(series.line, style.color, style = stroke)
         is SeriesStyle.Signed -> {
@@ -225,6 +225,10 @@ internal fun DrawScope.drawSeriesLine(series: SeriesDrawing, stroke: Stroke, dot
             clipRect(top = series.splitY, bottom = size.height) { drawPath(series.line, style.negative, style = stroke) }
         }
     }
+}
+
+/** Isolated or marked readings, each with a see-through ring. */
+internal fun DrawScope.drawSeriesDots(series: SeriesDrawing, dotRadius: Float, ring: Float) {
     val dots = series.dots
     for (i in 0 until dots.size) {
         val x = dots.xy[i * 2]
@@ -235,10 +239,11 @@ internal fun DrawScope.drawSeriesLine(series: SeriesDrawing, stroke: Stroke, dot
 
 /**
  * A dot with a [ring] of transparency around it, so it reads over lines and fills on any container. Needs the
- * canvas on an offscreen layer (`CompositingStrategy.Offscreen`) for the clear to punch through.
+ * canvas on an offscreen layer (`CompositingStrategy.Offscreen`) for the clear to punch through. `Clear` ignores
+ * the paint color, so the erase reuses the dot's own color (a transparent paint could be dropped as a no-op).
  */
 internal fun DrawScope.drawRingedDot(color: Color, center: Offset, radius: Float, ring: Float) {
-    drawCircle(Color.Black, radius + ring, center, blendMode = BlendMode.Clear)
+    drawCircle(color, radius + ring, center, blendMode = BlendMode.Clear)
     drawCircle(color, radius, center)
 }
 

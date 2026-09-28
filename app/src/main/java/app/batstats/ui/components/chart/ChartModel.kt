@@ -40,7 +40,11 @@ internal class ChartModel(
     }
 
     companion object {
-        fun of(series: List<ChartSeries>, window: TimeWindow?, references: List<ChartReference>): ChartModel {
+        /**
+         * The time span a chart shows: [window], else first to last reading of any series. An empty or
+         * single-instant span is widened by 30 s each side, so the x mapping never divides by zero.
+         */
+        fun spanOf(series: List<ChartSeries>, window: TimeWindow?): TimeWindow {
             var start = window?.startMs ?: series.minOfOrNull { s -> s.points.firstOrNull { !ChartMath.isGap(it) }?.timeMs ?: Long.MAX_VALUE } ?: 0L
             var end = window?.endMs ?: series.maxOfOrNull { s -> s.points.lastOrNull { !ChartMath.isGap(it) }?.timeMs ?: Long.MIN_VALUE } ?: 0L
             if (start == Long.MAX_VALUE || end == Long.MIN_VALUE) {
@@ -51,6 +55,13 @@ internal class ChartModel(
                 start -= SINGLE_POINT_PAD_MS
                 end = start + 2 * SINGLE_POINT_PAD_MS
             }
+            return TimeWindow(start, end)
+        }
+
+        fun of(series: List<ChartSeries>, window: TimeWindow?, references: List<ChartReference>): ChartModel {
+            val span = spanOf(series, window)
+            val start = span.startMs
+            val end = span.endMs
             val from = IntArray(series.size)
             val to = IntArray(series.size)
             val stats = series.mapIndexed { i, s ->
@@ -82,7 +93,7 @@ internal class ChartModel(
                     low = 0.0
                     high = 1.0
                 }
-                AxisModel(low, high, series[members.first()].unit)
+                AxisModel(low, high, members.firstOrNull()?.let { series[it].unit }.orEmpty())
             }
             return ChartModel(start, end, axes, axisOf, from, to, stats)
         }

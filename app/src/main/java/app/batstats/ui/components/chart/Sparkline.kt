@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -67,10 +68,16 @@ fun Sparkline(
                 val zeroY = yMap.y(0.0)
                 val gridWidth = SparkGridWidth.toPx()
                 val latest = Offset(xMap.x(stats.latestTimeMs), yMap.y(stats.latest))
+                // With a window, the neighbour beyond each edge may be off the value range: clip to the range.
+                val clipTop = inset - stroke.width / 2
+                val clipBottom = size.height - inset + stroke.width / 2
                 onDrawBehind {
                     if (showZero) drawLine(grid, Offset(0f, zeroY), Offset(size.width, zeroY), gridWidth)
-                    drawSeriesFill(drawing)
-                    drawSeriesLine(drawing, stroke, dot, ring)
+                    clipRect(top = clipTop, bottom = clipBottom) {
+                        drawSeriesFill(drawing)
+                        drawSeriesLine(drawing, stroke)
+                    }
+                    drawSeriesDots(drawing, dot, ring)
                     if (markLatest) drawRingedDot(drawing.colorAt(latest.y), latest, dot, ring)
                 }
             },

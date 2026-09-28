@@ -47,6 +47,9 @@ internal class PlotLayout(
     val referenceLabels: List<TextLayoutResult>,
     val referenceYs: FloatArray,
 ) {
+    /** Whether the plot area left after labels and gutters is non-empty; tiny canvases draw nothing. */
+    val hasRoom: Boolean get() = xMap.width > 0f && bottom > top
+
     companion object {
         /**
          * @param edgeInset keeps the first/last reading this far inside the plot (data-fit charts), so edge dots
@@ -99,7 +102,7 @@ internal class PlotLayout(
             for (tick in timeTicks.values) {
                 val label = textMeasurer.measure(timeFormatter.axisLabel(tick, timeTicks.granularity), labelStyle)
                 val width = label.size.width.toFloat()
-                val labelLeft = (xMap.x(tick) - width / 2).coerceIn(0f, size.width - width)
+                val labelLeft = (xMap.x(tick) - width / 2).coerceIn(0f, max(0f, size.width - width))
                 if (labelLeft < previousRight + gap) continue
                 timeLabels += label
                 lefts += labelLeft

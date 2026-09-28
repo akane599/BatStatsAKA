@@ -31,7 +31,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
@@ -57,7 +60,7 @@ private const val MIN_BAR_TICKS = 3
 private const val MAX_BAR_TICKS = 5
 private const val BAR_TICK_SPACING = 1.8f
 
-/** One bar: [values] stack bottom-up in [BarSegment] order (negatives count as 0). */
+/** One bar: [values] stack bottom-up in [BarSegment] order (negative and non-finite values count as 0). */
 @Immutable
 data class BarEntry(val label: String, val values: List<Double>)
 
@@ -80,8 +83,9 @@ object BarChartDefaults {
  * Bars are at most 24 dp wide with a 4 dp rounded top and a 2 dp gap between layers; category labels thin out
  * (keeping the newest, rightmost) when they would collide. A legend row appears for two or more [segments].
  *
- * Selection is optional: pass [onSelect] to make bars tappable (tapping the selected bar clears it). With a
- * [selectedIndex] the other bars dim and the selected total is labelled on its cap.
+ * Selection is optional: pass [onSelect] to make bars tappable (the whole slot is the target; tapping the selected
+ * bar clears it) and to add one TalkBack action per bar ("Select Oct 9") plus "Clear selection". With a
+ * [selectedIndex] the other bars dim, the selected total is labelled on its cap and announced as the state.
  *
  * @param entries the bars, oldest first (the newest keeps its label when labels thin out).
  * @param unit caption above the value axis.
@@ -104,9 +108,30 @@ fun BarChart(
     // Keep one instance while the content is equal, so the draw cache survives unrelated recompositions.
     val bars = remember(entries) { entries }
     val layers = remember(segments) { segments }
-    val totals = remember(bars) { bars.map { entry -> entry.values.sumOf { max(it, 0.0) } } }
+    val totals = remember(bars) { bars.map { entry -> entry.values.sumOf(::barValue) } }
     val hasData = totals.any { it > 0.0 }
     val template = stringResource(R.string.component_bar_summary)
+    val selectTemplate = stringResource(R.string.component_bar_select)
+    val clearLabel = stringResource(R.string.component_bar_clear)
+    val selectedTemplate = stringResource(R.string.component_bar_selected)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val selected = selectedIndex?.takeIf { it in bars.indices }
+    val selectedText = selected?.let { selectedTemplate.format(bars[it].label, format.format(totals[it])) }
+    // One action per bar (plus "Clear selection"): TalkBack users select bars without aiming at them.
+    val actions = remember(bars, onSelect != null, selected != null, selectTemplate, clearLabel) {
+        if (onSelect == null) {
+            emptyList()
+        } else {
+            bars.mapIndexed { i, bar ->
+                CustomAccessibilityAction(selectTemplate.format(bar.label)) {
+                    currentOnSelect?.invoke(i)
+                    true
+                }
+            } + listOfNotNull(
+                if (selected != null) CustomAccessibilityAction(clearLabel) { currentOnSelect?.invoke(null); true } else null,
+            )
+        }
+    }
     val summary = contentDescription ?: remember(bars, totals, format, template, emptyText) {
         if (!hasData) {
             emptyText
@@ -115,7 +140,13 @@ fun BarChart(
             template.format(bars[highest].label, format.format(totals[highest]), bars.last().label, format.format(totals.last()))
         }
     }
-    Column(modifier.fillMaxWidth().clearAndSetSemantics { this.contentDescription = summary }) {
+    Column(
+        modifier.fillMaxWidth().clearAndSetSemantics {
+            this.contentDescription = summary
+            if (selectedText != null) stateDescription = selectedText
+            if (actions.isNotEmpty()) customActions = actions
+        },
+    ) {
         if (layers.size > 1) {
             Row(
                 Modifier.padding(bottom = MaterialTheme.spacing.xs),
@@ -166,8 +197,9 @@ private fun Bars(
     val tap = if (selectable) {
         Modifier.pointerInput(entries.size) {
             detectTapGestures { offset ->
+                if (hit.slot <= 0f || offset.x < hit.left) return@detectTapGestures
                 val index = ((offset.x - hit.left) / hit.slot).toInt()
-                if (offset.x >= hit.left && index in entries.indices) {
+                if (index in entries.indices) {
                     currentOnSelect?.invoke(if (index == currentSelected) null else index)
                 }
             }
@@ -197,6 +229,11 @@ private fun Bars(
                 val tickLabels = List(ticks.count) { textMeasurer.measure(numberFormat.format(ticks.valueAt(it)), labelStyle) }
                 val plotLeft = max(tickLabels.maxOf { it.size.width }, unitLabel?.size?.width ?: 0) + gap
                 val plotWidth = size.width - plotLeft
+                if (plotWidth <= 0f || bottom <= top) {
+                    // Too small for a plot (e.g. mid-animation): draw nothing rather than inverted geometry.
+                    hit.slot = 0f
+                    return@drawWithCache onDrawBehind { }
+                }
                 val yMap = YAxisMap(top, bottom, ticks.min, ticks.max)
                 val slot = plotWidth / entries.size
                 val barWidth = min(MaxBarWidth.toPx(), slot * BAR_FILL_RATIO)
@@ -211,11 +248,11 @@ private fun Bars(
                 val barOwners = ArrayList<Int>()
                 entries.forEachIndexed { bar, entry ->
                     val left = plotLeft + slot * bar + (slot - barWidth) / 2
-                    val topLayer = entry.values.indices.lastOrNull { entry.values[it] > 0.0 } ?: return@forEachIndexed
+                    val topLayer = entry.values.indices.lastOrNull { barValue(entry.values[it]) > 0.0 } ?: return@forEachIndexed
                     var base = bottom
                     var running = 0.0
                     for (layer in 0..topLayer) {
-                        val value = entry.values[layer]
+                        val value = barValue(entry.values[layer])
                         if (value <= 0.0) continue
                         running += value
                         val layerTop = yMap.y(running)
@@ -251,7 +288,7 @@ private fun Bars(
                 val capOffset = selected?.let { index ->
                     val label = capLabel ?: return@let Offset.Zero
                     val center = plotLeft + slot * (index + 0.5f)
-                    val x = (center - label.size.width / 2).coerceIn(0f, size.width - label.size.width)
+                    val x = (center - label.size.width / 2).coerceIn(0f, max(0f, size.width - label.size.width))
                     Offset(x, yMap.y(totals[index]) - gap / 2 - label.size.height)
                 } ?: Offset.Zero
                 val gridWidth = BarGridWidth.toPx()
@@ -272,7 +309,7 @@ private fun Bars(
                         if ((categoryLabels.size - 1 - i) % stride != 0) continue
                         val label = categoryLabels[i]
                         val center = plotLeft + slot * (i + 0.5f)
-                        val x = (center - label.size.width / 2).coerceIn(0f, size.width - label.size.width)
+                        val x = (center - label.size.width / 2).coerceIn(0f, max(0f, size.width - label.size.width))
                         drawText(label, topLeft = Offset(x, xLabelTop))
                     }
                     capLabel?.let { drawText(it, topLeft = capOffset) }
@@ -307,16 +344,16 @@ fun BreakdownBar(
                 .height(BreakdownHeight)
                 .clip(MaterialTheme.shapes.extraSmall)
                 .drawWithCache {
-                    val total = segments.sumOf { max(it.value, 0.0) }
-                    val parts = segments.filter { it.value > 0.0 }
+                    val total = segments.sumOf { barValue(it.value) }
+                    val parts = segments.filter { barValue(it.value) > 0.0 }
                     val gap = SegmentGap.toPx()
-                    val usable = size.width - gap * (parts.size - 1).coerceAtLeast(0)
+                    val usable = max(0f, size.width - gap * (parts.size - 1).coerceAtLeast(0))
                     val lefts = FloatArray(parts.size)
                     val widths = FloatArray(parts.size)
                     var x = 0f
                     parts.forEachIndexed { i, part ->
                         lefts[i] = x
-                        widths[i] = (part.value / total * usable).toFloat()
+                        widths[i] = (barValue(part.value) / total * usable).toFloat()
                         x += widths[i] + gap
                     }
                     onDrawBehind {
@@ -347,3 +384,6 @@ fun BreakdownBar(
         }
     }
 }
+
+/** A stack or breakdown value as drawn: negative, NaN and infinite values count as 0. */
+private fun barValue(value: Double): Double = if (value.isFinite() && value > 0.0) value else 0.0

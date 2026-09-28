@@ -2,8 +2,11 @@ package app.batstats.ui.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.History
@@ -12,6 +15,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Canvas
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import app.batstats.ui.ComponentPreviews
@@ -142,6 +152,82 @@ fun InfoSheetPreview() {
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+        }
+    }
+}
+
+/** 360 dp phone at 1× and 1.5× font: the Now readouts' narrowest case. */
+@Preview(name = "W360", widthDp = 360)
+@Preview(name = "W360LargeFont", widthDp = 360, fontScale = 1.5f)
+annotation class NarrowPreviews
+
+/**
+ * The Now readouts, 4 across inside a panel (~65 dp cells on a 360 dp phone): values shrink in steps (≥70 %), then
+ * units wrap under the value; nothing is cut. The last row is two equal-height panels (`IntrinsicSize.Max`), which
+ * a subcomposing cell would crash.
+ */
+@PreviewTest
+@NarrowPreviews
+@Composable
+fun StatCellNarrowPreview() {
+    val colors = MaterialTheme.chartColors
+    Frame {
+        Panel {
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                StatCell("Current", "−412", Modifier.weight(1f), unit = "mA", indicator = colors.drain)
+                StatCell("Power", "−1.61", Modifier.weight(1f), unit = "W")
+                StatCell("Temp.", "31.5", Modifier.weight(1f), unit = "°C")
+                StatCell("Voltage", "3.91", Modifier.weight(1f), unit = "V")
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+                StatCell("Current", "+12,480", Modifier.weight(1f), unit = "mA", indicator = colors.charge)
+                StatCell("Power", "−48.25", Modifier.weight(1f), unit = "W")
+                StatCell("Temp.", "−10.5", Modifier.weight(1f), unit = "°C")
+                StatCell("Capacity", "12,345", Modifier.weight(1f), unit = "mAh")
+            }
+        }
+        Row(Modifier.height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+            Panel(Modifier.weight(1f).fillMaxHeight(), title = "Screen on") {
+                StatCell("Drain", "6.2", unit = "%/h", supporting = "412 mA")
+            }
+            Panel(Modifier.weight(1f).fillMaxHeight(), title = "Screen off") {
+                StatCell("Drain", "0.8", unit = "%/h")
+            }
+        }
+    }
+}
+
+private fun fakeIcon(color: Color): ImageBitmap {
+    val bitmap = ImageBitmap(96, 96)
+    Canvas(bitmap).drawCircle(Offset(48f, 48f), 48f, Paint().apply { this.color = color })
+    return bitmap
+}
+
+/**
+ * A caching loader that knows one app: its icon replaces the placeholder from the first frame; unknown and failing
+ * packages keep the placeholder.
+ */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun AppIconLoadedPreview() {
+    val icon = fakeIcon(MaterialTheme.colorScheme.tertiary)
+    val loader = object : AppIconLoader {
+        override suspend fun load(packageName: String): ImageBitmap? = cached(packageName)
+
+        override fun cached(packageName: String): ImageBitmap? = when (packageName) {
+            "com.android.chrome" -> icon
+            "com.example.broken" -> error("PackageManager failed")
+            else -> null
+        }
+    }
+    CompositionLocalProvider(LocalAppIconLoader provides loader) {
+        Frame {
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                AppIcon("com.android.chrome", "Chrome")
+                AppIcon("org.unknown", "Unknown")
+                AppIcon("com.example.broken", "Broken")
             }
         }
     }

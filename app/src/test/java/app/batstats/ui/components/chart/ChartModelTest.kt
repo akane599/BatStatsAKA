@@ -75,12 +75,48 @@ class ChartModelTest {
 
     @Test
     fun gapsOnlyAndEmptySeriesHaveNoData() {
-        val gapsOnly = ChartModel.of(listOf(ChartSeries("x", points(null, Double.NaN), solid)), null, emptyList())
+        val gapsOnly = ChartModel.of(
+            listOf(ChartSeries("x", points(null, Double.NaN, Double.POSITIVE_INFINITY), solid)),
+            null,
+            emptyList(),
+        )
         assertFalse(gapsOnly.hasData)
         assertNull(gapsOnly.stats[0])
         val empty = ChartModel.of(listOf(ChartSeries("x", emptyList(), solid)), null, emptyList())
         assertFalse(empty.hasData)
         assertTrue(empty.endMs > empty.startMs)
+    }
+
+    @Test
+    fun noSeriesAtAllIsAnEmptyModel() {
+        val model = ChartModel.of(emptyList(), window = null, references = emptyList())
+        assertFalse(model.hasData)
+        assertEquals(1, model.axes.size)
+        assertEquals("", model.axes[0].unit)
+        assertEquals(1, model.ticks(5).size)
+        val windowed = ChartModel.of(emptyList(), TimeWindow(0, 60_000), listOf(ChartReference(5.0, "x")))
+        assertFalse(windowed.hasData)
+    }
+
+    @Test
+    fun spanIsTheWindowOrTheReadingsPaddedWhenEmpty() {
+        val series = listOf(ChartSeries("x", points(null, 1.0, 2.0, null), solid))
+        assertEquals(TimeWindow(1_000, 2_000), ChartModel.spanOf(series, window = null))
+        assertEquals(TimeWindow(-5, 5), ChartModel.spanOf(series, TimeWindow(-5, 5)))
+        val empty = ChartModel.spanOf(emptyList(), window = null)
+        assertTrue(empty.spanMs > 0)
+    }
+
+    @Test
+    fun axisMapsNeverThrowOnTinyOrInvertedGeometry() {
+        // A plot squeezed to zero or negative width (e.g. mid-animation) maps every x to the start.
+        assertEquals(0L, XAxisMap(left = 10f, width = 0f, startMs = 0, spanMs = 1_000).time(50f))
+        assertEquals(0L, XAxisMap(left = 10f, width = -20f, startMs = 0, spanMs = 1_000).time(5f))
+        // An inverted value range (min > max) centres everything instead of throwing in coerceIn.
+        val inverted = YAxisMap(top = 0f, bottom = 100f, min = 5.0, max = 1.0)
+        assertEquals(50f, inverted.baseline, 0f)
+        val flat = YAxisMap(top = 0f, bottom = -10f, min = 0.0, max = 1.0)
+        assertEquals(-10f, flat.baseline, 0f)
     }
 
     @Test

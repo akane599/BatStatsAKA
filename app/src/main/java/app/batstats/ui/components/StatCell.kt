@@ -10,15 +10,37 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.AlignmentLine
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.IntrinsicMeasurable
+import androidx.compose.ui.layout.IntrinsicMeasureScope
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Measurable
+import androidx.compose.ui.layout.MeasurePolicy
+import androidx.compose.ui.layout.MeasureResult
+import androidx.compose.ui.layout.MeasureScope
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.constrainHeight
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.isSpecified
 import app.batstats.ui.theme.numericTitle
 import app.batstats.ui.theme.spacing
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.roundToInt
 
 private val IndicatorSize = 8.dp
 
@@ -26,12 +48,27 @@ private val IndicatorSize = 8.dp
 private const val UNIT_SCALE = 0.6f
 
 /**
+ * Sizes (fractions of [StatCell]'s `valueStyle`) a value line steps through: value and unit share a line down to
+ * 80 %; below that the unit moves under the value, which may then go down to 70 %.
+ */
+private val INLINE_SCALES = floatArrayOf(1f, 0.9f, 0.8f)
+private val VALUE_SCALES = floatArrayOf(1f, 0.9f, 0.8f, 0.7f)
+
+/**
  * A labelled number: label above, value (tabular Space Grotesk) with its unit on the same baseline, and an
  * optional supporting line. Read as one item by TalkBack.
  *
+ * **Narrow cells never cut a number:** when value + unit don't fit the width, both shrink in 10 % steps down to
+ * 80 % of [valueStyle] (keeping the cell's height and value baseline, so a row of cells stays aligned); if they
+ * still don't fit, the unit moves under the value, which keeps the number large (down to 70 % if needed); a value
+ * wider than the cell even at 70 % shrinks until it fits.
+ * Give 4-across rows equal `Modifier.weight(1f)` cells. Supports intrinsic measurement (e.g. `IntrinsicSize.Max`
+ * rows of equal-height panels).
+ *
  * @param value the formatted number only ("−412"); put the unit in [unit] so it renders quieter.
  * @param indicator a small dot before the label, tying the value to a chart color (e.g. the trace direction).
- * @param valueStyle `numericTitle` by default; `numericHeadline` for the large Now readouts.
+ * @param valueStyle `numericTitle` by default; `numericHeadline` for the large Now readouts. A style without a
+ *   font size falls back to `numericTitle`'s size.
  */
 @Composable
 fun StatCell(
@@ -43,6 +80,8 @@ fun StatCell(
     indicator: Color? = null,
     valueStyle: TextStyle = MaterialTheme.typography.numericTitle,
 ) {
+    val fallbackSize = MaterialTheme.typography.numericTitle.fontSize
+    val sized = if (valueStyle.fontSize.isSpecified) valueStyle else valueStyle.copy(fontSize = fallbackSize)
     Column(modifier.semantics(mergeDescendants = true) {}) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -57,24 +96,7 @@ fun StatCell(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xxs)) {
-            Text(
-                value,
-                modifier = Modifier.alignByBaseline(),
-                style = valueStyle,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-            )
-            if (unit != null) {
-                Text(
-                    unit,
-                    modifier = Modifier.alignByBaseline(),
-                    style = valueStyle.copy(fontSize = valueStyle.fontSize * UNIT_SCALE),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                )
-            }
-        }
+        ValueLine(value, unit, sized)
         if (supporting != null) {
             Text(
                 supporting,
@@ -84,3 +106,140 @@ fun StatCell(
         }
     }
 }
+
+@Composable
+private fun ValueLine(value: String, unit: String?, style: TextStyle) {
+    val gap = MaterialTheme.spacing.xxs
+    val policy = remember(gap) { ValueLinePolicy(gap) }
+    Layout(
+        content = {
+            Text(value, style = style, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
+            if (unit != null) {
+                Text(
+                    unit,
+                    style = style.scaled(UNIT_SCALE),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+        },
+        measurePolicy = policy,
+    )
+}
+
+/** Font size (and an sp line height) times [scale]; [this] must have a specified font size. */
+private fun TextStyle.scaled(scale: Float): TextStyle = copy(
+    fontSize = fontSize * scale,
+    lineHeight = if (lineHeight.isSp) lineHeight * scale else lineHeight,
+)
+
+/** How the value line fits a width: one [scale] for value and unit, and whether the unit sits under the value. */
+@Immutable
+internal data class ValueLineFit(val scale: Float, val unitBelow: Boolean)
+
+/**
+ * The largest step of [INLINE_SCALES] at which value and unit share a line within [maxWidth]; else the largest of
+ * [VALUE_SCALES] at which they fit stacked (a lone value: at which it fits); else the exact scale that fits the
+ * wider of the two, so a number is never cut short. Widths are at full size; [unitWidth] is `null` without a unit.
+ * Never throws, for any [maxWidth].
+ */
+internal fun fitValueLine(valueWidth: Int, unitWidth: Int?, gap: Int, maxWidth: Int): ValueLineFit {
+    if (maxWidth == Constraints.Infinity) return ValueLineFit(1f, unitBelow = false)
+    val available = max(maxWidth, 0).toFloat()
+    val unitOrZero = unitWidth ?: 0
+    val inlineGap = if (unitWidth != null) gap else 0
+    for (scale in INLINE_SCALES) {
+        if (scale * (valueWidth + unitOrZero) + inlineGap <= available) return ValueLineFit(scale, unitBelow = false)
+    }
+    val widest = max(valueWidth, unitOrZero)
+    val below = unitWidth != null
+    for (scale in VALUE_SCALES) if (scale * widest <= available) return ValueLineFit(scale, below)
+    return ValueLineFit(if (widest > 0) available / widest else 1f, below)
+}
+
+/**
+ * Value and unit measured at full size, then drawn scaled (graphics layer) as [fitValueLine] decides. Scaling
+ * keeps them real `Text`s (semantics, font scale) without subcomposition, so intrinsic measurement works.
+ */
+private class ValueLinePolicy(private val gap: Dp) : MeasurePolicy {
+    override fun MeasureScope.measure(measurables: List<Measurable>, constraints: Constraints): MeasureResult {
+        val value = measurables[0].measure(Constraints())
+        val unit = measurables.getOrNull(1)?.measure(Constraints())
+        val gapPx = gap.roundToPx()
+        val fit = fitValueLine(value.width, unit?.width, gapPx, constraints.maxWidth)
+        val scale = fit.scale
+        // The value baseline stays where the full-size line has it, so shrunk and full cells in a row line up.
+        val valueBaseline = value.baseline()
+        val baseline = max(valueBaseline, unit?.baseline() ?: 0)
+        val valueTop = baseline - scale * valueBaseline
+        val valueRight = scale * value.width
+        val lineWidth: Float
+        val lineHeight: Float
+        val unitX: Float
+        val unitY: Float
+        if (unit != null && fit.unitBelow) {
+            unitX = 0f
+            unitY = valueTop + scale * value.height
+            lineWidth = max(valueRight, scale * unit.width)
+            lineHeight = unitY + scale * unit.height
+        } else {
+            unitX = valueRight + gapPx
+            unitY = baseline - scale * (unit?.baseline() ?: 0)
+            lineWidth = if (unit != null) unitX + scale * unit.width else valueRight
+            // Full-size line height, whatever the scale: shrinking never changes the cell's height.
+            lineHeight = max(value.height - valueBaseline, unit?.let { it.height - it.baseline() } ?: 0).toFloat() + baseline
+        }
+        val layoutWidth = constraints.constrainWidth(ceil(lineWidth).toInt())
+        val layoutHeight = constraints.constrainHeight(ceil(lineHeight).toInt())
+        return layout(layoutWidth, layoutHeight) {
+            if (scale <= 0f) return@layout // no width at all: nothing fits, nothing to draw
+            fun Placeable.placeScaled(x: Float, y: Float) {
+                val left = if (layoutDirection == LayoutDirection.Rtl) layoutWidth - x - scale * this.width else x
+                if (scale == 1f) {
+                    place(left.roundToInt(), y.roundToInt())
+                } else {
+                    placeWithLayer(left.roundToInt(), y.roundToInt()) {
+                        scaleX = scale
+                        scaleY = scale
+                        transformOrigin = TransformOrigin(0f, 0f)
+                    }
+                }
+            }
+            value.placeScaled(0f, valueTop)
+            unit?.placeScaled(unitX, unitY)
+        }
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int {
+        val (value, unit) = naturalWidths(measurables)
+        return ceil(VALUE_SCALES.last() * max(value, unit ?: 0)).toInt()
+    }
+
+    override fun IntrinsicMeasureScope.maxIntrinsicWidth(measurables: List<IntrinsicMeasurable>, height: Int): Int {
+        val (value, unit) = naturalWidths(measurables)
+        return value + (unit?.let { it + gap.roundToPx() } ?: 0)
+    }
+
+    override fun IntrinsicMeasureScope.minIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        intrinsicHeight(measurables, width)
+
+    override fun IntrinsicMeasureScope.maxIntrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int =
+        intrinsicHeight(measurables, width)
+
+    private fun naturalWidths(measurables: List<IntrinsicMeasurable>): Pair<Int, Int?> =
+        measurables[0].maxIntrinsicWidth(Constraints.Infinity) to measurables.getOrNull(1)?.maxIntrinsicWidth(Constraints.Infinity)
+
+    /** Full line height; stacked, an upper bound (the value line plus the scaled unit line). */
+    private fun IntrinsicMeasureScope.intrinsicHeight(measurables: List<IntrinsicMeasurable>, width: Int): Int {
+        val (valueWidth, unitWidth) = naturalWidths(measurables)
+        val valueHeight = measurables[0].maxIntrinsicHeight(Constraints.Infinity)
+        val unit = measurables.getOrNull(1) ?: return valueHeight
+        val fit = fitValueLine(valueWidth, unitWidth, gap.roundToPx(), width)
+        if (!fit.unitBelow) return max(valueHeight, unit.maxIntrinsicHeight(Constraints.Infinity))
+        return valueHeight + ceil(fit.scale * unit.maxIntrinsicHeight(Constraints.Infinity)).toInt()
+    }
+}
+
+/** First baseline, or the bottom for a child without one. */
+private fun Placeable.baseline(): Int = this[FirstBaseline].takeIf { it != AlignmentLine.Unspecified } ?: height

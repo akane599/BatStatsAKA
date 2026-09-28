@@ -1,6 +1,7 @@
 package app.batstats.ui.components.chart
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -14,23 +15,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.Stable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
@@ -71,10 +65,6 @@ private val RingWidth = 2.dp
 private val ReadoutGap = 8.dp
 private val DashLength = 4.dp
 private const val HOUR_MS = 3_600_000L
-private const val NONE = Long.MIN_VALUE
-
-/** Screenshot previews only: composes the chart with the scrub cursor at this time. */
-internal val LocalPreviewScrubTimeMs = staticCompositionLocalOf<Long?> { null }
 
 /** Default sizes for [TimeSeriesChart]. */
 object TimeSeriesChartDefaults {
@@ -92,8 +82,10 @@ object TimeSeriesChartDefaults {
  *   and its wash by sign (the live power trace). The first series is drawn on top. Up to a few thousand points
  *   per series are fine (drawing keeps ≤ 4 per pixel column); downsample longer histories with
  *   [ChartMath.downsampleMinMaxAsync] first.
- * - **Scrub:** drag horizontally (or tap) to show a cursor and a readout of the nearest readings, formatted by each
- *   series' `format`; the readout stays after lifting, a tap clears it.
+ * - **Scrub:** drag horizontally (or tap) to show a cursor and a readout of the nearest in-window readings,
+ *   formatted by each series' `format`; the readout stays after lifting, a tap clears it. Hoist [scrubState] to
+ *   read the cursor ([ChartScrubState.timeMs], [ChartScrubState.readingIn]), set or clear it from outside (e.g. when
+ *   the range changes), or share it with a second chart so both scrub together.
  * - **Motion:** the trace draws in once, the first time data appears (400 ms); skipped in previews and when the
  *   system removes animations.
  * - **Accessibility:** one `contentDescription` — [contentDescription] if given, otherwise time range plus latest /
@@ -103,6 +95,7 @@ object TimeSeriesChartDefaults {
  * @param chartHeight height of the plot including its axis labels.
  * @param references dashed threshold lines (e.g. design capacity); they widen the axis to stay visible.
  * @param markLatest dot the newest reading of each series ("now" on the live trace).
+ * @param scrubState the scrub cursor; pass your own [rememberChartScrubState] to observe, drive or share it.
  * @param emptyText shown in place of the plot when no series has a reading in the window.
  */
 @Composable
@@ -113,6 +106,7 @@ fun TimeSeriesChart(
     chartHeight: Dp = TimeSeriesChartDefaults.Height,
     references: List<ChartReference> = emptyList(),
     markLatest: Boolean = false,
+    scrubState: ChartScrubState = rememberChartScrubState(),
     animateDrawIn: Boolean = true,
     timeFormatter: TimeAxisFormatter = rememberTimeAxisFormatter(),
     emptyText: String = stringResource(R.string.component_chart_empty),
@@ -129,6 +123,12 @@ fun TimeSeriesChart(
     }
     val skipAnimation = !animateDrawIn || LocalInspectionMode.current
     val drawnIn = rememberSaveable { mutableStateOf(skipAnimation) }
+    val seriesState = rememberUpdatedState(shown)
+    val modelState = rememberUpdatedState(model)
+    // Only draw and the readout read this, so a cursor move never recomposes the chart itself.
+    val selection = remember(scrubState) {
+        derivedStateOf { selectionAt(scrubState.timeMs, modelState.value, seriesState.value) }
+    }
 
     Column(modifier.fillMaxWidth().clearAndSetSemantics { this.contentDescription = summary }) {
         if (shown.size > 1) {
@@ -141,7 +141,7 @@ fun TimeSeriesChart(
         }
         Box(Modifier.fillMaxWidth().height(chartHeight)) {
             if (model.hasData) {
-                Plot(shown, model, refs, fitToData = window == null, markLatest, drawnIn, timeFormatter)
+                Plot(shown, model, refs, fitToData = window == null, markLatest, scrubState, selection, drawnIn, timeFormatter)
             } else {
                 Text(
                     emptyText,
@@ -161,6 +161,8 @@ private fun Plot(
     references: List<ChartReference>,
     fitToData: Boolean,
     markLatest: Boolean,
+    scrub: ChartScrubState,
+    selection: State<Selection?>,
     drawnIn: MutableState<Boolean>,
     timeFormatter: TimeAxisFormatter,
 ) {
@@ -168,11 +170,6 @@ private fun Plot(
     val labelStyle = MaterialTheme.typography.numericLabel.copy(color = colors.axisLabel)
     val textMeasurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    val previewScrub = LocalPreviewScrubTimeMs.current
-    val scrub = remember { ScrubState(previewScrub ?: NONE) }
-    val seriesState = rememberUpdatedState(series)
-    val modelState = rememberUpdatedState(model)
-    val selection = remember { derivedStateOf { scrub.select(modelState.value, seriesState.value) } }
     val progress = remember { Animatable(if (drawnIn.value) 1f else 0f) }
     LaunchedEffect(Unit) {
         if (progress.value < 1f) progress.animateTo(1f, BatMotion.long(BatMotion.StandardDecelerate))
@@ -193,20 +190,22 @@ private fun Plot(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .pointerInput(Unit) {
+                .pointerInput(scrub) {
                     detectTapGestures { offset ->
-                        scrub.timeMs = if (scrub.timeMs != NONE) NONE else layoutState.value.xMap.time(offset.x)
+                        if (scrub.timeMs != null) scrub.clear() else scrub.scrubTo(layoutState.value.xMap.time(offset.x))
                     }
                 }
-                .pointerInput(Unit) {
+                .pointerInput(scrub) {
                     detectHorizontalDragGestures(
-                        onDragStart = { offset -> scrub.timeMs = layoutState.value.xMap.time(offset.x) },
+                        onDragStart = { offset -> scrub.scrubTo(layoutState.value.xMap.time(offset.x)) },
                     ) { change, _ ->
                         change.consume()
-                        scrub.timeMs = layoutState.value.xMap.time(change.position.x)
+                        scrub.scrubTo(layoutState.value.xMap.time(change.position.x))
                     }
                 }
                 .drawWithCache {
+                    // Too small for a plot (e.g. mid-animation): draw nothing rather than inverted geometry.
+                    if (!layout.hasRoom) return@drawWithCache onDrawBehind { }
                     val dotRadius = DotRadius.toPx()
                     val xMap = layout.xMap
                     val drawings = series.indices.map { i ->
@@ -225,6 +224,12 @@ private fun Plot(
                     val dash = PathEffect.dashPathEffect(floatArrayOf(DashLength.toPx(), DashLength.toPx()))
                     val leftTicks = layout.ticks[0]
                     val gap = layout.gap
+                    // Lines reach one neighbour beyond the window, whose value may be off the axis: keep them in
+                    // the plot (plus half a stroke, so a line at the axis max keeps its round cap).
+                    val lineTop = layout.top - stroke.width / 2
+                    val lineBottom = layout.bottom + stroke.width / 2
+                    val dotTop = layout.top - dotRadius - ring
+                    val dotBottom = layout.bottom + dotRadius + ring
 
                     onDrawBehind {
                         for (i in 0 until leftTicks.count) {
@@ -251,9 +256,13 @@ private fun Plot(
 
                         val reveal = progress.value
                         val revealRight = layout.left + (layout.right - layout.left) * reveal
-                        clipRect(left = layout.left, top = 0f, right = revealRight, bottom = size.height) {
+                        clipRect(left = layout.left, top = lineTop, right = revealRight, bottom = lineBottom) {
                             for (i in drawings.lastIndex downTo 0) drawSeriesFill(drawings[i])
-                            for (i in drawings.lastIndex downTo 0) drawSeriesLine(drawings[i], stroke, dotRadius, ring)
+                            for (i in drawings.lastIndex downTo 0) drawSeriesLine(drawings[i], stroke)
+                        }
+                        // Point dots may include those neighbours too; in-range dots keep their full ring.
+                        clipRect(left = layout.left, top = dotTop, right = revealRight, bottom = dotBottom) {
+                            for (i in drawings.lastIndex downTo 0) drawSeriesDots(drawings[i], dotRadius, ring)
                         }
 
                         for (i in references.indices) {
@@ -276,12 +285,10 @@ private fun Plot(
                         val cursorX = xMap.x(selected.timeMs)
                         drawLine(colors.axisLabel, Offset(cursorX, layout.top), Offset(cursorX, layout.bottom), gridWidth)
                         for (i in series.indices) {
-                            val index = selected.indexOf(i)
-                            if (index < 0) continue
-                            val point = series[i].points[index]
-                            val value = point.value ?: continue
+                            val value = selected.rawValue(i)
+                            if (value.isNaN()) continue
                             val y = layout.yMaps[model.axisOf[i]].y(value)
-                            drawRingedDot(drawings[i].colorAt(y), Offset(xMap.x(point.timeMs), y), cursorRadius, ring)
+                            drawRingedDot(drawings[i].colorAt(y), Offset(xMap.x(selected.timeOf(i)), y), cursorRadius, ring)
                         }
                     }
                 },
@@ -301,19 +308,21 @@ private fun Readout(
 ) {
     val selected = selection.value ?: return
     val noValue = stringResource(R.string.component_no_value)
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-        shape = MaterialTheme.shapes.extraSmall,
-        modifier = Modifier.layout { measurable, constraints ->
-            val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-            layout(placeable.width, placeable.height) {
-                val current = selection.value ?: return@layout
-                val cursor = layout.xMap.x(current.timeMs)
-                val gap = ReadoutGap.toPx()
-                val x = if (cursor + gap + placeable.width <= layout.right) cursor + gap else cursor - gap - placeable.width
-                placeable.place(x.coerceAtLeast(0f).roundToInt(), layout.top.roundToInt())
+    // A plain Box, not a Surface: a Surface consumes touches, and drags or taps that start on the readout must
+    // still reach the plot underneath.
+    Box(
+        Modifier
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
+                layout(placeable.width, placeable.height) {
+                    val current = selection.value ?: return@layout
+                    val cursor = layout.xMap.x(current.timeMs)
+                    val gap = ReadoutGap.toPx()
+                    val x = if (cursor + gap + placeable.width <= layout.right) cursor + gap else cursor - gap - placeable.width
+                    placeable.place(x.coerceAtLeast(0f).roundToInt(), layout.top.roundToInt())
+                }
             }
-        },
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, MaterialTheme.shapes.extraSmall),
     ) {
         Column(Modifier.padding(horizontal = MaterialTheme.spacing.xs, vertical = MaterialTheme.spacing.xxs)) {
             Text(
@@ -322,8 +331,7 @@ private fun Readout(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             series.forEachIndexed { i, s ->
-                val index = selected.indexOf(i)
-                val value = if (index >= 0) s.points[index].value else null
+                val value = selected.valueOf(i)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
@@ -370,29 +378,4 @@ private fun summaryText(
         parts += seriesTemplate.format(s.label, s.format.format(stats.latest), s.format.format(stats.low), s.format.format(stats.high))
     }
     return parts.joinToString(" ")
-}
-
-/** Nearest reading per series at the scrub time; [timeMs] is where the cursor snaps. */
-@Immutable
-internal data class Selection(val timeMs: Long, val first: Int, val second: Int) {
-    fun indexOf(series: Int): Int = if (series == 0) first else second
-}
-
-/** The scrub position (epoch ms, or [NONE]); only the draw phase and the readout read it. */
-@Stable
-internal class ScrubState(initialTimeMs: Long) {
-    var timeMs by mutableLongStateOf(initialTimeMs)
-
-    fun select(model: ChartModel, series: List<ChartSeries>): Selection? {
-        val time = timeMs
-        if (time == NONE || time < model.startMs || time > model.endMs) return null
-        val first = series.getOrNull(0)?.let { ChartMath.nearestIndex(it.points, time, it.maxGapMs ?: Long.MAX_VALUE) } ?: -1
-        val second = series.getOrNull(1)?.let { ChartMath.nearestIndex(it.points, time, it.maxGapMs ?: Long.MAX_VALUE) } ?: -1
-        val snap = when {
-            first >= 0 -> series[0].points[first].timeMs
-            second >= 0 -> series[1].points[second].timeMs
-            else -> return null
-        }
-        return Selection(snap, first, second)
-    }
 }

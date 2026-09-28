@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
 import app.batstats.ui.ComponentPreviews
 import app.batstats.ui.FIXED_TIME_MS
@@ -67,21 +66,26 @@ private fun ChartFrame(title: String, content: @Composable () -> Unit) {
 @ComponentPreviews
 @Composable
 fun LiveTracePreview() {
+    LiveTrace(rememberChartScrubState())
+}
+
+/** Scrubbed through a hoisted [ChartScrubState], as the Now screen would. */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun LiveTraceScrubbedPreview() {
+    LiveTrace(rememberChartScrubState(initialTimeMs = FIXED_TIME_MS - 38 * MINUTE))
+}
+
+@Composable
+private fun LiveTrace(scrubState: ChartScrubState) {
     ChartFrame("Power") {
         TimeSeriesChart(
             series = listOf(ChartSeries("Current", liveCurrent, ChartDefaults.directionStyle(), unit = "mA")),
             window = TimeWindow(FIXED_TIME_MS - HOUR, FIXED_TIME_MS),
             markLatest = true,
+            scrubState = scrubState,
         )
-    }
-}
-
-@PreviewTest
-@ComponentPreviews
-@Composable
-fun LiveTraceScrubbedPreview() {
-    CompositionLocalProvider(LocalPreviewScrubTimeMs provides FIXED_TIME_MS - 38 * MINUTE) {
-        LiveTracePreview()
     }
 }
 
@@ -108,23 +112,22 @@ fun GapsChartPreview() {
 @ComponentPreviews
 @Composable
 fun TwoSeriesChartPreview() {
-    CompositionLocalProvider(LocalPreviewScrubTimeMs provides FIXED_TIME_MS - 20 * MINUTE) {
-        ChartFrame("Level and current") {
-            TimeSeriesChart(
-                series = listOf(
-                    ChartSeries("Current", sessionCurrent, ChartDefaults.directionStyle(filled = false), unit = "mA"),
-                    ChartSeries(
-                        "Level",
-                        sessionLevel,
-                        ChartDefaults.solidStyle(MaterialTheme.colorScheme.secondary),
-                        unit = "%",
-                        format = NumberFormatter("%", maxDecimals = 0),
-                        axisMin = 0.0,
-                        axisMax = 100.0,
-                    ),
+    ChartFrame("Level and current") {
+        TimeSeriesChart(
+            series = listOf(
+                ChartSeries("Current", sessionCurrent, ChartDefaults.directionStyle(filled = false), unit = "mA"),
+                ChartSeries(
+                    "Level",
+                    sessionLevel,
+                    ChartDefaults.solidStyle(MaterialTheme.chartColors.level),
+                    unit = "%",
+                    format = NumberFormatter("%", maxDecimals = 0),
+                    axisMin = 0.0,
+                    axisMax = 100.0,
                 ),
-            )
-        }
+            ),
+            scrubState = rememberChartScrubState(initialTimeMs = FIXED_TIME_MS - 20 * MINUTE),
+        )
     }
 }
 
@@ -156,24 +159,45 @@ fun EmptyChartPreview() {
         TimeSeriesChart(
             series = listOf(ChartSeries("Current", emptyList(), ChartDefaults.directionStyle(), unit = "mA")),
             window = TimeWindow(FIXED_TIME_MS - HOUR, FIXED_TIME_MS),
+            chartHeight = TimeSeriesChartDefaults.Height / 2,
+        )
+        // No series at all, and a series of gap markers only, render the same empty state.
+        TimeSeriesChart(series = emptyList(), chartHeight = TimeSeriesChartDefaults.Height / 2, emptyText = "No series")
+        TimeSeriesChart(
+            series = listOf(
+                ChartSeries(
+                    "Temperature",
+                    listOf(TimePoint(FIXED_TIME_MS - HOUR, null), TimePoint(FIXED_TIME_MS, Double.NaN)),
+                    ChartDefaults.solidStyle(MaterialTheme.chartColors.temperature),
+                    unit = "°C",
+                ),
+            ),
+            chartHeight = TimeSeriesChartDefaults.Height / 2,
+            emptyText = "Only gaps",
         )
     }
 }
 
 private val dayLabels = listOf("Sep 26", "27", "28", "29", "30", "Oct 1", "2", "3", "4", "5", "6", "7", "8", "9")
+// Screen-off drain stacks under screen-on drain, as the drainSecondary token describes.
 private val drainDays = dayLabels.mapIndexed { i, label ->
-    BarEntry(label, listOf(18.0 + 14 * (0.5 + 0.5 * sin(i * 1.3)), 6.0 + 5 * (0.5 + 0.5 * cos(i * 0.9))))
+    BarEntry(label, listOf(6.0 + 5 * (0.5 + 0.5 * cos(i * 0.9)), 18.0 + 14 * (0.5 + 0.5 * sin(i * 1.3))))
+}
+
+@Composable
+private fun drainLayers(): List<BarSegment> {
+    val colors = MaterialTheme.chartColors
+    return listOf(BarSegment("Screen off", colors.drainSecondary), BarSegment("Screen on", colors.drain))
 }
 
 @PreviewTest
 @ComponentPreviews
 @Composable
 fun StackedBarChartPreview() {
-    val drain = MaterialTheme.chartColors.drain
     ChartFrame("Daily drain") {
         BarChart(
             entries = drainDays,
-            segments = listOf(BarSegment("Screen on", drain), BarSegment("Screen off", drain.copy(alpha = 0.45f))),
+            segments = drainLayers(),
             unit = "%",
             format = NumberFormatter("%", maxDecimals = 0),
             selectedIndex = drainDays.lastIndex,
@@ -186,12 +210,20 @@ fun StackedBarChartPreview() {
 @ComponentPreviews
 @Composable
 fun EmptyBarChartPreview() {
-    val drain = MaterialTheme.chartColors.drain
     ChartFrame("Daily drain") {
         BarChart(
             entries = emptyList(),
-            segments = listOf(BarSegment("Screen on", drain), BarSegment("Screen off", drain.copy(alpha = 0.45f))),
+            segments = drainLayers(),
             unit = "%",
+            chartHeight = BarChartDefaults.Height / 2,
+        )
+        // Non-finite values count as zero: all-NaN days are empty too.
+        BarChart(
+            entries = listOf(BarEntry("Oct 8", listOf(Double.NaN, Double.NaN)), BarEntry("Oct 9", listOf(Double.NaN, 0.0))),
+            segments = drainLayers(),
+            unit = "%",
+            chartHeight = BarChartDefaults.Height / 2,
+            emptyText = "Only gaps",
         )
     }
 }
@@ -227,6 +259,41 @@ fun SparklineAndBreakdownPreview() {
                     ),
                     format = { minutes -> "${minutes.toInt()} min" },
                 )
+            }
+        }
+    }
+}
+
+/** Level with a gap marker and a sampling hole (maxGapMs), a signed trace with gaps, and an empty sparkline. */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun SparklineGapsAndEmptyPreview() {
+    val levelWithGaps = sessionLevel.mapIndexed { i, point -> if (i == 40) point.copy(value = null) else point }
+        .filterIndexed { i, _ -> i !in 60..75 }
+    val label = @Composable { text: String ->
+        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    ScreenshotTheme {
+        Panel(Modifier.padding(MaterialTheme.spacing.md), title = "Sparklines") {
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                Column(Modifier.weight(1f)) {
+                    label("Gaps")
+                    Sparkline(levelWithGaps, Modifier.fillMaxWidth(), maxGapMs = 5 * MINUTE)
+                }
+                Column(Modifier.weight(1f)) {
+                    label("Signed, gaps")
+                    Sparkline(
+                        liveCurrent.filterIndexed { i, _ -> i !in 100..130 },
+                        Modifier.fillMaxWidth(),
+                        style = ChartDefaults.directionStyle(filled = false),
+                        maxGapMs = MINUTE,
+                    )
+                }
+                Column(Modifier.weight(1f)) {
+                    label("Empty")
+                    Sparkline(emptyList(), Modifier.fillMaxWidth())
+                }
             }
         }
     }
