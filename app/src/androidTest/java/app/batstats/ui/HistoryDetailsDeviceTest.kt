@@ -9,97 +9,111 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.ViewModelStore
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.R
+import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.RepositoryRecoveryTest
-import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.DailySummary
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.measurement.DailySummaryAggregator
 import app.batstats.test.DeviceEnvironment
 import app.batstats.ui.screens.HistoryScreen
-import app.batstats.ui.screens.SessionDetailsScreen
 import app.batstats.ui.theme.MainTheme
+import app.batstats.viewmodel.DefaultHistoryRepository
+import app.batstats.viewmodel.HistoryMode
 import app.batstats.viewmodel.HistoryViewModel
-import app.batstats.viewmodel.SessionDetailsViewModel
+import app.batstats.viewmodel.SessionFilter
+import java.time.ZoneId
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.util.Locale
 
-/** Production history UI and Room, with isolated, explicitly scripted imported readings. */
+/**
+ * Production History UI and Room, with scripted rows: the Days totals, the session row, the chips, and a row opening
+ * its session. The SessionDetails half (source, charts, deletion of an open record) is rewritten with that screen
+ * and re-added after the P4b merge.
+ */
 @RunWith(AndroidJUnit4::class)
 class HistoryDetailsDeviceTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun sessionCardOpensLinkedChartsAndDeletionRemovesStaleDetails() {
+    @Test fun daysAndSessionRowsShowScriptedHistoryAndARowOpensItsSession() {
         DeviceEnvironment.requireDisposableEmulator()
         val fixture = RepositoryRecoveryTest.Fixture()
         val models = ViewModelStore()
-        val history = HistoryViewModel(fixture.repository)
-        val details = SessionDetailsViewModel(fixture.repository, fixture.database, "scripted-session")
+        val history = HistoryViewModel(DefaultHistoryRepository(fixture.repository, fixture.database))
         models.put("history", history)
-        models.put("details", details)
         val context = DeviceEnvironment.context
+        fun text(id: Int, vararg args: Any): String = context.getString(id, *args)
+        val today = DailySummaryAggregator.epochDay(System.currentTimeMillis(), ZoneId.systemDefault())
         val start = 1_779_184_800_000L
-        val source = "import:scripted BatteryManager counter observations"
         var opened by mutableStateOf<String?>(null)
-        fun show(text: String) {
-            compose.onNode(hasScrollAction()).performScrollToNode(hasText(text))
-            compose.onNodeWithText(text).assertIsDisplayed()
+        fun show(value: String) {
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText(value))
+            compose.onNodeWithText(value).assertIsDisplayed()
         }
+        // "3 min · 80% → 79%": the session row's second line.
+        val sessionDetail = text(
+            R.string.history_session_detail,
+            text(R.string.now_duration_minutes, "3"),
+            text(R.string.history_level_change, text(R.string.history_percent, "80"), text(R.string.history_percent, "79")),
+        )
         try {
             runBlocking {
                 fixture.database.sessionDao().insert(ChargeSession(
                     "scripted-session", SessionType.DISCHARGE, start, start + 180_000,
-                    80, 79, 1_000, -60_000, null, observationId = "scripted-import",
+                    80, 79, 42_000, -60_000, null, observationId = "scripted-import",
                     lastSampleTime = start + 180_000, observedMs = 180_000,
                     counterCoveredMs = 60_000, screenOnMs = 180_000, screenOffMs = 0,
-                    source = source
+                    source = "import:scripted BatteryManager counter observations",
+                    appUsageStatus = AppUsageStatus.NO_ACCESS,
                 ))
-                listOf(-50_000L, null, -100_000L, -150_000L).forEachIndexed { index, current ->
-                    fixture.database.batteryDao().insertSample(BatterySample(
-                        timestamp = start + index * 60_000, levelPercent = 80, status = 3,
-                        plugged = 0, currentNowUa = current, chargeCounterUah = null,
-                        voltageMv = 4000, temperatureDeciC = null, health = null,
-                        screenOn = true, observationId = "scripted-import", sessionId = "scripted-session",
-                        source = source, boundaryReason = if (index == 2) "gap" else null
-                    ))
-                }
+                fixture.database.dailySummaryDao().upsert(DailySummary(
+                    epochDay = today, screenOnMs = 7_200_000, screenOffMs = 10_800_000,
+                    screenOnDischargeUah = 300_000, screenOffDischargeUah = 120_000,
+                ))
             }
             compose.setContent {
                 MainTheme(dynamicColor = false) {
-                    if (opened == null) HistoryScreen({}, { opened = it }, history)
-                    else SessionDetailsScreen({ opened = null }, details)
+                    HistoryScreen(onOpenSession = { opened = it }, vm = history)
                 }
             }
-            compose.waitUntil(120_000) { !history.ui.value.loading }
-            show("80% → 79%")
-            DeviceEnvironment.screenshot("history-populated-scripted")
-            compose.onNodeWithText("80% → 79%").performClick()
-            compose.waitUntil(120_000) { !details.ui.value.loading }
+
+            // Days (the default): today's row with the drain used and screen-on time.
+            compose.waitUntil(120_000) { !history.state.value.days.loading && history.state.value.days.recorded }
+            compose.onNodeWithText(text(R.string.history_mode_days)).assertIsSelected()
+            show(text(R.string.history_days_title))
+            show("420 mAh")
+            show(text(R.string.history_day_detail, text(R.string.now_duration_hours_minutes, "2", "0")))
+            DeviceEnvironment.screenshot("history-days-scripted")
+
+            // Sessions: the row, its charge moved out of the battery and the quiet app-usage hint.
+            compose.onNodeWithText(text(R.string.history_mode_sessions)).performClick()
+            compose.waitUntil(120_000) {
+                history.state.value.mode == HistoryMode.SESSIONS && history.state.value.sessions.rows.isNotEmpty()
+            }
+            show(sessionDetail)
+            show("−42 mAh")
+            show(text(R.string.history_app_usage_no_access))
+            DeviceEnvironment.screenshot("history-sessions-scripted")
+
+            // The Charge chip hides the discharge; All brings it back.
+            compose.onNodeWithText(text(R.string.history_filter_charge)).performClick()
+            compose.waitUntil(120_000) {
+                history.state.value.filter == SessionFilter.CHARGE && history.state.value.sessions.rows.isEmpty()
+            }
+            show(text(R.string.history_sessions_empty_charge))
+            compose.onAllNodesWithText(sessionDetail).assertCountEquals(0)
+            DeviceEnvironment.screenshot("history-sessions-charge-empty")
+            compose.onNodeWithText(text(R.string.history_filter_all)).performClick()
+            compose.waitUntil(120_000) { history.state.value.sessions.rows.isNotEmpty() }
+
+            // The whole row opens its session.
+            show(sessionDetail)
+            compose.onNodeWithText(sessionDetail).performClick()
+            compose.waitForIdle()
             assertEquals("scripted-session", opened)
-            show(context.getString(R.string.session_imported_source, source))
-            DeviceEnvironment.screenshot("history-detail-source-scripted")
-            show(context.getString(R.string.session_screen_times, "3m 0s", "0s"))
-            val currentTitle = context.getString(R.string.session_net_current)
-            show("$currentTitle (mA)")
-            val chartDescription = context.getString(R.string.chart_description, currentTitle, 3,
-                String.format(Locale.getDefault(), "%.1f", -150.0),
-                String.format(Locale.getDefault(), "%.1f", -50.0), "mA")
-            compose.onNode(hasScrollAction()).performScrollToNode(hasContentDescription(chartDescription))
-            compose.onNodeWithContentDescription(chartDescription).assertIsDisplayed()
-            assertTrue(details.ui.value.points.any { it.currentNowUa == null })
-            assertTrue(details.ui.value.points.any { it.discontinuity })
-            DeviceEnvironment.screenshot("history-current-gaps-scripted")
-            show(context.getString(R.string.session_temperature) + " (°C)")
-            show(context.getString(R.string.chart_empty))
-            DeviceEnvironment.screenshot("history-temperature-unavailable-scripted")
-            // A database invalidation must remove the old chart instead of retaining deleted data.
-            runBlocking { fixture.database.sessionDao().clearAll() }
-            compose.waitUntil(120_000) { !details.ui.value.loading && details.ui.value.session == null }
-            show(context.getString(R.string.session_missing))
-            assertTrue(details.ui.value.points.isEmpty())
-            DeviceEnvironment.screenshot("history-deleted-record-scripted")
         } finally {
             compose.runOnUiThread { models.clear() }
             runBlocking { fixture.close() }

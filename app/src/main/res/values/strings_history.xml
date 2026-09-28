@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The History screen (ui/screens/HistoryScreen.kt). Units come from strings_now.xml. -->
+<resources>
+    <string name="history_info_title">About history</string>
+    <string name="history_info_body">Days adds up each calendar day while monitoring runs. Screen on and screen off count only time on battery; charged is the charge taken in. Days without monitoring stay empty.\n\nThe daily average covers the recorded days in the chosen range, without today until it is over. Deep sleep is how much of the time on battery the processor was fully asleep.\n\nA session runs from plugging in to unplugging, or the other way round. A gap in monitoring ends a session and starts a new one.</string>
+
+    <!-- Days | Sessions -->
+    <string name="history_mode_label">History view</string>
+    <string name="history_mode_days">Days</string>
+    <string name="history_mode_sessions">Sessions</string>
+
+    <!-- Days -->
+    <string name="history_range_label">Chart range</string>
+    <string name="history_range_week">7 days</string>
+    <string name="history_range_two_weeks">14 days</string>
+    <string name="history_range_month">30 days</string>
+    <string name="history_screen_on">Screen on</string>
+    <string name="history_screen_off">Screen off</string>
+    <string name="history_deep_sleep">Deep sleep</string>
+    <string name="history_charged">Charged</string>
+    <string name="history_chart_empty">No drain recorded in these days</string>
+    <string name="history_average">Daily average</string>
+    <string name="history_today">Today</string>
+    <string name="history_yesterday">Yesterday</string>
+    <string name="history_day_not_recorded">Not recorded</string>
+    <string name="history_days_title">Daily totals</string>
+    <string name="history_day_detail">Screen on %1$s</string>
+    <string name="history_day_detail_charged">Screen on %1$s · charged %2$s</string>
+    <string name="history_days_empty_title">No days recorded</string>
+    <string name="history_days_empty_body">Start monitoring on Now to record daily totals.</string>
+    <string name="history_days_empty_monitoring">Totals appear here once the phone has run on battery.</string>
+
+    <!-- Sessions -->
+    <string name="history_filter_all">All</string>
+    <string name="history_filter_discharge">Discharge</string>
+    <string name="history_filter_charge">Charge</string>
+    <string name="history_sessions_empty_all">No sessions yet</string>
+    <string name="history_sessions_empty_discharge">No discharge sessions yet</string>
+    <string name="history_sessions_empty_charge">No charge sessions yet</string>
+    <string name="history_sessions_empty_body">A session is recorded each time the phone is plugged in or unplugged while monitoring runs.</string>
+    <string name="history_session_span">%1$s – %2$s</string>
+    <string name="history_session_span_now">%1$s – now</string>
+    <string name="history_session_detail">%1$s · %2$s</string>
+    <string name="history_level_change">%1$s → %2$s</string>
+    <string name="history_percent">%1$s%%</string>
+    <string name="history_type_charge">Charge</string>
+    <string name="history_type_discharge">Discharge</string>
+    <string name="history_type_plugged">Plugged in, not charging</string>
+    <string name="history_type_unknown">Power state unknown</string>
+    <string name="history_app_usage_no_access">App usage: no access</string>
+    <string name="history_app_usage_failed">App usage: couldn\'t read</string>
+    <string name="history_open_session">Open details</string>
+    <string name="history_show_more">Show more</string>
+
+    <!-- Errors -->
+    <string name="history_failed_title">History couldn\'t be read</string>
+    <string name="history_failed_body">Your saved records are safe.</string>
+    <string name="history_retry">Try again</string>
+</resources>

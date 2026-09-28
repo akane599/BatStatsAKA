@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The History screen (ui/screens/HistoryScreen.kt). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="history_info_title">Geçmiş hakkında</string>
+    <string name="history_info_body">Günler, izleme çalışırken her takvim gününü toplar. Ekran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar; şarj edilen, alınan şarjdır. İzleme olmayan günler boş kalır.\n\nGünlük ortalama, seçilen aralıktaki kayıtlı günleri kapsar; bugün bitene kadar dahil edilmez. Derin uyku, pilde geçen sürenin işlemcinin tamamen uyuduğu kısmıdır.\n\nBir oturum takmaktan çıkarmaya ya da tersine sürer. İzlemedeki bir boşluk oturumu bitirir ve yenisini başlatır.</string>
+
+    <string name="history_mode_label">Geçmiş görünümü</string>
+    <string name="history_mode_days">Günler</string>
+    <string name="history_mode_sessions">Oturumlar</string>
+
+    <string name="history_range_label">Grafik aralığı</string>
+    <string name="history_range_week">7 gün</string>
+    <string name="history_range_two_weeks">14 gün</string>
+    <string name="history_range_month">30 gün</string>
+    <string name="history_screen_on">Ekran açık</string>
+    <string name="history_screen_off">Ekran kapalı</string>
+    <string name="history_deep_sleep">Derin uyku</string>
+    <string name="history_charged">Şarj edilen</string>
+    <string name="history_chart_empty">Bu günlerde kayıtlı tüketim yok</string>
+    <string name="history_average">Günlük ortalama</string>
+    <string name="history_today">Bugün</string>
+    <string name="history_yesterday">Dün</string>
+    <string name="history_day_not_recorded">Kayıt yok</string>
+    <string name="history_days_title">Günlük toplamlar</string>
+    <string name="history_day_detail">Ekran açık %1$s</string>
+    <string name="history_day_detail_charged">Ekran açık %1$s · şarj %2$s</string>
+    <string name="history_days_empty_title">Kayıtlı gün yok</string>
+    <string name="history_days_empty_body">Günlük toplamları kaydetmek için Şimdi ekranında izlemeyi başlatın.</string>
+    <string name="history_days_empty_monitoring">Telefon pille çalıştıktan sonra toplamlar burada görünür.</string>
+
+    <string name="history_filter_all">Tümü</string>
+    <string name="history_filter_discharge">Deşarj</string>
+    <string name="history_filter_charge">Şarj</string>
+    <string name="history_sessions_empty_all">Henüz oturum yok</string>
+    <string name="history_sessions_empty_discharge">Henüz deşarj oturumu yok</string>
+    <string name="history_sessions_empty_charge">Henüz şarj oturumu yok</string>
+    <string name="history_sessions_empty_body">İzleme çalışırken telefon her takıldığında veya çıkarıldığında bir oturum kaydedilir.</string>
+    <string name="history_session_span">%1$s – %2$s</string>
+    <string name="history_session_span_now">%1$s – şimdi</string>
+    <string name="history_session_detail">%1$s · %2$s</string>
+    <string name="history_level_change">%1$s → %2$s</string>
+    <string name="history_percent">%%%1$s</string>
+    <string name="history_type_charge">Şarj</string>
+    <string name="history_type_discharge">Deşarj</string>
+    <string name="history_type_plugged">Takılı, şarj olmuyor</string>
+    <string name="history_type_unknown">Güç durumu bilinmiyor</string>
+    <string name="history_app_usage_no_access">Uygulama kullanımı: erişim yok</string>
+    <string name="history_app_usage_failed">Uygulama kullanımı: okunamadı</string>
+    <string name="history_open_session">Ayrıntıları aç</string>
+    <string name="history_show_more">Daha fazla göster</string>
+
+    <string name="history_failed_title">Geçmiş okunamadı</string>
+    <string name="history_failed_body">Kayıtlı verileriniz güvende.</string>
+    <string name="history_retry">Tekrar dene</string>
+</resources>
