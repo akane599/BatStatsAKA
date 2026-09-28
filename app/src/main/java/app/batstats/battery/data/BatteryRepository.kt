@@ -106,7 +106,7 @@ class BatteryRepository(
                         is Event.Clear -> {
                             try {
                                 db.withTransaction {
-                                    batteryDao.clearAll(); sessionDao.clearAll(); db.appEnergyDao().clearAll()
+                                    batteryDao.clearAll(); sessionDao.clearAll(); db.dailySummaryDao().clearAll(); db.appUsageDao().clearSnapshots()
                                 }
                                 session = null; lastPersisted = null
                                 needsSessionRecovery = false
@@ -400,7 +400,7 @@ class BatteryRepository(
         if (settings.autoCleanupEnabled && settings.dataRetentionIndex != 5) {
             val days = listOf(7L, 30L, 90L, 180L, 365L).getOrElse(settings.dataRetentionIndex) { 90 }
             val cutoff = now - days * 86_400_000
-            db.withTransaction { batteryDao.purge(cutoff); sessionDao.purge(cutoff); db.appEnergyDao().purgeOlderThan(cutoff) }
+            HistoryPolicy.purgeExpired(db, cutoff)
         }
         sessionDao.boundStorage()
         batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.

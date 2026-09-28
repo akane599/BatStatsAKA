@@ -7,7 +7,8 @@ import sqlite3
 
 root = Path(__file__).resolve().parents[1]
 dao = (root / 'app/src/main/java/app/batstats/battery/data/db/Dao.kt').read_text()
-schema = json.loads((root / 'app/schemas/app.batstats.battery.data.db.BatteryDatabase/4.json').read_text())['database']
+schemas = (root / 'app/schemas/app.batstats.battery.data.db.BatteryDatabase').glob('*.json')
+schema = json.loads(max(schemas, key=lambda p: int(p.stem)).read_text())['database']  # newest version
 
 def query(method, interface=None):
     section = dao if interface is None else dao.split('interface ' + interface + ' {')[1].split('\n}\n')[0]
@@ -75,3 +76,48 @@ with sqlite3.connect(':memory:') as db:
     assert all(r['currentNowUa'] != 999999 for r in rows), 'Session chart mixed unrelated time-overlapping readings'
     assert sum(r['discontinuity'] for r in rows) >= 2, 'Downsampling hid missing samples or explicit gaps'
 print('PASS actual history UI queries: paging/filter across125 records, bounded session-only charts preserving discontinuities')
+
+with sqlite3.connect(':memory:') as db:
+    db.execute('PRAGMA foreign_keys=ON')  # Room enables it on open because the schema has foreign keys
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,activeKey) VALUES('open','DISCHARGE',5000,NULL,1)")
+    db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,activeKey) VALUES('closed','DISCHARGE',1000,2000,NULL)")
+    def snapshot(session, kind, at):
+        snapshot_id = db.execute('INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES(?,?,?)', (session, kind, at)).lastrowid
+        db.execute("INSERT INTO app_snapshot_uids(snapshotId,uid,packageName,powerMah) VALUES(?,10001,'a',1.0)", (snapshot_id,))
+        return snapshot_id
+    baseline = snapshot('open', 'BASELINE', 100)
+    snapshot('closed', 'BASELINE', 50); snapshot(None, 'END', 10)
+    ends = [snapshot('closed', 'END', 200 + i) for i in range(4)]
+    db.execute(query('pruneSnapshots'), {'keepLatest': 3})
+    kept = [r[0] for r in db.execute('SELECT id FROM app_snapshots ORDER BY capturedAt DESC, id DESC')]
+    assert kept == [ends[3], ends[2], ends[1], baseline], 'Snapshot pruning lost the open baseline or kept too many'
+    assert db.execute('SELECT COUNT(*) FROM app_snapshot_uids').fetchone()[0] == 4, 'Pruned snapshot uids did not cascade'
+    assert db.execute(query('latestSnapshot'), {'sessionId': 'open', 'kind': 'BASELINE'}).fetchone()[0] == baseline
+    for rank in (2, 0, 1):
+        db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('closed',?,?,'p',1.5,?,'DELTA')",
+                   (rank, 10000 + rank, int(rank == 2)))
+    assert [r[1] for r in db.execute(query('sessionUsageRows'), {'sessionId': 'closed'})] == [0, 1, 2], 'App usage not in rank order'
+    assert len(db.execute(query('usageForSessionsBetween'), {'from': 1500, 'to': 1600}).fetchall()) == 3, 'Export missed overlapping session usage'
+    assert db.execute(query('usageForSessionsBetween'), {'from': 6000, 'to': 7000}).fetchall() == [], 'Export mixed in other sessions'
+    db.execute(query('setAppUsageStatus'), {'sessionId': 'closed', 'status': 'READY', 'basis': 'DELTA'})
+    assert db.execute("SELECT appUsageStatus, appUsageBasis FROM charge_sessions WHERE sessionId='closed'").fetchone() == ('READY', 'DELTA')
+    try:
+        db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('missing',0,1,'p',1,0,'DELTA')")
+    except sqlite3.IntegrityError:
+        pass
+    else:
+        raise AssertionError('App usage accepted a missing session')
+    db.execute(query('purge', 'SessionDao'), {'olderThan': 3000})
+    assert db.execute('SELECT COUNT(*) FROM session_app_usage').fetchone()[0] == 0, 'Deleting a session left its app usage'
+    db.execute(query('pruneOrphanSnapshots'))
+    assert [r[0] for r in db.execute('SELECT id FROM app_snapshots')] == [baseline], 'Orphaned snapshots survived retention'
+    for day in (-1, 0, 5):
+        db.execute('INSERT INTO daily_summaries(epochDay,screenOnMs,screenOffMs,screenOnDischargeUah,screenOffDischargeUah,chargedUah,updatedAt) VALUES(?,0,0,0,0,0,0)', (day,))
+    assert [r[0] for r in db.execute(query('between', 'DailySummaryDao'), {'fromDay': -1, 'toDay': 4})] == [-1, 0]
+    db.execute(query('purgeBefore'), {'epochDay': 0})
+    assert [r[0] for r in db.execute('SELECT epochDay FROM daily_summaries ORDER BY epochDay')] == [0, 5], 'Day retention wrong'
+print('PASS actual v5 DAO SQL: snapshot pruning keeps the open baseline + last 3 with uid cascade, ranked usage, export join, FK/cascade, orphan and day retention')

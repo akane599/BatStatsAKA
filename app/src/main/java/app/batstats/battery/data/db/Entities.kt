@@ -1,13 +1,15 @@
 package app.batstats.battery.data.db
 
 import androidx.room.*
+import app.batstats.battery.apps.AppUsageBasis
+import app.batstats.battery.apps.AppUsageStatus
 import kotlinx.serialization.Contextual
 import kotlinx.serialization.Serializable
 
 @Serializable
 @Entity(
     tableName = "battery_samples",
-    indices = [Index("timestamp"), Index("status"), Index("sessionId"), Index(value = ["observationId", "elapsedMs"], unique = true)]
+    indices = [Index("timestamp"), Index("sessionId"), Index(value = ["observationId", "elapsedMs"], unique = true)]
 )
 data class BatterySample(
     @field:PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -61,45 +63,21 @@ data class ChargeSession(
     val screenOffUah: Long? = null,
     val cpuSuspendMs: Long? = null,
     val closeReason: String? = null,
-    @ColumnInfo(defaultValue = "'legacy'") val source: String = "legacy"
+    @ColumnInfo(defaultValue = "'legacy'") val source: String = "legacy",
+    // v5 — all nullable: legacy and imported v4 rows leave them null.
+    val chargerType: String? = null,         // charging only: AC / USB / WIRELESS / DOCK (enum name)
+    val energyNwh: Long? = null,             // nWh, ≥ 0; same sign rule as deltaUah (gained for CHARGE, consumed for DISCHARGE)
+    val peakPowerMw: Long? = null,           // mW magnitude, ≥ 0
+    val peakTemperatureDeciC: Int? = null,   // tenths of °C
+    val screenOffSuspendMs: Long? = null,    // CPU suspend (deep sleep) while the screen was off
+    val capacityEstimateMah: Int? = null,    // full-capacity estimate from this session's counter span
+    val capacityConfidence: String? = null,  // measurement confidence enum name
+    val capacityBasis: String? = null,       // measurement basis enum name
+    val appUsageStatus: AppUsageStatus? = null,
+    val appUsageBasis: AppUsageBasis? = null,
 )
 
 enum class SessionType { CHARGE, DISCHARGE, PLUGGED, UNKNOWN }
-
-@Entity(tableName = "alarm_rules")
-@Serializable
-data class AlarmRule(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val type: AlarmType,
-    val enabled: Boolean,
-    val threshold: Int,    // percent for CHARGE_LIMIT; °C for TEMP; mA for DISCHARGE
-    val notifyOnce: Boolean = true
-)
-
-enum class AlarmType { CHARGE_LIMIT, TEMP_HIGH, DISCHARGE_HIGH }
-
-/**
- * Aggregated per‑app energy estimates (heuristic mode).
- * Stores hour buckets to keep data light...
- */
-@Entity(
-    tableName = "app_energy_stats",
-    primaryKeys = ["bucketStart", "packageName", "mode"],
-    indices = [Index("bucketStart"), Index("packageName")]
-)
-data class AppEnergyStat(
-    val bucketStart: Long,          // start of the hour (ms)
-    val packageName: String,
-    val mode: String = "HEURISTIC", // HEURISTIC / SHIZUKU / ROOT (future)
-    val energyMah: Double,          // accumulated mAh in this bucket
-    val samples: Int                // number of samples contributed
-)
-
-data class AppDrainAggregate(
-    val packageName: String,
-    val energyMah: Double,
-    val samples: Int
-)
 
 /** Bounded representative chart rows; bucket discontinuities must remain visible. */
 data class SessionChartReading(
