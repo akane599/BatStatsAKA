@@ -13,7 +13,7 @@ Android app developed on Ubuntu, CLI only (no Android Studio in the loop). Keep 
 - JDK: build targets 21; `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` (system default; pinned in gradle.properties: no)
 - Gradle 9.7.1 · AGP 9.5.0-alpha07 (alpha, for screenshot test suites) · Kotlin 2.4.20 · compileSdk 37 · minSdk 26 · version catalog: yes (`gradle/libs.versions.toml`)
 - Modules: `:app` · applicationId `org.mlm.batstats` (debug: `.debug`, preview: `.preview`) ≠ namespace `app.batstats`
-- Architecture: single-module MVVM; layers `ui/` `viewmodel/` `data/` `di/` + feature package `battery/` (data/db, service, measurement, drain, diagnostics, shizuku, util, widget)
+- Architecture: single-module MVVM; layers `ui/` (navigation, components/chart, theme, screens) `viewmodel/` `data/` `di/` + feature package `battery/` (apps, data/db, data/sampling, service, measurement, drain, diagnostics, shizuku, util, widget)
 - DI: koin · DB: room · Network: none · Async: coroutines/Flow
 - Navigation: Navigation 3 (`NavDisplay`/`NavKey`, `ui/NavGraph.kt`) · Firebase: no
 - Tests: JUnit4 + kotlinx-coroutines-test (no mockk/turbine) · androidTest: yes (UiAutomator + Compose UI test) · Espresso: no
@@ -69,8 +69,7 @@ Main context is for decisions and edits. Everything that reads a lot or reviews 
 - Compose: stateless composables, `modifier: Modifier = Modifier` first optional param, state hoisted to ViewModel. Screens = public wrapper `XxxScreen` (Koin, flows, effects, launchers, Intents, root/Shizuku) + stateless `XxxContent`; every screen has `@PreviewTest @ScreenPreviews` in `app/src/screenshotTest/kotlin/app/batstats/ui/screens/` (helpers in `ui/ScreenshotPreviews.kt`; dates from `FIXED_TIME_MS`).
 - Compose design: all colors/type/shapes/spacing via `MaterialTheme` + `MaterialTheme.batColors` / `.chartColors` / `.spacing` (+ shapes, `Motion.kt`) in `ui/theme/`; agents report missing tokens, main context adds them; no `Color(0x…)`, raw `.dp`/`.sp` in screen files. Load `compose-design` before designing or restyling any screen.
 - App widgets: RemoteViews XML in `res/layout/widget_*.xml`, driven by `battery/widget/WidgetUpdater.kt` — keep them RemoteViews-compatible (no ViewBinding, no custom views).
-- Strings in `res/values/strings.xml` **and** `values-es/`, `values-tr/` (the hook's `check_resources.py` fails on missing translations/format args); dimensions/colors via theme/resources, never literals in code.
-- `check_resources.py` and `test/…/support/EnglishStrings.kt` read every `values*/strings*.xml` file per locale as one merged table (duplicate keys across files in the same locale fail the check).
+- Strings in `values/`, `values-es/`, `values-tr/` — any `strings*.xml` file (e.g. `strings_components.xml`); `check_resources.py` and `EnglishStrings.kt` merge them per locale and fail on missing translations, format-arg mismatches or duplicate keys. Dimensions/colors via theme/resources, never literals in code.
 - androidTest finds UI by text/contentDescription and `ui/TestTags` (`testTagsAsResourceId`; nav items tagged); renaming strings breaks `NavigationDeviceTest` & co. Palette edits must keep `ThemeContrastTest` (text ≥4.5:1; chart/semantic colors + control `outline` ≥3:1 on every surface tier) green.
 - Room bump: `check_migrations.py` + `check_history_queries.py` auto-detect the newest schema and check the whole migration chain; `DatabaseMigrationTest` seeds v4 SQL (no room-testing dependency).
 - Settings (kmp-settings, `settings/SettingsDefinition.kt`): removing/renaming a key needs `SCHEMA_VERSION` + a `MigrationManager` step in `di/AppModules.kt`.
