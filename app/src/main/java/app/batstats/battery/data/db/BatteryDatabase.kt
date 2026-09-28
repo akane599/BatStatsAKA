@@ -94,16 +94,22 @@ abstract class BatteryDatabase : RoomDatabase() {
     }
 }
 
+/**
+ * Enum columns can hold any text (older builds, imports, hand edits), so reads never use `valueOf`: an unknown
+ * name reads as null in the nullable columns, and as a documented fallback in the two NOT NULL ones.
+ */
 class EnumConverters {
     @TypeConverter fun fromSessionType(t: SessionType?): String? = t?.name
-    @TypeConverter fun toSessionType(s: String?): SessionType? = s?.let { enumValueOf<SessionType>(it) }
+    /** NOT NULL column: an unknown type reads as UNKNOWN, which gets no type-specific stats or breakdown. */
+    @TypeConverter fun toSessionType(s: String?): SessionType? = s?.let { name -> SessionType.entries.firstOrNull { it.name == name } ?: SessionType.UNKNOWN }
 
     @TypeConverter fun fromSnapshotKind(k: AppSnapshotKind?): String? = k?.name
-    @TypeConverter fun toSnapshotKind(s: String?): AppSnapshotKind? = s?.let { enumValueOf<AppSnapshotKind>(it) }
+    /** NOT NULL column: an unknown kind reads as END, so it is never used as (or protected like) a baseline. */
+    @TypeConverter fun toSnapshotKind(s: String?): AppSnapshotKind? = s?.let { name -> AppSnapshotKind.entries.firstOrNull { it.name == name } ?: AppSnapshotKind.END }
 
     @TypeConverter fun fromAppUsageStatus(t: AppUsageStatus?): String? = t?.name
-    @TypeConverter fun toAppUsageStatus(s: String?): AppUsageStatus? = s?.let { enumValueOf<AppUsageStatus>(it) }
+    @TypeConverter fun toAppUsageStatus(s: String?): AppUsageStatus? = s?.let { name -> AppUsageStatus.entries.firstOrNull { it.name == name } }
 
     @TypeConverter fun fromAppUsageBasis(t: AppUsageBasis?): String? = t?.name
-    @TypeConverter fun toAppUsageBasis(s: String?): AppUsageBasis? = s?.let { enumValueOf<AppUsageBasis>(it) }
+    @TypeConverter fun toAppUsageBasis(s: String?): AppUsageBasis? = s?.let { name -> AppUsageBasis.entries.firstOrNull { it.name == name } }
 }

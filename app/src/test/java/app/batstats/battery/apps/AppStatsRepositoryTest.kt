@@ -1,6 +1,7 @@
 package app.batstats.battery.apps
 
 import app.batstats.battery.diagnostics.DiagnosticCode
+import app.batstats.battery.util.DumpOutput
 import app.batstats.battery.util.ShellRunner.Mode
 import app.batstats.battery.util.ShellRunner.Outcome
 import kotlinx.coroutines.CompletableDeferred
@@ -109,6 +110,16 @@ class AppStatsRepositoryTest {
         assertEquals(1, shell.commands.size)
         assertNull(repository.cached.value)
         assertTrue(diagnostics.isEmpty())
+    }
+
+    @Test fun aDumpAndroidRefusesIsNoAccessNotAFailure() = runTest {
+        // ADB grants on Android 16: ShellRunner turns the one-line security exception into this failure.
+        val shell = FakeShell().apply { access = Mode.ADB; next = { Outcome.Failure(Mode.ADB, DumpOutput.REFUSED_CROSS_USER) } }
+        val repository = repository(shell)
+        assertEquals(AppStatsResult.NoAccess, repository.snapshot(force = true))
+        shell.next = { Outcome.Failure(Mode.SHIZUKU, DumpOutput.REFUSED) }
+        assertEquals(AppStatsResult.NoAccess, repository.snapshot())
+        assertTrue("Not a read failure", diagnostics.isEmpty())
     }
 
     @Test fun commandFailuresAreResultsNotExceptionsAndAreNotCached() = runTest {

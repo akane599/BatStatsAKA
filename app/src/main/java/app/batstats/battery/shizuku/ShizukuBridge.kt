@@ -33,7 +33,6 @@ import app.batstats.battery.util.CommandOutput
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.suspendCancellableCoroutine
 
@@ -67,7 +66,7 @@ class ShizukuBridge(private val context: Context) {
     }
 
     private val requestIds = AtomicLong(SystemClock.elapsedRealtimeNanos())
-    private val binderRef = AtomicReference<IBinder?>(null)
+    private val binding = HelperBinding<IBinder> { it.isBinderAlive }
     private val bindMutex = Mutex()
     private val listenersRegistered = AtomicBoolean(false)
 
@@ -88,12 +87,10 @@ class ShizukuBridge(private val context: Context) {
             .version(SERVICE_VERSION)
     }
 
-    private val pendingBind = AtomicReference<CompletableDeferred<IBinder?>?>(null)
-
     // On Main, like bindUserService: an idle unbind cannot interleave with a bind in progress.
     private val idle = IdleCountdown(CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), IDLE_UNBIND_MS) {
         // Runs under the countdown's lock: a command that starts after this finds no binder and rebinds.
-        if (binderRef.getAndSet(null) != null) {
+        if (binding.forget()) {
             Log.d(TAG, "UserService idle for ${IDLE_UNBIND_MS / 1000} s; unbinding")
             unbindService()
         }
@@ -102,31 +99,29 @@ class ShizukuBridge(private val context: Context) {
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             Log.d(TAG, "UserService connected (alive=${service?.isBinderAlive})")
-            binderRef.set(service)
-            runCatching {
-                service?.linkToDeath({
-                    binderRef.compareAndSet(service, null)
-                    pendingBind.getAndSet(null)?.complete(null)
-                }, 0)
+            if (service == null) {
+                binding.failAttempt()
+                return
             }
-            pendingBind.getAndSet(null)?.complete(service)
+            binding.connected(service)
+            // The notice names its binder: a helper that dies after an idle unbind cannot fail the next bind.
+            runCatching { service.linkToDeath({ binding.died(service) }, 0) }
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             Log.d(TAG, "UserService disconnected")
-            binderRef.set(null)
-            pendingBind.getAndSet(null)?.complete(null)
+            binding.disconnected()
         }
 
         override fun onBindingDied(name: ComponentName?) = onServiceDisconnected(name)
-        override fun onNullBinding(name: ComponentName?) = onServiceDisconnected(name)
+        override fun onNullBinding(name: ComponentName?) = binding.failAttempt()
     }
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
         Log.d(TAG, "Shizuku binder received")
         everSeen = true
         _running.value = true
-        binderRef.set(null)
+        binding.forget()
         _granted.value = checkPermissionNow()
     }
 
@@ -134,8 +129,7 @@ class ShizukuBridge(private val context: Context) {
         Log.w(TAG, "Shizuku binder died")
         _running.value = false
         _granted.value = false
-        binderRef.set(null)
-        pendingBind.getAndSet(null)?.complete(null)
+        binding.reset()
     }
 
     private val permissionResultListener =
@@ -170,8 +164,7 @@ class ShizukuBridge(private val context: Context) {
             everSeen = true
         } else {
             _granted.value = false
-            binderRef.set(null)
-            pendingBind.getAndSet(null)?.complete(null)
+            binding.reset()
         }
         return alive
     }
@@ -259,7 +252,7 @@ class ShizukuBridge(private val context: Context) {
         }
 
         Log.d(TAG, "Retrying after transport failure: ${first.message}")
-        binderRef.set(null)
+        binding.forget(binder)
         val fresh = ensureBound() ?: return first
         return execute(fresh, cmd, timeoutMs)
     }
@@ -324,13 +317,12 @@ class ShizukuBridge(private val context: Context) {
     }
 
     private suspend fun ensureBound(): IBinder? {
-        binderRef.get()?.takeIf { it.isBinderAlive }?.let { return it }
+        binding.current()?.let { return it }
 
         return bindMutex.withLock {
-            binderRef.get()?.takeIf { it.isBinderAlive }?.let { return@withLock it }
+            binding.current()?.let { return@withLock it }
 
-            val deferred = CompletableDeferred<IBinder?>()
-            pendingBind.set(deferred)
+            val attempt = binding.begin()
 
             val started = withContext(Dispatchers.Main) {
                 try {
@@ -342,20 +334,20 @@ class ShizukuBridge(private val context: Context) {
                 }
             }
             if (!started) {
-                pendingBind.compareAndSet(deferred, null)
+                binding.end(attempt)
                 return@withLock null
             }
 
             val startedAt = SystemClock.elapsedRealtime()
             val binder = try {
-                withTimeoutOrNull(BIND_TIMEOUT_MS) { deferred.await() }
+                withTimeoutOrNull(BIND_TIMEOUT_MS) { attempt.result.await() }
             } finally {
-                pendingBind.compareAndSet(deferred, null)
+                binding.end(attempt)
             }
 
             if (binder == null || !binder.isBinderAlive) {
                 Log.e(TAG, "UserService bind failed after ${SystemClock.elapsedRealtime() - startedAt} ms")
-                binderRef.set(null)
+                binder?.let { binding.forget(it) }
                 null
             } else {
                 Log.d(TAG, "UserService bound in ${SystemClock.elapsedRealtime() - startedAt} ms")
@@ -366,8 +358,7 @@ class ShizukuBridge(private val context: Context) {
 
     fun unbind() {
         unbindService()
-        binderRef.set(null)
-        pendingBind.getAndSet(null)?.complete(null)
+        binding.reset()
     }
 
     /** remove = true also stops the helper process. */
@@ -414,5 +405,71 @@ internal class IdleCountdown(
                 }
             }
         }
+    }
+}
+
+/**
+ * The helper's binder and the bind attempt waiting for one. A death notice names its binder and only drops that
+ * binder while it is still current; a disconnect notice names none, so it only drops a current binder that is
+ * dead. Neither completes a waiting attempt: an attempt is answered only by the binder that connects for it
+ * (or fails on [failAttempt], [reset] or its own timeout). So the late death of a helper stopped by the idle
+ * unbind cannot fail, or drop the binder of, the bind that follows it. Thread-safe.
+ */
+internal class HelperBinding<B : Any>(private val isAlive: (B) -> Boolean) {
+    /** One bind attempt; [result] completes with the binder that connects for it, or null. */
+    class Attempt<B> internal constructor() {
+        val result = CompletableDeferred<B?>()
+    }
+
+    private val lock = Any()
+    private var binder: B? = null
+    private var pending: Attempt<B>? = null
+
+    /** The connected binder while it is alive. */
+    fun current(): B? = synchronized(lock) { binder?.takeIf(isAlive) }
+
+    fun begin(): Attempt<B> = synchronized(lock) {
+        pending?.result?.complete(null)
+        Attempt<B>().also { pending = it }
+    }
+
+    /** [attempt] stopped waiting (answered, timed out or never started); a newer attempt is untouched. */
+    fun end(attempt: Attempt<B>) = synchronized(lock) {
+        if (pending === attempt) pending = null
+    }
+
+    /** onServiceConnected: [service] becomes current and answers the waiting attempt. */
+    fun connected(service: B) = synchronized(lock) {
+        binder = service
+        pending?.result?.complete(service)
+        pending = null
+    }
+
+    /** onNullBinding or a null binder: the waiting attempt gets nothing. */
+    fun failAttempt() = synchronized(lock) {
+        pending?.result?.complete(null)
+        pending = null
+    }
+
+    /** [service]'s death notice. */
+    fun died(service: B) = synchronized(lock) {
+        if (binder === service) binder = null
+    }
+
+    fun disconnected() = synchronized(lock) {
+        if (binder?.let(isAlive) == false) binder = null
+    }
+
+    /** Drops the current binder ([service] only if that is still the current one); true if one was dropped. */
+    fun forget(service: B? = null): Boolean = synchronized(lock) {
+        val held = binder
+        (held != null && (service == null || held === service)).also { if (it) binder = null }
+    }
+
+    /** Shizuku itself went away, or an explicit unbind: no binder, and the waiting attempt fails now. */
+    fun reset() = synchronized(lock) {
+        binder = null
+        pending?.result?.complete(null)
+        pending = null
     }
 }

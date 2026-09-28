@@ -11,6 +11,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
@@ -43,8 +44,15 @@ class SessionSnapshotCollectorTest {
         val usage = mutableMapOf<String, List<AppUsageRow>>()
         var failWrites = false
         var openSessionError: Exception? = null
+        var openSessionFailures = 0
 
-        override fun openSession(): Flow<OpenSession?> = openSessionError?.let { error -> flow { throw error } } ?: open
+        override fun openSession(): Flow<OpenSession?> = openSessionError?.let { error -> flow { throw error } } ?: flow {
+            if (openSessionFailures > 0) {
+                openSessionFailures--
+                throw IllegalStateException("database is locked")
+            }
+            emitAll(open)
+        }
         override suspend fun hasBaseline(sessionId: String) = sessionId in baselines
         override suspend fun baseline(sessionId: String) = baselines[sessionId]
         override suspend fun saveBaseline(sessionId: String, snapshot: AppUsageSnapshot): Boolean {
@@ -84,9 +92,10 @@ class SessionSnapshotCollectorTest {
     private val stats = FakeStats()
     private val store = FakeStore()
     private val transitions = MutableSharedFlow<PowerTransition>(extraBufferCapacity = 16)
+    private val warnings = mutableListOf<String>()
 
     private fun TestScope.start() {
-        backgroundScope.launch { SessionSnapshotCollector(stats, store, transitions, log = {}).run() }
+        backgroundScope.launch { SessionSnapshotCollector(stats, store, transitions, log = {}, warn = { warnings += it }).run() }
         runCurrent()
     }
 
@@ -281,6 +290,30 @@ class SessionSnapshotCollectorTest {
         plugIn("A", "C")
         advance(END_DEBOUNCE_MS)
         assertEquals(AppUsageStatus.READY, store.status("A"))
+    }
+
+    @Test fun baselinesResumeAfterAnOpenSessionQueryError() = runTest {
+        store.openSessionFailures = 1
+        store.openDischarge("B")
+        start()
+        stats.results += ready(100, 1 to 1.0)
+        assertEquals(1, warnings.count { "open session query failed" in it })
+        advance(SessionSnapshotCollector.OPEN_SESSION_RETRY_MS - 1)
+        advance(BASELINE_DEBOUNCE_MS)
+        assertTrue("Still waiting for the retry", stats.calls.isEmpty())
+        advance(1)
+        assertEquals(listOf(true), stats.calls)
+        assertNotNull(store.baselines["B"])
+    }
+
+    @Test fun guardedFailuresAreWarnings() = runTest {
+        store.openDischarge("A")
+        start()
+        store.failWrites = true
+        stats.results += ready(100, 1 to 3.0)
+        plugIn("A", "C")
+        advance(END_DEBOUNCE_MS)
+        assertEquals(listOf("end failed (IllegalStateException: disk I/O error)"), warnings)
     }
 
     @Test fun onlyDischargeSessionsStartPending() {

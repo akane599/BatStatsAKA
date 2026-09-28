@@ -3,6 +3,7 @@ package app.batstats.battery.apps
 import android.os.SystemClock
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.util.BatteryStatsParser
+import app.batstats.battery.util.DumpOutput
 import app.batstats.battery.util.ShellRunner
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -111,7 +112,11 @@ class AppStatsRepository(
         if (force && shell.detectMode(forceRefresh = true) == ShellRunner.Mode.NONE) return AppStatsResult.NoAccess to null
         return when (val outcome = shell.exec(COMMAND)) {
             is ShellRunner.Outcome.Failure -> {
-                if (outcome.mode == ShellRunner.Mode.NONE) return AppStatsResult.NoAccess to null
+                // No mode at all, or a mode Android refuses this dump to (ADB grants on Android 16): no access.
+                // ShellRunner.lastError keeps the refusal text (DumpOutput.REFUSED_CROSS_USER) for the UI.
+                if (outcome.mode == ShellRunner.Mode.NONE || DumpOutput.isRefusal(outcome.message)) {
+                    return AppStatsResult.NoAccess to null
+                }
                 onDiagnostic(DiagnosticCode.ADVANCED_READ_FAILED)
                 AppStatsResult.Failed(describe(outcome)) to null
             }

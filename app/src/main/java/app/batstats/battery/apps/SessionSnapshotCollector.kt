@@ -10,8 +10,10 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -38,6 +40,7 @@ class SessionSnapshotCollector(
     private val store: SessionSnapshotStore,
     private val transitions: Flow<PowerTransition>,
     private val log: (String) -> Unit = { Log.d(LOG_TAG, it) },
+    private val warn: (String) -> Unit = { Log.w(LOG_TAG, it) },
 ) {
     private val writes = Mutex()
     // Sessions whose END is being taken; the sweep leaves them alone. Added before the handler returns.
@@ -52,9 +55,14 @@ class SessionSnapshotCollector(
         }
     }
 
-    // A query error in the flow itself ends baselines for this run instead of the service; the next start resumes.
+    // A query error in the flow itself is retried after [OPEN_SESSION_RETRY_MS]; the guard is a last resort
+    // that keeps anything else from reaching the service.
     private suspend fun baselines() = guarded("open session") {
-        store.openSession().collectLatest { open ->
+        store.openSession().retryWhen { cause, _ ->
+            warn("open session query failed (${cause.javaClass.simpleName}: ${cause.message}); retrying in ${OPEN_SESSION_RETRY_MS / 1000} s")
+            delay(OPEN_SESSION_RETRY_MS)
+            true
+        }.distinctUntilChanged().collectLatest { open -> // distinct: a retry re-emits the same session
             if (open?.type != SessionType.DISCHARGE) return@collectLatest
             guarded("baseline") {
                 if (store.hasBaseline(open.sessionId)) return@guarded
@@ -124,7 +132,7 @@ class SessionSnapshotCollector(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log("$step failed (${e.javaClass.simpleName}: ${e.message})")
+            warn("$step failed (${e.javaClass.simpleName}: ${e.message})")
         }
     }
 
@@ -136,6 +144,7 @@ class SessionSnapshotCollector(
         const val END_DEBOUNCE_MS = 10_000L
         const val BASELINE_DEBOUNCE_MS = 30_000L
         const val STARTUP_SWEEP_DELAY_MS = 30_000L
+        const val OPEN_SESSION_RETRY_MS = 60_000L
 
         /** Set on the in-memory open session at creation: a breakdown is only ever taken for discharge sessions. */
         fun initialStatus(type: SessionType): AppUsageStatus =
