@@ -9,6 +9,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.R
 import app.batstats.battery.data.RepositoryRecoveryTest
+import app.batstats.battery.service.MonitoringController
 import app.batstats.test.DeviceEnvironment
 import app.batstats.ui.screens.DashboardScreen
 import app.batstats.ui.theme.MainTheme
@@ -27,7 +28,8 @@ class DashboardRecoveryDeviceTest {
         DeviceEnvironment.requireDisposableEmulator()
         val fixture = RepositoryRecoveryTest.Fixture()
         val models = ViewModelStore()
-        val vm = DashboardViewModel(ApplicationProvider.getApplicationContext<Application>(), fixture.repository, fixture.settings)
+        val app = ApplicationProvider.getApplicationContext<Application>()
+        val vm = DashboardViewModel(app, fixture.repository, fixture.settings, MonitoringController(app, fixture.repository))
         models.put("scripted-dashboard", vm)
         val context = DeviceEnvironment.context
         fun refresh() = compose.onNodeWithText(context.getString(R.string.diagnostic_refresh)).performClick()

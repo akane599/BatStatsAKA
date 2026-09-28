@@ -1,16 +1,14 @@
 package app.batstats.battery.drain
 
-import android.content.Context
-import android.content.Intent
 import app.batstats.battery.data.BatteryRepository
-import app.batstats.battery.service.BatteryMonitorService
+import app.batstats.battery.service.MonitoringControl
 
 /** Screen accounting uses ordinary Android readings and has exactly one service-owned sampler. */
-class AdvancedDrainTracker(private val context: Context, private val repository: BatteryRepository) {
+class AdvancedDrainTracker(private val repository: BatteryRepository, private val monitoring: MonitoringControl) {
     val drainState = repository.observation
-    val isTracking = repository.isMonitoringFlow
+    val isTracking = monitoring.isMonitoring
     fun isRunning() = isTracking.value
-    fun start() { context.startForegroundService(Intent(context, BatteryMonitorService::class.java)) }
-    fun stop() { context.stopService(Intent(context, BatteryMonitorService::class.java)) }
+    fun start() { monitoring.start() }
+    fun stop() = monitoring.stop()
     fun resetSession() = repository.resetObservation()
 }

@@ -1,16 +1,13 @@
 package app.batstats.viewmodel
 
 import android.app.Application
-import android.content.Intent
-import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
-import app.batstats.battery.drain.DrainNotificationManager
-import app.batstats.battery.service.BatteryMonitorService
+import app.batstats.battery.service.MonitoringControl
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.chartTimeRangeMs
@@ -26,7 +23,8 @@ import kotlinx.coroutines.launch
 class DashboardViewModel(
     private val app: Application,
     private val repo: BatteryRepository,
-    settingsRepository: SettingsRepository<AppSettings>
+    settingsRepository: SettingsRepository<AppSettings>,
+    private val monitoring: MonitoringControl,
 ) : AndroidViewModel(app) {
 
     val settings: StateFlow<AppSettings> = settingsRepository.flow
@@ -50,6 +48,7 @@ class DashboardViewModel(
             initialValue = null
         )
 
+    @Suppress("DEPRECATION") // Shim until P4c replaces this screen.
     @OptIn(ExperimentalCoroutinesApi::class)
     val recentSamples: Flow<List<BatterySample>> = settings
         .flatMapLatest { s ->
@@ -57,20 +56,8 @@ class DashboardViewModel(
         }
 
     fun toggleMonitoring() {
-        if (isMonitoring.value) {
-            val intent = Intent(app, BatteryMonitorService::class.java)
-            app.stopService(intent)
-            // Repo update happens in Service.onDestroy
-        } else {
-            DrainNotificationManager.ensureChannel(app)
-            val intent = Intent(app, BatteryMonitorService::class.java)
-            if (Build.VERSION.SDK_INT >= 26) {
-                app.startForegroundService(intent)
-            } else {
-                app.startService(intent)
-            }
-            // Repo update happens in Service.onStartCommand
-        }
+        // Repo update happens in Service.onStartCommand / onDestroy.
+        if (isMonitoring.value) monitoring.stop() else monitoring.start()
     }
 
     fun startManualSession(type: SessionType) {

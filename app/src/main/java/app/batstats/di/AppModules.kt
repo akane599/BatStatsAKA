@@ -1,13 +1,22 @@
 package app.batstats.di
 
+import android.content.Context
 import android.os.Build
 import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.data.CalibrationOverrides
+import app.batstats.battery.data.CalibrationStore
 import app.batstats.battery.data.ExportImportManager
 import app.batstats.battery.data.HistoryMaintenance
 import app.batstats.battery.data.db.BatteryDatabase
+import app.batstats.battery.data.sampling.SamplerState
+import app.batstats.battery.data.sampling.SamplingController
+import app.batstats.battery.data.sampling.SharedPreferencesStore
 import app.batstats.battery.drain.AdvancedDrainTracker
 import app.batstats.battery.drain.DrainNotificationManager
+import app.batstats.battery.service.MonitoringControl
+import app.batstats.battery.service.MonitoringController
+import app.batstats.battery.service.SamplingDemand
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
@@ -30,9 +39,11 @@ import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.flowOf
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private const val SCHEMA_VERSION = 2
@@ -83,12 +94,23 @@ val appModule = module {
 
     single { HistoryMaintenance() }
     single { ExportImportManager(androidContext(), get(), get()) }
-    single { BatteryRepository(androidContext(), get(), get(), get(), get(), get()) }
+    // One sampler thread per process; screens, the tile and details hold it as SamplingDemand.
+    single { SamplingController(androidContext(), get()) } bind SamplingDemand::class
+    single {
+        val preferences = androidContext().getSharedPreferences(CalibrationStore.PREFS_NAME, Context.MODE_PRIVATE)
+        // Settings overrides arrive with settings v3 (B1b); until then both are Auto.
+        CalibrationStore(SharedPreferencesStore(preferences), flowOf(CalibrationOverrides()), get())
+    }
+    single {
+        val samplerPreferences = androidContext().getSharedPreferences(SamplerState.PREFS_NAME, Context.MODE_PRIVATE)
+        BatteryRepository(get(), get(), get(), get(), get(), get(), get(), SharedPreferencesStore(samplerPreferences))
+    }
+    single<MonitoringControl> { MonitoringController(androidContext(), get()) }
 
-    single { AdvancedDrainTracker(androidContext(), get()) }
+    single { AdvancedDrainTracker(get(), get()) }
     single { DrainNotificationManager(androidContext(), get()) }
 
-    viewModel { DashboardViewModel(androidApplication(), get(), get()) }
+    viewModel { DashboardViewModel(androidApplication(), get(), get(), get()) }
     viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
     viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
     viewModel { HistoryViewModel(get()) }
