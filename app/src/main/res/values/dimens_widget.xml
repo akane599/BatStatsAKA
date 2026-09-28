@@ -5,7 +5,9 @@
     <dimen name="widget_corner_radius">20dp</dimen>
     <!-- Spacing.kt Spacing.xs (8dp) — "the gap inside a group"; the widget's outer content padding. -->
     <dimen name="widget_padding">8dp</dimen>
+    <!-- Pre-existing 20dp icon size; no ui/theme spacing/shape token covers icon sizing. -->
     <dimen name="widget_icon_size">20dp</dimen>
+    <!-- Spacing.kt Spacing.xs (8dp). -->
     <dimen name="widget_icon_margin_end">8dp</dimen>
     <!-- Spacing.kt Spacing.xs (8dp). -->
     <dimen name="widget_value_margin_top">8dp</dimen>

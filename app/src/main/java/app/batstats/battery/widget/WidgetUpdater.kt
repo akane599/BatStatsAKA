@@ -55,9 +55,9 @@ object WidgetUpdater {
     }
 
     /** At or below this level while discharging, the icon turns to [Direction.HEAT] (mirrors NowHero.LOW_LEVEL). */
-    private const val LOW_BATTERY_LEVEL = 15
+    internal const val LOW_BATTERY_LEVEL = 15
 
-    private fun directionFor(power: PowerState, level: Int?): Direction = when (power) {
+    internal fun directionFor(power: PowerState, level: Int?): Direction = when (power) {
         PowerState.CHARGING, PowerState.PLUGGED -> Direction.CHARGE
         PowerState.DISCHARGING -> if (level != null && level <= LOW_BATTERY_LEVEL) Direction.HEAT else Direction.DRAIN
         PowerState.UNKNOWN -> Direction.NEUTRAL
