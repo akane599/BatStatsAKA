@@ -35,7 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -46,7 +45,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import app.batstats.R
 import app.batstats.battery.data.sampling.ChargerType
@@ -54,21 +52,20 @@ import app.batstats.battery.measurement.EtaBasis
 import app.batstats.battery.measurement.PowerState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.StatCellDefaults
+import app.batstats.ui.components.headerActionOverhang
 import app.batstats.ui.theme.BatMotion
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericDisplay
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.spacing
-import kotlin.math.min
+import app.batstats.viewmodel.HeroState
 
 private const val LEVEL_SEGMENTS = 10
 private const val FULL_LEVEL = 100
 
 /** At or below this level on battery, the level bar turns to the heat color (Android's own low-battery point). */
 private const val LOW_LEVEL = 15
-
-/** Units and words next to a big number render at this fraction of its size (as in StatCell). */
-internal const val UNIT_SCALE = 0.6f
 
 /**
  * The hero: state and charger, the level with its segmented bar, time left / to full with its basis, and the one
@@ -80,7 +77,7 @@ internal fun NowHero(hero: HeroState, onToggleMonitoring: () -> Unit, modifier: 
     Panel(modifier, color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.large) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             StateLine(hero, color, Modifier.weight(1f))
-            Box(Modifier.overhangEnd(MaterialTheme.spacing.sm)) {
+            Box(Modifier.headerActionOverhang(MaterialTheme.spacing.sm)) {
                 InfoSheet(stringResource(R.string.now_hero_info_title), stringResource(R.string.now_hero_info_body))
             }
         }
@@ -197,8 +194,13 @@ private fun EtaText(hero: HeroState) {
                 )
             }
         } else if (hero.hasReading) {
+            val waiting = when {
+                hero.monitoring -> R.string.now_eta_estimating
+                hero.power == PowerState.CHARGING -> R.string.now_eta_needs_monitoring_charge
+                else -> R.string.now_eta_needs_monitoring
+            }
             Text(
-                stringResource(if (hero.monitoring) R.string.now_eta_estimating else R.string.now_eta_needs_monitoring),
+                stringResource(waiting),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.End,
@@ -217,7 +219,7 @@ private fun basisLabel(basis: EtaBasis, power: PowerState): Int = when (basis) {
 /** The quieter span for units and words next to a number in [style]. */
 @Composable
 internal fun unitSpan(style: TextStyle): SpanStyle = SpanStyle(
-    fontSize = if (style.fontSize != TextUnit.Unspecified) style.fontSize * UNIT_SCALE else TextUnit.Unspecified,
+    fontSize = if (style.fontSize != TextUnit.Unspecified) style.fontSize * StatCellDefaults.UnitScale else TextUnit.Unspecified,
     color = MaterialTheme.colorScheme.onSurfaceVariant,
 )
 
@@ -278,17 +280,5 @@ private fun MonitoringButton(monitoring: Boolean, onClick: () -> Unit, modifier:
         FilledTonalButton(onClick = onClick, modifier = modifier) { content() }
     } else {
         Button(onClick = onClick, modifier = modifier) { content() }
-    }
-}
-
-/**
- * Lets a 48 dp control sit in a text-height row (as Panel's header does): it reports no height and [endShift] less
- * width, so the row stays as tall as its text, and its glyph lines up with the gutter. The touch target stays whole.
- */
-internal fun Modifier.overhangEnd(endShift: Dp): Modifier = layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
-    val shift = min(endShift.roundToPx(), placeable.width / 2)
-    layout(placeable.width - shift, 0) {
-        placeable.placeRelative(0, -placeable.height / 2)
     }
 }

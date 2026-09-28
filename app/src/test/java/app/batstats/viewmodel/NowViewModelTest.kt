@@ -3,6 +3,7 @@ package app.batstats.viewmodel
 import android.graphics.Bitmap
 import app.batstats.battery.apps.AppInfo
 import app.batstats.battery.apps.AppInfoSource
+import app.batstats.battery.apps.AppLabel
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageRow
 import app.batstats.battery.apps.AppUsageSnapshot
@@ -18,19 +19,10 @@ import app.batstats.battery.measurement.CurrentCalibration
 import app.batstats.battery.measurement.CurrentUnit
 import app.batstats.battery.measurement.DailySummaryAggregator
 import app.batstats.battery.measurement.EtaBasis
-import app.batstats.battery.measurement.Observation
-import app.batstats.battery.measurement.ObservationSummary
-import app.batstats.battery.measurement.ObservedBucket
 import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.service.MonitoringControl
 import app.batstats.settings.AppSettings
 import app.batstats.ui.components.chart.TimeWindow
-import app.batstats.ui.screens.now.Eta
-import app.batstats.ui.screens.now.NowEvent
-import app.batstats.ui.screens.now.NowUiState
-import app.batstats.ui.screens.now.TodayState
-import app.batstats.ui.screens.now.TopAppsState
-import app.batstats.ui.screens.now.TraceRange
 import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -113,9 +105,14 @@ class NowViewModelTest {
         assertEquals(PowerState.CHARGING, state().hero.power)
         assertEquals(ChargerType.AC, state().hero.charger)
 
-        // No time left without monitoring, even when a sample carries one.
+        // Without monitoring, time to full still shows while charging: every capture carries Android's own.
         monitoring.isMonitoring.value = false
         repo.realtime.value = BatteryRepository.Realtime(sample(T0 + 66 * SECOND, status = 2, plugged = 1, eta = HOUR, basis = "ANDROID"), mA)
+        runCurrent()
+        assertEquals(Eta(HOUR, EtaBasis.ANDROID), state().hero.eta)
+
+        // Time left does not: the discharge estimate is the monitoring writer's.
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0 + 68 * SECOND, eta = 3 * HOUR, basis = "LIVE_RATE"), mA)
         runCurrent()
         assertNull(state().hero.eta)
     }
@@ -162,7 +159,7 @@ class NowViewModelTest {
             assertEquals(listOf(T0 - 9 * MINUTE, T0 - 8 * MINUTE), points.map { it.timeMs })
             assertEquals(listOf(-400.0, -410.0), points.map { it.value })
             assertEquals(TimeWindow(T0 - 18 * MINUTE, T0 - 8 * MINUTE), window)
-            assertEquals(NowMath.LIVE_MAX_GAP_MS, maxGapMs)
+            assertEquals(NowMapping.LIVE_MAX_GAP_MS, maxGapMs)
         }
 
         repo.realtime.value = BatteryRepository.Realtime(sample(T0, raw = -500))
@@ -219,44 +216,94 @@ class NowViewModelTest {
         runCurrent()
 
         val points = state().trace.points
-        assertTrue("downsampled to ${points.size}", points.size <= NowMath.DOWNSAMPLE_BUCKETS * 4)
+        assertTrue("downsampled to ${points.size}", points.size <= NowMapping.DOWNSAMPLE_BUCKETS * 4)
         assertEquals(T0 - 24 * HOUR, points.first().timeMs)
         assertEquals(repo.samples.value.last().timestamp, points.last().timeMs)
         assertEquals(-196.0, points.minOf { it.value!! }, 1e-9)
     }
 
-    @Test fun sinceUnplugTurnsDrainIntoPercentPerHourAndDeepSleep() = runTest {
-        repo.observation.value = summary(chargeUah = 2_800_000, level = 70)
+    @Test fun sinceUnplugIsTheOpenDischargeSessionRow() = runTest {
+        monitoring.isMonitoring.value = true
+        // Counter full charge from the latest reading: 2.8 Ah × 100 / 67 %.
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0))
+        repo.discharge.value = listOf(drainSession("open", endTime = null))
         val (_, state) = start()
 
         with(state().sinceUnplug!!) {
+            assertTrue(current)
             assertEquals(T0 - 3 * HOUR, startedAtMs)
-            assertEquals(T0, throughMs)
-            // Counter full charge = 2.8 Ah × 100 / 70 = 4 Ah; 400 mA → 10 %/h, 100 mA → 2.5 %/h.
-            assertEquals(400.0, screenOn.currentMa!!, 1e-9)
-            assertEquals(10.0, screenOn.percentPerHour!!, 1e-9)
+            assertEquals(T0 - MINUTE, endedAtMs)
             assertEquals(HOUR, screenOn.durationMs)
-            assertEquals(2.5, screenOff.percentPerHour!!, 1e-9)
+            assertEquals(400.0, screenOn.currentMa!!, 1e-9)
+            assertEquals(400.0 * 100_000 / (2_800_000L * 100 / 67), screenOn.percentPerHour!!, 1e-9)
+            assertEquals(100.0, screenOff.currentMa!!, 1e-9)
             assertEquals(50.0, deepSleepPercent!!, 1e-9)
-            assertFalse(paused)
         }
+        assertEquals(T0, state().nowMs)
 
-        // No counter: the combined capacity estimate stands in (5,000 mAh → 8 %/h).
-        repo.sessions.value = listOf(session("s1", capacityMah = 5_000, confidence = "HIGH"))
-        repo.observation.value = summary(chargeUah = null, level = 70, stopped = true)
+        // No usable counter (the emulator's 10 mAh): the combined capacity estimate stands in (5,000 mAh → 8 %/h).
+        repo.sessions.value = listOf(session("h", capacityMah = 5_000, confidence = "HIGH"))
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0 + 2 * SECOND).copy(chargeCounterUah = 10_000))
         runCurrent()
         assertEquals(8.0, state().sinceUnplug!!.screenOn.percentPerHour!!, 1e-9)
-        assertTrue(state().sinceUnplug!!.paused)
 
         // Neither: mA only.
         repo.sessions.value = emptyList()
         runCurrent()
         assertNull(state().sinceUnplug!!.screenOn.percentPerHour)
         assertEquals(400.0, state().sinceUnplug!!.screenOn.currentMa!!, 1e-9)
+    }
 
-        repo.observation.value = ObservationSummary()
+    @Test fun pluggedInItShowsTheLastClosedWindowAndNothingFromTheChargeSession() = runTest {
+        monitoring.isMonitoring.value = true
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0, status = 2))
+        repo.active.value = session("charge", type = SessionType.CHARGE)
+        repo.discharge.value = listOf(drainSession("last", endTime = T0 - 20 * MINUTE))
+        val (_, state) = start()
+
+        with(state().sinceUnplug!!) {
+            assertFalse(current)
+            assertEquals(T0 - 3 * HOUR, startedAtMs)
+            assertEquals(T0 - 20 * MINUTE, endedAtMs)
+            assertEquals(400.0, screenOn.currentMa!!, 1e-9)
+        }
+
+        // A row left open by a stopped process is history too, ending at its last save.
+        monitoring.isMonitoring.value = false
+        repo.discharge.value = listOf(drainSession("stale", endTime = null))
+        runCurrent()
+        assertFalse(state().sinceUnplug!!.current)
+        assertEquals(T0 - MINUTE, state().sinceUnplug!!.endedAtMs)
+
+        // Never on battery yet: nothing, and no window borrowed from another session type.
+        repo.discharge.value = emptyList()
         runCurrent()
         assertNull(state().sinceUnplug)
+    }
+
+    @Test fun resetStartsANewWindowFromTheNextSession() = runTest {
+        monitoring.isMonitoring.value = true
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0))
+        repo.discharge.value = listOf(drainSession("before", endTime = null))
+        val (vm, state) = start()
+
+        vm.onEvent(NowEvent.ResetObservation)
+        assertEquals(1, repo.resets)
+        // The repository closes the session ("Observation reset by user") and the next capture opens a new one.
+        repo.discharge.value = listOf(drainSession("before", endTime = T0))
+        runCurrent()
+        assertFalse(state().sinceUnplug!!.current)
+        repo.discharge.value = listOf(
+            drainSession("after", endTime = null, startTime = T0 + 2 * SECOND, screenOnMs = 0, screenOffMs = 0, onUah = null, offUah = null),
+            drainSession("before", endTime = T0),
+        )
+        runCurrent()
+        with(state().sinceUnplug!!) {
+            assertTrue(current)
+            assertEquals(T0 + 2 * SECOND, startedAtMs)
+            assertEquals(0L, screenOn.durationMs)
+            assertNull(screenOn.currentMa)
+        }
     }
 
     @Test fun todayFollowsTheLocalDayAcrossMidnight() = runTest {
@@ -300,19 +347,19 @@ class NowViewModelTest {
 
     @Test fun topAppsComeOnlyFromTheCachedDumpSinceUnplugWhenNewerThanTheBaseline() = runTest {
         // The seam has no way to start a dump: Now only ever reads the cache.
-        repo.cached.value = AppUsageSnapshot(100, 1, T0 - 5 * MINUTE, listOf(row(CHROME, 1, 130.0), row(YOUTUBE, 2, 60.0), row(MAPS, 3, 8.0), row(GMS, 4, 2.0)))
-        repo.baselines["s1"] = AppUsageSnapshot(100, 1, T0 - 2 * HOUR, listOf(row(CHROME, 1, 6.0), row(YOUTUBE, 2, 0.0)))
+        repo.cached.value = AppUsageSnapshot(100, 1, T0 - 5 * MINUTE, listOf(row(CHROME, 10_001, 130.0), row(YOUTUBE, 10_002, 60.0), row(MAPS, 10_003, 8.0), row(GMS, 10_004, 2.0)))
+        repo.baselines["s1"] = AppUsageSnapshot(100, 1, T0 - 2 * HOUR, listOf(row(CHROME, 10_001, 6.0), row(YOUTUBE, 10_002, 0.0)))
         repo.active.value = session("s1", type = SessionType.DISCHARGE)
         val (_, state) = start()
 
         with(state().topApps as TopAppsState.Ready) {
             assertEquals(AppUsageBasis.DELTA, basis)
             assertEquals(T0 - 5 * MINUTE, capturedAtMs)
-            assertEquals(listOf("Chrome", "YouTube", "Maps"), rows.map { it.label })
+            assertEquals(listOf("Chrome", "YouTube", "Maps").map { AppLabel.Named(it) }, rows.map { it.label })
             assertEquals(listOf(124.0, 60.0, 8.0), rows.map { it.powerMah })
             // Shares are of all apps, including the ones not shown (194 mAh).
             assertEquals((124.0 / 194.0).toFloat(), rows.first().share, 1e-6f)
-            assertEquals(1, rows.first().uid)
+            assertEquals(10_001, rows.first().uid)
             assertEquals(CHROME, rows.first().packageName)
         }
 
@@ -327,6 +374,11 @@ class NowViewModelTest {
         repo.active.value = session("c1", type = SessionType.CHARGE)
         runCurrent()
         assertEquals(AppUsageBasis.ABSOLUTE, (state().topApps as TopAppsState.Ready).basis)
+
+        // Rows without an installed, labelled package never show a raw id.
+        repo.cached.value = AppUsageSnapshot(100, 1, T0, listOf(row("System UID 1000", 1_000, 50.0), row("UID 10555", 10_555, 20.0)))
+        runCurrent()
+        assertEquals(listOf(AppLabel.SystemProcess, AppLabel.Unknown), (state().topApps as TopAppsState.Ready).rows.map { it.label })
 
         repo.cached.value = null
         runCurrent()
@@ -354,7 +406,6 @@ class NowViewModelTest {
 
     private class FakeNowRepository : NowRepository {
         override val realtime = MutableStateFlow(BatteryRepository.Realtime())
-        override val observation = MutableStateFlow(ObservationSummary())
         override val calibration = MutableStateFlow(CalibrationState())
         override val settings = MutableStateFlow(AppSettings())
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)
@@ -365,6 +416,7 @@ class NowViewModelTest {
         val queries = mutableListOf<Long>()
         val days = MutableStateFlow<Map<Long, DailySummary>>(emptyMap())
         val sessions = MutableStateFlow<List<ChargeSession>>(emptyList())
+        val discharge = MutableStateFlow<List<ChargeSession>>(emptyList())
         val baselines = mutableMapOf<String, AppUsageSnapshot>()
         var resets = 0
         var undos = 0
@@ -377,6 +429,7 @@ class NowViewModelTest {
 
         override fun day(epochDay: Long): Flow<DailySummary?> = days.map { it[epochDay] }
         override fun recentSessions(limit: Int): Flow<List<ChargeSession>> = sessions.map { it.take(limit) }
+        override fun dischargeSessions(limit: Int): Flow<List<ChargeSession>> = discharge.map { it.take(limit) }
         override suspend fun baseline(sessionId: String) = baselines[sessionId]
         override fun resetObservation() { resets++ }
         override fun undoCalibration() { undos++ }
@@ -445,14 +498,33 @@ class NowViewModelTest {
             boundaryReason = boundary,
         )
 
-        fun summary(chargeUah: Long?, level: Int, stopped: Boolean = false) = ObservationSummary(
-            startedAt = T0 - 3 * HOUR,
-            latest = Observation(T0, 20_000_000, 12_000_000, level, chargeUah, -400_000, 3_870, PowerState.DISCHARGING, true, false, "gen-1"),
-            screenOn = ObservedBucket(durationMs = HOUR, chargeCoveredMs = HOUR, chargeChangeUah = 400_000),
-            screenOff = ObservedBucket(durationMs = 2 * HOUR, chargeCoveredMs = 2 * HOUR, chargeChangeUah = 200_000),
-            cpuSuspendMs = 90 * MINUTE,
-            cpuObservedMs = 3 * HOUR,
-            stopped = stopped,
+        /** A DISCHARGE row as SessionReport writes it: 1 h on (400 mAh), 2 h off (200 mAh), fully covered, 50 % asleep. */
+        fun drainSession(
+            id: String,
+            endTime: Long?,
+            startTime: Long = T0 - 3 * HOUR,
+            screenOnMs: Long = HOUR,
+            screenOffMs: Long = 2 * HOUR,
+            onUah: Long? = 400_000,
+            offUah: Long? = 200_000,
+        ) = ChargeSession(
+            sessionId = id,
+            type = SessionType.DISCHARGE,
+            startTime = startTime,
+            endTime = endTime,
+            startLevel = 90,
+            endLevel = 67,
+            deltaUah = null,
+            avgCurrentUa = null,
+            estCapacityMah = null,
+            lastSampleTime = T0 - MINUTE,
+            observedMs = screenOnMs + screenOffMs,
+            counterCoveredMs = screenOnMs + screenOffMs,
+            screenOnMs = screenOnMs,
+            screenOffMs = screenOffMs,
+            screenOnUah = onUah,
+            screenOffUah = offUah,
+            cpuSuspendMs = (screenOnMs + screenOffMs) / 2,
         )
 
         fun session(

@@ -43,6 +43,7 @@
     <string name="now_eta_basis_taper">From this charger\'s learned curve</string>
     <string name="now_eta_estimating">Estimating time left</string>
     <string name="now_eta_needs_monitoring">Start monitoring for time left</string>
+    <string name="now_eta_needs_monitoring_charge">Start monitoring for time to full</string>
     <string name="now_eta_content_description">%1$s %2$s</string>
     <string name="now_start_monitoring">Start monitoring</string>
     <string name="now_stop_monitoring">Stop monitoring</string>
@@ -65,10 +66,11 @@
     <string name="now_readout_voltage">Voltage</string>
 
     <!-- Since unplug (the monitoring window) -->
-    <string name="now_since_title">Since %1$s</string>
-    <string name="now_since_title_empty">Since unplug</string>
-    <string name="now_since_paused">Paused</string>
+    <string name="now_since_title">Since unplug</string>
+    <string name="now_since_title_at">Since unplug · %1$s</string>
+    <string name="now_since_title_last">Last on battery · %1$s–%2$s</string>
     <string name="now_since_empty">Start monitoring to see how fast the battery drains with the screen on and off.</string>
+    <string name="now_since_empty_monitoring">Appears once the phone runs on battery.</string>
     <string name="now_screen_on">Screen on</string>
     <string name="now_screen_off">Screen off</string>
     <string name="now_deep_sleep">Deep sleep</string>
@@ -79,7 +81,7 @@
     <string name="now_reset_confirm">Reset</string>
     <string name="now_cancel">Cancel</string>
     <string name="now_since_info_title">About since unplug</string>
-    <string name="now_since_info_body">These numbers count from when monitoring started, or from your last Reset. They keep adding up across charges until you reset them.\n\nScreen on and screen off count only time on battery. The first number is the average drain per hour as a share of the battery\'s full capacity; mA is the same drain as current.\n\nDeep sleep is how much of the time the processor was fully asleep. With the screen off it should be high: if it is low, something is keeping the phone awake.</string>
+    <string name="now_since_info_body">Since unplug counts from the moment the phone was last unplugged, or from your last Reset; a gap in monitoring also starts a new window. While the phone is plugged in, the last time on battery is shown instead.\n\nScreen on and screen off count only time on battery. The first number is the average drain per hour as a share of the battery\'s full capacity; mA is the same drain as current.\n\nDeep sleep is how much of the time the processor was fully asleep. With the screen off it should be high: if it is low, something is keeping the phone awake.</string>
 
     <!-- Today -->
     <string name="now_today_title">Today</string>
@@ -105,7 +107,6 @@
     <string name="now_apps_basis_absolute">Since the last full charge · updated %1$s</string>
     <string name="now_apps_empty">No per-app data yet.</string>
     <string name="now_apps_open">Open Apps</string>
-    <string name="now_apps_unknown">App %1$d</string>
 
     <!-- Current calibration notice -->
     <string name="now_calibration_title">Current readings corrected</string>

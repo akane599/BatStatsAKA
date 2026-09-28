@@ -1,6 +1,7 @@
 package app.batstats.ui.screens
 
 import androidx.compose.runtime.Composable
+import app.batstats.battery.apps.AppLabel
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.data.sampling.ChargerType
 import app.batstats.battery.measurement.CapacityConfidence
@@ -16,19 +17,19 @@ import app.batstats.ui.ScreenshotTheme
 import app.batstats.ui.TallPhonePreview
 import app.batstats.ui.components.chart.TimePoint
 import app.batstats.ui.components.chart.TimeWindow
-import app.batstats.ui.screens.now.DrainState
-import app.batstats.ui.screens.now.Eta
-import app.batstats.ui.screens.now.HealthState
-import app.batstats.ui.screens.now.HeroState
 import app.batstats.ui.screens.now.NowContent
-import app.batstats.ui.screens.now.NowUiState
-import app.batstats.ui.screens.now.Readouts
-import app.batstats.ui.screens.now.SinceUnplugState
-import app.batstats.ui.screens.now.TodayState
-import app.batstats.ui.screens.now.TopApp
-import app.batstats.ui.screens.now.TopAppsState
-import app.batstats.ui.screens.now.TraceRange
-import app.batstats.ui.screens.now.TraceState
+import app.batstats.viewmodel.DrainState
+import app.batstats.viewmodel.Eta
+import app.batstats.viewmodel.HealthState
+import app.batstats.viewmodel.HeroState
+import app.batstats.viewmodel.NowUiState
+import app.batstats.viewmodel.Readouts
+import app.batstats.viewmodel.SinceUnplugState
+import app.batstats.viewmodel.TodayState
+import app.batstats.viewmodel.TopApp
+import app.batstats.viewmodel.TopAppsState
+import app.batstats.viewmodel.TraceRange
+import app.batstats.viewmodel.TraceState
 import com.android.tools.screenshot.PreviewTest
 import kotlin.math.cos
 import kotlin.math.sin
@@ -58,24 +59,25 @@ private val hourPlugIn = List(121) { i ->
 
 private val topApps = TopAppsState.Ready(
     rows = listOf(
-        TopApp(10_123, "com.android.chrome", "Chrome", 124.0, 0.31f),
-        TopApp(10_201, "com.google.android.youtube", "YouTube", 58.2, 0.15f),
-        TopApp(10_311, "com.google.android.apps.maps", "Maps", 7.4, 0.02f),
+        TopApp(10_123, "com.android.chrome", AppLabel.Named("Chrome"), 124.0, 0.31f),
+        TopApp(10_201, "com.google.android.youtube", AppLabel.Named("YouTube"), 58.2, 0.15f),
+        TopApp(10_311, "com.google.android.apps.maps", AppLabel.Named("Maps"), 7.4, 0.02f),
     ),
     basis = AppUsageBasis.DELTA,
     capturedAtMs = FIXED_TIME_MS - 11 * MINUTE,
 )
 
 private val sinceUnplug = SinceUnplugState(
+    current = true,
     startedAtMs = FIXED_TIME_MS - 3 * HOUR - 10 * MINUTE,
-    throughMs = FIXED_TIME_MS,
+    endedAtMs = FIXED_TIME_MS - 20 * SECOND,
     screenOn = DrainState(durationMs = 62 * MINUTE, currentMa = 412.0, percentPerHour = 9.1),
     screenOff = DrainState(durationMs = 128 * MINUTE, currentMa = 58.0, percentPerHour = 1.3),
     deepSleepPercent = 86.0,
-    paused = false,
 )
 
 private fun discharging() = NowUiState(
+    nowMs = FIXED_TIME_MS,
     hero = HeroState(
         hasReading = true,
         level = 67,
@@ -111,18 +113,26 @@ private fun charging() = discharging().copy(
         points = hourPlugIn,
         window = TimeWindow(FIXED_TIME_MS - HOUR, FIXED_TIME_MS),
     ),
-    topApps = topApps.copy(basis = AppUsageBasis.ABSOLUTE),
+    // Plugged in 25 min ago: the last window on battery, which began yesterday.
+    sinceUnplug = sinceUnplug.copy(current = false, startedAtMs = FIXED_TIME_MS - 20 * HOUR, endedAtMs = FIXED_TIME_MS - 25 * MINUTE),
+    // A two-day-old cache (its time carries the date) with a system-process row.
+    topApps = topApps.copy(
+        rows = topApps.rows.take(2) + TopApp(1_000, "System UID 1000", AppLabel.SystemProcess, 21.0, 0.05f),
+        basis = AppUsageBasis.ABSOLUTE,
+        capturedAtMs = FIXED_TIME_MS - 2 * 24 * HOUR,
+    ),
 )
 
-/** Monitoring stopped: no time left, the drain numbers frozen at the stop, the live trace from demand polls only. */
+/** Monitoring stopped: no time left, the last on-battery window as it ended, the live trace from demand polls only. */
 private fun monitoringOff() = discharging().copy(
     hero = HeroState(hasReading = true, level = 67, power = PowerState.DISCHARGING, monitoring = false),
     trace = discharging().trace.copy(points = liveDrain.takeLast(90)),
-    sinceUnplug = sinceUnplug.copy(throughMs = FIXED_TIME_MS - 40 * MINUTE, paused = true),
+    sinceUnplug = sinceUnplug.copy(current = false, endedAtMs = FIXED_TIME_MS - 40 * MINUTE),
 )
 
 /** First launch: a reading, nothing recorded yet, no per-app data. */
 private fun empty() = NowUiState(
+    nowMs = FIXED_TIME_MS,
     hero = HeroState(hasReading = true, level = 80, power = PowerState.DISCHARGING, monitoring = false),
     readouts = Readouts(currentMa = -388.0, powerW = -1.54, temperatureC = 29.8, voltageV = 3.97),
     trace = TraceState(window = TimeWindow(FIXED_TIME_MS - TraceRange.LIVE.spanMs, FIXED_TIME_MS), maxGapMs = 95_000L),

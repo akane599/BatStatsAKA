@@ -30,6 +30,7 @@
     <string name="now_eta_basis_taper">Según la curva aprendida de este cargador</string>
     <string name="now_eta_estimating">Calculando el tiempo restante</string>
     <string name="now_eta_needs_monitoring">Inicia la supervisión para ver el tiempo restante</string>
+    <string name="now_eta_needs_monitoring_charge">Inicia la supervisión para ver el tiempo hasta llenar</string>
     <string name="now_eta_content_description">%1$s %2$s</string>
     <string name="now_start_monitoring">Iniciar supervisión</string>
     <string name="now_stop_monitoring">Detener supervisión</string>
@@ -50,10 +51,11 @@
     <string name="now_readout_temperature">Temperatura</string>
     <string name="now_readout_voltage">Voltaje</string>
 
-    <string name="now_since_title">Desde %1$s</string>
-    <string name="now_since_title_empty">Desde que se desconectó</string>
-    <string name="now_since_paused">En pausa</string>
+    <string name="now_since_title">Desde que se desconectó</string>
+    <string name="now_since_title_at">Desde que se desconectó · %1$s</string>
+    <string name="now_since_title_last">Última vez con batería · %1$s–%2$s</string>
     <string name="now_since_empty">Inicia la supervisión para ver lo rápido que se descarga la batería con la pantalla encendida y apagada.</string>
+    <string name="now_since_empty_monitoring">Aparece cuando el teléfono funcione con batería.</string>
     <string name="now_screen_on">Pantalla encendida</string>
     <string name="now_screen_off">Pantalla apagada</string>
     <string name="now_deep_sleep">Sueño profundo</string>
@@ -64,7 +66,7 @@
     <string name="now_reset_confirm">Restablecer</string>
     <string name="now_cancel">Cancelar</string>
     <string name="now_since_info_title">Sobre desde que se desconectó</string>
-    <string name="now_since_info_body">Estas cifras cuentan desde que empezó la supervisión o desde tu último restablecimiento. Siguen sumando entre cargas hasta que las restableces.\n\nPantalla encendida y pantalla apagada cuentan solo el tiempo con batería. La primera cifra es el consumo medio por hora como parte de la capacidad total de la batería; mA es el mismo consumo como corriente.\n\nEl sueño profundo es cuánto tiempo el procesador estuvo totalmente dormido. Con la pantalla apagada debería ser alto: si es bajo, algo mantiene el teléfono despierto.</string>
+    <string name="now_since_info_body">Desde que se desconectó cuenta desde la última vez que se desconectó el teléfono o desde tu último restablecimiento; una pausa en la supervisión también empieza un periodo nuevo. Mientras el teléfono está conectado se muestra la última vez con batería.\n\nPantalla encendida y pantalla apagada cuentan solo el tiempo con batería. La primera cifra es el consumo medio por hora como parte de la capacidad total de la batería; mA es el mismo consumo como corriente.\n\nEl sueño profundo es cuánto tiempo el procesador estuvo totalmente dormido. Con la pantalla apagada debería ser alto: si es bajo, algo mantiene el teléfono despierto.</string>
 
     <string name="now_today_title">Hoy</string>
     <string name="now_today_used">Usado</string>
@@ -87,7 +89,6 @@
     <string name="now_apps_basis_absolute">Desde la última carga completa · actualizado %1$s</string>
     <string name="now_apps_empty">Todavía no hay datos por app.</string>
     <string name="now_apps_open">Abrir Apps</string>
-    <string name="now_apps_unknown">App %1$d</string>
 
     <string name="now_calibration_title">Lecturas de corriente corregidas</string>
     <string name="now_calibration_unit">Este teléfono informa la corriente en miliamperios. Ahora los valores se convierten.</string>

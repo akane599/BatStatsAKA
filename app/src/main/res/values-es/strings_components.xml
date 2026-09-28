@@ -8,5 +8,7 @@
     <string name="component_bar_clear">Borrar selección</string>
     <string name="component_bar_selected">Seleccionado: %1$s, %2$s</string>
     <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_app_system_process">Proceso del sistema</string>
+    <string name="component_app_unknown">App desconocida</string>
     <string name="component_info_open">Acerca de %1$s</string>
 </resources>

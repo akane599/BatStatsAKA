@@ -1,38 +1,31 @@
 package app.batstats.ui.screens.now
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import app.batstats.R
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
+import app.batstats.ui.components.StatCellDefaults
 import app.batstats.ui.components.chart.ChartDefaults
 import app.batstats.ui.components.chart.ChartScrubState
 import app.batstats.ui.components.chart.ChartSeries
+import app.batstats.ui.components.chart.MINUS_SIGN
 import app.batstats.ui.components.chart.NumberFormatter
 import app.batstats.ui.components.chart.TimeSeriesChart
 import app.batstats.ui.components.chart.rememberChartScrubState
@@ -40,8 +33,9 @@ import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.numericTitle
 import app.batstats.ui.theme.spacing
-import java.util.Locale
-import kotlin.math.abs
+import app.batstats.viewmodel.Readouts
+import app.batstats.viewmodel.TraceRange
+import app.batstats.viewmodel.TraceState
 
 private const val READOUTS = 4
 private const val GRID_COLUMNS = 2
@@ -92,42 +86,17 @@ private fun TraceChart(trace: TraceState, scrubState: ChartScrubState) {
     )
 }
 
-/** Live · 1h · 6h · 24h as quiet tabs, the selected one on a raised pill; each option is a 48 dp target. */
+/** Live · 1h · 6h · 24h ([SegmentedTabs]). */
 @Composable
 private fun RangeSelector(selected: TraceRange, onSelect: (TraceRange) -> Unit, modifier: Modifier = Modifier) {
-    val description = stringResource(R.string.now_range_label)
-    Row(
-        modifier
-            .fillMaxWidth()
-            .selectableGroup()
-            .semantics { contentDescription = description },
-    ) {
-        TraceRange.entries.forEach { range ->
-            val isSelected = range == selected
-            Box(
-                Modifier
-                    .weight(1f)
-                    .minimumInteractiveComponentSize()
-                    .selectable(selected = isSelected, onClick = { onSelect(range) }, role = Role.Tab)
-                    .padding(MaterialTheme.spacing.xxs),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (isSelected) {
-                    Box(
-                        Modifier
-                            .matchParentSize()
-                            .clip(MaterialTheme.shapes.small)
-                            .background(MaterialTheme.colorScheme.secondaryContainer),
-                    )
-                }
-                Text(
-                    stringResource(rangeLabel(range)),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = if (isSelected) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
+    val ranges = TraceRange.entries
+    SegmentedTabs(
+        labels = ranges.map { stringResource(rangeLabel(it)) },
+        selectedIndex = ranges.indexOf(selected),
+        onSelect = { onSelect(ranges[it]) },
+        modifier = modifier,
+        contentDescription = stringResource(R.string.now_range_label),
+    )
 }
 
 private fun rangeLabel(range: TraceRange): Int = when (range) {
@@ -153,7 +122,7 @@ internal fun ReadoutGrid(readouts: Readouts, useFahrenheit: Boolean, modifier: M
             stringResource(R.string.now_readout_current),
             current?.let { formatSigned(it, 0, locale) } ?: noValue,
             stringResource(R.string.now_unit_ma),
-            MINUS + formatNumber(CURRENT_TEMPLATE, 0, locale),
+            MINUS_SIGN + formatNumber(CURRENT_TEMPLATE, 0, locale),
             indicator = when {
                 current == null || current == 0.0 -> MaterialTheme.colorScheme.onSurfaceVariant
                 current > 0 -> MaterialTheme.batColors.charge
@@ -164,13 +133,13 @@ internal fun ReadoutGrid(readouts: Readouts, useFahrenheit: Boolean, modifier: M
             stringResource(R.string.now_readout_power),
             readouts.powerW?.let { formatSigned(it, 2, locale) } ?: noValue,
             stringResource(R.string.now_unit_w),
-            MINUS + formatNumber(POWER_TEMPLATE, 2, locale),
+            MINUS_SIGN + formatNumber(POWER_TEMPLATE, 2, locale),
         ),
         Readout(
             stringResource(R.string.now_readout_temperature),
-            temperature?.let { formatTemperature(it, locale) } ?: noValue,
+            temperature?.let { formatNumber(it, 1, locale) } ?: noValue,
             stringResource(if (useFahrenheit) R.string.now_unit_fahrenheit else R.string.now_unit_celsius),
-            if (useFahrenheit) formatNumber(FAHRENHEIT_TEMPLATE, 1, locale) else MINUS + formatNumber(CELSIUS_TEMPLATE, 1, locale),
+            if (useFahrenheit) formatNumber(FAHRENHEIT_TEMPLATE, 1, locale) else MINUS_SIGN + formatNumber(CELSIUS_TEMPLATE, 1, locale),
         ),
         Readout(
             stringResource(R.string.now_readout_voltage),
@@ -192,7 +161,7 @@ internal fun ReadoutGrid(readouts: Readouts, useFahrenheit: Boolean, modifier: M
             // StatCell's indicator dot and its gap (8 + 8 dp); the unit sits 4 dp after the value.
             val indicator = with(density) { (spacing.xs + spacing.xs).toPx() }
             val unitGap = with(density) { spacing.xxs.toPx() }
-            val unitStyle = valueStyle.copy(fontSize = valueStyle.fontSize * UNIT_SCALE)
+            val unitStyle = valueStyle.copy(fontSize = valueStyle.fontSize * StatCellDefaults.UnitScale)
             lines.all { line ->
                 val label = measurer.measure(line.label, labelStyle).size.width + if (line.dot) indicator else 0f
                 val value = measurer.measure(line.template, valueStyle).size.width + unitGap +
@@ -215,9 +184,6 @@ internal fun ReadoutGrid(readouts: Readouts, useFahrenheit: Boolean, modifier: M
         }
     }
 }
-
-private fun formatTemperature(value: Double, locale: Locale): String =
-    if (value < 0) MINUS + formatNumber(abs(value), 1, locale) else formatNumber(value, 1, locale)
 
 private data class ReadoutLine(val label: String, val dot: Boolean, val template: String, val unit: String)
 

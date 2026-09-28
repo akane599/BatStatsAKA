@@ -78,6 +78,17 @@ class AppInfoCacheTest {
         assertEquals(1, lookup.infoReads.count { it == "com.android.phone" })
     }
 
+    @Test fun theCachedIconPeekNeverLoads() = runTest {
+        val cache = cache()
+        assertNull(cache.cachedIcon("com.example"))
+        assertTrue(lookup.iconReads.isEmpty())
+        cache.icon("com.example")
+        assertEquals(Icon("com.example", 1), cache.cachedIcon("com.example"))
+        cache.invalidate("com.example")
+        assertNull(cache.cachedIcon("com.example"))
+        assertEquals(1, lookup.iconReads.size)
+    }
+
     @Test fun trimClearsEverything() = runTest {
         val cache = cache()
         cache.info("com.example"); cache.icon("com.example")

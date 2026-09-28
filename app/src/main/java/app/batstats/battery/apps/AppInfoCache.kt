@@ -43,6 +43,9 @@ class AppInfoCache<Icon : Any>(
         lookup.icon(packageName)?.also { icons.put(packageName, it) }
     }
 
+    /** The icon already in [icons], or null; never loads. */
+    fun cachedIcon(packageName: String): Icon? = icons[packageName]
+
     /** A package was added, removed, replaced or changed: its label, flags and icon may differ now. */
     fun invalidate(packageName: String) {
         infos.remove(packageName)

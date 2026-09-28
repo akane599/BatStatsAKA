@@ -226,7 +226,7 @@ private fun Bars(
                     minimumFractionDigits = ticks.decimals
                     maximumFractionDigits = ticks.decimals
                 }
-                val tickLabels = List(ticks.count) { textMeasurer.measure(numberFormat.format(ticks.valueAt(it)), labelStyle) }
+                val tickLabels = List(ticks.count) { textMeasurer.measure(numberFormat.formatWithMinus(ticks.valueAt(it)), labelStyle) }
                 val plotLeft = max(tickLabels.maxOf { it.size.width }, unitLabel?.size?.width ?: 0) + gap
                 val plotWidth = size.width - plotLeft
                 if (plotWidth <= 0f || bottom <= top) {

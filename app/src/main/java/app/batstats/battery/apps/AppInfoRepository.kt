@@ -44,6 +44,9 @@ class AppInfoRepository(private val context: Context) : AppInfoSource {
         return cache.icon(packageName)
     }
 
+    /** A peek into the LRU; the same [Bitmap] instance as [icon] returned, so do not recycle it. */
+    override fun cachedIcon(packageName: String): Bitmap? = cache.cachedIcon(packageName)
+
     fun onTrimMemory() = cache.clear()
 
     fun onConfigurationChanged(config: Configuration) {

@@ -9,12 +9,11 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import app.batstats.R
+import app.batstats.ui.components.chart.MINUS_SIGN
+import app.batstats.ui.components.chart.formatWithMinus
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
-
-/** Typographic minus: the same width as a tabular digit's neighbours, unlike "-". */
-internal const val MINUS = "−"
 
 private const val MINUTE_MS = 60_000L
 private val PLACEHOLDER = Regex("%(\\d+)\\$[sd]|%%")
@@ -23,21 +22,19 @@ private val PLACEHOLDER = Regex("%(\\d+)\\$[sd]|%%")
 @ReadOnlyComposable
 internal fun currentLocale(): Locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
 
-/** Grouped, with exactly [decimals] fraction digits. */
-internal fun formatNumber(value: Double, decimals: Int, locale: Locale): String =
-    NumberFormat.getNumberInstance(locale).apply {
-        minimumFractionDigits = decimals
-        maximumFractionDigits = decimals
-    }.format(value)
+private fun numberFormat(decimals: Int, locale: Locale): NumberFormat = NumberFormat.getNumberInstance(locale).apply {
+    minimumFractionDigits = decimals
+    maximumFractionDigits = decimals
+}
+
+/** Grouped, with exactly [decimals] fraction digits; negatives with the typographic minus ([MINUS_SIGN]). */
+internal fun formatNumber(value: Double, decimals: Int, locale: Locale): String = numberFormat(decimals, locale).formatWithMinus(value)
 
 /** "+1,450" into the battery, "−412" out of it, a bare "0" when it rounds to zero. */
 internal fun formatSigned(value: Double, decimals: Int, locale: Locale): String {
-    val magnitude = formatNumber(abs(value), decimals, locale)
-    return when {
-        magnitude == formatNumber(0.0, decimals, locale) -> magnitude
-        value < 0 -> MINUS + magnitude
-        else -> "+$magnitude"
-    }
+    val format = numberFormat(decimals, locale)
+    val text = format.formatWithMinus(value)
+    return if (value > 0 && text != format.format(0.0)) "+$text" else text
 }
 
 /** Small rates keep a second decimal so a real drain never reads as 0.0. */

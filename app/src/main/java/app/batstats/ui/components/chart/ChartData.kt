@@ -27,16 +27,26 @@ fun interface ValueFormatter {
     fun format(value: Double): String
 }
 
+/** The typographic minus (U+2212) charts and readouts print for negative numbers, instead of a hyphen. */
+const val MINUS_SIGN = "\u2212"
+
+/** [value] in this format with [MINUS_SIGN] for negatives; a value that rounds to zero prints no sign. */
+fun NumberFormat.formatWithMinus(value: Double): String {
+    val magnitude = format(abs(value))
+    return if (value < 0 && magnitude != format(0.0)) MINUS_SIGN + magnitude else magnitude
+}
+
 /**
  * Default [ValueFormatter]: the default-locale number with at most [maxDecimals] fraction digits (grouped), then
- * [unit] after a space. Values ≥ 100 drop the decimals. A data class, so a series that uses it stays comparable.
+ * [unit] after a space. Values ≥ 100 drop the decimals; negatives use [MINUS_SIGN]. A data class, so a series that
+ * uses it stays comparable.
  */
 @Immutable
 data class NumberFormatter(val unit: String = "", val maxDecimals: Int = 1) : ValueFormatter {
     override fun format(value: Double): String {
         val number = NumberFormat.getNumberInstance().apply {
             maximumFractionDigits = if (abs(value) >= 100) 0 else maxDecimals
-        }.format(value)
+        }.formatWithMinus(value)
         return if (unit.isEmpty()) number else "$number $unit"
     }
 }

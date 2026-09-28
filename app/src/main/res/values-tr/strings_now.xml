@@ -30,6 +30,7 @@
     <string name="now_eta_basis_taper">Bu şarj cihazının öğrenilen eğrisine göre</string>
     <string name="now_eta_estimating">Kalan süre hesaplanıyor</string>
     <string name="now_eta_needs_monitoring">Kalan süre için izlemeyi başlatın</string>
+    <string name="now_eta_needs_monitoring_charge">Dolma süresi için izlemeyi başlatın</string>
     <string name="now_eta_content_description">%1$s %2$s</string>
     <string name="now_start_monitoring">İzlemeyi başlat</string>
     <string name="now_stop_monitoring">İzlemeyi durdur</string>
@@ -50,10 +51,11 @@
     <string name="now_readout_temperature">Sıcaklık</string>
     <string name="now_readout_voltage">Voltaj</string>
 
-    <string name="now_since_title">%1$s itibarıyla</string>
-    <string name="now_since_title_empty">Fişten çekildiğinden beri</string>
-    <string name="now_since_paused">Duraklatıldı</string>
+    <string name="now_since_title">Fişten çekildiğinden beri</string>
+    <string name="now_since_title_at">Fişten çekildiğinden beri · %1$s</string>
+    <string name="now_since_title_last">Son pil kullanımı · %1$s–%2$s</string>
     <string name="now_since_empty">Ekran açıkken ve kapalıyken pilin ne kadar hızlı boşaldığını görmek için izlemeyi başlatın.</string>
+    <string name="now_since_empty_monitoring">Telefon pille çalıştığında görünür.</string>
     <string name="now_screen_on">Ekran açık</string>
     <string name="now_screen_off">Ekran kapalı</string>
     <string name="now_deep_sleep">Derin uyku</string>
@@ -64,7 +66,7 @@
     <string name="now_reset_confirm">Sıfırla</string>
     <string name="now_cancel">İptal</string>
     <string name="now_since_info_title">Fişten çekildiğinden beri hakkında</string>
-    <string name="now_since_info_body">Bu değerler izlemenin başladığı andan veya son sıfırlamanızdan itibaren sayılır. Siz sıfırlayana kadar şarjlar boyunca birikmeye devam eder.\n\nEkran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar. İlk değer, pilin tam kapasitesinin payı olarak saatlik ortalama tüketimdir; mA aynı tüketimin akım olarak değeridir.\n\nDerin uyku, işlemcinin tamamen uykuda olduğu süredir. Ekran kapalıyken yüksek olmalıdır: düşükse bir şey telefonu uyanık tutuyordur.</string>
+    <string name="now_since_info_body">Fişten çekildiğinden beri, telefonun son fişten çekildiği andan veya son sıfırlamanızdan itibaren sayılır; izlemedeki bir kesinti de yeni bir dönem başlatır. Telefon takılıyken son pil kullanımı gösterilir.\n\nEkran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar. İlk değer, pilin tam kapasitesinin payı olarak saatlik ortalama tüketimdir; mA aynı tüketimin akım olarak değeridir.\n\nDerin uyku, işlemcinin tamamen uykuda olduğu süredir. Ekran kapalıyken yüksek olmalıdır: düşükse bir şey telefonu uyanık tutuyordur.</string>
 
     <string name="now_today_title">Bugün</string>
     <string name="now_today_used">Kullanılan</string>
@@ -87,7 +89,6 @@
     <string name="now_apps_basis_absolute">Son tam şarjdan beri · %1$s güncellendi</string>
     <string name="now_apps_empty">Henüz uygulama başına veri yok.</string>
     <string name="now_apps_open">Uygulamaları aç</string>
-    <string name="now_apps_unknown">Uygulama %1$d</string>
 
     <string name="now_calibration_title">Akım okumaları düzeltildi</string>
     <string name="now_calibration_unit">Bu telefon akımı miliamper olarak bildiriyor. Değerler artık dönüştürülüyor.</string>

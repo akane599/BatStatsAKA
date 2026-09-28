@@ -45,8 +45,11 @@ import kotlin.math.roundToInt
 
 private val IndicatorSize = 8.dp
 
-/** Units sit at this fraction of the value's size, on the same baseline. */
-private const val UNIT_SCALE = 0.6f
+/** Shared [StatCell] proportions, for number + unit text elsewhere that should match it. */
+object StatCellDefaults {
+    /** Units (and words next to a number) sit at this fraction of the value's size, on the same baseline. */
+    val UnitScale: Float = 0.6f
+}
 
 /**
  * Sizes (fractions of [StatCell]'s `valueStyle`) a value line steps through: value and unit share a line down to
@@ -127,7 +130,7 @@ private fun ValueLine(value: String, unit: String?, style: TextStyle, template: 
             if (unit != null) {
                 Text(
                     unit,
-                    style = style.scaled(UNIT_SCALE),
+                    style = style.scaled(StatCellDefaults.UnitScale),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     softWrap = false,

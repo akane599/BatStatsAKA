@@ -17,8 +17,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
@@ -29,11 +33,15 @@ import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDe
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import app.batstats.R
+import app.batstats.battery.apps.AppInfoSource
 import app.batstats.ui.NavGraph
 import app.batstats.ui.TestTags
+import app.batstats.ui.components.AppIconLoader
+import app.batstats.ui.components.LocalAppIconLoader
 import app.batstats.ui.navigation.Routes
 import app.batstats.ui.navigation.openDestination
 import app.batstats.ui.navigation.rememberTopLevelBackStack
+import org.koin.compose.koinInject
 
 /** [NavigationRail] replaces [NavigationBar] at this width and above (the Material breakpoint). */
 private const val RAIL_MIN_WIDTH_DP = 600
@@ -51,9 +59,19 @@ private val TAB_ITEMS = listOf(
  * The 4-tab shell: Now · History · Apps · Settings, bottom bar below [RAIL_MIN_WIDTH_DP], a rail
  * at or above it. [destination] is a `destination` deep-link extra value (see
  * `app.batstats.ui.navigation.Destinations`), applied once via [onDestinationHandled].
+ * Every screen below gets app icons from [AppInfoSource] through [LocalAppIconLoader].
  */
 @Composable
 fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {}) {
+    val appInfo: AppInfoSource = koinInject()
+    val icons = remember(appInfo) { AppInfoIconLoader(appInfo) }
+    CompositionLocalProvider(LocalAppIconLoader provides icons) {
+        TabShell(destination, onDestinationHandled)
+    }
+}
+
+@Composable
+private fun TabShell(destination: String?, onDestinationHandled: () -> Unit) {
     val topLevelBackStack = rememberTopLevelBackStack()
     LaunchedEffect(destination) {
         if (destination != null) {
@@ -150,4 +168,11 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
             }
         }
     }
+}
+
+/** [AppIconLoader] over [AppInfoSource]: loads on IO (inside the source), peeks its LRU for [cached]. */
+private class AppInfoIconLoader(private val source: AppInfoSource) : AppIconLoader {
+    override suspend fun load(packageName: String): ImageBitmap? = source.icon(packageName)?.asImageBitmap()
+
+    override fun cached(packageName: String): ImageBitmap? = source.cachedIcon(packageName)?.asImageBitmap()
 }

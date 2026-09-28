@@ -80,7 +80,7 @@ internal class PlotLayout(
                     minimumFractionDigits = axis.decimals
                     maximumFractionDigits = axis.decimals
                 }
-                List(axis.count) { textMeasurer.measure(format.format(axis.valueAt(it)), labelStyle) }
+                List(axis.count) { textMeasurer.measure(format.formatWithMinus(axis.valueAt(it)), labelStyle) }
             }
             val unitLabels = model.axes.map { axis -> axis.unit.takeIf(String::isNotEmpty)?.let { textMeasurer.measure(it, labelStyle) } }
             fun gutter(axis: Int): Float =

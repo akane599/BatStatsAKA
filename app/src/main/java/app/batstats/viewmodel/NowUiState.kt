@@ -1,6 +1,7 @@
-package app.batstats.ui.screens.now
+package app.batstats.viewmodel
 
 import androidx.compose.runtime.Immutable
+import app.batstats.battery.apps.AppLabel
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.data.sampling.ChargerType
 import app.batstats.battery.measurement.CapacityConfidence
@@ -11,15 +12,17 @@ import app.batstats.ui.components.chart.TimePoint
 import app.batstats.ui.components.chart.TimeWindow
 
 /**
- * Everything [NowContent] renders, as plain values: numbers stay numbers (formatting and units happen in the UI,
+ * Everything the Now screen renders, as plain values: numbers stay numbers (formatting and units happen in the UI,
  * with the viewer's locale), stored enum names are already parsed, and a `null` part means "nothing to show yet".
  */
 @Immutable
 data class NowUiState(
+    /** The latest reading's time (the clock before one): "today" for dates in titles and captions. */
+    val nowMs: Long = 0,
     val hero: HeroState = HeroState(),
     val readouts: Readouts = Readouts(),
     val trace: TraceState = TraceState(),
-    /** Null until monitoring has observed something. */
+    /** The newest on-battery window; null when no DISCHARGE session was ever recorded. */
     val sinceUnplug: SinceUnplugState? = null,
     /** Null when today's summary row doesn't exist yet. */
     val today: TodayState? = null,
@@ -38,7 +41,7 @@ data class HeroState(
     val level: Int? = null,
     val power: PowerState = PowerState.UNKNOWN,
     val charger: ChargerType? = null,
-    /** Time left (discharging) or to full (charging); only while monitoring. */
+    /** Time left (discharging; only while monitoring) or to full (charging; Android's, also without monitoring). */
     val eta: Eta? = null,
     val monitoring: Boolean = false,
     /** Android refused the foreground-service start; cleared by the next attempt or once monitoring runs. */
@@ -68,7 +71,7 @@ enum class TraceRange(val spanMs: Long) {
 /**
  * The current trace in mA (calibrated with today's calibration; stored rows keep raw values). [points] carry gap
  * markers (`value = null`) where monitoring restarted or collection was interrupted; [maxGapMs] also breaks the
- * line across missing readings.
+ * line across missing readings. Chart types, because the ViewModel downsamples them with ChartMath.
  */
 @Immutable
 data class TraceState(
@@ -79,20 +82,19 @@ data class TraceState(
 )
 
 /**
- * The monitoring window's drain (the observation started at monitoring start, or at the last Reset): screen-on and
- * screen-off discharge only, and deep sleep over the whole window.
+ * The on-battery window "Since unplug" shows: the open DISCHARGE session ([current]: since the last unplug or Reset,
+ * [endedAtMs] = its latest save), or, while plugged in or not monitoring, the newest closed one ("Last on battery").
+ * Every figure comes from that one session row.
  */
 @Immutable
 data class SinceUnplugState(
+    val current: Boolean,
     val startedAtMs: Long,
-    /** The latest observed reading's time. */
-    val throughMs: Long?,
+    val endedAtMs: Long,
     val screenOn: DrainState,
     val screenOff: DrainState,
-    /** CPU deep sleep as a percent of the observed time; null before any interval was observed. */
+    /** CPU deep sleep as a percent of the session's observed time; null before any interval was observed. */
     val deepSleepPercent: Double?,
-    /** Monitoring stopped: the numbers are frozen at the stop. */
-    val paused: Boolean,
 )
 
 /** One screen state's discharge: its duration, average drain in mA (positive) and in % of capacity per hour. */
@@ -131,17 +133,17 @@ sealed interface TopAppsState {
     ) : TopAppsState
 }
 
-/** [share] is this app's part of all apps' power over the same window (0..1). */
+/** [label] is never a raw id ([AppLabel]); [share] is this app's part of all apps' power over the same window. */
 @Immutable
 data class TopApp(
     val uid: Int,
     val packageName: String,
-    val label: String,
+    val label: AppLabel,
     val powerMah: Double,
     val share: Float,
 )
 
-/** What NowContent asks for; the ViewModel handles state changes, NowScreen handles navigation. */
+/** What the Now screen asks for; the ViewModel handles state changes, NowScreen handles navigation. */
 sealed interface NowEvent {
     data object ToggleMonitoring : NowEvent
     data class SelectRange(val range: TraceRange) : NowEvent

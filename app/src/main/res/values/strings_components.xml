@@ -9,6 +9,8 @@
     <string name="component_bar_clear">Clear selection</string>
     <string name="component_bar_selected">Selected: %1$s, %2$s</string>
     <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_app_system_process">System process</string>
+    <string name="component_app_unknown">Unknown app</string>
     <string name="component_info_open">About %1$s</string>
     <string name="component_no_value" translatable="false">—</string>
 </resources>

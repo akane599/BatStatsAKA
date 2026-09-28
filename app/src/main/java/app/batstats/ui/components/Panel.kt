@@ -87,16 +87,17 @@ private fun PanelHeader(title: String?, trailing: (@Composable () -> Unit)?) {
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        if (trailing != null) Box(if (title != null) Modifier.overhang(spacing.sm) else Modifier) { trailing() }
+        if (trailing != null) Box(if (title != null) Modifier.headerActionOverhang(spacing.sm) else Modifier) { trailing() }
     }
 }
 
 /**
- * Lets a touch-target-sized control (48 dp) sit in a text-height row: it reports no height and [endShift] less
- * width, so the row keeps the title's height and the control is drawn centered on it, shifted into the end
- * padding so its glyph lines up with the gutter. Its touch target stays whole (it overlaps the panel padding).
+ * Lets a touch-target-sized control (48 dp, e.g. an [InfoSheet] button) sit at the end of a text-height row, as
+ * [Panel]'s header does: it reports no height and [endShift] less width, so the row keeps the text's height and the
+ * control is drawn centered on it, shifted into the end padding so its glyph lines up with the gutter. Its touch
+ * target stays whole (it overlaps the padding). Pass `MaterialTheme.spacing.sm` inside a `spacing.md` gutter.
  */
-private fun Modifier.overhang(endShift: Dp): Modifier = layout { measurable, constraints ->
+fun Modifier.headerActionOverhang(endShift: Dp): Modifier = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints.copy(minWidth = 0, minHeight = 0))
     val shift = min(endShift.roundToPx(), placeable.width / 2)
     layout(placeable.width - shift, 0) {

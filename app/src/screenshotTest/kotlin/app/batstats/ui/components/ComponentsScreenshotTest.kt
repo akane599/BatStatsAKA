@@ -269,3 +269,17 @@ fun AppIconLoadedPreview() {
         }
     }
 }
+
+/** Range and mode choices: 4 short options (Now's trace), 2 options (History's Days | Sessions), 3 with none selected. */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun SegmentedTabsPreview() {
+    Frame {
+        Panel {
+            SegmentedTabs(labels = listOf("Live", "1h", "6h", "24h"), selectedIndex = 0, onSelect = {})
+            SegmentedTabs(labels = listOf("Days", "Sessions"), selectedIndex = 1, onSelect = {})
+            SegmentedTabs(labels = listOf("All", "Discharge", "Charge"), selectedIndex = -1, onSelect = {})
+        }
+    }
+}

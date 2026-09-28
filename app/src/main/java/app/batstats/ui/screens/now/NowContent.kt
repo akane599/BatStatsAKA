@@ -30,6 +30,8 @@ import app.batstats.R
 import app.batstats.ui.components.chart.ChartScrubState
 import app.batstats.ui.components.chart.rememberChartScrubState
 import app.batstats.ui.theme.spacing
+import app.batstats.viewmodel.NowEvent
+import app.batstats.viewmodel.NowUiState
 
 /** Two columns from this window width (the Material "expanded" breakpoint): live on the start, cards on the end. */
 private const val TWO_COLUMN_MIN_WIDTH_DP = 840
@@ -37,7 +39,7 @@ private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 /**
  * Now, stateless: [state] in, [onEvent] out. One scrolling page under the status bar (no top bar: the hero is the
  * header). Phones stack notice, hero, trace, since unplug, Today, Health and Top apps; from 840 dp the live half
- * (through since unplug) and the cards sit side by side. The Reset confirmation is local UI state.
+ * (notice, hero, trace) and the cards sit side by side. The Reset confirmation is local UI state.
  */
 @Composable
 fun NowContent(
@@ -69,13 +71,20 @@ fun NowContent(
             modifier = Modifier.fillMaxWidth(),
             scrubState = scrubState,
         )
-        SinceUnplugPanel(state.sinceUnplug, onReset = { confirmReset = true }, modifier = Modifier.fillMaxWidth())
     }
     val cards: @Composable () -> Unit = {
+        SinceUnplugPanel(
+            state.sinceUnplug,
+            monitoring = state.hero.monitoring,
+            nowMs = state.nowMs,
+            onReset = { confirmReset = true },
+            modifier = Modifier.fillMaxWidth(),
+        )
         TodayPanel(state.today, onOpen = { onEvent(NowEvent.OpenHistory) }, modifier = Modifier.fillMaxWidth())
         HealthPanel(state.health, onOpen = { onEvent(NowEvent.OpenHealth) }, modifier = Modifier.fillMaxWidth())
         TopAppsPanel(
             state.topApps,
+            nowMs = state.nowMs,
             onOpenApps = { onEvent(NowEvent.OpenApps) },
             onOpenApp = { uid, packageName -> onEvent(NowEvent.OpenApp(uid, packageName)) },
             modifier = Modifier.fillMaxWidth(),

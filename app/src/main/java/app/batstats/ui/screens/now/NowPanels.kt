@@ -29,53 +29,56 @@ import app.batstats.battery.measurement.CapacityConfidence
 import app.batstats.battery.measurement.CurrentCalibration
 import app.batstats.battery.measurement.CurrentSign
 import app.batstats.battery.measurement.CurrentUnit
-import app.batstats.ui.components.AppIcon
+import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.StatCell
+import app.batstats.ui.components.displayName
+import app.batstats.ui.components.chart.TimeAxisFormatter
 import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.theme.spacing
+import app.batstats.viewmodel.DrainState
+import app.batstats.viewmodel.HealthState
+import app.batstats.viewmodel.SinceUnplugState
+import app.batstats.viewmodel.TodayState
+import app.batstats.viewmodel.TopAppsState
 import java.util.Calendar
 import java.util.TimeZone
 
 private const val TODAY_MAH_TEMPLATE = 8_888.0
 
 /**
- * The monitoring window's drain: screen on and screen off as %/h (mA and duration below) and deep sleep, with a
- * confirmed Reset. Titled with when the window started, because it spans every charge until it is reset.
+ * The on-battery window from one DISCHARGE session row: screen on and screen off as %/h (mA and duration below) and
+ * deep sleep. The open session reads "Since unplug · 9:12 AM" with a confirmed Reset; while plugged in (or not
+ * monitoring) the newest closed one reads "Last on battery · 6:10–9:20 AM". Times carry a date when not today.
  */
 @Composable
-internal fun SinceUnplugPanel(state: SinceUnplugState?, onReset: () -> Unit, modifier: Modifier = Modifier) {
+internal fun SinceUnplugPanel(
+    state: SinceUnplugState?,
+    monitoring: Boolean,
+    nowMs: Long,
+    onReset: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val formatter = rememberTimeAxisFormatter()
-    val title = if (state == null) {
-        stringResource(R.string.now_since_title_empty)
-    } else {
-        val sameDay = sameLocalDay(state.startedAtMs, state.throughMs ?: state.startedAtMs, formatter.zone)
-        stringResource(
-            R.string.now_since_title,
-            formatter.format(state.startedAtMs, if (sameDay) TimeGranularity.MINUTES else TimeGranularity.DATE_TIME),
+    val title = when {
+        state == null -> stringResource(R.string.now_since_title)
+        state.current -> stringResource(R.string.now_since_title_at, dayAwareTime(formatter, state.startedAtMs, nowMs))
+        else -> stringResource(
+            R.string.now_since_title_last,
+            dayAwareTime(formatter, state.startedAtMs, nowMs),
+            dayAwareTime(formatter, state.endedAtMs, state.startedAtMs),
         )
     }
     Panel(
         modifier,
         title = title,
-        trailing = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (state?.paused == true) {
-                    Text(
-                        stringResource(R.string.now_since_paused),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                InfoSheet(stringResource(R.string.now_since_info_title), stringResource(R.string.now_since_info_body))
-            }
-        },
+        trailing = { InfoSheet(stringResource(R.string.now_since_info_title), stringResource(R.string.now_since_info_body)) },
     ) {
         if (state == null) {
-            QuietText(stringResource(R.string.now_since_empty))
+            QuietText(stringResource(if (monitoring) R.string.now_since_empty_monitoring else R.string.now_since_empty))
             return@Panel
         }
         Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
@@ -89,10 +92,15 @@ internal fun SinceUnplugPanel(state: SinceUnplugState?, onReset: () -> Unit, mod
                 Modifier.weight(1f),
                 unit = stringResource(R.string.now_unit_percent),
             )
-            TextButton(onClick = onReset) { Text(stringResource(R.string.now_reset)) }
+            // Reset starts a new window; it has nothing to do with a window that already ended.
+            if (state.current) TextButton(onClick = onReset) { Text(stringResource(R.string.now_reset)) }
         }
     }
 }
+
+/** [timeMs] as a time on [referenceMs]'s local day, else with its date ("Oct 8, 6:10 PM"). */
+internal fun dayAwareTime(formatter: TimeAxisFormatter, timeMs: Long, referenceMs: Long): String =
+    formatter.format(timeMs, if (sameLocalDay(timeMs, referenceMs, formatter.zone)) TimeGranularity.MINUTES else TimeGranularity.DATE_TIME)
 
 /** %/h when the capacity is known, else the average mA; the other figure and the duration go underneath. */
 @Composable
@@ -178,6 +186,7 @@ private fun confidenceLabel(confidence: CapacityConfidence): Int = when (confide
 @Composable
 internal fun TopAppsPanel(
     apps: TopAppsState,
+    nowMs: Long,
     onOpenApps: () -> Unit,
     onOpenApp: (uid: Int, packageName: String) -> Unit,
     modifier: Modifier = Modifier,
@@ -199,15 +208,16 @@ internal fun TopAppsPanel(
             is TopAppsState.Ready -> {
                 val formatter = rememberTimeAxisFormatter()
                 QuietText(
-                    stringResource(basisLabel(apps.basis), formatter.format(apps.capturedAtMs, TimeGranularity.MINUTES)),
+                    // The cache can be days old: then the time carries its date.
+                    stringResource(basisLabel(apps.basis), dayAwareTime(formatter, apps.capturedAtMs, nowMs)),
                     Modifier.padding(horizontal = spacing.md),
                 )
                 val locale = currentLocale()
                 val mah = stringResource(R.string.now_unit_mah)
                 apps.rows.forEach { app ->
-                    val label = app.label.ifBlank { stringResource(R.string.now_apps_unknown, app.uid) }
+                    val label = app.label.displayName()
                     AppRow(
-                        icon = { AppIcon(app.packageName, label) },
+                        icon = { AppLabelIcon(app.packageName, app.label) },
                         label = label,
                         value = "${formatNumber(app.powerMah, if (app.powerMah < 10) 1 else 0, locale)} $mah",
                         share = app.share,
