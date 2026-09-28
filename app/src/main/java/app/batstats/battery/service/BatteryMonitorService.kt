@@ -14,8 +14,6 @@ import android.util.Log
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.util.DetailedStatsCollector
-import app.batstats.settings.detailedStatsIntervalMs
-import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.Notifier
 import app.batstats.battery.measurement.BatteryAlerts
@@ -33,20 +31,31 @@ class BatteryMonitorService : Service() {
     private val repository: BatteryRepository by inject()
     private val notifications: DrainNotificationManager by inject()
     private val shell: ShellRunner by inject()
-    private val shizuku: ShizukuBridge by inject()
     private val collector: DetailedStatsCollector by inject()
     private val diagnostics: DiagnosticStore by inject()
     private var started = false
     private var monitoringStartedElapsed = 0L
 
+    private fun startMonitoringForeground() {
+        val notification = notifications.getNotification()
+        if (Build.VERSION.SDK_INT >= 34) startForeground(DrainNotificationManager.NOTIFICATION_ID,
+            notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        else startForeground(DrainNotificationManager.NOTIFICATION_ID, notification)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (repository.isClearingHistory) { stopSelf(); return START_NOT_STICKY }
+        if (repository.isClearingHistory) {
+            // The service may have been started with startForegroundService(); Android requires
+            // startForeground() to be called regardless, or it throws ForegroundServiceDidNotStartInTimeException.
+            try { startMonitoringForeground() }
+            catch (e: RuntimeException) { Log.e("BatteryMonitorService", "Could not start monitoring while clearing", e) }
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (started) return START_STICKY
         try {
-            val notification = notifications.getNotification()
-            if (Build.VERSION.SDK_INT >= 34) startForeground(DrainNotificationManager.NOTIFICATION_ID,
-                notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-            else startForeground(DrainNotificationManager.NOTIFICATION_ID, notification)
+            startMonitoringForeground()
         } catch (e: RuntimeException) {
             diagnostics.record(DiagnosticCode.START_FAILED)
             Log.e("BatteryMonitorService", "Could not start monitoring", e)
@@ -57,19 +66,6 @@ class BatteryMonitorService : Service() {
         started = true
         monitoringStartedElapsed = SystemClock.elapsedRealtime()
         repository.startSampling()
-        serviceScope.launch {
-            repository.settingsFlow.map { it.detailedStatsIntervalMs }.distinctUntilChanged().collectLatest { interval ->
-                while (isActive) { collector.refresh(); delay(interval) }
-            }
-        }
-        serviceScope.launch {
-            combine(shizuku.running, shizuku.granted) { running, granted -> running to granted }
-                .collect {
-                    val mode = shell.detectMode(forceRefresh = true)
-                    collector.accessChanged(mode)
-                    if (mode != ShellRunner.Mode.NONE) collector.refresh(force = true)
-                }
-        }
         serviceScope.launch(Dispatchers.IO) {
             // Private, excluded from automatic backup; changes are written only at episode boundaries.
             val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)

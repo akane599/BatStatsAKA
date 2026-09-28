@@ -57,7 +57,9 @@ class ShellRunner(
     suspend fun exec(cmd: String, allowEmpty: Boolean = false): Outcome = commandLock.withLock {
         withContext(Dispatchers.IO) {
             // Select one backend for this read. A failure never falls through to another source.
-            val mode = detectMode(forceRefresh = true)
+            // Use the cached mode (detectMode() probes only when nothing is cached yet); callers
+            // that need a fresh probe use detectMode(forceRefresh = true) explicitly.
+            val mode = detectMode()
             val result = when (mode) {
                 Mode.SHIZUKU -> when (val result = shizuku.run(cmd, TimeUnit.SECONDS.toMillis(CMD_TIMEOUT_SEC))) {
                     is ShizukuBridge.RunResult.Success -> CommandOutput.Result(result.output)

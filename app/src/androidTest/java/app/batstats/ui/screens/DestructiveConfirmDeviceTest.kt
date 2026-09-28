@@ -187,9 +187,6 @@ class DestructiveConfirmDeviceTest {
         awaitText(R.string.history_clear_failed)
         assertEquals(1, clears)
         compose.onNodeWithText(label(R.string.history_clear_warning)).assertIsDisplayed()
-        // The buttons re-enable only once the failure snackbar is gone: `clearingHistory = false`
-        // runs after the suspending showSnackbar call. Dismiss it instead of waiting out its timeout.
-        compose.runOnIdle { snackbarHost.currentSnackbarData?.dismiss() }
         compose.onNodeWithText(label(R.string.delete_all)).assertIsEnabled().performClick()
         awaitText(R.string.data_cleared)
         assertEquals(2, clears)

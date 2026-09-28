@@ -485,10 +485,15 @@ fun BatterySettingsContent(
                             try {
                                 onClearHistory()
                                 showClearDataDialog = false
+                                // Reset before the suspending showSnackbar so the dialog's buttons
+                                // (and a freshly reopened dialog) aren't stuck disabled for its duration.
+                                clearingHistory = false
                                 snackbarHostState.showSnackbar(dataClearedMsg)
                             } catch (e: kotlinx.coroutines.CancellationException) { throw e }
-                            catch (_: Exception) { snackbarHostState.showSnackbar(clearFailedMsg) }
-                            finally { clearingHistory = false }
+                            catch (_: Exception) {
+                                clearingHistory = false
+                                snackbarHostState.showSnackbar(clearFailedMsg)
+                            } finally { clearingHistory = false }
                         }
                     },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)

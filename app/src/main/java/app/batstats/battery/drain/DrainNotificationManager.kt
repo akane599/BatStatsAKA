@@ -19,16 +19,22 @@ class DrainNotificationManager(private val context: Context, private val reposit
     companion object {
         const val CHANNEL_ID = "drain_stats_channel"
         const val NOTIFICATION_ID = 2001
+        private const val LEGACY_MONITOR_CHANNEL_ID = "battery_monitor"
+
+        /** Also called by [app.batstats.battery.util.Notifier] so its boot prompt shares this channel. */
+        fun ensureChannel(context: Context) {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.deleteNotificationChannel(LEGACY_MONITOR_CHANNEL_ID)
+            manager.createNotificationChannel(
+                NotificationChannel(CHANNEL_ID, context.getString(R.string.monitor_channel), NotificationManager.IMPORTANCE_LOW).apply {
+                    description = context.getString(R.string.monitor_channel_description)
+                    setShowBadge(false); enableLights(false); enableVibration(false)
+                }
+            )
+        }
     }
     private val text = MonitoringText(context)
-    init {
-        context.getSystemService(NotificationManager::class.java).createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, context.getString(R.string.monitor_channel), NotificationManager.IMPORTANCE_LOW).apply {
-                description = context.getString(R.string.monitor_channel_description)
-                setShowBadge(false); enableLights(false); enableVibration(false)
-            }
-        )
-    }
+    init { ensureChannel(context) }
     fun getNotification(
         reading: BatteryRepository.Realtime = repository.realtimeFlow.value,
         summary: ObservationSummary = repository.observation.value,

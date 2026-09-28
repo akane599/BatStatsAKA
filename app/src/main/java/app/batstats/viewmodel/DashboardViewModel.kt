@@ -9,22 +9,18 @@ import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.service.BatteryMonitorService
-import app.batstats.battery.util.Notifier
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.chartTimeRangeMs
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class DashboardViewModel(
@@ -60,27 +56,13 @@ class DashboardViewModel(
             repo.recentSamplesFlow(s.chartTimeRangeMs)
         }
 
-    private val _liveCurrent = MutableStateFlow<List<Float>>(emptyList())
-    val liveCurrent: StateFlow<List<Float>> = _liveCurrent.asStateFlow()
-
-    init {
-        viewModelScope.launch {
-            realtime.collectLatest { rt ->
-                val current = rt.currentMa?.toFloat() ?: return@collectLatest
-                _liveCurrent.update { history ->
-                    (history + current).takeLast(100)
-                }
-            }
-        }
-    }
-
     fun toggleMonitoring() {
         if (isMonitoring.value) {
             val intent = Intent(app, BatteryMonitorService::class.java)
             app.stopService(intent)
             // Repo update happens in Service.onDestroy
         } else {
-            Notifier.ensureChannel(app)
+            DrainNotificationManager.ensureChannel(app)
             val intent = Intent(app, BatteryMonitorService::class.java)
             if (Build.VERSION.SDK_INT >= 26) {
                 app.startForegroundService(intent)

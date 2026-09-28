@@ -50,10 +50,8 @@ class BatteryRepository(
     private var session: ChargeSession? = null
     private var needsSessionRecovery = false
     private var lastPersisted: BatterySample? = null
-    private var sampleCount = 0L
     private var lastCleanupElapsed = Long.MIN_VALUE
     private var samplesSinceCleanup = 0
-    private var lastCountFlushAttempt = Long.MIN_VALUE
 
     private val _realtime = MutableStateFlow(Realtime())
     val realtimeFlow = _realtime.asStateFlow()
@@ -61,7 +59,7 @@ class BatteryRepository(
     val isMonitoringFlow = _isMonitoring.asStateFlow()
     private val _observation = MutableStateFlow(ObservationSummary())
     val observation = _observation.asStateFlow()
-    private enum class FailureSource { BATTERY, STATE_EVENTS, HISTORY, RETENTION, SAMPLE_COUNT }
+    private enum class FailureSource { BATTERY, STATE_EVENTS, HISTORY, RETENTION }
     private val failures = MutableStateFlow<Map<FailureSource, String>>(emptyMap())
     val error = failures.map { values ->
         values.toSortedMap().values.joinToString("\n").ifEmpty { null }
@@ -99,7 +97,6 @@ class BatteryRepository(
                             engine.stop(); estimator.reset()
                             _observation.value = engine.summary
                             finishSession("Monitoring stopped")
-                            flushSampleCount(force = true)
                         }
                         Event.Reset -> {
                             engine.reset(); sessionEngine.reset(); estimator.reset()
@@ -111,17 +108,11 @@ class BatteryRepository(
                                 db.withTransaction {
                                     batteryDao.clearAll(); sessionDao.clearAll(); db.appEnergyDao().clearAll()
                                 }
-                                session = null; lastPersisted = null; sampleCount = 0
+                                session = null; lastPersisted = null
                                 needsSessionRecovery = false
                                 failure(FailureSource.HISTORY); failure(FailureSource.RETENTION)
                                 engine.reset(); sessionEngine.reset(); estimator.reset()
                                 _observation.value = engine.summary
-                                try {
-                                    settingsRepository.update { it.copy(totalSamplesCollected = 0) }
-                                    failure(FailureSource.SAMPLE_COUNT)
-                                }
-                                catch (e: CancellationException) { throw e }
-                                catch (_: Exception) { failure(FailureSource.SAMPLE_COUNT, "History cleared; the sample-count setting could not be reset") }
                                 event.result.complete(Unit)
                             } catch (e: Exception) { event.result.completeExceptionally(e); throw e }
                         }
@@ -359,8 +350,7 @@ class BatteryRepository(
         _realtime.update { Realtime(mergePersistedReading(it.sample, sample)) }
         _observation.value = summary
         failure(FailureSource.HISTORY)
-        if (inserted != -1L) { sampleCount++; samplesSinceCleanup++ }
-        if (sampleCount >= 100) flushSampleCount()
+        if (inserted != -1L) samplesSinceCleanup++
         if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= 200 || event.point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             lastCleanupElapsed = event.point.elapsedMs
             samplesSinceCleanup = 0
@@ -403,25 +393,6 @@ class BatteryRepository(
         if (!needsSessionRecovery) return
         sessionDao.closeInterrupted("Process stopped; interval ended at last stored reading")
         needsSessionRecovery = false
-    }
-
-    private suspend fun flushSampleCount(force: Boolean = false) {
-        val count = sampleCount
-        if (count == 0L) return
-        val now = SystemClock.elapsedRealtime()
-        if (!force && lastCountFlushAttempt != Long.MIN_VALUE && now - lastCountFlushAttempt < 60_000) return
-        lastCountFlushAttempt = now
-        try {
-            settingsRepository.update {
-                it.copy(totalSamplesCollected = it.totalSamplesCollected.coerceIn(0L, Long.MAX_VALUE - count) + count)
-            }
-            sampleCount = 0
-            failure(FailureSource.SAMPLE_COUNT)
-        } catch (e: CancellationException) { throw e }
-        catch (e: Exception) {
-            diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
-            failure(FailureSource.SAMPLE_COUNT, "Sample-count preference could not be saved (${e.javaClass.simpleName}); battery history is retained")
-        }
     }
 
     private suspend fun cleanup(now: Long) {

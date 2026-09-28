@@ -37,7 +37,6 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Chose standalone `com.android.compose.screenshot` plugin over AGP test suites because AGP is 9.4.0 (suites need ≥ 9.5.0-alpha03) and AGP bumps need approval. Revisit when AGP ≥ 9.5.0-alpha03 (standalone setup is deprecated there). (Superseded 2026-09-28: moved to AGP 9.5.0-alpha07 + test suites, see above.)
 
 ## Known debt / follow-ups
-- Settings "Clear All Data": `clearingHistory = false` runs after the suspending `showSnackbar`, so for ~4 s after a failed clear the dialog buttons stay disabled, and after a successful clear reopening the dialog shows disabled buttons. Pre-existing; fix by resetting the flag before showing the snackbar (then drop the dismiss step in `DestructiveConfirmDeviceTest`) — low
 - Review suggestions not yet done: `DetailedStatsTab` enum instead of `Int` tab; one shared Shizuku/access UI class for Dashboard + DetailedStats; `KernelDetailsState` single `sources` list; `DiagnosticsUiState` builder shared by wrapper/tests; previews for DetailedStats tabs 1–5/error, Settings dialogs, SessionDetails failed/recording/interrupted/imported — low
 - Transient UI (snackbars) can't be screenshot-tested: layoutlib captures one frame before `showSnackbar` renders — low
 - DetailedStats/History/Settings `rememberSaveable` keys moved with the split; a state bundle saved by the previous APK won't restore once after update — low
