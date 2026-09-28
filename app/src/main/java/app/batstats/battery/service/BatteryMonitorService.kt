@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.util.DetailedStatsCollector
@@ -32,7 +33,9 @@ class BatteryMonitorService : Service() {
     private val repository: BatteryRepository by inject()
     private val notifications: DrainNotificationManager by inject()
     private val shell: ShellRunner by inject()
+    @Suppress("DEPRECATION") // The old advanced-stats error line, until P4c reworks the notification source.
     private val collector: DetailedStatsCollector by inject()
+    private val sessionSnapshots: SessionSnapshotCollector by inject()
     private val diagnostics: DiagnosticStore by inject()
     private var started = false
     private var monitoringStartedElapsed = 0L
@@ -67,6 +70,8 @@ class BatteryMonitorService : Service() {
         started = true
         monitoringStartedElapsed = SystemClock.elapsedRealtime()
         repository.startSampling()
+        // Per-app baselines/ends at unplug and plug-in; runs (and dumps) only while monitoring runs.
+        serviceScope.launch(Dispatchers.Default) { sessionSnapshots.run() }
         serviceScope.launch(Dispatchers.IO) {
             // Private, excluded from automatic backup; changes are written only at episode boundaries.
             val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)

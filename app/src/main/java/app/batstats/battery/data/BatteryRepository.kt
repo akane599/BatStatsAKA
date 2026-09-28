@@ -2,6 +2,7 @@ package app.batstats.battery.data
 
 import android.util.Log
 import androidx.room.withTransaction
+import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.data.db.*
 import app.batstats.battery.data.sampling.DailySummaryReplay
 import app.batstats.battery.data.sampling.KeyValueStore
@@ -285,7 +286,8 @@ class BatteryRepository(
         val current = if (open == null || ended != null) {
             sessionEngine.reset()
             sessionExtremes = SessionExtremes()
-            SessionReport.open(point, raw)
+            // On the in-memory row, since every save rewrites it: PENDING for discharge, NOT_APPLICABLE otherwise.
+            SessionReport.open(point, raw).let { it.copy(appUsageStatus = SessionSnapshotCollector.initialStatus(it.type)) }
         } else open
         val sessionBefore = sessionEngine.summary
         val sessionSummary = sessionEngine.accept(point)

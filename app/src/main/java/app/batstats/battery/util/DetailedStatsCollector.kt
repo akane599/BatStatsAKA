@@ -1,5 +1,7 @@
 package app.batstats.battery.util
 
+import app.batstats.battery.apps.AppStatsRepository
+import app.batstats.battery.apps.AppStatsResult
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
 import android.util.Log
@@ -14,18 +16,20 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Collects comprehensive battery stats using Root/Shizuku/ADB-granted DUMP.
- * Provides parsed data for the detailed stats screen.
+ * The old detailed-stats screen's state holder. The batterystats dump now comes from [AppStatsRepository]
+ * (shared, cached, joined by concurrent callers); this shim only keeps the screen's flows and its extra
+ * deviceidle/power dumps until P4c replaces the screen.
  */
+@Deprecated("Removed in P4c")
 class DetailedStatsCollector(
     private val shellRunner: ShellRunner,
-    private val diagnostics: DiagnosticStore
+    private val diagnostics: DiagnosticStore,
+    private val appStats: AppStatsRepository,
 ) {
     companion object {
         private const val TAG = "DetailedStatsCollector"
 
-        const val NO_ACCESS_MESSAGE =
-            "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Advanced statistics > Access setup."
+        const val NO_ACCESS_MESSAGE = AppStatsRepository.NO_ACCESS_MESSAGE
     }
 
     private val refreshing = AtomicBoolean(false)
@@ -102,26 +106,22 @@ class DetailedStatsCollector(
             var hasData = false
             val failures = mutableListOf<String>()
 
-            Log.d(TAG, "Fetching batterystats...")
-            when (val stats = shellRunner.exec("dumpsys batterystats -c --charged")) {
-                is ShellRunner.Outcome.Success -> {
-                    if (stats.mode != selectedMode || generation != accessGeneration.get()) { accessChanged(shellRunner.access.value); return false }
-                    Log.d(TAG, "Parsing batterystats (${stats.output.length} chars, via ${stats.mode})...")
-                    val parsed = BatteryStatsParser.parseCheckin(stats.output)
-                    if (!parsed.hasValidWindow) {
-                        diagnostics.record(DiagnosticCode.ADVANCED_FORMAT_INVALID)
-                        failures += "Battery statistics format unavailable or incomplete"
-                    } else {
-                        newSnapshot = parsed.copy(source = "Android batterystats · ${stats.mode.name}")
-                        hasData = true
-                    }
-                    Log.d(TAG, "Parsed ${parsed.apps.size} apps, ${parsed.wakelocks.size} wakelocks")
+            // The repository records its own diagnostics for a failed or unreadable dump.
+            val stats = appStats.snapshot(force)
+            if (generation != accessGeneration.get() || shellRunner.access.value != selectedMode) { accessChanged(shellRunner.access.value); return false }
+            when (stats) {
+                is AppStatsResult.Ready -> {
+                    newSnapshot = stats.snapshot
+                    hasData = true
                 }
-
-                is ShellRunner.Outcome.Failure -> {
+                AppStatsResult.NoAccess -> {
                     _snapshot.value = null; _lastRefresh.value = 0
-                    failures += describe(stats)
-                    Log.e(TAG, "batterystats failed: ${stats.mode} / ${stats.message}")
+                    failures += NO_ACCESS_MESSAGE
+                }
+                is AppStatsResult.Failed -> {
+                    _snapshot.value = null; _lastRefresh.value = 0
+                    failures += stats.message
+                    Log.e(TAG, "batterystats failed: ${stats.message}")
                 }
             }
 
@@ -157,7 +157,7 @@ class DetailedStatsCollector(
             _lastRefresh.value = newSnapshot?.capturedAt ?: 0
             _error.value = failures.takeIf { it.isNotEmpty() }?.joinToString("\n")
 
-            if (failures.isNotEmpty()) diagnostics.record(DiagnosticCode.ADVANCED_READ_FAILED)
+            if (failures.isNotEmpty() && stats !is AppStatsResult.Failed) diagnostics.record(DiagnosticCode.ADVANCED_READ_FAILED)
             else if (previousError != null && hasData) diagnostics.record(DiagnosticCode.ADVANCED_RECOVERED)
             hasData
         } catch (ce: CancellationException) {
@@ -175,16 +175,6 @@ class DetailedStatsCollector(
         }
     }
 
-    private fun describe(failure: ShellRunner.Outcome.Failure): String = when (failure.mode) {
-        ShellRunner.Mode.NONE -> NO_ACCESS_MESSAGE
-        ShellRunner.Mode.SHIZUKU ->
-            "Shizuku is connected but the dump failed: ${failure.message}. Try again, or restart Shizuku."
-        ShellRunner.Mode.ROOT ->
-            "Root is available but the dump failed: ${failure.message}."
-        ShellRunner.Mode.ADB ->
-            "DUMP and usage-stat access were detected but the dump failed: ${failure.message}."
-    }
-
     suspend fun resetStats(): Boolean {
         if (!refreshing.compareAndSet(false, true)) {
             _error.value = "Collection is in progress. Try the reset again after it finishes."
@@ -194,6 +184,7 @@ class DetailedStatsCollector(
             val outcome = shellRunner.exec("dumpsys batterystats --reset", allowEmpty = true)
             if (outcome is ShellRunner.Outcome.Success) {
                 diagnostics.record(DiagnosticCode.SYSTEM_STATS_RESET)
+                appStats.invalidate() // A new stats window: the cached dump is from the old one.
                 accessGeneration.incrementAndGet()
                 _snapshot.value = null; _deviceIdle.value = null; _powerManager.value = null
                 _lastRefresh.value = 0; lastAttemptElapsed = Long.MIN_VALUE

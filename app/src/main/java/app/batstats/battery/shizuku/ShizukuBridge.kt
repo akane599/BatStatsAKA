@@ -14,6 +14,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,6 +54,9 @@ class ShizukuBridge(private val context: Context) {
 
         private const val PING_RETRIES = 4
         private const val PING_RETRY_DELAY_MS = 120L
+
+        /** The helper process is stopped after this long with no command in flight; the next command rebinds. */
+        const val IDLE_UNBIND_MS = 60_000L
     }
 
     enum class Failure { NOT_RUNNING, NO_PERMISSION, BIND_FAILED, TRANSPORT, COMMAND }
@@ -85,6 +89,15 @@ class ShizukuBridge(private val context: Context) {
     }
 
     private val pendingBind = AtomicReference<CompletableDeferred<IBinder?>?>(null)
+
+    // On Main, like bindUserService: an idle unbind cannot interleave with a bind in progress.
+    private val idle = IdleCountdown(CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate), IDLE_UNBIND_MS) {
+        // Runs under the countdown's lock: a command that starts after this finds no binder and rebinds.
+        if (binderRef.getAndSet(null) != null) {
+            Log.d(TAG, "UserService idle for ${IDLE_UNBIND_MS / 1000} s; unbinding")
+            unbindService()
+        }
+    }
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
@@ -219,32 +232,37 @@ class ShizukuBridge(private val context: Context) {
 
     suspend fun run(cmd: String, timeoutMs: Long = DEFAULT_CMD_TIMEOUT_MS): RunResult =
         withContext(Dispatchers.IO) {
-            if (!isRunning()) {
-                return@withContext RunResult.Error("Shizuku is not running", Failure.NOT_RUNNING)
-            }
-            if (!hasPermissionResilient()) {
-                return@withContext RunResult.Error(
-                    "Shizuku permission not granted",
-                    Failure.NO_PERMISSION
-                )
-            }
-
-            val binder = ensureBound()
-                ?: return@withContext RunResult.Error(
-                    "Could not start the Shizuku helper service",
-                    Failure.BIND_FAILED
-                )
-
-            val first = execute(binder, cmd, timeoutMs)
-            if (first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
-                return@withContext first
-            }
-
-            Log.d(TAG, "Retrying after transport failure: ${first.message}")
-            binderRef.set(null)
-            val fresh = ensureBound() ?: return@withContext first
-            execute(fresh, cmd, timeoutMs)
+            idle.begin()
+            try { runCommand(cmd, timeoutMs) } finally { idle.end() }
         }
+
+    private suspend fun runCommand(cmd: String, timeoutMs: Long): RunResult {
+        if (!isRunning()) {
+            return RunResult.Error("Shizuku is not running", Failure.NOT_RUNNING)
+        }
+        if (!hasPermissionResilient()) {
+            return RunResult.Error(
+                "Shizuku permission not granted",
+                Failure.NO_PERMISSION
+            )
+        }
+
+        val binder = ensureBound()
+            ?: return RunResult.Error(
+                "Could not start the Shizuku helper service",
+                Failure.BIND_FAILED
+            )
+
+        val first = execute(binder, cmd, timeoutMs)
+        if (first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
+            return first
+        }
+
+        Log.d(TAG, "Retrying after transport failure: ${first.message}")
+        binderRef.set(null)
+        val fresh = ensureBound() ?: return first
+        return execute(fresh, cmd, timeoutMs)
+    }
 
     suspend fun runOrNull(cmd: String): String? =
         (run(cmd) as? RunResult.Success)?.output
@@ -347,12 +365,54 @@ class ShizukuBridge(private val context: Context) {
     }
 
     fun unbind() {
+        unbindService()
+        binderRef.set(null)
+        pendingBind.getAndSet(null)?.complete(null)
+    }
+
+    /** remove = true also stops the helper process. */
+    private fun unbindService() {
         try {
             Shizuku.unbindUserService(args, connection, true)
         } catch (t: Throwable) {
             Log.e(TAG, "unbind failed", t)
         }
-        binderRef.set(null)
-        pendingBind.getAndSet(null)?.complete(null)
+    }
+}
+
+/**
+ * Calls [onIdle] once [idleMs] pass with no command between [begin] and [end]; a [begin] cancels the countdown.
+ * [onIdle] runs on [scope] while holding the lock [begin] takes, so a command either starts before the idle
+ * check (and the countdown is skipped) or after [onIdle] finished. Keep [onIdle] short.
+ */
+internal class IdleCountdown(
+    private val scope: CoroutineScope,
+    private val idleMs: Long,
+    private val onIdle: () -> Unit,
+) {
+    private val lock = Any()
+    private var inFlight = 0
+    private var countdown: Job? = null
+
+    fun begin() = synchronized(lock) {
+        inFlight++
+        countdown?.cancel()
+        countdown = null
+    }
+
+    fun end() = synchronized(lock) {
+        inFlight = (inFlight - 1).coerceAtLeast(0)
+        if (inFlight == 0) {
+            countdown?.cancel()
+            countdown = scope.launch {
+                delay(idleMs)
+                synchronized(lock) {
+                    if (inFlight == 0 && countdown === coroutineContext[Job]) {
+                        countdown = null
+                        onIdle()
+                    }
+                }
+            }
+        }
     }
 }

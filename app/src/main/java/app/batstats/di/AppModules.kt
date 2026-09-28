@@ -2,6 +2,14 @@ package app.batstats.di
 
 import android.content.Context
 import android.os.Build
+import app.batstats.battery.apps.AppInfoRepository
+import app.batstats.battery.apps.AppInfoSource
+import app.batstats.battery.apps.AppStatsRepository
+import app.batstats.battery.apps.AppStatsSource
+import app.batstats.battery.apps.RoomSessionSnapshotStore
+import app.batstats.battery.apps.SessionSnapshotCollector
+import app.batstats.battery.apps.SessionSnapshotStore
+import app.batstats.battery.apps.ShellRunnerStatsShell
 import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.CalibrationOverrides
@@ -59,7 +67,14 @@ val appModule = module {
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
     single { DiagnosticStore(androidContext(), get()) }
-    single { DetailedStatsCollector(get(), get()) }
+    // The one batterystats reader (on demand only; concurrent callers share a dump) and installed-app info.
+    single { AppStatsRepository(ShellRunnerStatsShell(get()), get(), get<DiagnosticStore>()::record) } bind AppStatsSource::class
+    single { AppInfoRepository(androidContext()) } bind AppInfoSource::class
+    single<SessionSnapshotStore> { RoomSessionSnapshotStore(get()) }
+    // Started and stopped by BatteryMonitorService.
+    single { SessionSnapshotCollector(get(), get(), get<BatteryRepository>().powerTransitions) }
+    @Suppress("DEPRECATION") // Shim for the old detailed-stats screen until P4c.
+    single { DetailedStatsCollector(get(), get(), get()) }
 
     single<SettingsRepository<AppSettings>> {
         SettingsRepository(dataStore = get(), schema = AppSettingsSchema)

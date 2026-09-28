@@ -1,6 +1,9 @@
 package app.batstats.battery
 
 import android.app.Application
+import android.content.ComponentCallbacks2
+import android.content.res.Configuration
+import app.batstats.battery.apps.AppInfoRepository
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.shizuku.ShizukuBridge
@@ -21,6 +24,7 @@ class BatteryApp : Application() {
     private val appScope: CoroutineScope by inject()
     private val settingsMigrator: SettingsMigrator by inject()
     private val shizukuBridge: ShizukuBridge by inject()
+    private val appInfo: AppInfoRepository by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -31,6 +35,15 @@ class BatteryApp : Application() {
         }
 
         shizukuBridge.warmUp()
+
+        // App icons are the only sizeable cache: dropped on trim, and re-rendered after a density change.
+        // The repository is resolved lazily here, so an app that never showed an icon creates it on the first trim.
+        registerComponentCallbacks(object : ComponentCallbacks2 {
+            override fun onTrimMemory(level: Int) = appInfo.onTrimMemory()
+            override fun onConfigurationChanged(newConfig: Configuration) = appInfo.onConfigurationChanged(newConfig)
+            @Deprecated("Superseded by onTrimMemory")
+            override fun onLowMemory() = appInfo.onTrimMemory()
+        })
 
         // Settings migration; history retention cleanup waits until it has ended.
         appScope.launch {

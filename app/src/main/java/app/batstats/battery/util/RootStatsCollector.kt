@@ -8,12 +8,19 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Curated, bounded reads execute inside su; app-UID File access is not a root read. */
+/**
+ * Curated, bounded reads execute inside su; app-UID File access is not a root read.
+ * Each read's result (output or failure) is reused for [READ_TTL_MS]: the kernel tab re-requests all three
+ * reads whenever its list item re-enters composition, and each is a fresh `su` process. The explicit refresh
+ * calls [invalidateRootCache] first, which also drops these results.
+ */
 object RootStatsCollector {
+    private const val READ_TTL_MS = 30_000L
     private val probeLock = Mutex()
     private val readLock = Mutex()
     @Volatile private var cachedRoot: Boolean? = null
     @Volatile private var cachedAt = 0L
+    private val reads = ReadCache<String?>(READ_TTL_MS, SystemClock::elapsedRealtime)
     private val _errors = MutableStateFlow<Map<String, String>>(emptyMap())
     val errors = _errors.asStateFlow()
     private val _collectedAt = MutableStateFlow<Map<String, Long>>(emptyMap())
@@ -29,12 +36,17 @@ object RootStatsCollector {
             available
         }
     }
-    fun invalidateRootCache() { cachedRoot = null; cachedAt = 0 }
+    fun invalidateRootCache() {
+        cachedRoot = null; cachedAt = 0
+        reads.clear()
+    }
 
     private suspend fun read(label: String, command: String): String? = readLock.withLock {
+        // A reused result keeps its errors/collectedAt entries, so the screen still shows when it was read.
+        reads.get(label)?.let { return@withLock it.value }
         val result = runInterruptible(Dispatchers.IO) { CommandOutput.run(listOf("su", "-c", command), 20_000, 256 * 1024) }
         _collectedAt.value = _collectedAt.value - label
-        if (!result.successful || result.output.isBlank()) {
+        val output = if (!result.successful || result.output.isBlank()) {
             _errors.value = _errors.value + (label to (result.error ?: "No supported readable kernel nodes"))
             null
         } else {
@@ -42,6 +54,8 @@ object RootStatsCollector {
             _collectedAt.value = _collectedAt.value + (label to System.currentTimeMillis())
             result.output
         }
+        reads.put(label, output)
+        output
     }
     suspend fun getKernelBatteryInfo(): KernelStats.Battery? {
         val raw = read("Battery", "cat /sys/class/power_supply/battery/uevent") ?: return null
@@ -83,4 +97,21 @@ object RootStatsCollector {
         done
         exit 1
     """.trimIndent()
+}
+
+/** Per-key results kept for [ttlMs] of [elapsedMs] time, including null results. Thread-safe. */
+internal class ReadCache<V>(private val ttlMs: Long, private val elapsedMs: () -> Long) {
+    class Entry<V>(val value: V, val atMs: Long)
+
+    private val entries = HashMap<String, Entry<V>>()
+
+    /** The entry while it is younger than the TTL (a clock that went backwards expires it). */
+    @Synchronized
+    fun get(key: String): Entry<V>? = entries[key]?.takeIf { elapsedMs() - it.atMs in 0 until ttlMs }
+
+    @Synchronized
+    fun put(key: String, value: V) { entries[key] = Entry(value, elapsedMs()) }
+
+    @Synchronized
+    fun clear() = entries.clear()
 }

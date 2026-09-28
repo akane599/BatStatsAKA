@@ -35,6 +35,7 @@ class ShizukuDeviceTest {
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
         val bridge = GlobalContext.get().get<ShizukuBridge>()
         val shell = GlobalContext.get().get<ShellRunner>()
+        @Suppress("DEPRECATION") // The shim over AppStatsRepository, until P4c.
         val collector = GlobalContext.get().get<DetailedStatsCollector>()
         var stoppedServer = false
         try {
