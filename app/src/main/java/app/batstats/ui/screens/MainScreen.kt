@@ -74,6 +74,21 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
     )
     val useRail = LocalConfiguration.current.screenWidthDp >= RAIL_MIN_WIDTH_DP
 
+    // Each inset is owned by exactly one layer, so it's applied exactly once:
+    // - Top (status bar) is never claimed here — every screen inside NavGraph owns it via its own
+    //   TopAppBar/Scaffold, same as before this shell existed.
+    // - Bottom is claimed by whichever bar is showing: NavigationBar already reserves it inside
+    //   its own height in bar mode; nothing does in rail mode, so the shell claims it for content.
+    // - Start is claimed by NavigationRail itself in rail mode (a full-bleed edge column using its
+    //   own default Vertical + Start insets); in bar mode nothing else claims Horizontal so the
+    //   shell claims it for content, matching each screen's old standalone behavior.
+    // `consumeWindowInsets` below then stops the screens' own nested Scaffolds from seeing (and
+    // re-applying) whatever this shell already spent.
+    val shellInsets = WindowInsets.safeDrawing.only(
+        if (useRail) WindowInsetsSides.Bottom + WindowInsetsSides.End
+        else WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal
+    )
+
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -82,6 +97,7 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
         color = MaterialTheme.colorScheme.background,
     ) {
         Scaffold(
+            contentWindowInsets = shellInsets,
             bottomBar = {
                 if (!useRail) {
                     NavigationBar {
@@ -99,12 +115,10 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
             },
         ) { padding ->
             if (useRail) {
-                // Scaffold's default contentWindowInsets already padded `padding` on every side
-                // (there's no bottomBar to consume the bottom one). Applying that padding to this
-                // Row is the single place all 4 sides are accounted for, so the rail itself must
-                // not add its own (default: Vertical + Start) on top, or icons get extra gaps.
-                Row(Modifier.fillMaxSize().padding(padding)) {
-                    NavigationRail(windowInsets = WindowInsets(0)) {
+                Row(Modifier.fillMaxSize()) {
+                    // Full-bleed: keeps its own default (Vertical + Start) insets rather than
+                    // whatever the Row/Scaffold would otherwise hand it, so it isn't padded twice.
+                    NavigationRail {
                         TAB_ITEMS.forEach { tab ->
                             NavigationRailItem(
                                 selected = tab.route == topLevelBackStack.selectedTab,
@@ -115,10 +129,24 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
                             )
                         }
                     }
-                    NavGraph(topLevelBackStack, decorators, Modifier.weight(1f))
+                    NavGraph(
+                        topLevelBackStack,
+                        decorators,
+                        Modifier
+                            .weight(1f)
+                            .padding(padding)
+                            .consumeWindowInsets(padding)
+                            // Start is the rail's, not the content's, even though the rail didn't
+                            // consume it from the shared ambient insets itself.
+                            .consumeWindowInsets(WindowInsets.safeDrawing.only(WindowInsetsSides.Start)),
+                    )
                 }
             } else {
-                NavGraph(topLevelBackStack, decorators, Modifier.padding(padding))
+                NavGraph(
+                    topLevelBackStack,
+                    decorators,
+                    Modifier.padding(padding).consumeWindowInsets(padding),
+                )
             }
         }
     }

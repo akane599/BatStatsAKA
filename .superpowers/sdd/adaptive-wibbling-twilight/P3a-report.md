@@ -201,3 +201,70 @@ confirm nothing else regressed since navigation logic wasn't touched).
 Not re-verified on device (no window-size-class instrumentation exists to catch inset regressions
 automatically, and the emulator is in use) — recommend eyeballing the ≥600 dp rail layout in
 `/device-check` or a manual resize test before merge.
+
+## Fix round 2 (commit "P3a: single-owner window insets")
+
+Merged `feat/overhaul` (`git merge --ff-only`, fast-forwarded 28ee62f..d9911e4, picking up B1a's
+sampler/repository rewrite; no conflicts, unrelated files) before this round.
+
+Controller's emulator check on the merged code (merge d9911e4) found a real regression from round
+1's fix, which only addressed the rail's own double-inset: with the outer `Scaffold`'s default
+`contentWindowInsets` (all 4 sides, since round 1 didn't touch it) applied via a bare
+`Modifier.padding(padding)` — never `consumeWindowInsets` — every screen's own inner
+`Scaffold`/`TopAppBar` still saw the *full, unconsumed* ambient insets and reapplied them on top:
+status bar height doubled in both bar and rail mode (title sat a full status-bar height too low),
+and the same risk existed for the bottom/nav-bar inset.
+
+**Root cause:** `Modifier.padding(padding)` only adds visual space from a `PaddingValues` value;
+it does not touch the ambient `WindowInsets` composition locals that a *descendant's own* default
+`contentWindowInsets` reads. Without an accompanying `consumeWindowInsets`, any nested screen with
+its own Scaffold/TopAppBar independently sees — and reapplies — the same system inset.
+
+**Fix** (one inset, one owner):
+- Outer `Scaffold`'s `contentWindowInsets` now explicitly excludes Top always (screens own the
+  status bar via their own TopAppBar/Scaffold, exactly as before this shell existed) — computed as
+  `WindowInsets.safeDrawing.only(Bottom + Horizontal)` in bar mode, `Bottom + End` in rail mode
+  (Start is the rail's, see below).
+- Content (`NavGraph`)'s modifier is now `.padding(padding).consumeWindowInsets(padding)` in both
+  modes, so nested screens' own Scaffolds see zero for whatever the shell already spent (Bottom,
+  Horizontal/End) and apply only Top, exactly once.
+- `NavigationRail` no longer gets `windowInsets = WindowInsets(0)` (round 1's fix) — it now keeps
+  its own default (Vertical + Start) and acts as a genuine full-bleed edge column, since the outer
+  Scaffold no longer contributes Start to the Row at all. The content side gets an extra explicit
+  `.consumeWindowInsets(WindowInsets.safeDrawing.only(Start))` so its own nested screens don't also
+  see a stray Start inset now that the rail visually owns that edge.
+- Bar mode's `NavigationBar` was already correct (Scaffold negotiates bottomBar-height-vs-insets
+  internally, which was never the bug) and needed no change beyond the shared consume fix.
+
+```
+flock /tmp/batstats-gradle.lock ./gradlew :app:assembleDebug :app:testDebugUnitTest --console=plain -q
+```
+Exit 0. `grep -E "error:|FAILED|e: |warning: \["`: no matches. Full `testDebugUnitTest` suite
+(all classes, not just `TopLevelBackStackTest`) passed — navigation logic untouched by this round,
+this was a pure layout/inset fix.
+
+**On-device verification** (emulator free this round):
+```
+flock /tmp/batstats-gradle.lock ./gradlew :app:installDebug --console=plain -q
+adb shell am start -n org.mlm.batstats.debug/app.batstats.battery.BatteryMainActivity
+adb exec-out screencap -p > <scratch>/bar.png      # 1080x2400 (bar mode)
+adb shell wm size 1800x2400
+adb shell am start -n org.mlm.batstats.debug/app.batstats.battery.BatteryMainActivity
+adb exec-out screencap -p > <scratch>/rail.png     # 1800x2400 (rail mode)
+adb shell wm size reset
+```
+Confirmed reset with `adb shell wm size` → `Physical size: 1080x2400`.
+
+Screenshot observations:
+- **Bar mode (1080×2400):** "BatStats" title sits directly under the status bar clock/icons with a
+  normal single gap — no longer pushed down an extra status-bar height. Bottom `NavigationBar`
+  (Now/History/Apps/Settings) sits correctly above the system gesture-bar pill, single gap, content
+  cards run cleanly up to the bar with no extra dead space and nothing clipped behind it.
+- **Rail mode (1800×2400):** Same single-gap title placement under the status bar. `NavigationRail`
+  is a full-bleed left column: its items start below the status bar (correct Top handling from its
+  own default insets) and the rail's left edge sits flush at x=0 (correct Start handling). Content
+  begins immediately to the right of the rail with no gap and no overlap. Bottom gesture-bar pill
+  has normal single spacing under the content.
+
+No further concerns from this round; both modes match the "each inset applied exactly once"
+principle.
