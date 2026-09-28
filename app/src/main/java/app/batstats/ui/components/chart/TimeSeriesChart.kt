@@ -190,9 +190,9 @@ private fun Plot(
             Modifier
                 .fillMaxSize()
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-                .pointerInput(scrub) {
+                .pointerInput(scrub, selection) {
                     detectTapGestures { offset ->
-                        if (scrub.timeMs != null) scrub.clear() else scrub.scrubTo(layoutState.value.xMap.time(offset.x))
+                        scrub.toggleAt(layoutState.value.xMap.time(offset.x), shownHere = selection.value != null)
                     }
                 }
                 .pointerInput(scrub) {

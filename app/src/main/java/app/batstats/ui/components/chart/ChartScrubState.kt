@@ -49,6 +49,15 @@ class ChartScrubState(initialTimeMs: Long? = null) {
     }
 }
 
+/**
+ * A tap on a chart: hides the cursor when [shownHere] (this chart draws it), else puts it at [timeMs]. A cursor this
+ * chart doesn't show (e.g. set outside its span, or by a chart sharing the state) moves here instead of being cleared
+ * invisibly.
+ */
+internal fun ChartScrubState.toggleAt(timeMs: Long, shownHere: Boolean) {
+    if (shownHere) clear() else scrubTo(timeMs)
+}
+
 /** A [ChartScrubState] that survives recomposition; [initialTimeMs] places the cursor (e.g. in previews). */
 @Composable
 fun rememberChartScrubState(initialTimeMs: Long? = null): ChartScrubState = remember { ChartScrubState(initialTimeMs) }

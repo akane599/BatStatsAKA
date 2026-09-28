@@ -84,6 +84,22 @@ class ChartScrubStateTest {
     }
 
     @Test
+    fun aTapClearsOnlyACursorThisChartShows() {
+        val series = listOf(ChartSeries("x", points(1.0, 2.0, 3.0, 4.0), solid))
+        val model = ChartModel.of(series, window = null, references = emptyList())
+        fun tap(state: ChartScrubState, atMs: Long) = state.toggleAt(atMs, shownHere = selectionAt(state.timeMs, model, series) != null)
+        // Set outside this chart's span (e.g. through a shared state): invisible here, so the tap moves it in.
+        val state = ChartScrubState(initialTimeMs = 10_000)
+        tap(state, 1_500)
+        assertEquals(1_500L, state.timeMs)
+        // Visible now: the next tap clears it, and the one after shows it again.
+        tap(state, 2_000)
+        assertNull(state.timeMs)
+        tap(state, 2_000)
+        assertEquals(2_000L, state.timeMs)
+    }
+
+    @Test
     fun oneStateScrubsTwoChartsEachAtItsOwnReadings() {
         val state = ChartScrubState(initialTimeMs = 2_100)
         val everySecond = listOf(ChartSeries("Current", points(1.0, 2.0, 3.0, 4.0), solid))

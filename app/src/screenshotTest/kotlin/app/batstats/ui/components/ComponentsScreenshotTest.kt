@@ -198,6 +198,43 @@ fun StatCellNarrowPreview() {
     }
 }
 
+/** One Now readout row; the templates are the widest values each readout expects. */
+@Composable
+private fun LiveReadouts(current: String, power: String, temperature: String, voltage: String, charging: Boolean) {
+    val colors = MaterialTheme.chartColors
+    Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
+        StatCell(
+            "Current",
+            current,
+            Modifier.weight(1f),
+            unit = "mA",
+            indicator = if (charging) colors.charge else colors.drain,
+            sizingTemplate = "−8,888",
+        )
+        StatCell("Power", power, Modifier.weight(1f), unit = "W", sizingTemplate = "−88.88")
+        StatCell("Temp.", temperature, Modifier.weight(1f), unit = "°C", sizingTemplate = "−88.8")
+        StatCell("Voltage", voltage, Modifier.weight(1f), unit = "V", sizingTemplate = "8.88")
+    }
+}
+
+/**
+ * The same live readouts a few minutes apart (discharging, then fast charging past 10 W): with sizing templates each
+ * cell keeps its size, unit position and height while digits come and go, so both panels match.
+ */
+@PreviewTest
+@NarrowPreviews
+@Composable
+fun StatCellLivePreview() {
+    Frame {
+        Panel(title = "Discharging") {
+            LiveReadouts("−412", "−1.61", "31.5", "3.91", charging = false)
+        }
+        Panel(title = "Charging") {
+            LiveReadouts("+2,480", "+12.40", "38.0", "4.35", charging = true)
+        }
+    }
+}
+
 private fun fakeIcon(color: Color): ImageBitmap {
     val bitmap = ImageBitmap(96, 96)
     Canvas(bitmap).drawCircle(Offset(48f, 48f), 48f, Paint().apply { this.color = color })

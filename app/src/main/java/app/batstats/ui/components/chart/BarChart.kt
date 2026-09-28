@@ -320,7 +320,10 @@ private fun Bars(
 
 /**
  * One horizontal bar split into proportional parts (e.g. an app's foreground / background / cached time), with a
- * legend of label and formatted value per part. The spoken description lists every part.
+ * legend of label and formatted value per part. The spoken description lists every part. A part with a non-finite
+ * value (unknown) is left out; a negative one counts as 0.
+ *
+ * @param emptyText the spoken description when no part is left (the bar shows its empty track).
  */
 @Composable
 fun BreakdownBar(
@@ -328,12 +331,12 @@ fun BreakdownBar(
     modifier: Modifier = Modifier,
     format: ValueFormatter = NumberFormatter(),
     showLegend: Boolean = true,
+    emptyText: String = stringResource(R.string.component_chart_empty),
 ) {
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     val itemTemplate = stringResource(R.string.component_breakdown_item)
-    val summary = remember(segments, format, itemTemplate) {
-        segments.joinToString(", ") { itemTemplate.format(it.label, format.format(it.value)) }
-    }
+    val parts = remember(segments) { listedParts(segments) }
+    val summary = remember(parts, format, itemTemplate, emptyText) { breakdownSummary(parts, format, itemTemplate, emptyText) }
     Column(
         modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = summary },
         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
@@ -344,21 +347,21 @@ fun BreakdownBar(
                 .height(BreakdownHeight)
                 .clip(MaterialTheme.shapes.extraSmall)
                 .drawWithCache {
-                    val total = segments.sumOf { barValue(it.value) }
-                    val parts = segments.filter { barValue(it.value) > 0.0 }
+                    val drawn = parts.filter { it.value > 0.0 }
+                    val total = drawn.sumOf { it.value }
                     val gap = SegmentGap.toPx()
-                    val usable = max(0f, size.width - gap * (parts.size - 1).coerceAtLeast(0))
-                    val lefts = FloatArray(parts.size)
-                    val widths = FloatArray(parts.size)
+                    val usable = max(0f, size.width - gap * (drawn.size - 1).coerceAtLeast(0))
+                    val lefts = FloatArray(drawn.size)
+                    val widths = FloatArray(drawn.size)
                     var x = 0f
-                    parts.forEachIndexed { i, part ->
+                    drawn.forEachIndexed { i, part ->
                         lefts[i] = x
-                        widths[i] = (barValue(part.value) / total * usable).toFloat()
+                        widths[i] = (part.value / total * usable).toFloat()
                         x += widths[i] + gap
                     }
                     onDrawBehind {
-                        if (parts.isEmpty()) drawRect(track)
-                        for (i in parts.indices) drawRect(parts[i].color, Offset(lefts[i], 0f), Size(widths[i], size.height))
+                        if (drawn.isEmpty()) drawRect(track)
+                        for (i in drawn.indices) drawRect(drawn[i].color, Offset(lefts[i], 0f), Size(widths[i], size.height))
                     }
                 },
         )
@@ -367,7 +370,7 @@ fun BreakdownBar(
                 horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
             ) {
-                segments.forEach { segment ->
+                parts.forEach { segment ->
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
@@ -385,5 +388,21 @@ fun BreakdownBar(
     }
 }
 
-/** A stack or breakdown value as drawn: negative, NaN and infinite values count as 0. */
+/** A stack value as drawn: negative, NaN and infinite values count as 0. */
 private fun barValue(value: Double): Double = if (value.isFinite() && value > 0.0) value else 0.0
+
+/** The parts a [BreakdownBar] shows and speaks: non-finite (unknown) values left out, negatives as 0. */
+internal fun listedParts(segments: List<BreakdownSegment>): List<BreakdownSegment> =
+    segments.filter { it.value.isFinite() }.map { if (it.value < 0.0) it.copy(value = 0.0) else it }
+
+/** "Label: value" for every listed part, or [emptyText] when there is none. */
+internal fun breakdownSummary(
+    parts: List<BreakdownSegment>,
+    format: ValueFormatter,
+    itemTemplate: String,
+    emptyText: String,
+): String = if (parts.isEmpty()) {
+    emptyText
+} else {
+    parts.joinToString(", ") { itemTemplate.format(it.label, format.format(it.value)) }
+}

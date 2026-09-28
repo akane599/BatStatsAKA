@@ -49,6 +49,37 @@ class ValueLineFitTest {
     @Test
     fun unboundedWidthKeepsFullSize() {
         assertEquals(ValueLineFit(1f, unitBelow = false), fitValueLine(10_000, 40, 8, Constraints.Infinity))
+        assertEquals(ValueLineFit(1f, unitBelow = false), fitValueLine(10_000, 40, 8, Constraints.Infinity, templateWidth = 100))
+    }
+
+    @Test
+    fun aTemplatePinsScaleAndPlacementForEveryLiveValueThatFitsIt() {
+        // The template (100 wide, e.g. "−8,888") fits beside its unit at 80 %; every live value keeps that.
+        val pinned = ValueLineFit(0.8f, unitBelow = false)
+        for (live in listOf(40, 60, 80, 100)) assertEquals(pinned, fitValueLine(live, 40, 8, maxWidth = 130, templateWidth = 100))
+        // Without it a short value renders larger: the readout would change size as its digits change.
+        assertEquals(ValueLineFit(1f, unitBelow = false), fitValueLine(60, 40, 8, maxWidth = 130))
+    }
+
+    @Test
+    fun aTemplateKeepsAStackedUnitStackedSoTheHeightStays() {
+        // The template needs its unit below at 90 %; a short live value alone would fit inline (a shorter cell).
+        val pinned = ValueLineFit(0.9f, unitBelow = true)
+        assertEquals(pinned, fitValueLine(50, 40, 8, maxWidth = 90, templateWidth = 100))
+        assertEquals(pinned, fitValueLine(100, 40, 8, maxWidth = 90, templateWidth = 100))
+        assertEquals(ValueLineFit(0.9f, unitBelow = false), fitValueLine(50, 40, 8, maxWidth = 90))
+    }
+
+    @Test
+    fun aValueWiderThanItsTemplateStillFits() {
+        // Within the template fit's slack (129 of 130) nothing changes...
+        assertEquals(ValueLineFit(1f, unitBelow = false), fitValueLine(81, 40, 8, maxWidth = 130, templateWidth = 80))
+        // ...beyond it the value gets its own fit instead of overflowing: here its unit stacks...
+        assertEquals(ValueLineFit(1f, unitBelow = true), fitValueLine(120, 40, 8, maxWidth = 130, templateWidth = 80))
+        // ...and far beyond every step it shrinks to fit exactly.
+        val huge = fitValueLine(260, 40, 8, maxWidth = 130, templateWidth = 80)
+        assertTrue(huge.unitBelow)
+        assertEquals(0.5f, huge.scale, 1e-6f)
     }
 
     @Test
