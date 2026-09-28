@@ -161,4 +161,57 @@ class BatteryStatsParserTest {
         assertFalse(s.hasValidWindow)
     }
 
+    private val streamingFixtures = listOf(
+        "9,0,l,pws,0.75\n9,0,l,dc,0,0,120,0",
+        "9,0,l,dc,0,0,1e300,1e300",
+        """
+            9,10001,l,jb,"job,with,commas",12345,7,4321,3
+            9,10001,l,sy,authority,7654,2,1234,1
+        """.trimIndent(),
+        "9,0,l,m," + List(21) { "0" }.joinToString(","),
+        """
+            9,0,l,gble,100,20,2,1,30
+            9,10001,l,ble,1000,2000,20,1,3000
+            9,10001,l,blem,120,4,2,140,10,3,1,30,10,20,10
+        """.trimIndent(),
+        """
+            9,0,i,uid,10001,example.app
+            9,10001,l,pwi,uid,1.5,0,0.5,2.0
+            9,10001,l,cpu,100,200,0
+            9,10001,l,fg,1500,2
+            9,10001,l,fgs,2000,1
+            9,10001,l,st,1000,2000,3000,4000,5000,6000,7000
+            9,10001,l,nt,10,20,30,40,1,2,3,4,2000000,5,60,70
+        """.trimIndent(),
+        """
+            9,10001,l,pwi,uid,3.0,0,0,0
+            9,0,i,uid,10001,example.one
+            9,0,i,uid,10001,example.two
+        """.trimIndent(),
+        "9,0,i,uid,10001,example.app\n9,110001,l,pwi,uid,1.0,0,0,0",
+        "9,10001,l,wua,tag,8",
+        "9,10001,l,wl,tag,100,f,2,0,60,100,200,p,3,0,100,200,50,bp,1,0,50,50,300,w,4,0,100,300",
+        "9,0,l,bt,2,60000,50000,100000,80000,1700000000000,30000,20000,4000,3800000,3900000,10000",
+        "9,0,l,bt,2,60000",
+        "9,0,l,bt,2,100,200,100,200,1700000000000",
+        "9,10001,l,pwi,uid,0,0,0,0",
+        """
+            9,10001,l,pwi,uid,1.5,0,0,0
+            9,10001,l,pwi,uid,1.5,0,0,0
+            9,0,l,gcf,100000,200000
+            9,10001,l,ctf,A,2,100,200,50,100
+            9,10001,l,ctf,T,2,50,100,20,40
+        """.trimIndent(),
+        "8,10001,l,pwi,uid,10\n9,10001,u,pwi,uid,20\n9,10001,l,jb,\"unfinished,100,2",
+        "9,0,h,1234:B|100,0,i,uid,10001,example.app\n9,10001,l,pwi,uid,1.0,0,0,0",
+    )
+
+    @Test fun streamingAndStringParsesAgreeOnEveryFixture() {
+        streamingFixtures.forEach { raw ->
+            // capturedAt defaults to the wall-clock time of each call; normalize it before comparing.
+            val fromString = BatteryStatsParser.parseCheckin(raw).copy(capturedAt = 0)
+            val fromSequence = BatteryStatsParser.parseCheckin(raw.lineSequence()).copy(capturedAt = 0)
+            assertEquals("Mismatch for fixture: $raw", fromString, fromSequence)
+        }
+    }
 }

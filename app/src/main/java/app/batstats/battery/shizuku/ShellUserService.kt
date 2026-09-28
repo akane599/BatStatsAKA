@@ -15,8 +15,7 @@ class ShellUserService : Binder() {
         const val TRANSACTION_CANCEL = 3
         const val TRANSACTION_DESTROY = 16777114
         private val COMMANDS = setOf(
-            "dumpsys batterystats -c --charged", "dumpsys batterystats --reset",
-            "dumpsys deviceidle", "dumpsys power", "dumpsys battery"
+            "dumpsys batterystats -c --charged", "dumpsys battery"
         )
     }
 

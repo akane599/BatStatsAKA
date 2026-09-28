@@ -43,7 +43,7 @@ class ShizukuBridge(private val context: Context) {
 
         const val PERMISSION_REQUEST_CODE = 1001
 
-        private const val SERVICE_VERSION = 4
+        private const val SERVICE_VERSION = 5
 
         private const val BIND_TIMEOUT_MS = 10_000L
         private const val DEFAULT_CMD_TIMEOUT_MS = 25_000L
@@ -236,7 +236,7 @@ class ShizukuBridge(private val context: Context) {
                 )
 
             val first = execute(binder, cmd, timeoutMs)
-            if (cmd.contains("--reset") || first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
+            if (first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
                 return@withContext first
             }
 
