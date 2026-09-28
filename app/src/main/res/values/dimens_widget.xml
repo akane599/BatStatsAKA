@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static mirror of ui/theme/Shape.kt / Spacing.kt / Type.kt for the RemoteViews widgets (no Compose there). -->
+<resources>
+    <!-- Shape.kt BatShapes.large (20dp) — "hero panels", the tier a home-screen widget is closest to. -->
+    <dimen name="widget_corner_radius">20dp</dimen>
+    <!-- Spacing.kt Spacing.xs (8dp) — "the gap inside a group"; the widget's outer content padding. -->
+    <dimen name="widget_padding">8dp</dimen>
+    <!-- Pre-existing 20dp icon size; no ui/theme spacing/shape token covers icon sizing. -->
+    <dimen name="widget_icon_size">20dp</dimen>
+    <!-- Spacing.kt Spacing.xs (8dp). -->
+    <dimen name="widget_icon_margin_end">8dp</dimen>
+    <!-- Spacing.kt Spacing.xs (8dp). -->
+    <dimen name="widget_value_margin_top">8dp</dimen>
+    <!-- Spacing.kt Spacing.xxs (4dp). -->
+    <dimen name="widget_subtitle_margin_top">4dp</dimen>
+    <!-- Type.kt numericLabel (labelMedium-based, 12sp) — closest token to a widget eyebrow caption. -->
+    <dimen name="widget_title_text_size">12sp</dimen>
+    <dimen name="widget_value_text_size_max">24sp</dimen>
+    <dimen name="widget_value_text_size_min">12sp</dimen>
+    <!-- Type.kt labelSmall (M3 default, 11sp) — matches the widget's caption size exactly. -->
+    <dimen name="widget_subtitle_text_size">11sp</dimen>
+</resources>

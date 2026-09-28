@@ -9,10 +9,13 @@ import android.content.Context
 import android.content.Intent
 import android.view.View
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import app.batstats.R
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.db.BatterySample
+import app.batstats.battery.measurement.BatteryReading
+import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.util.TimeEstimator
 import app.batstats.settings.useFahrenheit
 import java.text.DateFormat
@@ -32,7 +35,33 @@ object WidgetUpdater {
     const val ACTION_REFRESH = "app.batstats.battery.widget.ACTION_REFRESH"
 
     /** The widgets' visible text; the service's update gate compares it to skip unchanged pushes. */
-    data class Content(val level: String, val temperature: String, val estimate: String, val caption: String)
+    data class Content(
+        val level: String,
+        val temperature: String,
+        val estimate: String,
+        val caption: String,
+        val direction: Direction,
+    )
+
+    /**
+     * Icon accent for the level and time widgets: energy direction, mirroring
+     * `ui/screens/now/NowHero.directionColor`. The temperature widget ignores this and always uses [HEAT].
+     */
+    enum class Direction(val colorRes: Int) {
+        CHARGE(R.color.widget_charge),
+        DRAIN(R.color.widget_drain),
+        HEAT(R.color.widget_heat),
+        NEUTRAL(R.color.widget_on_surface_variant),
+    }
+
+    /** At or below this level while discharging, the icon turns to [Direction.HEAT] (mirrors NowHero.LOW_LEVEL). */
+    internal const val LOW_BATTERY_LEVEL = 15
+
+    internal fun directionFor(power: PowerState, level: Int?): Direction = when (power) {
+        PowerState.CHARGING, PowerState.PLUGGED -> Direction.CHARGE
+        PowerState.DISCHARGING -> if (level != null && level <= LOW_BATTERY_LEVEL) Direction.HEAT else Direction.DRAIN
+        PowerState.UNKNOWN -> Direction.NEUTRAL
+    }
 
     private val providers = listOf(BatteryLevelWidget::class.java, BatteryTempWidget::class.java, BatteryTimeWidget::class.java)
 
@@ -77,6 +106,8 @@ object WidgetUpdater {
             estimate = if (monitoring) TimeEstimator.etaString(context, sample) ?: "—" else "—",
             caption = if (monitoring) context.getString(R.string.widget_read_at, freshness)
                 else context.getString(R.string.widget_paused_at, freshness),
+            direction = sample?.let { directionFor(BatteryReading.powerState(it.status, it.plugged), it.levelPercent) }
+                ?: Direction.NEUTRAL,
         )
     }
 
@@ -90,9 +121,18 @@ object WidgetUpdater {
                 BatteryTempWidget::class.java -> R.string.widget_temperature to content.temperature
                 else -> R.string.widget_estimate to content.estimate
             }
+            // Temperature isn't an energy direction: it always reads as heat (matches ChartColors.temperature).
+            val icon = when (provider) {
+                BatteryLevelWidget::class.java -> R.drawable.ic_battery
+                BatteryTempWidget::class.java -> R.drawable.ic_thermometer
+                else -> R.drawable.ic_time
+            }
+            val tint = if (provider == BatteryTempWidget::class.java) R.color.widget_heat else content.direction.colorRes
             val views = RemoteViews(context.packageName, R.layout.widget_common).apply {
                 setTextViewText(R.id.title, context.getString(title))
                 setTextViewText(R.id.value, value)
+                setImageViewResource(R.id.icon, icon)
+                setInt(R.id.icon, "setColorFilter", ContextCompat.getColor(context, tint))
                 setViewVisibility(R.id.subtitle, View.VISIBLE)
                 setTextViewText(R.id.subtitle, content.caption)
                 setContentDescription(R.id.root, "${context.getString(title)}: $value. ${content.caption}")

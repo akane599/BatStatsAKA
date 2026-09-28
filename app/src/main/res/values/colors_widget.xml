@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Static mirror of ui/theme/Color.kt's BatPalette for the 3 RemoteViews home-screen widgets, which
+  can't read the Compose theme. Keep in sync by hand if BatPalette's values change.
+-->
+<resources>
+    <!-- BatPalette.ContainerHigh (Color.kt) — same tonal tier ui/screens/now/NowHero's hero Panel uses
+         (MaterialTheme.colorScheme.surfaceContainerHigh). Widget background. -->
+    <color name="widget_background">#FF1C232D</color>
+    <!-- BatPalette.OnSurface (Color.kt) — the live readout value. -->
+    <color name="widget_on_surface">#FFE6EAF0</color>
+    <!-- BatPalette.OnSurfaceVariant (Color.kt) — title/subtitle text, and the icon's neutral (no-reading) tint. -->
+    <color name="widget_on_surface_variant">#FF9AA4B2</color>
+    <!-- BatPalette.Charge (Color.kt) — energy flowing in: charging/plugged icon tint. -->
+    <color name="widget_charge">#FFC8F25C</color>
+    <!-- BatPalette.Drain (Color.kt) — energy flowing out: discharging icon tint. -->
+    <color name="widget_drain">#FFFFB35C</color>
+    <!-- BatPalette.Heat (Color.kt) — low-battery-while-discharging icon tint, and the temperature widget's
+         fixed icon tint (matches ChartColors.temperature = heat). -->
+    <color name="widget_heat">#FFFF6B6B</color>
+</resources>
