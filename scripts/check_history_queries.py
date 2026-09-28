@@ -121,3 +121,33 @@ with sqlite3.connect(':memory:') as db:
     db.execute(query('purgeBefore'), {'epochDay': 0})
     assert [r[0] for r in db.execute('SELECT epochDay FROM daily_summaries ORDER BY epochDay')] == [0, 5], 'Day retention wrong'
 print('PASS actual v5 DAO SQL: snapshot pruning keeps the open baseline + last 3 with uid cascade, ranked usage, export join, FK/cascade, orphan and day retention')
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for i in range(12):
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,capacityEstimateMah,capacityConfidence,capacityBasis) VALUES(?,'DISCHARGE',?,?,?,?,?)",
+                   ('s%02d' % i, i * 1000, i * 1000 + 500, None if i % 3 == 0 else 4000 + i, None if i % 3 == 0 else 'HIGH', 'COUNTER_SPAN'))
+    trend = db.execute(query('capacityEstimates'), {'limit': 5}).fetchall()
+    assert [r['sessionId'] for r in trend] == ['s11', 's10', 's08', 's07', 's05'], 'Trend not newest-first estimates only, or unbounded'
+    assert set(trend[0].keys()) == {'sessionId', 'type', 'startTime', 'endTime', 'lastSampleTime', 'startLevel', 'endLevel',
+                                    'capacityEstimateMah', 'capacityConfidence', 'capacityBasis'}, 'Trend projection columns drifted'
+    # Per-session delete (SessionDao.deleteSession): snapshots, samples, then the row; uids and app usage cascade.
+    snapshot_id = db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('s07','BASELINE',1)").lastrowid
+    db.execute("INSERT INTO app_snapshot_uids(snapshotId,uid,packageName,powerMah) VALUES(?,10001,'a',1.0)", (snapshot_id,))
+    db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('s08','BASELINE',2)")
+    db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('s07',0,10001,'a',1.0,0,'DELTA')")
+    db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('s08',0,10001,'a',1.0,0,'DELTA')")
+    for at, session in [(7100, 's07'), (7200, 's07'), (8100, 's08')]:
+        db.execute('INSERT INTO battery_samples(timestamp,status,screenOn,sessionId) VALUES(?,3,1,?)', (at, session))
+    for method in ('deleteSessionSnapshots', 'deleteSessionSamples', 'deleteSessionRow'):
+        db.execute(query(method), {'id': 's07'})
+    counts = {table: db.execute("SELECT COUNT(*) FROM %s" % table).fetchone()[0]
+              for table in ('charge_sessions', 'app_snapshots', 'app_snapshot_uids', 'session_app_usage', 'battery_samples')}
+    assert counts == {'charge_sessions': 11, 'app_snapshots': 1, 'app_snapshot_uids': 0, 'session_app_usage': 1, 'battery_samples': 1}, \
+        'Per-session delete missed rows or touched another session: %s' % counts
+print('PASS actual trend/delete SQL: bounded newest-first estimate projection, per-session delete with snapshot-uid and app-usage cascade')
