@@ -5,18 +5,20 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.tooling.preview.PreviewLightDark
 import app.batstats.ui.theme.MainTheme
 
 // Preview names must not contain ".": the engine keeps only the text after the last one ("Font 1.5" -> "5_….png").
+// The app is dark-only, so the night uiMode flag is repurposed as the OLED switch: "Oled" variants set it and
+// ScreenshotTheme / MainTheme(oled = isSystemInDarkTheme()) read it.
 
-/** Component variants: light, dark, and 1.5× font. */
-@PreviewLightDark
+/** Component variants: default (dark), OLED black, and 1.5× font. */
+@Preview(name = "Default")
+@Preview(name = "Oled", uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL)
 @Preview(name = "LargeFont", fontScale = 1.5f)
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.ANNOTATION_CLASS)
 annotation class ComponentPreviews
 
-/** Screen matrix: widths 400/610/900 dp × heights 400/500/1000 dp, plus dark and 1.5× font on a 400×500 phone. */
+/** Screen matrix: widths 400/610/900 dp × heights 400/500/1000 dp, plus OLED black and 1.5× font on a 400×500 phone. */
 @Preview(name = "W400H400", widthDp = 400, heightDp = 400)
 @Preview(name = "W400H500", widthDp = 400, heightDp = 500)
 @Preview(name = "W400H1000", widthDp = 400, heightDp = 1000)
@@ -27,7 +29,7 @@ annotation class ComponentPreviews
 @Preview(name = "W900H500", widthDp = 900, heightDp = 500)
 @Preview(name = "W900H1000", widthDp = 900, heightDp = 1000)
 @Preview(
-    name = "Dark",
+    name = "Oled",
     widthDp = 400,
     heightDp = 500,
     uiMode = Configuration.UI_MODE_NIGHT_YES or Configuration.UI_MODE_TYPE_NORMAL,
@@ -46,10 +48,10 @@ annotation class PhonePreview
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.ANNOTATION_CLASS)
 annotation class TallPhonePreview
 
-/** App theme as the screenshot suite renders it; [oledBlack] forces the OLED dark variant. */
+/** App theme as the screenshot suite renders it; [oledBlack] (or an "Oled" preview variant) forces pure black. */
 @Composable
 fun ScreenshotTheme(oledBlack: Boolean = false, content: @Composable () -> Unit) {
-    MainTheme(darkTheme = oledBlack || isSystemInDarkTheme(), oledBlack = oledBlack) {
+    MainTheme(oled = oledBlack || isSystemInDarkTheme()) {
         Surface(content = content)
     }
 }

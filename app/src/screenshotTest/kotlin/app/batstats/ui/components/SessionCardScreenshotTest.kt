@@ -30,7 +30,7 @@ private val observedDischarge = ChargeSession(
 @ComponentPreviews
 @Composable
 fun SessionCardObservedPreview() {
-    MainTheme(darkTheme = isSystemInDarkTheme()) {
+    MainTheme(oled = isSystemInDarkTheme()) {
         Surface { SessionCard(observedDischarge) }
     }
 }
@@ -39,7 +39,7 @@ fun SessionCardObservedPreview() {
 @ComponentPreviews
 @Composable
 fun SessionCardRecordingPreview() {
-    MainTheme(darkTheme = isSystemInDarkTheme()) {
+    MainTheme(oled = isSystemInDarkTheme()) {
         Surface {
             SessionCard(
                 observedDischarge.copy(type = SessionType.CHARGE, endTime = null, endLevel = null, startLevel = 23),
