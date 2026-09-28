@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared UI components (ui/components/**). Screen strings live in strings_<screen>.xml. -->
+<resources>
+    <string name="component_chart_empty">No readings yet</string>
+    <string name="component_chart_summary_range">From %1$s to %2$s.</string>
+    <string name="component_chart_summary_series">%1$s: latest %2$s, low %3$s, high %4$s.</string>
+    <string name="component_bar_summary">Highest: %1$s, %2$s. Latest: %3$s, %4$s.</string>
+    <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_info_open">About %1$s</string>
+    <string name="component_no_value" translatable="false">—</string>
+</resources>

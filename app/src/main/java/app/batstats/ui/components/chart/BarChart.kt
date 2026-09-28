@@ -1,0 +1,349 @@
+package app.batstats.ui.components.chart
+
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import app.batstats.R
+import app.batstats.ui.theme.chartColors
+import app.batstats.ui.theme.numericLabel
+import app.batstats.ui.theme.spacing
+import java.text.NumberFormat
+import kotlin.math.ceil
+import kotlin.math.max
+import kotlin.math.min
+
+private val MaxBarWidth = 24.dp
+private val BarRadius = 4.dp
+private val SegmentGap = 2.dp
+private val BarGridWidth = 1.dp
+private val BarLabelGap = 6.dp
+private val BreakdownHeight = 12.dp
+private const val BAR_FILL_RATIO = 0.6f
+private const val DIM_ALPHA = 0.38f
+private const val MIN_BAR_TICKS = 3
+private const val MAX_BAR_TICKS = 5
+private const val BAR_TICK_SPACING = 1.8f
+
+/** One bar: [values] stack bottom-up in [BarSegment] order (negatives count as 0). */
+@Immutable
+data class BarEntry(val label: String, val values: List<Double>)
+
+/** A stack layer's legend name and color (e.g. "Screen on" / "Screen off"). */
+@Immutable
+data class BarSegment(val label: String, val color: Color)
+
+/** One part of a [BreakdownBar]. */
+@Immutable
+data class BreakdownSegment(val label: String, val value: Double, val color: Color)
+
+/** Default sizes for [BarChart]. */
+object BarChartDefaults {
+    /** Plot plus axis labels; the legend row sits above and is extra. */
+    val Height: Dp = 160.dp
+}
+
+/**
+ * Stacked bars over categories (e.g. one per day: screen-on vs screen-off drain), on a value axis from zero.
+ * Bars are at most 24 dp wide with a 4 dp rounded top and a 2 dp gap between layers; category labels thin out
+ * (keeping the newest, rightmost) when they would collide. A legend row appears for two or more [segments].
+ *
+ * Selection is optional: pass [onSelect] to make bars tappable (tapping the selected bar clears it). With a
+ * [selectedIndex] the other bars dim and the selected total is labelled on its cap.
+ *
+ * @param entries the bars, oldest first (the newest keeps its label when labels thin out).
+ * @param unit caption above the value axis.
+ * @param format formats the cap label and the spoken summary.
+ * @param contentDescription overrides the default summary (highest and latest total).
+ */
+@Composable
+fun BarChart(
+    entries: List<BarEntry>,
+    segments: List<BarSegment>,
+    modifier: Modifier = Modifier,
+    chartHeight: Dp = BarChartDefaults.Height,
+    unit: String = "",
+    format: ValueFormatter = NumberFormatter(unit),
+    selectedIndex: Int? = null,
+    onSelect: ((Int?) -> Unit)? = null,
+    emptyText: String = stringResource(R.string.component_chart_empty),
+    contentDescription: String? = null,
+) {
+    // Keep one instance while the content is equal, so the draw cache survives unrelated recompositions.
+    val bars = remember(entries) { entries }
+    val layers = remember(segments) { segments }
+    val totals = remember(bars) { bars.map { entry -> entry.values.sumOf { max(it, 0.0) } } }
+    val hasData = totals.any { it > 0.0 }
+    val template = stringResource(R.string.component_bar_summary)
+    val summary = contentDescription ?: remember(bars, totals, format, template, emptyText) {
+        if (!hasData) {
+            emptyText
+        } else {
+            val highest = totals.indices.maxBy { totals[it] }
+            template.format(bars[highest].label, format.format(totals[highest]), bars.last().label, format.format(totals.last()))
+        }
+    }
+    Column(modifier.fillMaxWidth().clearAndSetSemantics { this.contentDescription = summary }) {
+        if (layers.size > 1) {
+            Row(
+                Modifier.padding(bottom = MaterialTheme.spacing.xs),
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md),
+            ) {
+                layers.forEach { segment -> LegendItem(segment.label, key = { LegendSwatch(segment.color) }) }
+            }
+        }
+        Box(Modifier.fillMaxWidth().height(chartHeight)) {
+            if (hasData) {
+                Bars(bars, layers, totals, unit, format, selectedIndex, onSelect)
+            } else {
+                Text(
+                    emptyText,
+                    modifier = Modifier.align(Alignment.Center),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/** Plot geometry the tap handler needs; written by the draw cache. */
+private class BarHitArea {
+    var left = 0f
+    var slot = 1f
+}
+
+@Composable
+private fun Bars(
+    entries: List<BarEntry>,
+    segments: List<BarSegment>,
+    totals: List<Double>,
+    unit: String,
+    format: ValueFormatter,
+    selectedIndex: Int?,
+    onSelect: ((Int?) -> Unit)?,
+) {
+    val colors = MaterialTheme.chartColors
+    val labelStyle = MaterialTheme.typography.numericLabel.copy(color = colors.axisLabel)
+    val capStyle = MaterialTheme.typography.numericLabel.copy(color = MaterialTheme.colorScheme.onSurface)
+    val textMeasurer = rememberTextMeasurer()
+    val hit = remember { BarHitArea() }
+    val currentSelected by rememberUpdatedState(selectedIndex)
+    val currentOnSelect by rememberUpdatedState(onSelect)
+    val selectable = onSelect != null
+    val tap = if (selectable) {
+        Modifier.pointerInput(entries.size) {
+            detectTapGestures { offset ->
+                val index = ((offset.x - hit.left) / hit.slot).toInt()
+                if (offset.x >= hit.left && index in entries.indices) {
+                    currentOnSelect?.invoke(if (index == currentSelected) null else index)
+                }
+            }
+        }
+    } else {
+        Modifier
+    }
+    Spacer(
+        Modifier
+            .fillMaxSize()
+            .then(tap)
+            .drawWithCache {
+                val gap = BarLabelGap.toPx()
+                val labelHeight = textMeasurer.measure("0", labelStyle).size.height.toFloat()
+                val unitLabel = unit.takeIf(String::isNotEmpty)?.let { textMeasurer.measure(it, labelStyle) }
+                val capRoom = if (selectable || selectedIndex != null) labelHeight + gap / 2 else 0f
+                // The cap label sits over the plot and the unit caption over the gutter, so their rows can overlap.
+                val top = max((if (unitLabel != null) labelHeight + gap / 2 else 0f) + labelHeight / 2, capRoom)
+                val xLabelTop = size.height - labelHeight
+                val bottom = xLabelTop - max(gap, labelHeight / 2 + BarGridWidth.toPx())
+                val maxTicks = ((bottom - top) / (labelHeight * BAR_TICK_SPACING)).toInt().coerceIn(MIN_BAR_TICKS, MAX_BAR_TICKS)
+                val ticks = ChartMath.niceTicks(0.0, totals.max(), maxTicks)
+                val numberFormat = NumberFormat.getNumberInstance().apply {
+                    minimumFractionDigits = ticks.decimals
+                    maximumFractionDigits = ticks.decimals
+                }
+                val tickLabels = List(ticks.count) { textMeasurer.measure(numberFormat.format(ticks.valueAt(it)), labelStyle) }
+                val plotLeft = max(tickLabels.maxOf { it.size.width }, unitLabel?.size?.width ?: 0) + gap
+                val plotWidth = size.width - plotLeft
+                val yMap = YAxisMap(top, bottom, ticks.min, ticks.max)
+                val slot = plotWidth / entries.size
+                val barWidth = min(MaxBarWidth.toPx(), slot * BAR_FILL_RATIO)
+                val radius = min(BarRadius.toPx(), barWidth / 2)
+                val segmentGap = SegmentGap.toPx()
+                hit.left = plotLeft
+                hit.slot = slot
+
+                // One path per visible layer of each bar; only the top layer gets rounded corners.
+                val barPaths = ArrayList<Path>()
+                val barColors = ArrayList<Color>()
+                val barOwners = ArrayList<Int>()
+                entries.forEachIndexed { bar, entry ->
+                    val left = plotLeft + slot * bar + (slot - barWidth) / 2
+                    val topLayer = entry.values.indices.lastOrNull { entry.values[it] > 0.0 } ?: return@forEachIndexed
+                    var base = bottom
+                    var running = 0.0
+                    for (layer in 0..topLayer) {
+                        val value = entry.values[layer]
+                        if (value <= 0.0) continue
+                        running += value
+                        val layerTop = yMap.y(running)
+                        val layerBottom = if (base < bottom) base - segmentGap else base
+                        if (layerBottom - layerTop > 0f) {
+                            val r = if (layer == topLayer) min(radius, layerBottom - layerTop) else 0f
+                            barPaths += Path().apply {
+                                addRoundRect(
+                                    RoundRect(
+                                        left = left,
+                                        top = layerTop,
+                                        right = left + barWidth,
+                                        bottom = layerBottom,
+                                        topLeftCornerRadius = CornerRadius(r),
+                                        topRightCornerRadius = CornerRadius(r),
+                                        bottomRightCornerRadius = CornerRadius.Zero,
+                                        bottomLeftCornerRadius = CornerRadius.Zero,
+                                    ),
+                                )
+                            }
+                            barColors += segments.getOrNull(layer)?.color ?: colors.axisLabel
+                            barOwners += bar
+                        }
+                        base = layerTop
+                    }
+                }
+
+                val categoryLabels = entries.map { textMeasurer.measure(it.label, labelStyle) }
+                val widestLabel = categoryLabels.maxOf { it.size.width } + gap
+                val stride = max(1, ceil(widestLabel / slot).toInt())
+                val selected = selectedIndex?.takeIf { it in entries.indices }
+                val capLabel = selected?.let { textMeasurer.measure(format.format(totals[it]), capStyle) }
+                val capOffset = selected?.let { index ->
+                    val label = capLabel ?: return@let Offset.Zero
+                    val center = plotLeft + slot * (index + 0.5f)
+                    val x = (center - label.size.width / 2).coerceIn(0f, size.width - label.size.width)
+                    Offset(x, yMap.y(totals[index]) - gap / 2 - label.size.height)
+                } ?: Offset.Zero
+                val gridWidth = BarGridWidth.toPx()
+
+                onDrawBehind {
+                    for (i in 0 until ticks.count) {
+                        val y = yMap.y(ticks.valueAt(i))
+                        drawLine(colors.grid, Offset(plotLeft, y), Offset(size.width, y), gridWidth)
+                        val label = tickLabels[i]
+                        drawText(label, topLeft = Offset(plotLeft - gap - label.size.width, y - label.size.height / 2))
+                    }
+                    unitLabel?.let { drawText(it, topLeft = Offset(plotLeft - gap - it.size.width, 0f)) }
+                    for (i in barPaths.indices) {
+                        val alpha = if (selected == null || barOwners[i] == selected) 1f else DIM_ALPHA
+                        drawPath(barPaths[i], barColors[i], alpha = alpha)
+                    }
+                    for (i in categoryLabels.indices) {
+                        if ((categoryLabels.size - 1 - i) % stride != 0) continue
+                        val label = categoryLabels[i]
+                        val center = plotLeft + slot * (i + 0.5f)
+                        val x = (center - label.size.width / 2).coerceIn(0f, size.width - label.size.width)
+                        drawText(label, topLeft = Offset(x, xLabelTop))
+                    }
+                    capLabel?.let { drawText(it, topLeft = capOffset) }
+                }
+            },
+    )
+}
+
+/**
+ * One horizontal bar split into proportional parts (e.g. an app's foreground / background / cached time), with a
+ * legend of label and formatted value per part. The spoken description lists every part.
+ */
+@Composable
+fun BreakdownBar(
+    segments: List<BreakdownSegment>,
+    modifier: Modifier = Modifier,
+    format: ValueFormatter = NumberFormatter(),
+    showLegend: Boolean = true,
+) {
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val itemTemplate = stringResource(R.string.component_breakdown_item)
+    val summary = remember(segments, format, itemTemplate) {
+        segments.joinToString(", ") { itemTemplate.format(it.label, format.format(it.value)) }
+    }
+    Column(
+        modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = summary },
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
+    ) {
+        Spacer(
+            Modifier
+                .fillMaxWidth()
+                .height(BreakdownHeight)
+                .clip(MaterialTheme.shapes.extraSmall)
+                .drawWithCache {
+                    val total = segments.sumOf { max(it.value, 0.0) }
+                    val parts = segments.filter { it.value > 0.0 }
+                    val gap = SegmentGap.toPx()
+                    val usable = size.width - gap * (parts.size - 1).coerceAtLeast(0)
+                    val lefts = FloatArray(parts.size)
+                    val widths = FloatArray(parts.size)
+                    var x = 0f
+                    parts.forEachIndexed { i, part ->
+                        lefts[i] = x
+                        widths[i] = (part.value / total * usable).toFloat()
+                        x += widths[i] + gap
+                    }
+                    onDrawBehind {
+                        if (parts.isEmpty()) drawRect(track)
+                        for (i in parts.indices) drawRect(parts[i].color, Offset(lefts[i], 0f), Size(widths[i], size.height))
+                    }
+                },
+        )
+        if (showLegend) {
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md),
+                verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
+            ) {
+                segments.forEach { segment ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
+                    ) {
+                        LegendItem(segment.label, key = { LegendSwatch(segment.color) })
+                        Text(
+                            format.format(segment.value),
+                            style = MaterialTheme.typography.numericLabel,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
