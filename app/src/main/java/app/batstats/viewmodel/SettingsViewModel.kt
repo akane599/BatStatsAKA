@@ -2,6 +2,7 @@ package app.batstats.viewmodel
 
 import app.batstats.R
 import app.batstats.settings.SettingsImportPolicy
+import app.batstats.settings.SettingsWrites
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,11 +49,19 @@ class SettingsViewModel(
         )
 
     val dynamicColors: Flow<Boolean> = settings.map { it.dynamicColors }
-    val themeIndex: Flow<Int> = settings.map { it.themeIndex }
+
+    @Deprecated("Settings v3 removed the theme (the app is dark-only); removed with this screen in P4")
+    val themeIndex: Flow<Int> = flowOf(0)
 
     fun updateSetting(name: String, value: Any) {
         viewModelScope.launch {
-            attempt { repository.set(name, value) }
+            val stored = try { SettingsWrites.normalize(name, value) }
+            catch (_: IllegalArgumentException) {
+                _error.value = context.getString(if (name == "designCapacityMah") R.string.settings_design_capacity_invalid
+                    else R.string.settings_write_failed)
+                return@launch
+            }
+            attempt { repository.set(name, stored) }
         }
     }
 
@@ -86,8 +96,8 @@ class SettingsViewModel(
         catch (_: Exception) { context.getString(R.string.settings_export_failed) }
     }
 
+    /** Throws [IllegalArgumentException] for a file [SettingsImportPolicy] rejects; an older export is migrated. */
     suspend fun import(json: String): ImportResult = withContext(Dispatchers.IO) {
-        SettingsImportPolicy.validate(json)
-        backupManager.import(json)
+        SettingsImportPolicy.import(json, backupManager)
     }
 }

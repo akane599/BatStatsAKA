@@ -43,14 +43,14 @@ object Notifier {
 
     const val ALERT_CHANNEL_ID = "battery_alerts"
 
-    fun ensureAlertChannel(ctx: Context, settings: AppSettings) {
+    /** Sound and vibration start on and belong to the user in the channel's system settings (settings v3). */
+    fun ensureAlertChannel(ctx: Context) {
         val manager = ctx.getSystemService(NotificationManager::class.java)
         if (manager.getNotificationChannel(ALERT_CHANNEL_ID) != null) return
         manager.createNotificationChannel(NotificationChannel(ALERT_CHANNEL_ID,
             ctx.getString(R.string.alert_channel_name), NotificationManager.IMPORTANCE_DEFAULT).apply {
             description = ctx.getString(R.string.alert_channel_description)
-            enableVibration(settings.alertVibrationEnabled)
-            if (!settings.alertSoundEnabled) setSound(null, null)
+            enableVibration(true)
             setShowBadge(false)
         })
     }

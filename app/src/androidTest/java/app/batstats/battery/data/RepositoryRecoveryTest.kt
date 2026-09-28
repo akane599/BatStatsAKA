@@ -23,6 +23,7 @@ import app.batstats.battery.measurement.DailySummaryAggregator
 import app.batstats.battery.measurement.PowerState
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
+import app.batstats.settings.SettingsMigrator
 import app.batstats.test.DeviceEnvironment
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.*
@@ -91,8 +92,10 @@ class RepositoryRecoveryTest {
         val diagnostics = DiagnosticStore(context, scope)
         val sampler = SamplingController(context, diagnostics)
         val calibration = CalibrationStore(MemoryStore(), flowOf(CalibrationOverrides()), scope)
+        // As BatteryApp does: retention cleanup waits for this migration.
+        private val migrator = SettingsMigrator(dataStore).also { scope.launch { it.run() } }
         val repository = BatteryRepository(database, settings, scope, HistoryMaintenance(), diagnostics, sampler,
-            calibration, MemoryStore())
+            calibration, HistoryRetention(migrator, settings.flow), MemoryStore())
         suspend fun refresh() = withTimeout(60_000) {
             val result = CompletableDeferred<BatteryRepository.Realtime>()
             repository.refreshNow { result.complete(it) }

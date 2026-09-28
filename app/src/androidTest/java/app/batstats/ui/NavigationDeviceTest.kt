@@ -61,7 +61,7 @@ class NavigationDeviceTest {
         savedSettings = BatteryGraph.settings.flow.first()
         DeviceEnvironment.context.stopService(Intent(DeviceEnvironment.context, BatteryMonitorService::class.java))
         BatteryGraph.repo.stopSampling()
-        BatteryGraph.settings.update { it.copy(themeIndex = 1, dynamicColors = false) }
+        BatteryGraph.settings.update { it.copy(dynamicColors = false) }
     }
 
     @After fun restore() = runBlocking {
@@ -117,7 +117,7 @@ class NavigationDeviceTest {
 
     @Test fun largeTextDarkThemeKeepsActionsAndResetExplanationReachable() {
         DeviceEnvironment.device.executeShellCommand("settings put system font_scale 2.0")
-        runBlocking { BatteryGraph.settings.update { it.copy(themeIndex = 2, dynamicColors = false) } }
+        runBlocking { BatteryGraph.settings.update { it.copy(dynamicColors = false) } }
         compose.waitUntil(120_000) { compose.activity.resources.configuration.fontScale >= 1.99f }
         compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(R.string.diagnostic_refresh)))
         capture("dashboard-dark-font200")

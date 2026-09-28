@@ -164,9 +164,7 @@ fun DashboardContent(
                 }
             }
             item {
-                val current = reading.sample?.currentNowUa?.let {
-                    if (settings.showCurrentInMa) formatDrainRate(it / 1000.0) else "$it µA"
-                } ?: "—"
+                val current = reading.sample?.currentNowUa?.let { formatDrainRate(it / 1000.0) } ?: "—"
                 val temp = reading.temperatureC?.let {
                     if (settings.temperatureUnitIndex == 1) String.format(Locale.getDefault(), "%.1f °F", it * 1.8 + 32)
                     else String.format(Locale.getDefault(), "%.1f °C", it)

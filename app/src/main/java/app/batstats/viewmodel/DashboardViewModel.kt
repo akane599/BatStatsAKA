@@ -10,13 +10,10 @@ import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.service.MonitoringControl
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
-import app.batstats.settings.chartTimeRangeMs
 import io.github.mlmgames.settings.core.SettingsRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -48,12 +45,9 @@ class DashboardViewModel(
             initialValue = null
         )
 
+    // Settings v3 removed the chart range setting; the old screen keeps its former 1 h default.
     @Suppress("DEPRECATION") // Shim until P4c replaces this screen.
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val recentSamples: Flow<List<BatterySample>> = settings
-        .flatMapLatest { s ->
-            repo.recentSamplesFlow(s.chartTimeRangeMs)
-        }
+    val recentSamples: Flow<List<BatterySample>> = repo.recentSamplesFlow(60 * 60 * 1000L)
 
     fun toggleMonitoring() {
         // Repo update happens in Service.onStartCommand / onDestroy.

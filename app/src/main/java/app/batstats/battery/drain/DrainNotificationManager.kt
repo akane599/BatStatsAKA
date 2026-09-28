@@ -36,21 +36,24 @@ class DrainNotificationManager(private val context: Context, private val reposit
     }
     private val text = MonitoringText(context)
     init { ensureChannel(context) }
+    /** The notification's visible text; the service's update gate compares it to skip unchanged updates. */
+    data class Content(val title: String, val text: String, val expanded: String)
+
     fun getNotification(
         reading: BatteryRepository.Realtime = repository.realtimeFlow.value,
         summary: ObservationSummary = repository.observation.value,
         access: String = context.getString(R.string.monitor_standard),
         error: String? = repository.error.value,
         advancedIssue: Boolean = false
-    ): Notification {
-        val content = PendingIntent.getActivity(context, NOTIFICATION_ID,
-            Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                .putExtra(Destinations.EXTRA_DESTINATION, Destinations.NOW),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val reset = PendingIntent.getBroadcast(context, 1,
-            Intent(context, DrainNotificationReceiver::class.java).setAction(DrainNotificationReceiver.ACTION_RESET),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    ): Notification = build(content(reading, summary, access, error, advancedIssue))
+
+    fun content(
+        reading: BatteryRepository.Realtime,
+        summary: ObservationSummary,
+        access: String,
+        error: String?,
+        advancedIssue: Boolean,
+    ): Content {
         val freshness = reading.sample?.timestamp?.let {
             context.getString(R.string.monitor_read_at, DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it)))
         } ?: context.getString(R.string.monitor_waiting_battery)
@@ -61,12 +64,28 @@ class DrainNotificationManager(private val context: Context, private val reposit
             appendLine(text.expanded(summary))
             append("$freshness · $access")
         }
+        return Content(
+            title = "${reading.level?.let { "$it%" } ?: "—"} · ${text.state(reading.powerState)}",
+            text = issue ?: context.getString(R.string.monitor_collapsed, formatDrainRate(summary.screenOn.rateMa), formatDrainRate(summary.screenOff.rateMa), freshness),
+            expanded = expanded,
+        )
+    }
+
+    fun build(content: Content): Notification {
+        val intent = PendingIntent.getActivity(context, NOTIFICATION_ID,
+            Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(Destinations.EXTRA_DESTINATION, Destinations.NOW),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val reset = PendingIntent.getBroadcast(context, 1,
+            Intent(context, DrainNotificationReceiver::class.java).setAction(DrainNotificationReceiver.ACTION_RESET),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
-            .setContentTitle("${reading.level?.let { "$it%" } ?: "—"} · ${text.state(reading.powerState)}")
-            .setContentText(issue ?: context.getString(R.string.monitor_collapsed, formatDrainRate(summary.screenOn.rateMa), formatDrainRate(summary.screenOff.rateMa), freshness))
-            .setStyle(NotificationCompat.BigTextStyle().bigText(expanded))
-            .setContentIntent(content).setOngoing(true).setOnlyAlertOnce(true)
+            .setContentTitle(content.title)
+            .setContentText(content.text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(content.expanded))
+            .setContentIntent(intent).setOngoing(true).setOnlyAlertOnce(true)
             .setWhen(0L).setShowWhen(false).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .addAction(android.R.drawable.ic_menu_rotate, context.getString(R.string.monitor_reset), reset).build()

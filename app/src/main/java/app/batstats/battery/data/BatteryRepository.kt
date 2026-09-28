@@ -39,6 +39,7 @@ class BatteryRepository(
     private val diagnostics: DiagnosticStore,
     private val sampler: SamplingController,
     private val calibration: CalibrationStore,
+    private val retention: HistoryRetention,
     samplerPreferences: KeyValueStore,
 ) {
     private val batteryDao = db.batteryDao()
@@ -433,12 +434,8 @@ class BatteryRepository(
     }
 
     private suspend fun cleanup(now: Long) {
-        val settings = settingsRepository.flow.first()
-        if (settings.autoCleanupEnabled && settings.dataRetentionIndex != 5) {
-            val days = listOf(7L, 30L, 90L, 180L, 365L).getOrElse(settings.dataRetentionIndex) { 90 }
-            val cutoff = now - days * 86_400_000
-            HistoryPolicy.purgeExpired(db, cutoff)
-        }
+        // Waits for the settings migration (v2 "auto-cleanup off" becomes Forever); throws if it failed.
+        retention.cutoff(now)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
         sessionDao.boundStorage()
         batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.
     }

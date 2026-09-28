@@ -1,14 +1,19 @@
 package app.batstats.settings
 
+import app.batstats.battery.measurement.CurrentSign
+import app.batstats.battery.measurement.CurrentUnit
 import io.github.mlmgames.settings.core.annotations.CategoryDefinition
-import io.github.mlmgames.settings.core.annotations.NoReset
-import io.github.mlmgames.settings.core.annotations.Persisted
 import io.github.mlmgames.settings.core.annotations.Setting
 import io.github.mlmgames.settings.core.types.Dropdown
 import io.github.mlmgames.settings.core.types.Slider
+import io.github.mlmgames.settings.core.types.TextInput
 import io.github.mlmgames.settings.core.types.Toggle
 import kotlinx.serialization.Serializable
 
+/**
+ * Settings schema v3 ([SettingsMigrations.CURRENT_VERSION]). Removing or renaming a key needs a
+ * schema bump and a step in [SettingsMigrations]. Enum values are stored by name.
+ */
 @Serializable
 data class AppSettings(
     // GENERAL
@@ -21,36 +26,13 @@ data class AppSettings(
     val autoStartOnBoot: Boolean = true,
 
     @Setting(
-        title = "Monitoring Interval",
-        description = "Shorter intervals improve responsiveness and use more battery. Sampling does not wake the CPU.",
+        title = "Status Bar Icon",
         category = General::class,
         type = Dropdown::class,
-        options = ["5 seconds", "10 seconds", "30 seconds", "1 minute", "5 minutes"],
-        key = "monitoring_interval_index"
+        options = ["Battery level", "Current (mA)", "Power (W)", "Temperature", "Static icon"],
+        key = "status_icon_value"
     )
-    val monitoringIntervalIndex: Int = 2,
-
-    @Persisted(key = "show_notification")
-    val showNotification: Boolean = true,
-
-    @Persisted(key = "show_drain_notification")
-    val showDrainNotification: Boolean = false,
-
-    @Persisted(key = "notification_style_index")
-    val notificationStyleIndex: Int = 1,
-
-    @Persisted(key = "track_foreground_apps")
-    val trackForegroundApps: Boolean = true,
-
-    @Setting(
-        title = "Detailed Stats Interval",
-        description = "Privileged collection is more expensive than ordinary readings. Longer intervals reduce overhead.",
-        category = General::class,
-        type = Dropdown::class, // Timepicker might be better later (but does not store in secs)
-        options = ["1 minute", "5 minutes", "15 minutes", "30 minutes"],
-        key = "detailed_stats_interval_index"
-    )
-    val detailedStatsIntervalIndex: Int = 1,
+    val statusIconValue: StatusIconValue = StatusIconValue.LEVEL,
 
     // NOTIFICATIONS & ALARMS
     @Setting(
@@ -136,22 +118,35 @@ data class AppSettings(
     )
     val chargingCompleteAlert: Boolean = true,
 
-    @Persisted(key = "alert_sound_enabled")
-    val alertSoundEnabled: Boolean = true,
+    // MEASUREMENT (overrides win over the detected calibration; the detection itself is not a setting)
+    @Setting(
+        title = "Current Unit",
+        category = Measurement::class,
+        type = Dropdown::class,
+        options = ["Auto", "µA", "mA"],
+        key = "current_unit_override"
+    )
+    val currentUnitOverride: CurrentUnitOverride = CurrentUnitOverride.AUTO,
 
-    @Persisted(key = "alert_vibration_enabled")
-    val alertVibrationEnabled: Boolean = true,
+    @Setting(
+        title = "Current Sign",
+        category = Measurement::class,
+        type = Dropdown::class,
+        options = ["Auto", "Normal", "Inverted"],
+        key = "current_sign_override"
+    )
+    val currentSignOverride: CurrentSignOverride = CurrentSignOverride.AUTO,
+
+    /** mAh; 0 = automatic. Only [DesignCapacity.isValid] values are written; read through [designCapacityOverrideMah]. */
+    @Setting(
+        title = "Design Capacity",
+        category = Measurement::class,
+        type = TextInput::class,
+        key = "design_capacity_mah"
+    )
+    val designCapacityMah: Int = DesignCapacity.AUTO,
 
     // DISPLAY
-    @Setting(
-        title = "Theme",
-        category = Display::class,
-        type = Dropdown::class,
-        options = ["System Default", "Light", "Dark"],
-        key = "theme_index"
-    )
-    val themeIndex: Int = 0,
-
     @Setting(
         title = "Dynamic Colors",
         category = Display::class,
@@ -169,23 +164,6 @@ data class AppSettings(
     val oledBlack: Boolean = false,
 
     @Setting(
-        title = "Chart Time Range",
-        category = Display::class,
-        type = Dropdown::class,
-        options = ["15 minutes", "1 hour", "6 hours", "24 hours", "7 days"],
-        key = "chart_time_range_index"
-    )
-    val chartTimeRangeIndex: Int = 1,
-
-    @Setting(
-        title = "Show Current in mA",
-        category = Display::class,
-        type = Toggle::class,
-        key = "show_current_in_ma"
-    )
-    val showCurrentInMa: Boolean = true,
-
-    @Setting(
         title = "Temperature Unit",
         category = Display::class,
         type = Dropdown::class,
@@ -193,9 +171,6 @@ data class AppSettings(
         key = "temperature_unit_index"
     )
     val temperatureUnitIndex: Int = 0,
-
-    @Persisted(key = "compact_stats_view")
-    val compactStatsView: Boolean = false,
 
     // DATA
     @Setting(
@@ -207,47 +182,49 @@ data class AppSettings(
         key = "data_retention_index"
     )
     val dataRetentionIndex: Int = 2,
-
-    @Setting(
-        title = "Auto-cleanup Old Data",
-        category = Data::class,
-        type = Toggle::class,
-        key = "auto_cleanup_enabled"
-    )
-    val autoCleanupEnabled: Boolean = true,
-
-    @Persisted(key = "export_format_index")
-    val exportFormatIndex: Int = 0,
-
-    @Persisted(key = "export_include_raw_samples")
-    val exportIncludeRawSamples: Boolean = false,
-
-    // PERSISTED STATE
-    @Persisted(key = "last_data_cleanup") val lastDataCleanup: Long = 0L,
-    @Persisted(key = "last_export_time") val lastExportTime: Long = 0L,
-    @Persisted(key = "total_samples_collected") val totalSamplesCollected: Long = 0L,
-    @Persisted(key = "first_launch_time") @NoReset val firstLaunchTime: Long = 0L,
-    @Persisted(key = "has_seen_onboarding") @NoReset val hasSeenOnboarding: Boolean = false,
 )
 
-val AppSettings.monitoringIntervalMs: Long
-    get() = when (monitoringIntervalIndex) {
-        0 -> 5_000L; 1 -> 10_000L; 2 -> 30_000L; 3 -> 60_000L; 4 -> 300_000L; else -> 30_000L
-    }
+/** What the status-bar icon of the monitoring notification shows (stored now, rendered in P5a). */
+enum class StatusIconValue { LEVEL, CURRENT_MA, POWER_W, TEMPERATURE, STATIC }
 
-val AppSettings.chartTimeRangeMs: Long
-    get() = when (chartTimeRangeIndex) {
-        0 -> 15 * 60 * 1000L; 1 -> 60 * 60 * 1000L; 2 -> 6 * 60 * 60 * 1000L
-        3 -> 24 * 60 * 60 * 1000L; 4 -> 7 * 24 * 60 * 60 * 1000L; else -> 60 * 60 * 1000L
-    }
+/** Settings override for the unit `CURRENT_NOW` reports in; [AUTO] (null [unit]) uses the detected calibration. */
+enum class CurrentUnitOverride(val unit: CurrentUnit?) {
+    AUTO(null),
+    MICROAMPS(CurrentUnit.MICROAMPS),
+    MILLIAMPS(CurrentUnit.MILLIAMPS),
+}
+
+/** Settings override for the sign of `CURRENT_NOW`; [AUTO] (null [sign]) uses the detected calibration. */
+enum class CurrentSignOverride(val sign: CurrentSign?) {
+    AUTO(null),
+    NORMAL(CurrentSign.NORMAL),
+    INVERTED(CurrentSign.INVERTED),
+}
+
+/** The design-capacity setting: 0 means automatic (sysfs `charge_full_design`), otherwise mAh in [RANGE_MAH]. */
+object DesignCapacity {
+    const val AUTO = 0
+    val RANGE_MAH = 1_000..30_000
+
+    fun isValid(mAh: Int): Boolean = mAh == AUTO || mAh in RANGE_MAH
+}
+
+/**
+ * The design capacity for the capacity/health estimators: the setting when it is valid, otherwise
+ * [DesignCapacity.AUTO], so an out-of-range stored value can never reach them.
+ */
+val AppSettings.designCapacityOverrideMah: Int
+    get() = designCapacityMah.takeIf(DesignCapacity::isValid) ?: DesignCapacity.AUTO
 
 val AppSettings.useFahrenheit: Boolean get() = temperatureUnitIndex == 1
 
-val AppSettings.detailedStatsIntervalMs: Long
-    get() = when (detailedStatsIntervalIndex) {
-        0 -> 60_000L; 1 -> 300_000L; 2 -> 900_000L; 3 -> 1_800_000L; else -> 300_000L
-    }
+/** The "Forever" option of [AppSettings.dataRetentionIndex]. */
+const val RETENTION_FOREVER_INDEX = 5
+private val RETENTION_DAYS = listOf(7L, 30L, 90L, 180L, 365L)
 
+/** Retention in days, or null for Forever. An unknown index keeps the 3-month default. */
+val AppSettings.retentionDays: Long?
+    get() = if (dataRetentionIndex == RETENTION_FOREVER_INDEX) null else RETENTION_DAYS.getOrElse(dataRetentionIndex) { 90L }
 
 @CategoryDefinition(order = 0)
 object General
@@ -256,7 +233,10 @@ object General
 object Notifications
 
 @CategoryDefinition(order = 2)
-object Display
+object Measurement
 
 @CategoryDefinition(order = 3)
+object Display
+
+@CategoryDefinition(order = 4)
 object Data

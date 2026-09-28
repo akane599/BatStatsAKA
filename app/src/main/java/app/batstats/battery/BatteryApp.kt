@@ -6,8 +6,8 @@ import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.di.appModule
 import app.batstats.settings.AppSettings
+import app.batstats.settings.SettingsMigrator
 import io.github.mlmgames.settings.core.SettingsRepository
-import io.github.mlmgames.settings.core.managers.MigrationManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
@@ -19,7 +19,7 @@ import org.koin.core.context.startKoin
 class BatteryApp : Application() {
 
     private val appScope: CoroutineScope by inject()
-    private val migrationManager: MigrationManager by inject()
+    private val settingsMigrator: SettingsMigrator by inject()
     private val shizukuBridge: ShizukuBridge by inject()
 
     override fun onCreate() {
@@ -32,9 +32,9 @@ class BatteryApp : Application() {
 
         shizukuBridge.warmUp()
 
-        // Run migrations
+        // Settings migration; history retention cleanup waits until it has ended.
         appScope.launch {
-            migrationManager.migrate()
+            settingsMigrator.run()
         }
     }
 }

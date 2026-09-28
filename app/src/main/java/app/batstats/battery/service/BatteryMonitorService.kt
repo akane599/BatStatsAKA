@@ -20,7 +20,9 @@ import app.batstats.battery.measurement.BatteryAlerts
 import app.batstats.battery.measurement.BatteryAlert
 import app.batstats.battery.measurement.BatteryAlertSettings
 import app.batstats.battery.measurement.AlertReading
+import app.batstats.battery.util.UpdateGate
 import app.batstats.battery.widget.WidgetUpdater
+import app.batstats.settings.useFahrenheit
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import org.koin.android.ext.android.inject
@@ -91,7 +93,7 @@ class BatteryMonitorService : Service() {
                     try {
                         if (events.isNotEmpty()) {
                             if (!alertChannelReady) {
-                                Notifier.ensureAlertChannel(this@BatteryMonitorService, settings)
+                                Notifier.ensureAlertChannel(this@BatteryMonitorService)
                                 alertChannelReady = true
                             }
                             if (Notifier.canPostAlerts(this@BatteryMonitorService)) {
@@ -110,39 +112,49 @@ class BatteryMonitorService : Service() {
                     if (alerts.latches != before) preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet()).apply()
                 }
         }
+        // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once.
         serviceScope.launch {
-            var lastPush = 0L
-            var previousImportant: String? = null
+            val gate = UpdateGate<DrainNotificationManager.Content>()
             val advanced = combine(shell.access, shell.lastError, collector.error) { access, shellError, collectorError ->
                 access to (collectorError ?: shellError)
             }
             combine(repository.realtimeFlow, repository.observation, repository.error, advanced) {
-                    reading, observation, historyError, accessState ->
-                Triple(reading, observation, Triple(accessState.first, historyError, accessState.second))
-            }.collect { (reading, observation, state) ->
-                val (access, historyError, accessError) = state
+                    reading, observation, historyError, (access, accessError) ->
                 val issue = historyError ?: accessError?.let { getString(R.string.monitor_advanced_issue, it) }
-                val important = "${reading.level}/${reading.powerState}/$access/$issue/${observation.startedAt}/${observation.gaps}"
-                val now = SystemClock.elapsedRealtime()
-                if (important != previousImportant || now - lastPush >= 30_000) {
-                    val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
-                    try {
-                        getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID,
-                            notifications.getNotification(reading, observation, label, issue, advancedIssue = historyError == null && accessError != null))
-                        reading.sample?.let { WidgetUpdater.push(this@BatteryMonitorService, it,
-                            fahrenheit = repository.getSettings().temperatureUnitIndex == 1) }
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: RuntimeException) {
-                        diagnostics.record(DiagnosticCode.NOTIFICATION_FAILED)
-                        Log.w("BatteryMonitorService", "Monitoring display update failed (${e.javaClass.simpleName})")
-                    }
-                    // Failed display updates retry on the next cadence or important state change.
-                    previousImportant = important; lastPush = now
+                val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
+                val content = notifications.content(reading, observation, label, issue, advancedIssue = historyError == null && accessError != null)
+                content to (reading.sample?.screenOn != false)
+            }.collectLatest { (content, screenOn) ->
+                if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
+                val shown = display("notification") {
+                    getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID, notifications.build(content))
                 }
+                // A failed update retries on the next change, still ≥5 s after this attempt.
+                gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())
+            }
+        }
+        serviceScope.launch {
+            val gate = UpdateGate<WidgetUpdater.Content>()
+            combine(repository.realtimeFlow, repository.settingsFlow.map { it.useFahrenheit }.distinctUntilChanged()) { reading, fahrenheit ->
+                reading.sample?.let { sample -> WidgetUpdater.content(this@BatteryMonitorService, sample, monitoring = true, fahrenheit) to sample.screenOn }
+            }.filterNotNull().collectLatest { (content, screenOn) ->
+                if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
+                val shown = display("widget") { WidgetUpdater.deliver(this@BatteryMonitorService, content) }
+                gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())
             }
         }
         return START_STICKY
+    }
+
+    private inline fun display(surface: String, update: () -> Unit): Boolean = try {
+        update()
+        true
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RuntimeException) {
+        diagnostics.record(DiagnosticCode.NOTIFICATION_FAILED)
+        Log.w("BatteryMonitorService", "Monitoring $surface update failed (${e.javaClass.simpleName})")
+        false
     }
 
     override fun onDestroy() {

@@ -25,8 +25,8 @@ class SettingsTextTest {
             assertEquals(meta.min, localized.min, 0f)
             assertEquals(meta.max, localized.max, 0f)
         }
-        val theme = AppSettingsSchema.fields.first { it.name == "themeIndex" }
-        assertNotEquals(SettingsText.resolve(english, theme.name, theme.meta!!).title,
-            SettingsText.resolve(turkish, theme.name, theme.meta!!).title)
+        val retention = AppSettingsSchema.fields.first { it.name == "dataRetentionIndex" }
+        assertNotEquals(SettingsText.resolve(english, retention.name, retention.meta!!).title,
+            SettingsText.resolve(turkish, retention.name, retention.meta!!).title)
     }
 }

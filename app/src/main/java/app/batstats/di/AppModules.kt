@@ -8,6 +8,7 @@ import app.batstats.battery.data.CalibrationOverrides
 import app.batstats.battery.data.CalibrationStore
 import app.batstats.battery.data.ExportImportManager
 import app.batstats.battery.data.HistoryMaintenance
+import app.batstats.battery.data.HistoryRetention
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.sampling.SamplerState
 import app.batstats.battery.data.sampling.SamplingController
@@ -22,6 +23,8 @@ import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
+import app.batstats.settings.SettingsMigrations
+import app.batstats.settings.SettingsMigrator
 import app.batstats.viewmodel.DashboardViewModel
 import app.batstats.viewmodel.DataViewModel
 import app.batstats.viewmodel.DetailedStatsViewModel
@@ -33,20 +36,19 @@ import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
 import io.github.mlmgames.settings.core.backup.SettingsBackupManager
 import io.github.mlmgames.settings.core.datastore.createSettingsDataStore
-import io.github.mlmgames.settings.core.managers.MigrationManager
 import io.github.mlmgames.settings.core.managers.ResetManager
 import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
-private const val SCHEMA_VERSION = 2
+private const val SCHEMA_VERSION = SettingsMigrations.CURRENT_VERSION
 private const val DATASTORE_NAME = "batstats_settings"
 
 val appModule = module {
@@ -65,17 +67,8 @@ val appModule = module {
 
     single<StringResourceProvider> { AndroidStringResourceProvider(androidContext()) }
     single { ResetManager(get(), AppSettingsSchema) }
-    single {
-        MigrationManager(dataStore = get(), currentVersion = SCHEMA_VERSION).apply {
-            addMigration(object : io.github.mlmgames.settings.core.managers.Migration {
-                override val fromVersion = 1
-                override val toVersion = 2
-                override suspend fun migrate(prefs: androidx.datastore.preferences.core.MutablePreferences) {
-                    prefs[androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_colors")] = false
-                }
-            })
-        }
-    }
+    // BatteryApp runs it at start; history retention waits for it (HistoryRetention).
+    single { SettingsMigrator(get()) }
 
     single {
         val app = androidApplication()
@@ -93,17 +86,20 @@ val appModule = module {
     }
 
     single { HistoryMaintenance() }
+    single { HistoryRetention(get(), get<SettingsRepository<AppSettings>>().flow) }
     single { ExportImportManager(androidContext(), get(), get()) }
     // One sampler thread per process; screens, the tile and details hold it as SamplingDemand.
     single { SamplingController(androidContext(), get()) } bind SamplingDemand::class
     single {
         val preferences = androidContext().getSharedPreferences(CalibrationStore.PREFS_NAME, Context.MODE_PRIVATE)
-        // Settings overrides arrive with settings v3 (B1b); until then both are Auto.
-        CalibrationStore(SharedPreferencesStore(preferences), flowOf(CalibrationOverrides()), get())
+        val overrides = get<SettingsRepository<AppSettings>>().flow.map { settings ->
+            CalibrationOverrides(settings.currentUnitOverride.unit, settings.currentSignOverride.sign)
+        }
+        CalibrationStore(SharedPreferencesStore(preferences), overrides, get())
     }
     single {
         val samplerPreferences = androidContext().getSharedPreferences(SamplerState.PREFS_NAME, Context.MODE_PRIVATE)
-        BatteryRepository(get(), get(), get(), get(), get(), get(), get(), SharedPreferencesStore(samplerPreferences))
+        BatteryRepository(get(), get(), get(), get(), get(), get(), get(), get(), SharedPreferencesStore(samplerPreferences))
     }
     single<MonitoringControl> { MonitoringController(androidContext(), get()) }
 
