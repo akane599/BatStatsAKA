@@ -26,10 +26,6 @@
     <string name="widget_no_reading">Okuma yok</string>
     <string name="widget_read_at">Okuma: %1$s</string>
     <string name="widget_paused_at">İzleme durduruldu · %1$s</string>
-    <string name="session_charging">Şarj oluyor</string>
-    <string name="session_discharging">Deşarj oluyor</string>
-    <string name="session_plugged">Bağlı, şarj olmuyor</string>
-    <string name="session_unknown">Güç durumu kullanılamıyor</string>
     <string name="settings_status_icon">Durum çubuğu simgesi</string>
     <string name="option_status_level">Pil seviyesi</string>
     <string name="option_status_current">Akım (mA)</string>
@@ -54,17 +50,8 @@
     <string name="option_6_months">6 ay</string>
     <string name="option_1_year">1 yıl</string>
     <string name="option_forever">Süresiz (depolama sınırları dahilinde)</string>
-    <string name="monitor_no_period">Gözlemlenen dönem yok</string>
-    <string name="monitor_charge_unavailable">Elektrik yükü verisi yok</string>
-    <string name="monitor_coverage">Sayaç kapsamı %1$s / %2$s</string>
-    <string name="monitor_waiting_observation">Gözlem bekleniyor</string>
-    <string name="monitor_since">Gözlem başlangıcı: %1$s</string>
-    <string name="monitor_through">Son aralık sonu: %1$s</string>
-    <string name="monitor_cpu_coverage">%1$s / %2$s gözlemlenen</string>
-    <string name="monitor_no_interval">— · gözlemlenen aralık yok</string>
     <string name="monitor_channel">Pil izleme</string>
     <string name="monitor_channel_description">Canlı pil okumaları ve gözlemlenen tüketim; izleme sırasında sessiz</string>
     <string name="monitor_eta_full">Tahmini dolma süresi: %1$s</string>
     <string name="monitor_eta_remaining">Tahmini kalan süre: %1$s</string>
-    <string name="monitor_window_range">Gözlem %1$s–%2$s</string>
 </resources>

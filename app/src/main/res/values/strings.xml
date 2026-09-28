@@ -32,10 +32,6 @@
     <string name="widget_no_reading">No reading</string>
     <string name="widget_read_at">Read %1$s</string>
     <string name="widget_paused_at">Monitoring stopped · %1$s</string>
-    <string name="session_charging">Charging</string>
-    <string name="session_discharging">Discharging</string>
-    <string name="session_plugged">Plugged in, not charging</string>
-    <string name="session_unknown">Power state unavailable</string>
     <string name="settings_status_icon">Status bar icon</string>
     <string name="option_status_level">Battery level</string>
     <string name="option_status_current">Current (mA)</string>
@@ -60,17 +56,8 @@
     <string name="option_6_months">6 months</string>
     <string name="option_1_year">1 year</string>
     <string name="option_forever">Forever (within storage limits)</string>
-    <string name="monitor_no_period">No period observed</string>
-    <string name="monitor_charge_unavailable">Charge unavailable</string>
-    <string name="monitor_coverage">Counter coverage %1$s / %2$s</string>
-    <string name="monitor_waiting_observation">Waiting for an observation</string>
-    <string name="monitor_since">Observed since %1$s</string>
-    <string name="monitor_through">Through last interval: %1$s</string>
-    <string name="monitor_cpu_coverage">%1$s / %2$s observed</string>
-    <string name="monitor_no_interval">— · no interval observed</string>
     <string name="monitor_channel">Battery monitoring</string>
     <string name="monitor_channel_description">Live battery readings and observed drain; silent while monitoring</string>
     <string name="monitor_eta_full">Est. full in %1$s</string>
     <string name="monitor_eta_remaining">Est. remaining: %1$s</string>
-    <string name="monitor_window_range">Observed %1$s–%2$s</string>
 </resources>

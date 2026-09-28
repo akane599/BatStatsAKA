@@ -15,7 +15,7 @@ import java.time.Instant
 import java.util.Locale
 import java.util.TimeZone
 
-/** The notification's text (replaces the old MonitoringText.expanded tests). */
+/** The notification's text. */
 class NotificationContentTest {
     private val builder = NotificationContent.Builder(EnglishStrings::get)
     private val utc = TimeZone.getTimeZone("UTC")

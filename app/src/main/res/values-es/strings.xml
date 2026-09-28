@@ -26,10 +26,6 @@
     <string name="widget_no_reading">Sin lectura</string>
     <string name="widget_read_at">Lectura: %1$s</string>
     <string name="widget_paused_at">Monitorización detenida · %1$s</string>
-    <string name="session_charging">Cargando</string>
-    <string name="session_discharging">Descargando</string>
-    <string name="session_plugged">Conectada, sin cargar</string>
-    <string name="session_unknown">Estado de alimentación no disponible</string>
     <string name="settings_status_icon">Icono de la barra de estado</string>
     <string name="option_status_level">Nivel de batería</string>
     <string name="option_status_current">Corriente (mA)</string>
@@ -54,17 +50,8 @@
     <string name="option_6_months">6 meses</string>
     <string name="option_1_year">1 año</string>
     <string name="option_forever">Para siempre (dentro de los límites de almacenamiento)</string>
-    <string name="monitor_no_period">No se observó ningún período</string>
-    <string name="monitor_charge_unavailable">Carga no disponible</string>
-    <string name="monitor_coverage">Cobertura del contador %1$s / %2$s</string>
-    <string name="monitor_waiting_observation">Esperando una observación</string>
-    <string name="monitor_since">Observado desde %1$s</string>
-    <string name="monitor_through">Hasta el último intervalo: %1$s</string>
-    <string name="monitor_cpu_coverage">%1$s / %2$s observados</string>
-    <string name="monitor_no_interval">— · ningún intervalo observado</string>
     <string name="monitor_channel">Monitorización de batería</string>
     <string name="monitor_channel_description">Lecturas de batería y consumo observado; silenciosa durante la monitorización</string>
     <string name="monitor_eta_full">Carga completa estimada en %1$s</string>
     <string name="monitor_eta_remaining">Tiempo restante estimado: %1$s</string>
-    <string name="monitor_window_range">Observado %1$s–%2$s</string>
 </resources>
