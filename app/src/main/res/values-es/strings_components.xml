@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="component_chart_empty">Aún no hay lecturas</string>
+    <string name="component_chart_summary_range">De %1$s a %2$s.</string>
+    <string name="component_chart_summary_series">%1$s: último %2$s, mínimo %3$s, máximo %4$s.</string>
+    <string name="component_bar_summary">Máximo: %1$s, %2$s. Último: %3$s, %4$s.</string>
+    <string name="component_bar_select">Seleccionar %1$s</string>
+    <string name="component_bar_clear">Borrar selección</string>
+    <string name="component_bar_selected">Seleccionado: %1$s, %2$s</string>
+    <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_info_open">Acerca de %1$s</string>
+</resources>
