@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Health screen (ui/screens/HealthScreen.kt). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="health_title">Pil sağlığı</string>
+    <string name="health_label">Sağlık</string>
+    <string name="health_percent">%%%1$s</string>
+    <string name="health_of_design">tasarım kapasitesine göre</string>
+    <string name="health_capacity">Kapasite</string>
+    <string name="health_design">Tasarım</string>
+    <string name="health_cycles">Döngü</string>
+    <string name="health_confidence_low">Düşük güven</string>
+    <string name="health_confidence_medium">Orta güven</string>
+    <string name="health_confidence_high">Yüksek güven</string>
+    <string name="health_capacity_none">Henüz ölçülmedi</string>
+    <string name="health_design_settings">Ayarlar\'da girildi</string>
+    <string name="health_design_battery">Pil bildiriyor</string>
+    <string name="health_design_not_set">Girilmedi</string>
+    <string name="health_design_checking">Denetleniyor…</string>
+    <string name="health_cycles_not_reported">Bildirilmiyor</string>
+    <string name="health_no_estimate">Henüz tahmin yok</string>
+    <string name="health_no_estimate_body">BatStats izleme açıkken uzun bir şarj veya deşarj kaydettiğinde görünür.</string>
+    <string name="health_needs_design">Tasarım kapasitesi gerekli</string>
+    <string name="health_needs_design_body">Telefonunuzun teknik özelliklerindeki değeri mAh olarak girin. Root ile BatStats bunu pilden okur.</string>
+    <string name="health_checking_design">Pilin bildirdiği tasarım kapasitesi denetleniyor…</string>
+    <string name="health_set_design">Tasarım kapasitesini gir</string>
+    <string name="health_info_title">Pil sağlığı hakkında</string>
+    <string name="health_info_body">BatStats, pilinizin tam kapasitesini kaydettiklerinden tahmin eder: bir şarj veya deşarj sırasında giren ya da çıkan yükün, seviyenin ne kadar değiştiğine bölünmesi.\n\nHer tahminin bir güven düzeyi vardır. Yüksek: seviye en az yüzde 40 değişti ve şarj sayacı neredeyse her zaman veri verdi. Orta: en az yüzde 20. Düşük: en az yüzde 10. Daha kısa oturumlar tahmin vermez.\n\nGösterilen kapasite en yeni 50 oturumun tahminlerini birleştirir ve güvenilir olanlara daha çok ağırlık verir; böylece tek bir tuhaf oturum onu pek değiştiremez.\n\nSağlık bu kapasiteyi tasarım kapasitesiyle karşılaştırır: Ayarlar\'da girdiğiniz değer ya da root ile pilin bildirdiği değer. Yeni bir pil yüzde 100\'ün üzerinde görünebilir. Bu bir tahmindir, laboratuvar testi değildir.</string>
+    <string name="health_trend_title">Zaman içinde kapasite</string>
+    <string name="health_trend_series">Kapasite</string>
+    <string name="health_trend_design">Tasarım</string>
+    <string name="health_trend_empty_title">Henüz eğilim yok</string>
+    <string name="health_trend_empty_body">Her uzun şarj veya deşarj bir nokta ekler.</string>
+    <string name="health_trend_one_title">Şimdilik bir tahmin</string>
+    <string name="health_trend_one_body">Eğilim ikincisiyle başlar.</string>
+    <string name="health_estimates_title">Son tahminler</string>
+    <string name="health_estimate_charge">Şarj · %%%1$s–%%%2$s</string>
+    <string name="health_estimate_discharge">Deşarj · %%%1$s–%%%2$s</string>
+    <string name="health_estimate_charge_plain">Şarj</string>
+    <string name="health_estimate_discharge_plain">Deşarj</string>
+    <string name="health_estimate_session">Oturum</string>
+    <string name="health_estimate_open">Oturumu aç</string>
+</resources>
