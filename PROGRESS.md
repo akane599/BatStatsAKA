@@ -7,17 +7,16 @@ _Claude: read this first every session. Update it before ending. Keep each secti
 Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Run ledger (rulings, deferred minors, per-task state): `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` — read it before resuming. Before-refs in `design/before/`, Wave A renders in `design/after-waveA/`.
 - [x] P0a bug fixes · P0b dead code/resources · Contracts
 - [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
-- [~] Wave B: B1a sampler done (4cf382f + fixes 833cc5a; **scoped re-review of the fixes pending**) · B1b settings v3 + gating · B2 per-app repositories · emulator cadence check
-- [x] P3a shell/navigation (merged 935e985) · [~] P3b components/charts (review done; fix round 1 **interrupted mid-edit** in worktree `.claude/worktrees/agent-a0a2938b2486412ea` — uncommitted partial work on top of 270ca79; finish, re-review, then merge)
+- [~] Wave B: B1a sampler (4cf382f + 833cc5a, reviewed) · B1b settings v3 + gating (ac8bb6f, reviewed) · B2 per-app repositories (**running**) · emulator cadence check
+- [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
 - [ ] P4a Now → **visual checkpoint with user**
 - [ ] P4b screens (6 agents) ∥ P5 notification/tile/widgets
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. Resume the overhaul: re-review B1a fixes (4be0431..833cc5a) and P3b fix round; merge P3b (`git merge worktree-agent-a0a2938b2486412ea`), gate, commit.
-2. Dispatch B1b (brief ready: `.superpowers/sdd/adaptive-wibbling-twilight/B1b-brief.md`), then B2 (`B2-brief.md`), then the emulator cadence check.
-3. P4a Now (brief not written yet) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
+1. B2: gate, commit, task review (ledger has state); then the emulator cadence check + B1b's device tests (MonitoringLifecycle, WidgetDelivery, RepositoryRecovery, Navigation).
+2. P4a Now (brief ready: `.superpowers/sdd/adaptive-wibbling-twilight/P4a-brief.md`) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
 
 ## Blockers / open questions
 
