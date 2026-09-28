@@ -10,7 +10,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
 - [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
 - [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
-- [~] P4b ∥ P5 wave (worktree branches off e1d7c13, NOT merged yet): done+reviewed: P5b tile (f204763), P5c widgets (a12c826), Health (b9a4c21), Settings (8aca44b); implemented, review/fix pending: History (703f8dc), SessionDetails (31ff8ca), P5a notification (600dd8f + fix round); still implementing: Apps, DataStatus. Per-task state + agent ids in the ledger.
+- [~] P4b ∥ P5 wave: all 9 implemented + reviewed on `worktree-agent-*` branches off e1d7c13 (P5a's fix-round re-review may still be pending — see ledger); **not merged yet**
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
