@@ -10,14 +10,14 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
 - [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
 - [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
-- [~] P4b ∥ P5 wave: all 9 implemented + reviewed on `worktree-agent-*` branches off e1d7c13 (P5a's fix-round re-review may still be pending — see ledger); **not merged yet**
+- [x] P4b ∥ P5 wave: 9 tasks reviewed + merged (7ea5448); WAVE-INTEGRATION de7eae5 (wiring, shims gone, shared design capacity, DAO queries, device tests green one class at a time) — review running
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. Finish the wave's review loops (ledger), then merge the 9 `worktree-agent-*` branches (conflicts expected in NavigationDeviceTest/DestructiveConfirmDeviceTest/HistoryDetailsDeviceTest — ownership rules in the ledger).
-2. WAVE-INTEGRATION task (ledger ruling): NavGraph entries + DI lines from the reports, delete temp shims, shared cached DesignCapacitySource (Now+Health), SessionDao projection + per-session delete DAO, shared formatters to ui/format, ACTION_STOP manifest filter, chart 150 % level tick; gate; device tests one class at a time; emulator checks (notification, tile, widgets).
-3. P4c removal → P6.
+1. Finish WAVE-INTEGRATION's review loop.
+2. P4c removal (brief ready: `.superpowers/sdd/adaptive-wibbling-twilight/P4c-brief.md`).
+3. P6: remaining test rewrites + new device tests, docs, compose-reviewer + independent design critic + module-graph-auditor, fresh verification, final whole-branch review; user runs `/screenshot-rebaseline` + `/device-check`.
 
 ## Blockers / open questions
 
