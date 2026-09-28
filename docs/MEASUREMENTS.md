@@ -7,13 +7,21 @@ BatStats reports Android and vendor data. It is not an independent electrical me
 | Value | Basis and limitation |
 | --- | --- |
 | Battery percentage | Android's level divided by its scale, rounded to a whole percentage. It is not a measured fraction of design capacity. |
-| Current | BatteryManager µA, optionally displayed as mA. Android defines positive as flowing into the battery and negative as flowing out. Contradictions with charging state are flagged; the app does not guess a vendor multiplier or flip the sign. |
+| Current | BatteryManager µA, optionally displayed as mA. Android defines positive as flowing into the battery and negative as flowing out. The database always keeps the raw value; the app can automatically detect and apply a per-device unit/sign correction — see **Automatic calibration** below — but it never guesses without evidence, and it never rescales the charge counter. |
 | Average current | A separate Android property whose averaging period depends on the device. It is not substituted for an unavailable instantaneous reading. |
 | Voltage and temperature | Android mV and tenths Celsius; temperature can be displayed in Fahrenheit. These are battery readings, not charger output or CPU temperature. |
 | Net power | Current × voltage, converted to mW. Derived from reported inputs; it is not an independent power measurement. |
 | Charge and remaining energy | Android charge counter in µAh and energy counter in nWh, where supported. Unsupported sentinels and rejected values are unavailable. A supported zero remains zero. |
-| Charging estimate | Android's approximate time to full, labeled as an estimate. |
-| Discharge estimate | Remaining reported charge divided by an observed drain trend. Requires at least five points over ten minutes, sufficient counter movement and comparable rates in both halves. Gaps, counter resets and power transitions invalidate the trend. Future use may change it. |
+| Charging estimate | Android's own `computeChargeTimeRemaining()` (API 28+) whenever the sampler has one. Otherwise a time-weighted average (45-minute half-life) of the observed charge rate up to 80%, then the 80→100% taper learned for the current charger; before a taper is learned, half the live rate is assumed for that stretch. The rate restarts on every new charger connection. |
+| Discharge estimate | The remaining charge counter divided by a time-weighted average (45-minute half-life) of the observed discharge rate. Sleep-through intervals count (their charge drop is real idle drain); observation gaps, counter resets and non-discharging intervals do not. Before enough live data accrues (10 minutes and 5 mAh), the estimate leans on the app's own 7-day typical discharge rate; the shown basis says which one dominates. |
+
+## Automatic calibration
+
+Some devices report `CURRENT_NOW` in the wrong unit (mA instead of µA) or with the sign inverted. BatStats can detect this by comparing the integral of raw current against the charge counter's own change over matching stretches of time (a "window": at least 20 mAh of counter movement over at least 10 minutes, on one charging or discharging direction, with the CPU awake for at least 90% of it). A correction is only applied when the evidence is consistent — 3 of the last 4 windows agree on the same unit and sign, and none of the kept windows contradicts it — never from a single window and never scaled to fit; a value that fits neither unit is treated as inconclusive.
+
+A faster, narrower check runs alongside it: 20 or more consecutive unplugged readings that are all positive (with a falling counter, when one is available) mark the sign as inverted, without deciding the unit. This fast path only fires while no window evidence says the sign is already normal.
+
+A detected correction that changes what the app actually uses shows a notice with an **Undo**; undoing restores the previous detection and will not re-apply the same rejected result until calibration is reset. Settings can also override the unit and/or sign directly, and an override always wins over detection. The detected/overridden calibration is stored outside Settings' own backup and export, so it will not follow a settings restore to a different device; the database itself always keeps the raw, uncorrected values, and the charge counter itself is only ever sanity-checked, never rescaled. The calibrated value is what Now, alerts, charts, the notification and the Quick Settings tile show.
 
 ## Observed periods
 
@@ -31,11 +39,19 @@ Shizuku is preferred. Availability and authorization are separate. Root and expl
 
 Android batterystats has its own since-charge/reset window, distinct from BatStats history. App charge values are Android estimates. A UID can include multiple packages or system services; consumption cannot be reliably split among them. Package mappings may include removed apps or profiles. Wakelocks, jobs, alarms, network bytes and CPU activity indicate work, not proof of excessive energy use. Comparisons use one report window. The proportional attributed total is an alternative total and must not be added to the UID total.
 
-Kernel readings require supported files and permissions, generally Root. Full-charge/design capacity ratio is a fuel-gauge estimate dependent on calibration and vendor units. Cycle count alone does not determine battery health. Unsupported fields stay unavailable.
+Kernel readings require supported files and permissions, generally Root. Full-charge/design capacity ratio is a fuel-gauge estimate dependent on calibration and vendor units (see **Capacity and health** below). Cycle count alone does not determine battery health. Unsupported fields stay unavailable.
+
+## Capacity and health
+
+The Health card (Now) and the Health screen show a full-charge capacity estimate and, against a design capacity, a health percentage. A full-charge estimate can come from a charge or discharge session — the counter's charge change divided by its percentage span, projected to 100% — or, with root, from the fuel gauge's own sysfs `charge_full`. A session-based estimate needs at least a 10-percentage-point span and the counter covering at least 75% of the session's observed time; its confidence is LOW below a 20-point span, MEDIUM from 20, HIGH from a 40-point span with at least 90% counter coverage. The current value combines the newest 50 sessions' estimates (plus a sysfs reading, when available) as a confidence-weighted median, so one outlier session cannot move it; its confidence is the strongest among the estimates within 10% of that median.
+
+Design capacity is the Settings override (mAh; 0 = automatic) when set, otherwise the fuel gauge's sysfs `charge_full_design` read once through root and cached — never re-read per screen, so a root prompt cannot repeat. A full-charge value outside a plausible range (roughly 0.3–50 Ah, to reject unit mistakes such as mAh landing in a µAh field) is rejected outright rather than scaled. Health is unavailable without a resolved design capacity, and it may read above 100% for a battery that is still newer than its design figure.
 
 ## Monitoring cost and storage
 
-Ordinary sampling defaults to 30 seconds; advanced collection defaults to 5 minutes. Shorter intervals improve responsiveness and perform more work. Polling does not acquire a wake lock or schedule an alarm to wake the CPU. State events also trigger readings. Notification updates are quiet and normally capped to a 30-second cadence, with important state changes surfaced sooner.
+Sampling runs at 2 seconds while something needs a live reading (the Now screen, an open session's details, or the Quick Settings tile while the shade is open), 30 seconds with the screen on otherwise, and 300 seconds with the screen off; none of this is user-configurable. Delays are scheduled on the uptime clock, so a pending poll never wakes a sleeping CPU, but broadcasts (screen on/off, Doze, a battery status change) still capture while it sleeps. A capture is written to history when it crosses a screen, Doze or gap boundary, when status/plugged or the level changes, or — for an ordinary poll — when at least 30 seconds have passed since the last saved row; everything else only updates realtime values and alerts. With monitoring off, only an active demand (e.g. the tile) polls, and those captures are realtime-only and never saved.
+
+Per-app breakdowns are not polled: a privileged dump only happens when a screen asks for one, or automatically at the start and end of a discharge session (debounced 30 seconds after an unplug and 10 seconds after a plug-in, so a rapid plug cycle does not trigger a wasted dump). The last successful dump is cached for 60 seconds and reused across callers and screens within that window.
 
 History is bounded to 100,000 samples and 10,000 sessions; the selected retention period also applies. Diagnostics retain up to 60 grouped local events in 32 KiB, with coalesced writes. Recent diagnostic events can be lost when the process stops. Export includes sources, units, UTC timestamps and reporting periods; sharing is deliberate.
 
