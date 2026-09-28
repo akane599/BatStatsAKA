@@ -99,8 +99,12 @@ fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {
             },
         ) { padding ->
             if (useRail) {
+                // Scaffold's default contentWindowInsets already padded `padding` on every side
+                // (there's no bottomBar to consume the bottom one). Applying that padding to this
+                // Row is the single place all 4 sides are accounted for, so the rail itself must
+                // not add its own (default: Vertical + Start) on top, or icons get extra gaps.
                 Row(Modifier.fillMaxSize().padding(padding)) {
-                    NavigationRail {
+                    NavigationRail(windowInsets = WindowInsets(0)) {
                         TAB_ITEMS.forEach { tab ->
                             NavigationRailItem(
                                 selected = tab.route == topLevelBackStack.selectedTab,

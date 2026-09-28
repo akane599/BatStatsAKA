@@ -171,3 +171,33 @@ end-to-end; recommend `/device-check` before merge.
    nothing else to pop to. Not asked to hide these buttons and didn't.
 5. No screenshot test added for the shell (brief said skip unless trivial; the existing helpers
    are per-screen, not shell-level, so skipped).
+
+## Fix round 1 (commit "P3a: rail insets fix")
+
+Reviewer finding (Important): the back-stack design and deep links checked out; the reviewer
+verified the `BackHandler`/`NavDisplay` assumption against the nav3 1.1.5 bytecode directly (no
+device run needed) — confirmed correct. One issue at `MainScreen.kt:876,908-921`: at ≥600 dp the
+`NavigationRail` path double-applied window insets. `Scaffold`'s default `contentWindowInsets`
+(systemBarsForVisualComponents, all 4 sides — there's no `bottomBar` in rail mode to consume the
+bottom one) already padded the `Row(Modifier.fillMaxSize().padding(padding))`; `NavigationRail`
+then applied its own default `windowInsets` (`Vertical + Start`) again on top, producing extra
+gaps above/below the rail icons and at the start edge.
+
+**Fix:** `NavigationRail(windowInsets = WindowInsets(0))` — the Row's `padding` from Scaffold
+already covers every side the rail needs, so the rail itself now contributes none. Added a comment
+at the call site explaining which side owns which inset in this mode. The <600 dp `NavigationBar`
+path was untouched (already correct: `bottomBar` consumes only the bottom inset via its own
+default, `NavGraph`'s content gets the rest via `padding`).
+
+```
+flock /tmp/batstats-gradle.lock ./gradlew :app:assembleDebug \
+  :app:testDebugUnitTest --tests app.batstats.ui.navigation.TopLevelBackStackTest \
+  --console=plain -q
+```
+Exit 0. `grep -E "error:|FAILED|e: |warning: \["` over the log: no matches.
+`TopLevelBackStackTest`: `tests="12" failures="0" errors="0"` (unaffected by this change; run to
+confirm nothing else regressed since navigation logic wasn't touched).
+
+Not re-verified on device (no window-size-class instrumentation exists to catch inset regressions
+automatically, and the emulator is in use) — recommend eyeballing the ≥600 dp rail layout in
+`/device-check` or a manual resize test before merge.
