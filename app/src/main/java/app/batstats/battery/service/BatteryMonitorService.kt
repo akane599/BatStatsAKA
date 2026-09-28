@@ -2,7 +2,6 @@ package app.batstats.battery.service
 
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
-import app.batstats.R
 import android.app.Service
 import android.app.NotificationManager
 import android.content.Intent
@@ -14,6 +13,7 @@ import android.util.Log
 import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.drain.DrainNotificationManager
+import app.batstats.battery.drain.NotificationIssue
 import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.Notifier
@@ -117,25 +117,19 @@ class BatteryMonitorService : Service() {
                     if (alerts.latches != before) preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet()).apply()
                 }
         }
-        // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once.
+        // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once (gated in run).
         serviceScope.launch {
-            val gate = UpdateGate<DrainNotificationManager.Content>()
-            val advanced = combine(shell.access, shell.lastError, collector.error) { access, shellError, collectorError ->
-                access to (collectorError ?: shellError)
+            val issue = combine(repository.error, shell.lastError, collector.error) { historyError, shellError, collectorError ->
+                when {
+                    historyError != null -> NotificationIssue.COLLECTION
+                    (collectorError ?: shellError) != null -> NotificationIssue.ADVANCED
+                    else -> null
+                }
             }
-            combine(repository.realtimeFlow, repository.observation, repository.error, advanced) {
-                    reading, observation, historyError, (access, accessError) ->
-                val issue = historyError ?: accessError?.let { getString(R.string.monitor_advanced_issue, it) }
-                val label = if (access == ShellRunner.Mode.NONE) getString(R.string.monitor_standard_unavailable) else getString(R.string.monitor_source, access.name)
-                val content = notifications.content(reading, observation, label, issue, advancedIssue = historyError == null && accessError != null)
-                content to (reading.sample?.screenOn != false)
-            }.collectLatest { (content, screenOn) ->
-                if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
-                val shown = display("notification") {
+            notifications.run(issue) { content ->
+                display("notification") {
                     getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID, notifications.build(content))
                 }
-                // A failed update retries on the next change, still ≥5 s after this attempt.
-                gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())
             }
         }
         serviceScope.launch {
