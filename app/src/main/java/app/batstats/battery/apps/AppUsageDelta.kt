@@ -26,11 +26,20 @@ object AppUsageDelta {
     /** A same-window dump whose total power went backwards (beyond floating-point rounding)
      * didn't really keep its window; treat it like a reset instead of reporting a bogus
      * negative-turned-zero delta. Per-uid fields are allowed to dip within a stable window
-     * (batterystats redistributes/rounds them) — that's exactly what the clamp below is for. */
-    private fun totalDecreased(baseline: List<AppUsageRow>, end: List<AppUsageRow>): Boolean =
-        totalPower(end) < totalPower(baseline) - POWER_EPSILON
-
-    private fun totalPower(rows: List<AppUsageRow>): Double = rows.sumOf { it.powerMah }
+     * (batterystats redistributes/rounds them) — that's exactly what the clamp below is for.
+     *
+     * The totals are summed only over uids present in *both* snapshots: a uid that was
+     * uninstalled between baseline and end drops out of `end.rows` entirely, and would otherwise
+     * make the total look like it went backwards even though every remaining app's power only
+     * rose — a false reset, not a real one. */
+    private fun totalDecreased(baseline: List<AppUsageRow>, end: List<AppUsageRow>): Boolean {
+        val baselineByUid = baseline.associateBy { it.uid }
+        val endByUid = end.associateBy { it.uid }
+        val commonUids = baselineByUid.keys intersect endByUid.keys
+        val baselineTotal = commonUids.sumOf { baselineByUid.getValue(it).powerMah }
+        val endTotal = commonUids.sumOf { endByUid.getValue(it).powerMah }
+        return endTotal < baselineTotal - POWER_EPSILON
+    }
 
     private fun clampedDelta(baselineRows: List<AppUsageRow>, endRows: List<AppUsageRow>): List<AppUsageRow> {
         val baselineByUid = baselineRows.associateBy { it.uid }

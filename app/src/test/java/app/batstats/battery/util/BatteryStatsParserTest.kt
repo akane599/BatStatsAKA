@@ -203,7 +203,10 @@ class BatteryStatsParserTest {
             9,10001,l,ctf,T,2,50,100,20,40
         """.trimIndent(),
         "8,10001,l,pwi,uid,10\n9,10001,u,pwi,uid,20\n9,10001,l,jb,\"unfinished,100,2",
-        "9,0,h,1234:B|100,0,i,uid,10001,example.app\n9,10001,l,pwi,uid,1.0,0,0,0",
+        // A real "9,h," history line: dropped by the `startsWith("9,h,")` filter itself, not by
+        // accident (an earlier fixture here mistakenly had an extra leading field, so it was only
+        // skipped because "h" isn't a recognized record type — not because it looked like history).
+        "9,h,1234:B|100,i,uid,10001,example.app\n9,10001,l,pwi,uid,1.0,0,0,0",
     )
 
     @Test fun streamingAndStringParsesAgreeOnEveryFixture() {

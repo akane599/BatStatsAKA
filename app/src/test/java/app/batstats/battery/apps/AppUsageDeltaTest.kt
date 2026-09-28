@@ -78,6 +78,19 @@ class AppUsageDeltaTest {
         assertEquals(1.0, result.rows.single().powerMah, 0.0)
     }
 
+    @Test fun uninstalledAppCannotFakeAResetWhileOthersRise() {
+        // uid 1 was heavy in the baseline but is gone from end (uninstalled between snapshots);
+        // uid 2 genuinely rose. The naive whole-list total (9.0+1.0=10.0 -> 3.0) looks like a
+        // decrease, but the total over uids common to both snapshots (uid 2 only: 1.0 -> 3.0) rose.
+        val baseline = snapshot(100L, 1L, row(1, power = 9.0), row(2, power = 1.0))
+        val end = snapshot(100L, 1L, row(2, power = 3.0))
+        val result = AppUsageDelta.compute(baseline, end)
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        val delta = result.rows.single()
+        assertEquals(2, delta.uid)
+        assertEquals(2.0, delta.powerMah, 0.0)
+    }
+
     @Test fun rowsWithNoUsageAreDropped() {
         val end = snapshot(100L, 1L, row(1, power = 0.0), row(2, power = 3.0))
         val result = AppUsageDelta.compute(null, end)
