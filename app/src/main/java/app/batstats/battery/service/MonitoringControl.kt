@@ -1,0 +1,17 @@
+package app.batstats.battery.service
+
+import kotlinx.coroutines.flow.StateFlow
+
+/** Starts and stops the monitoring foreground service; the single entry point for UI, tile and boot. */
+interface MonitoringControl {
+    val isMonitoring: StateFlow<Boolean>
+    fun start(): StartResult
+    fun stop()
+
+    enum class StartResult {
+        STARTED,
+        ALREADY_RUNNING,
+        /** Android refused a foreground-service start from the background; open the app instead. */
+        BLOCKED,
+    }
+}
