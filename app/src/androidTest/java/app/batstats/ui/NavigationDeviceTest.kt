@@ -13,6 +13,7 @@ import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.service.BatteryMonitorService
 import app.batstats.settings.AppSettings
 import app.batstats.test.DeviceEnvironment
+import app.batstats.ui.TestTags
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import org.junit.*
@@ -146,5 +147,29 @@ class NavigationDeviceTest {
         scroll(R.string.monitor_details); click(R.string.monitor_details)
         scroll(R.string.monitor_counter_help)
         capture("observation-dark-font200-landscape")
+    }
+
+    @Test fun tabsAreReachableBackReturnsToNowAndRetapPopsToRoot() {
+        compose.waitUntil(120_000) { BatteryGraph.repo.realtimeFlow.value.level != null }
+        awaitDashboard()
+
+        // Each tab opens its interim screen directly (no push); back from a tab root returns to Now.
+        compose.onNodeWithTag(TestTags.TAB_APPS).performClick()
+        compose.onNodeWithText(label(R.string.adv_access_help)).assertIsDisplayed()
+        backToDashboard()
+
+        compose.onNodeWithTag(TestTags.TAB_HISTORY).performClick()
+        compose.onNode(hasSetTextAction()).assertIsDisplayed()
+        backToDashboard()
+
+        compose.onNodeWithTag(TestTags.TAB_SETTINGS).performClick()
+        compose.onNodeWithContentDescription(label(R.string.settings_more)).assertIsDisplayed()
+        backToDashboard()
+
+        // Re-tapping the current tab pops it back to its root instead of leaving the app.
+        scroll(R.string.monitor_details); click(R.string.monitor_details)
+        scroll(R.string.monitor_counter_help)
+        compose.onNodeWithTag(TestTags.TAB_NOW).performClick()
+        awaitDashboard()
     }
 }
