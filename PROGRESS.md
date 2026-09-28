@@ -9,14 +9,15 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
 - [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
 - [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
-- [~] P4a Now (**running**, brief `P4a-brief.md`) → **visual checkpoint with user**
+- [~] P4a Now (c43b796; review running) → **visual checkpoint with user: waiting** (`design/checkpoint-P4a/contact-sheet.png`)
 - [ ] P4b screens (6 agents) ∥ P5 notification/tile/widgets
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. P4a Now: gate, commit, review (ledger has state) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
-2. P4b (6 agents) ∥ P5 (3 agents): briefs not written yet.
+1. P4a: user's checkpoint answers (look, readouts 2×2, Since-unplug reset) + finish its review/fix loop.
+2. P4a' component follow-ups (icon loader at root, U+2212 in charts, SegmentedTabs, public overhang/unit scale) before the fan-out.
+3. P4b (6 agents) ∥ P5 (3 agents): briefs ready in `.superpowers/sdd/adaptive-wibbling-twilight/` (P4-wave-common.md + 9 briefs).
 
 ## Blockers / open questions
 
