@@ -45,7 +45,7 @@ cat <<'EOF'
    1. Copy CLAUDE.md, PROGRESS.md, .claude/ and scripts/ into the repo root.
    2. Open Claude Code there and run:
         /bootstrap                # detects stack, fills every placeholder, verifies the build
-        /kotlinsense:install      # if Kotlin (needs JDK 17+)
+        # if Kotlin: put JetBrains kotlin-lsp on PATH (github.com/Kotlin/kotlin-lsp releases)
         bash scripts/install-jdtls.sh   # if Java (run in a normal terminal)
         /claude-code-setup        # optional: repo-specific hooks/agents
    3. Daily:  /feature-dev "<feature>"  ->  /review-pr  ->  /revise-claude-md

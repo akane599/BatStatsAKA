@@ -15,7 +15,7 @@ From the output, pick and record:
 - **JDK:** `java_target` is what the build wants; `java_home`/`jdks_installed` is what the machine has. If they disagree, write the exact `JAVA_HOME` path that satisfies the build (e.g. `/usr/lib/jvm/java-21-openjdk-amd64`) and note whether the project pins it in `gradle.properties` (`org.gradle.java.home`).
 - **Architecture:** infer from module list and package layout (`ui/domain/data`, `feature-*` modules, single-module, MVVM vs MVI vs MVP). Say "single-module MVVM" rather than inventing layers that don't exist.
 - **Design loop (Compose only):** if `screenshot_testing=none` and AGP ≥ 8.5, note in the report that adding `com.android.compose.screenshot` enables the screenshot loop used by `/ui-overhaul` and the `compose-design` skill (offer, don't apply). Record `previews`, `dynamic_color`, `custom_typography`, and `literal_colors_outside_theme` in the STACK block's UI line — a high literal count is the first thing an overhaul fixes.
-- **LSP:** Kotlin-primary → `kotlinsense` (run `/kotlinsense:install` if `kotlin_ls=missing`). Java-primary or mixed with substantial Java → also `jdtls` (`bash scripts/install-jdtls.sh` if `jdtls=missing`).
+- **LSP:** Kotlin-primary → the official `kotlin-lsp` plugin (needs JetBrains `kotlin-lsp` on PATH; the fwcd `kotlin-language-server` can't read Kotlin metadata newer than 2.2). Java-primary or mixed with substantial Java → also `jdtls` (`bash scripts/install-jdtls.sh` if `jdtls=missing`).
 
 ## Step 3 — Write CLAUDE.md
 Replace the STACK block with a compact bulleted summary (≤ 12 lines) and fill every `<…>` placeholder. Rules:

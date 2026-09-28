@@ -9,7 +9,7 @@ If the STACK block below still contains placeholders, run `/bootstrap` first.
 - Decisions go in the PROGRESS.md decision log with a one-line "why". Chat is not a record.
 
 <!-- STACK:BEGIN  (filled by /bootstrap — do not hand-edit values you haven't verified) -->
-- Language: Kotlin only (110 files, 0 Java) · New code in: Kotlin
+- Language: Kotlin only (no Java) · New code in: Kotlin
 - UI: Compose (Material 3) · previews: 0 in main · screenshot tests: compose-preview via AGP test suite `screenshotTest` (engine 0.0.1-alpha16; host TZ/locale pinned to UTC/en-US) · dynamic color: yes · custom typography: no · literal colors outside theme: 0 · raw `.dp` in `ui/screens`: 54 · 4 XML layouts are RemoteViews app widgets only
 - JDK: build targets 21; `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` (system default; pinned in gradle.properties: no)
 - Gradle 9.7.1 · AGP 9.5.0-alpha07 (alpha, for screenshot test suites) · Kotlin 2.4.20 · compileSdk 37 · minSdk 26 · version catalog: yes (`gradle/libs.versions.toml`)
@@ -34,10 +34,10 @@ If the STACK block below still contains placeholders, run `/bootstrap` first.
 - Unit tests:    `./gradlew :app:testDebugUnitTest --console=plain -q`
 - Instrumented:  `./gradlew :app:connectedDebugAndroidTest --console=plain -q` (emulator booted first)
 - Lint:          `./gradlew :app:lintDebug --console=plain -q`
-- Screenshots:   `./gradlew :app:testDebugScreenshotTestDefaultTestSuite --console=plain -q` (re-baseline with `/screenshot-rebaseline`, not a bare `update…` run: renamed/removed previews leave stale PNGs). `@PreviewTest` previews in `app/src/screenshotTest/kotlin/`, refs in `app/src/screenshotTestDefaultDebug/reference/` (commit with the UI change)
+- Screenshots:   `bash .claude/scripts/run_screenshot_tests.sh` (runs `:app:testDebugScreenshotTestDefaultTestSuite --rerun`, lists failures; exit 0 pass / 1 failures / 3 build broke). Re-baseline: ask the user to run `/screenshot-rebaseline` (never a bare `update…` run: renamed/removed previews leave stale PNGs). `@PreviewTest` previews in `app/src/screenshotTest/kotlin/`, refs in `app/src/screenshotTestDefaultDebug/reference/` (commit with the UI change)
 - Failures only: append `2>&1 | grep -E "error:|FAILED|e: |warning: \[" | head -40`
 - Exit codes:    shell is zsh — a pipe hides Gradle's status (`${PIPESTATUS}` is empty); redirect to a file and check `$?`, or use `$pipestatus[1]`
-- Task names:    don't use `./gradlew tasks --all` (AGP 9.5.0-alpha07 fails on release preview tasks); list via an init script printing `project(":app").tasks.names`
+- Task names:    don't use `./gradlew tasks --all` (AGP 9.5.0-alpha07 fails creating `generateReleaseComposePreviewRunfiles`: release has unit tests disabled); list via an init script printing `project(":app").tasks.names`
 - Logs:          `adb logcat -d --pid=$(adb shell pidof -s org.mlm.batstats.debug) | tail -80` — never unbounded `adb logcat`
 - Reports:       `app/build/reports/tests/`, `app/build/reports/lint-results-debug.html`, `app/build/reports/tests/testDebugScreenshotTestDefaultTestSuite/index.html`
 
@@ -46,7 +46,7 @@ Main context is for decisions and edits. Everything that reads a lot or reviews 
 - **Explore before touching:** for anything spanning >3 files, dispatch an `Explore` agent ("find X, return file list + 5-line summary") and read only the files it names.
 - **New feature:** `/feature-dev <description>` — it runs explorer → architect → reviewer agents itself. Answer its clarifying questions; don't skip the architecture step.
 - **Review before merge:** `/review-pr` (local) or `/code-review` (GitHub PR). For UI changes also run the `compose-reviewer` agent (Compose) or ask a general-purpose agent to review layouts/ViewBinding for leaks and lifecycle misuse (XML).
-- **Project tools:** `/new-screen <Name — purpose>` scaffolds a screen (wrapper + `XxxContent` + route + strings ×3 locales + screenshot test); `screenshot-diff-triager` agent when the screenshot suite fails; `/screenshot-rebaseline` after intended UI changes; `/device-check` runs CI's emulator suite (ordinary + Shizuku phases). The PostToolUse hook `.claude/hooks/check-res-db.sh` runs `check_resources.py` / `check_migrations.py` on res and `battery/data/db` edits — fix its exit-2 feedback, don't bypass it.
+- **Project tools:** `/new-screen <Name — purpose>` scaffolds a screen (wrapper + `XxxContent` + route + strings ×3 locales + screenshot test); `screenshot-diff-triager` agent when the screenshot suite fails; `/screenshot-rebaseline` and `/device-check` (CI's emulator suite) are user-invoked — ask the user to run them. The PostToolUse hook `.claude/hooks/check-res-db.sh` runs `check_resources.py` / `check_migrations.py` on res and `battery/data/db` edits — fix its exit-2 feedback, don't bypass it.
 - **Audits:** `/claude-security` for security; `module-graph-auditor` agent on any module/dependency change; `android-emulator-qa` skill for on-device behavior. Log every run in the PROGRESS.md audit table.
 - **Parallelism:** independent reviews/searches go out in one batch (one message, several Agent calls). Sequential only when one result feeds the next.
 - **UI overhauls (Compose):** `/ui-overhaul <scope>` — inventory → baseline screenshots → brief + tokens (approval gate) → theme first → one agent per screen → screenshots → independent design critique. Uses the `compose-design` skill; never restyle screens before the theme tokens exist.

@@ -1,6 +1,9 @@
 # new-screen templates
 
 Replace `Xxx`/`xxx`. Imports shown are the non-obvious ones; let the compiler tell you the rest.
+State lives in the ViewModel as a nested `Ui` class (the `HistoryViewModel.Ui` pattern), so `viewmodel/` never
+imports from `ui/`. If the wrapper instead combines several flows (as `DashboardScreen` does), declare an
+`@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
 
 ## `ui/screens/XxxScreen.kt`
 
@@ -14,18 +17,11 @@ import app.batstats.R
 import app.batstats.viewmodel.XxxViewModel
 import org.koin.androidx.compose.koinViewModel
 
-/** Everything [XxxContent] renders; plain values only, so screenshot tests can build it. */
-data class XxxUiState(
-    val loading: Boolean = false,
-    val items: List<String> = emptyList(),
-    val error: String? = null,
-)
-
 @Composable
 fun XxxScreen(onBack: () -> Unit, vm: XxxViewModel = koinViewModel()) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val ui by vm.ui.collectAsStateWithLifecycle()
     XxxContent(
-        state = state,
+        ui = ui,
         onBack = onBack,
         onRefresh = vm::refresh,
     )
@@ -34,7 +30,7 @@ fun XxxScreen(onBack: () -> Unit, vm: XxxViewModel = koinViewModel()) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun XxxContent(
-    state: XxxUiState,
+    ui: XxxViewModel.Ui,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -67,11 +63,19 @@ fun XxxContent(
 package app.batstats.viewmodel
 
 class XxxViewModel(private val source: XxxSource) : ViewModel() {
-    private val _state = MutableStateFlow(XxxUiState(loading = true))
-    val state: StateFlow<XxxUiState> = _state.asStateFlow()
+    /** Everything [app.batstats.ui.screens.XxxContent] renders; plain values, so screenshot tests can build it. */
+    @Immutable
+    data class Ui(
+        val loading: Boolean = false,
+        val items: List<String> = emptyList(),
+        val error: String? = null,
+    )
+
+    private val _ui = MutableStateFlow(Ui(loading = true))
+    val ui: StateFlow<Ui> = _ui.asStateFlow()
 
     fun refresh() {
-        viewModelScope.launch { /* load via source, then _state.update { … } */ }
+        viewModelScope.launch { /* load via source, then _ui.update { … } */ }
     }
 }
 ```
@@ -91,7 +95,7 @@ class XxxViewModelTest {
         val vm = XxxViewModel(FakeXxxSource(listOf("a", "b")))
         vm.refresh()
         advanceUntilIdle()
-        assertEquals(listOf("a", "b"), vm.state.value.items)
+        assertEquals(listOf("a", "b"), vm.ui.value.items)
     }
 }
 ```
@@ -118,17 +122,18 @@ onOpenXxx = { backStack.add(Screen.Xxx) },
 package app.batstats.ui.screens
 
 import androidx.compose.runtime.Composable
-import app.batstats.ui.FIXED_TIME_MS
 import app.batstats.ui.PhonePreview
 import app.batstats.ui.ScreenPreviews
 import app.batstats.ui.ScreenshotTheme
+import app.batstats.viewmodel.XxxViewModel
 import com.android.tools.screenshot.PreviewTest
 
-private val populated = XxxUiState(items = listOf("First", "Second", "Third"))
+// Any timestamps: FIXED_TIME_MS ± offsets (import app.batstats.ui.FIXED_TIME_MS), never the real clock.
+private val populated = XxxViewModel.Ui(items = listOf("First", "Second", "Third"))
 
 @Composable
-private fun XxxPreviewContent(state: XxxUiState) {
-    XxxContent(state = state, onBack = {}, onRefresh = {})
+private fun XxxPreviewContent(ui: XxxViewModel.Ui) {
+    XxxContent(ui = ui, onBack = {}, onRefresh = {})
 }
 
 @PreviewTest
@@ -149,7 +154,7 @@ fun XxxScreenOledPreview() {
 @PhonePreview
 @Composable
 fun XxxScreenEmptyPreview() {
-    ScreenshotTheme { XxxPreviewContent(XxxUiState()) }
+    ScreenshotTheme { XxxPreviewContent(XxxViewModel.Ui()) }
 }
 ```
 Use `@TallPhonePreview` instead of `@PhonePreview` when the distinguishing content of a secondary state sits below 500 dp.
