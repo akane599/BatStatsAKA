@@ -4,18 +4,20 @@ _Last updated: 2026-09-28 by claude_
 _Claude: read this first every session. Update it before ending. Keep each section under ~15 lines; archive old entries at the bottom._
 
 ## Now (this session / this week)
-Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md` (one commit per verified phase, no push; before-refs in `design/before/`)
-- [ ] P0a bug fixes · P0b dead code/resources
-- [ ] Contracts (shared types/interfaces stubbed)
-- [ ] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme
-- [ ] Wave B: B1a sampler/repository · B1b settings v3 + gating · B2 per-app repositories · emulator cadence check
-- [ ] P3a shell/navigation · P3b components/charts
+Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Run ledger (rulings, deferred minors, per-task state): `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` — read it before resuming. Before-refs in `design/before/`, Wave A renders in `design/after-waveA/`.
+- [x] P0a bug fixes · P0b dead code/resources · Contracts
+- [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
+- [~] Wave B: B1a sampler done (4cf382f + fixes 833cc5a; **scoped re-review of the fixes pending**) · B1b settings v3 + gating · B2 per-app repositories · emulator cadence check
+- [x] P3a shell/navigation (merged 935e985) · [~] P3b components/charts (fix round 1 in worktree branch `worktree-agent-a0a2938b2486412ea`; re-review + merge pending)
 - [ ] P4a Now → **visual checkpoint with user**
 - [ ] P4b screens (6 agents) ∥ P5 notification/tile/widgets
 - [ ] P4c removal of old screens/shims
 - [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
+1. Resume the overhaul: re-review B1a fixes (4be0431..833cc5a) and P3b fix round; merge P3b (`git merge worktree-agent-a0a2938b2486412ea`), gate, commit.
+2. Dispatch B1b (brief ready: `.superpowers/sdd/adaptive-wibbling-twilight/B1b-brief.md`), then B2 (`B2-brief.md`), then the emulator cadence check.
+3. P4a Now (brief not written yet) → show the user Now screenshots + restyled Settings theme before fanning out P4b/P5.
 
 ## Blockers / open questions
 
@@ -26,6 +28,10 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Added Compose Preview Screenshot Testing (`com.android.compose.screenshot` 0.0.1-alpha16) + smoke test `TelemetryChartScreenshotTest` (light/dark/1.5× font). Verified by: independent agent — `assembleDebug` exit 0, `testDebugUnitTest` 107/107, `validateDebugScreenshotTest` 3/3, refs unchanged
 
 ## Decision log (never delete, one line each)
+- 2026-09-28 — Overhaul outline token: M3 `outline` = #63758D (approved #3A4452 kept as `outlineVariant`) because #3A4452 was 1.45–1.95:1 on surfaces (invisible Switch track); smallest lightening passing ≥3:1 on every tier.
+- 2026-09-28 — Overhaul ETA/calibration: "sleep gaps" skip only observation gaps (engine's awake-time rule), not CPU-suspended intervals — counter Δq across suspend is real idle drain. Calibration fast path requires plugged == 0 and a falling counter.
+- 2026-09-28 — Overhaul persistence: screen-off polls saved at most every 30 s (elapsed clock) so a stuck 2 s demand token can't write every 2 s; a session end always forces a save.
+- 2026-09-28 — Parallel waves run in isolated git worktrees with Gradle serialised by `flock /tmp/batstats-gradle.lock`; worktrees sometimes start at origin/main — agents verify/reset their base first. `.superpowers/` and `.claude/worktrees/` are gitignored (a worktree once committed a report).
 - 2026-09-28 — Overhaul plan audited by a fresh-context `/plan-audit`: APPROVE WITH FIXES (4 blockers + 23 fixes, all folded into the plan before approval). User approved dark-only + OLED, 4 tabs, on-demand per-app stats, QUERY_ALL_PACKAGES, auto calibration.
 - 2026-09-28 — Removed the `ktlint -F` on-edit hook: ktlint absent (no-op) and, if installed, it would reformat whole files (codebase uses `;` chains/wildcard imports). Revisit if ktlint is adopted with a baseline.
 - 2026-09-28 — CI runs `:app:testDebugScreenshotTestDefaultTestSuite` in the existing verify step (same JDK 21/Linux as local). Revisit if CI renders differ from local refs (font/JDK drift).
