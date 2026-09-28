@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="settings_value_percent">%%%1$s</string>
+
+    <string name="settings_dismiss">Kapat</string>
+    <string name="settings_save">Kaydet</string>
+    <string name="settings_cancel">İptal</string>
+
+    <string name="settings_monitoring_title">İzleme</string>
+    <string name="settings_auto_start">Yeniden başlatınca başlat</string>
+    <string name="settings_status_link">Durum</string>
+    <string name="settings_status_link_summary">Erişim modu, kalibrasyon ve son sorunlar</string>
+    <string name="settings_monitoring_info_title">İzleme hakkında</string>
+    <string name="settings_monitoring_info_body">Yeniden başlatınca başlat: Android izin verirse telefon yeniden başladığında BatStats izlemeye devam eder. Aksi hâlde bir bildirim izlemeyi başlatmanızı sağlar. Shizuku\'nun ayrıca yeniden başlatılması gerekebilir.\n\nDurum çubuğu simgesi: izleme bildiriminin durum çubuğunda gösterdiği değer.</string>
+
+    <string name="settings_alerts_title">Uyarılar</string>
+    <string name="settings_alert_low">Düşük pil</string>
+    <string name="settings_alert_high">Şarj sınırı</string>
+    <string name="settings_alert_temperature">Yüksek sıcaklık</string>
+    <string name="settings_alert_discharge">Yüksek tüketim</string>
+    <string name="settings_alert_full">Tam şarj</string>
+    <string name="settings_alert_sound">Uyarı sesi ve titreşimi</string>
+    <string name="settings_alert_sound_summary">Android bildirim ayarlarında</string>
+    <string name="settings_threshold_description">%1$s eşiği, %2$s</string>
+    <string name="settings_threshold_low_hint">Seviye bu değere düştüğünde uyar.</string>
+    <string name="settings_threshold_high_hint">Şarj bu seviyeye ulaştığında uyar.</string>
+    <string name="settings_threshold_temperature_hint">Pil bu sıcaklığa ulaştığında uyar.</string>
+    <string name="settings_threshold_discharge_hint">Tüketim bunun üzerinde kaldığında uyar.</string>
+    <string name="settings_alerts_info_title">Uyarılar hakkında</string>
+    <string name="settings_alerts_info_body">Uyarılar yalnızca izleme açıkken çalışır.\n\nDüşük pil, seviye eşiğinize düştüğünde uyarır. Şarj sınırı, şarj sizin eşiğinize ulaştığında uyarır.\n\nYüksek tüketim, en az 1 dakikaya yayılan en az 3 eşik üstü okuma gerektirir. Enerjiyi hangi uygulamanın kullandığını söylemez.\n\nSıcaklık eşiği, hangi birimi gösterirseniz gösterin °C olarak saklanır.\n\nSes ve titreşim, uyarı bildirimleri için Android ayarlarında belirlenir.</string>
+
+    <string name="settings_measurement_title">Ölçüm</string>
+    <string name="settings_detected_unit">Algılanan birim</string>
+    <string name="settings_detected_sign">Algılanan işaret</string>
+    <string name="settings_evidence_windows">Eşleşen %1$d şarj sayacı penceresinden.</string>
+    <string name="settings_evidence_sign_only">Pildeyken pozitif okumalardan (yalnızca işaret).</string>
+    <string name="settings_evidence_none">Henüz algılanmadı. Telefon kullanılırken veya şarj olurken izleme gerekir.</string>
+    <string name="settings_override_note">Aşağıdaki birim veya işaret ayarınız algılamayı geçersiz kılar.</string>
+    <string name="settings_reset_calibration">Kalibrasyonu sıfırla</string>
+    <string name="settings_design_capacity_hint">Otomatik için boş, ya da %1$s–%2$s mAh</string>
+    <string name="settings_design_capacity_error">%1$s–%2$s mAh girin veya boş bırakın.</string>
+    <string name="settings_measurement_info_title">Ölçüm hakkında</string>
+    <string name="settings_measurement_info_body">Android pil akımını µA olarak bildirir, ancak bazı telefonlar mA kullanır ya da işareti ters çevirir. BatStats okumaları şarj sayacıyla karşılaştırır ve düzeltir.\n\nAkım birimi ve akım işareti algılamayı geçersiz kılar; Otomatik algılamayı kullanır.\n\nKalibrasyonu sıfırla algılamayı unutur ve yeniden başlar. Tüm verileri silmek onu korur.\n\nAyar dışa aktarımı birim ve işaret ayarlarınızı içerir, algılanan kalibrasyonu asla içermez.\n\nTasarım kapasitesi pil sağlığı için kullanılır. Android\'in bildirdiği kapasiteyi kullanmak için Otomatik bırakın.</string>
+    <string name="settings_reset_calibration_title">Kalibrasyon sıfırlansın mı?</string>
+    <string name="settings_reset_calibration_body">BatStats algılanan birimi ve işareti unutur ve yeni okumalardan yeniden algılar. Geçmişiniz ve ayarlarınız korunur.</string>
+    <string name="settings_reset_calibration_confirm">Sıfırla</string>
+    <string name="settings_calibration_reset_done">Kalibrasyon sıfırlandı</string>
+
+    <string name="settings_appearance_title">Görünüm</string>
+    <string name="settings_pure_black">Saf siyah</string>
+    <string name="settings_pure_black_summary">OLED ekranlar için</string>
+    <string name="settings_material_you">Material You</string>
+    <string name="settings_material_you_summary">Duvar kâğıdınızdan vurgu renkleri</string>
+    <string name="settings_temperature_unit">Sıcaklık birimi</string>
+
+    <string name="settings_data_title">Veri</string>
+    <string name="settings_retention">Geçmişi sakla</string>
+    <string name="settings_data_link">Dışa aktar, içe aktar ve sil</string>
+    <string name="settings_data_info_title">Veri hakkında</string>
+    <string name="settings_data_info_body">Bu süreden eski geçmiş, içe aktarılan dahil, silinir.\n\nDepolama ayrıca «Süresiz» seçiliyken bile 100.000 örnek ve 10.000 oturumla sınırlıdır.</string>
+</resources>
