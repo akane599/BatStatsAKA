@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Apps -->
+    <string name="apps_unit_seconds">sn</string>
+    <string name="apps_title">Uygulamalar</string>
+    <string name="apps_refresh">Uygulama istatistiklerini yenile</string>
+    <string name="apps_loading">Android\'in pil istatistikleri okunuyor…</string>
+    <string name="apps_loading_description">Uygulamalar yükleniyor</string>
+    <string name="apps_updated">Güncellendi: %1$s</string>
+
+    <string name="apps_access_title">Uygulama başına istatistikler için erişim gerekiyor</string>
+    <string name="apps_access_not_set_up">Android, uygulama başına pil istatistiklerini Shizuku, root veya ADB erişimi arkasında tutar. Henüz hiçbiri kurulmadı.</string>
+    <string name="apps_access_shizuku">Shizuku çalışıyor ancak BatStats\'e henüz izin vermedi.</string>
+    <string name="apps_access_adb">Bu Android sürümünde ADB ile verilen erişim uygulama başına istatistikleri kapsamıyor. Bunun yerine Shizuku veya root kullanın.</string>
+    <string name="apps_access_refused">Android, mevcut erişimle uygulama başına istatistikleri reddetti.</string>
+    <string name="apps_access_set_up">Erişimi kur</string>
+    <string name="apps_access_allow">Shizuku\'da izin ver</string>
+
+    <string name="apps_failed_title">Android istatistikleri okunamadı</string>
+    <string name="apps_failed_format">Android, BatStats\'in okuyamadığı bir biçimde yanıt verdi.</string>
+    <string name="apps_failed_shizuku">Shizuku üzerinden okuma başarısız oldu. Tekrar deneyin veya Shizuku\'yu yeniden başlatın.</string>
+    <string name="apps_failed_other">Okuma başarısız oldu. Birazdan tekrar deneyin.</string>
+    <string name="apps_retry">Tekrar dene</string>
+
+    <string name="apps_summary_title">Android istatistikleri</string>
+    <string name="apps_summary_title_since">%1$s itibarıyla Android istatistikleri</string>
+    <string name="apps_summary_on_battery">Pilde</string>
+    <string name="apps_summary_screen_on">Ekran açık</string>
+    <string name="apps_summary_screen_off">Ekran kapalı</string>
+    <string name="apps_summary_used">%%%1$s kullanıldı</string>
+    <string name="apps_summary_deep_doze">Derin Doze</string>
+    <string name="apps_summary_light_doze">Hafif Doze</string>
+    <string name="apps_summary_capacity">Kapasite</string>
+    <string name="apps_summary_info_title">Android istatistikleri hakkında</string>
+    <string name="apps_summary_info_body">Bu sayılar Android\'in kendi pil istatistiklerinden gelir. Android, telefon tam şarjdan sonra fişten çekildiğinde saymaya başlar ve bir sonraki tam şarjda baştan başlar.\n\nUygulama başına mAh değerleri ölçüm değil, Android\'in güç modelinden gelen tahminlerdir. Ekran açık ve kapalı, her durumdaki süreyi ve pilin kullanılan payını gösterir. Doze, telefonun ekran kapalıyken boşta geçirdiği süredir: en çok tasarrufu derin Doze sağlar.\n\nKapasite, Android\'in pilin tam şarjına dair kendi tahminidir.</string>
+
+    <string name="apps_no_access_title">Uygulamalar burada görünür</string>
+    <string name="apps_no_access_body">Erişim kurulduğunda her uygulamanın pil kullanımı burada, en büyükten başlayarak görünür.</string>
+
+    <string name="apps_search">Uygulama ara</string>
+    <string name="apps_search_clear">Aramayı temizle</string>
+    <string name="apps_sort_label">Sırala</string>
+    <string name="apps_sort_battery">Pil</string>
+    <string name="apps_sort_cpu">CPU</string>
+    <string name="apps_sort_foreground">Ön plan</string>
+    <string name="apps_sort_background">Arka plan</string>
+    <string name="apps_sort_network">Ağ</string>
+    <string name="apps_system_toggle">Sistem uygulamaları</string>
+    <plurals name="apps_count">
+        <item quantity="one">%d uygulama</item>
+        <item quantity="other">%d uygulama</item>
+    </plurals>
+
+    <string name="apps_empty_search_title">“%1$s” ile eşleşen uygulama yok</string>
+    <string name="apps_empty_search_body">Yazımı kontrol edin veya paket adıyla arayın.</string>
+    <plurals name="apps_empty_search_system">
+        <item quantity="one">%d sistem uygulaması eşleşiyor.</item>
+        <item quantity="other">%d sistem uygulaması eşleşiyor.</item>
+    </plurals>
+    <string name="apps_show_system">Sistem uygulamalarını göster</string>
+    <string name="apps_empty_only_system_title">Pili yalnızca sistem uygulamaları kullandı</string>
+    <string name="apps_empty_title">Henüz sayılmış uygulama kullanımı yok</string>
+    <string name="apps_empty_body">Android, istatistikleri baştan başladığından beri hiçbir uygulama kullanımı saymadı.</string>
+
+    <!-- AppDetails -->
+    <string name="apps_details_back">Geri</string>
+    <string name="apps_details_app_info">Uygulama bilgisi</string>
+    <string name="apps_details_caption_since">%1$s itibarıyla · güncellendi %2$s</string>
+    <string name="apps_details_battery">Kullanılan pil</string>
+    <string name="apps_details_share">Tüm uygulamalardaki payı</string>
+    <string name="apps_details_not_counted">Android, istatistikleri baştan başladığından beri bu uygulamanın kullanımını saymadı.</string>
+
+    <string name="apps_details_time_title">Duruma göre süre</string>
+    <string name="apps_details_time_foreground">Ön plan</string>
+    <string name="apps_details_time_fgs">Ön plan hizmeti</string>
+    <string name="apps_details_time_background">Arka plan</string>
+    <string name="apps_details_time_cached">Önbellekte</string>
+    <string name="apps_details_time_info_title">Duruma göre süre hakkında</string>
+    <string name="apps_details_time_info_body">Ön plan, uygulamanın ekranda açık olduğu süredir. Ön plan hizmeti, müzik veya navigasyon gibi bir bildirim görünürken çalışmaya devam eder.\n\nArka plan, ikisi de olmadan çalıştığı süredir. Önbellekte, Android\'in uygulamayı daha hızlı açılsın diye bellekte duraklatılmış tuttuğu anlamına gelir; az pil harcar.</string>
+
+    <string name="apps_details_cpu_title">CPU</string>
+    <string name="apps_details_cpu_time">CPU süresi</string>
+    <string name="apps_details_kept_awake">Uyanık tuttu</string>
+    <string name="apps_details_no_background_work">Android\'in istatistikleri baştan başladığından beri wakelock, alarm, iş veya eşitleme yok.</string>
+
+    <string name="apps_details_wakelocks_title">Wakelock\'lar</string>
+    <string name="apps_details_wakelocks_info_title">Wakelock\'lar hakkında</string>
+    <string name="apps_details_wakelocks_info_body">Bir wakelock, uygulama çalışırken telefonun uyumasını engeller. Her birinin adını uygulama verir. Ekran kapalıyken uzun CPU wakelock\'ları yaygın bir tüketim nedenidir.\n\nSüreler paylaşılır: birkaç uygulama aynı anda wakelock tuttuğunda Android süreyi aralarında böler.</string>
+    <string name="apps_details_wakelock_cpu">CPU\'yu açık tutar</string>
+    <string name="apps_details_wakelock_screen">ekranı açık tutar</string>
+    <plurals name="apps_details_times">
+        <item quantity="one">%d kez</item>
+        <item quantity="other">%d kez</item>
+    </plurals>
+    <string name="apps_details_show_all">Tümünü göster (%1$d)</string>
+    <string name="apps_details_show_fewer">Daha az göster</string>
+
+    <string name="apps_details_alarms_title">Alarmlar</string>
+    <plurals name="apps_details_wakeups">
+        <item quantity="one">%d uyandırma</item>
+        <item quantity="other">%d uyandırma</item>
+    </plurals>
+    <string name="apps_details_jobs_title">İşler</string>
+    <plurals name="apps_details_runs">
+        <item quantity="one">%d çalıştırma</item>
+        <item quantity="other">%d çalıştırma</item>
+    </plurals>
+    <string name="apps_details_syncs_title">Eşitlemeler</string>
+    <plurals name="apps_details_syncs">
+        <item quantity="one">%d eşitleme</item>
+        <item quantity="other">%d eşitleme</item>
+    </plurals>
+
+    <string name="apps_details_network_title">Ağ</string>
+    <string name="apps_details_mobile">Mobil veri</string>
+    <string name="apps_details_wifi">Wi-Fi</string>
+    <string name="apps_details_radio">Mobil radyo açık</string>
+
+    <string name="apps_details_hardware_title">Sensörler ve donanım</string>
+    <string name="apps_details_gps">GPS</string>
+    <string name="apps_details_sensors">Sensörler</string>
+    <string name="apps_details_camera">Kamera</string>
+    <string name="apps_details_flashlight">Fener</string>
+    <string name="apps_details_audio">Ses</string>
+    <string name="apps_details_video">Video</string>
+    <string name="apps_details_bluetooth_scan">Bluetooth taraması</string>
+
+    <string name="apps_details_history_title">Pildeki oturumlar</string>
+    <string name="apps_details_history_caption">%2$d oturumun %1$d tanesinde ilk 30 içinde</string>
+    <string name="apps_details_history_empty">Son 30 günde uygulama başına veri içeren oturum yok.</string>
+    <string name="apps_details_history_series">Kullanılan pil</string>
+    <string name="apps_details_history_info_title">Pildeki oturumlar hakkında</string>
+    <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. BatStats, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
+</resources>

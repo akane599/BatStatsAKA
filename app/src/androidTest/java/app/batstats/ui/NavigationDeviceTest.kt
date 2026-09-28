@@ -85,14 +85,19 @@ class NavigationDeviceTest {
         scroll(R.string.now_apps_title); capture("now-cards")
 
         tab(TestTags.TAB_APPS)
-        compose.onNodeWithText(label(R.string.adv_access_help)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.apps_refresh)).assertIsDisplayed()
+        fun appsShowing(id: Int) = compose.onAllNodesWithText(label(id)).fetchSemanticsNodes().isNotEmpty()
+        // Without Shizuku or root (ADB grants can't read per-app stats on API 36) Apps shows the access banner;
+        // with access, the list and its search field.
+        compose.waitUntil(120_000) { appsShowing(R.string.apps_access_set_up) || appsShowing(R.string.apps_search) }
         capture("apps-access")
-        click(R.string.adv_access_help)
-        compose.onNodeWithText(label(R.string.adv_copy_commands)).assertIsDisplayed()
-        capture("access-instructions")
-        DeviceEnvironment.device.pressBack()
-        compose.waitUntil(120_000) {
-            compose.onAllNodesWithText(label(R.string.adv_copy_commands)).fetchSemanticsNodes().isEmpty()
+        if (appsShowing(R.string.apps_access_set_up)) {
+            // "Set up access" opens Settings › Status on the Apps tab; Back returns to Apps.
+            click(R.string.apps_access_set_up)
+            compose.waitUntil(120_000) { !appsShowing(R.string.apps_access_set_up) }
+            capture("access-setup")
+            DeviceEnvironment.device.pressBack()
+            compose.waitUntil(120_000) { appsShowing(R.string.apps_access_set_up) }
         }
         backToNow()
 
@@ -160,7 +165,7 @@ class NavigationDeviceTest {
 
         // Each tab opens its screen directly (no push); back from a tab root returns to Now.
         tab(TestTags.TAB_APPS)
-        compose.onNodeWithText(label(R.string.adv_access_help)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(label(R.string.apps_refresh)).assertIsDisplayed()
         backToNow()
 
         tab(TestTags.TAB_HISTORY)

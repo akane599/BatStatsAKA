@@ -1,0 +1,266 @@
+package app.batstats.viewmodel
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import app.batstats.battery.apps.AppInfo
+import app.batstats.battery.apps.AppLabel
+import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.db.BatteryDatabase
+import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.util.BatteryStatsParser
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/** One discharge session with per-app data: this app's mAh in it, or null when it wasn't among the session's top 30. */
+data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMah: Double?)
+
+/** [AppStatsReader] plus this app's history across stored sessions. */
+interface AppDetailsRepository : AppStatsReader {
+    /**
+     * DISCHARGE sessions overlapping [fromMs]..[toMs] whose per-app breakdown is READY, oldest first, each with
+     * [uid]'s row when the session listed it.
+     */
+    suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage>
+}
+
+/** [AppDetailsRepository] over the shared reader and the `session_app_usage` rows (A3's DAOs, read on IO). */
+class DefaultAppDetailsRepository(
+    reader: AppStatsReader,
+    private val database: BatteryDatabase,
+) : AppDetailsRepository, AppStatsReader by reader {
+    override suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
+        val sessions = database.sessionDao().sessionsBetween(fromMs, toMs)
+            .filter { it.type == SessionType.DISCHARGE && it.appUsageStatus == AppUsageStatus.READY }
+        if (sessions.isEmpty()) return@withContext emptyList()
+        val rows = database.appUsageDao().usageForSessionsBetween(sessions.first().startTime, toMs)
+            .filter { it.uid == uid && !it.isOthers }
+            .associateBy { it.sessionId }
+        sessions.map { AppSessionUsage(it.sessionId, it.startTime, rows[it.sessionId]?.powerMah) }
+    }
+}
+
+/** A wakelock's effect: [CPU] keeps the processor awake (partial); [SCREEN] keeps the display on. */
+enum class WakelockKind { CPU, SCREEN }
+
+data class WakelockItem(val tag: String, val kind: WakelockKind, val totalMs: Long, val count: Int)
+data class AlarmItem(val tag: String, val wakeups: Int)
+
+/** A job or a sync: its name (job service or sync authority), runs and total run time. */
+data class TaskItem(val name: String, val count: Int, val totalMs: Long)
+
+/** Bytes by network and direction; [radioActiveMs] = time this app kept the mobile radio active. */
+data class NetworkUsage(
+    val mobileRxBytes: Long?,
+    val mobileTxBytes: Long?,
+    val wifiRxBytes: Long?,
+    val wifiTxBytes: Long?,
+    val radioActiveMs: Long?,
+)
+
+/** Hardware time (ms): GPS, other sensors, camera, flashlight, audio, video, Bluetooth scans. */
+data class HardwareUsage(
+    val gpsMs: Long? = null,
+    val sensorsMs: Long? = null,
+    val cameraMs: Long? = null,
+    val flashlightMs: Long? = null,
+    val audioMs: Long? = null,
+    val videoMs: Long? = null,
+    val bluetoothScanMs: Long? = null,
+)
+
+/**
+ * This app's row of one dump. [share] is its part of every app's mAh. Time by state: [foregroundMs] (activity in
+ * the foreground, as the Apps list's Foreground order), [foregroundServiceMs], [backgroundMs], [cachedMs]. Lists are for this uid only, largest first; [network] is null and
+ * [hardware] empty when Android counted nothing.
+ */
+data class AppUsageDetails(
+    val powerMah: Double,
+    val share: Float,
+    val foregroundMs: Long? = null,
+    val foregroundServiceMs: Long? = null,
+    val backgroundMs: Long? = null,
+    val cachedMs: Long? = null,
+    val cpuTimeMs: Long? = null,
+    val wakelockTimeMs: Long? = null,
+    val wakelocks: List<WakelockItem> = emptyList(),
+    val alarms: List<AlarmItem> = emptyList(),
+    val jobs: List<TaskItem> = emptyList(),
+    val syncs: List<TaskItem> = emptyList(),
+    val network: NetworkUsage? = null,
+    val hardware: HardwareUsage = HardwareUsage(),
+)
+
+/** Sessions on battery with per-app data (oldest first), and in how many of them this app was listed. */
+data class AppHistory(val sessions: List<AppSessionUsage>) {
+    val listedIn: Int get() = sessions.count { it.powerMah != null }
+}
+
+/**
+ * AppDetails for one uid. [label] is null until the app lookup returns; [canOpenAppInfo] when the package is
+ * installed. [capturedAtMs]/[startedAtMs] describe the dump shown (null before a good read); with a dump, a null
+ * [usage] means Android counted nothing for this app. [history] is null while it loads.
+ */
+data class AppDetailsUiState(
+    val uid: Int,
+    val packageName: String,
+    val nowMs: Long = 0,
+    val label: AppLabel? = null,
+    val canOpenAppInfo: Boolean = false,
+    val loading: Boolean = false,
+    val problem: StatsProblem? = null,
+    val capturedAtMs: Long? = null,
+    val startedAtMs: Long? = null,
+    val usage: AppUsageDetails? = null,
+    val history: AppHistory? = null,
+)
+
+sealed interface AppDetailsEvent {
+    data object Refresh : AppDetailsEvent
+    data object Back : AppDetailsEvent
+    data object OpenAppInfo : AppDetailsEvent
+    data object OpenAccessSetup : AppDetailsEvent
+    data object AllowShizuku : AppDetailsEvent
+}
+
+/**
+ * One app's details from the same on-demand dump as Apps (opening the screen reads it, within the 60 s cache when
+ * coming from Apps; pull-to-refresh forces a new one) plus its history across stored discharge sessions.
+ */
+class AppDetailsViewModel(
+    private val source: AppDetailsRepository,
+    private val uid: Int,
+    private val packageName: String,
+    private val clock: () -> Long = System::currentTimeMillis,
+    computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+) : ViewModel() {
+    private val loader = StatsLoader(viewModelScope, source)
+    private val info = MutableStateFlow<AppInfo?>(null)
+    private val infoLoaded = MutableStateFlow(false)
+    private val history = MutableStateFlow<AppHistory?>(null)
+
+    init {
+        viewModelScope.launch {
+            info.value = source.infoOrNull(packageName)
+            infoLoaded.value = true
+        }
+        loadHistory()
+    }
+
+    val state: StateFlow<AppDetailsUiState> = combine(
+        source.cached,
+        combine(info, infoLoaded, ::Pair),
+        loader.loading,
+        loader.problem,
+        history,
+    ) { snapshot, (info, loaded), loading, problem, history ->
+        AppDetailsUiState(
+            uid = uid,
+            packageName = packageName,
+            nowMs = clock(),
+            label = if (loaded) AppLabel.of(uid, packageName, info) else null,
+            canOpenAppInfo = info?.installed == true,
+            loading = loading,
+            problem = problem,
+            capturedAtMs = snapshot?.capturedAt,
+            startedAtMs = snapshot?.startedAt,
+            usage = snapshot?.let { details(it, uid) },
+            history = history,
+        )
+    }.flowOn(computeDispatcher).stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS),
+        AppDetailsUiState(uid, packageName),
+    )
+
+    fun onStart() = loader.start()
+
+    fun onStop() = loader.stop()
+
+    fun onEvent(event: AppDetailsEvent) {
+        when (event) {
+            AppDetailsEvent.Refresh -> {
+                loader.load(force = true)
+                loadHistory()
+            }
+            // Navigation, the App info intent and Shizuku's permission prompt are the screen wrapper's.
+            AppDetailsEvent.Back, AppDetailsEvent.OpenAppInfo, AppDetailsEvent.OpenAccessSetup, AppDetailsEvent.AllowShizuku -> Unit
+        }
+    }
+
+    private fun loadHistory() {
+        viewModelScope.launch {
+            val now = clock()
+            val sessions = try {
+                source.history(uid, now - HISTORY_WINDOW_MS, now)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                emptyList()
+            }
+            history.value = AppHistory(sessions.sortedBy { it.startMs }.takeLast(HISTORY_SESSIONS))
+        }
+    }
+
+    companion object {
+        /** History covers the sessions of the last 30 days, at most the newest [HISTORY_SESSIONS]. */
+        const val HISTORY_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
+        const val HISTORY_SESSIONS = 14
+        private const val STOP_TIMEOUT_MS = 5_000L
+
+        /** [uid]'s details in [snapshot], or null when the dump has no row for it. */
+        fun details(snapshot: BatteryStatsParser.FullSnapshot, uid: Int): AppUsageDetails? {
+            val app = snapshot.apps.firstOrNull { it.uid == uid } ?: return null
+            val total = snapshot.apps.sumOf { it.powerMah.coerceAtLeast(0.0) }
+            val network = snapshot.network.firstOrNull { it.uid == uid }
+            return AppUsageDetails(
+                powerMah = app.powerMah,
+                share = if (total > 0) (app.powerMah.coerceAtLeast(0.0) / total).toFloat() else 0f,
+                foregroundMs = app.foregroundTimeMs,
+                foregroundServiceMs = app.foregroundServiceTimeMs,
+                backgroundMs = app.backgroundTimeMs,
+                cachedMs = app.cachedTimeMs,
+                cpuTimeMs = app.cpuTimeMs,
+                wakelockTimeMs = app.wakeLockTimeMs,
+                wakelocks = snapshot.wakelocks.filter { it.uid == uid }
+                    .map { lock ->
+                        val kind = if (lock.type == BatteryStatsParser.WakelockType.PARTIAL) WakelockKind.CPU else WakelockKind.SCREEN
+                        WakelockItem(lock.tag, kind, lock.totalTimeMs, lock.count)
+                    }
+                    .sortedByDescending { it.totalMs },
+                alarms = snapshot.alarms.filter { it.uid == uid }.map { AlarmItem(it.tag, it.wakeups) }.sortedByDescending { it.wakeups },
+                jobs = snapshot.jobs.filter { it.uid == uid }.map { TaskItem(it.jobName, it.count, it.totalTimeMs) }.sortedByDescending { it.totalMs },
+                syncs = snapshot.syncs.filter { it.uid == uid }.map { TaskItem(it.authority, it.count, it.totalTimeMs) }.sortedByDescending { it.totalMs },
+                network = NetworkUsage(
+                    mobileRxBytes = app.mobileRxBytes,
+                    mobileTxBytes = app.mobileTxBytes,
+                    wifiRxBytes = app.wifiRxBytes,
+                    wifiTxBytes = app.wifiTxBytes,
+                    radioActiveMs = network?.mobileActiveTimeMs,
+                ).takeIf { it.hasData() },
+                hardware = HardwareUsage(
+                    gpsMs = app.gpsTimeMs.positive(),
+                    sensorsMs = app.sensorTimeMs.positive(),
+                    cameraMs = app.cameraTimeMs.positive(),
+                    flashlightMs = app.flashlightTimeMs.positive(),
+                    audioMs = app.audioTimeMs.positive(),
+                    videoMs = app.videoTimeMs.positive(),
+                    bluetoothScanMs = app.bluetoothScanTimeMs.positive(),
+                ),
+            )
+        }
+
+        private fun Long?.positive(): Long? = this?.takeIf { it > 0 }
+
+        private fun NetworkUsage.hasData(): Boolean =
+            listOfNotNull(mobileRxBytes, mobileTxBytes, wifiRxBytes, wifiTxBytes, radioActiveMs).any { it > 0 }
+    }
+}
