@@ -68,5 +68,4 @@ object WidgetUpdater {
         }
     }
     fun showPlaceholder(context: Context) = push(context, null, monitoring = false)
-    fun requestRefresh(context: Context) { context.sendBroadcast(Intent(ACTION_REFRESH).setPackage(context.packageName)) }
 }

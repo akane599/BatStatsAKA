@@ -88,7 +88,6 @@
     <string name="include_raw_samples">Incluir muestras originales</string>
     <string name="monitoring_ready">Monitorización lista</string>
     <string name="start_monitoring">Iniciar monitorización</string>
-    <string name="monitoring_battery">Monitorizando batería</string>
     <string name="tap_to_start">Toca para iniciar la monitorización de batería</string>
     <string name="battery_at_percent">Batería al %1$d%% — considera desconectarla.</string>
     <string name="charge_limit_reached">Límite de carga alcanzado</string>

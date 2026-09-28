@@ -88,7 +88,6 @@
     <string name="include_raw_samples">Ham örnekleri dahil et</string>
     <string name="monitoring_ready">İzleme hazır</string>
     <string name="start_monitoring">İzlemeyi başlat</string>
-    <string name="monitoring_battery">Pil izleniyor</string>
     <string name="tap_to_start">Pil izlemeyi başlatmak için dokunun</string>
     <string name="battery_at_percent">Pil %1$d%% — şarj bağlantısını kesmeyi düşünün.</string>
     <string name="charge_limit_reached">Şarj sınırına ulaşıldı</string>

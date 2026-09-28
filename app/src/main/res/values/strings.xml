@@ -95,7 +95,6 @@
 
     <string name="monitoring_ready">Monitoring ready</string>
     <string name="start_monitoring">Start monitoring</string>
-    <string name="monitoring_battery">Monitoring battery</string>
     <string name="tap_to_start">Tap to start battery monitoring</string>
     <string name="battery_at_percent">Battery at %1$d%% — consider unplugging.</string>
     <string name="charge_limit_reached">Charge limit reached</string>

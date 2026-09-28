@@ -1,9 +1,6 @@
 package app.batstats.battery.drain
 
-import app.batstats.battery.measurement.ObservationSummary
 import java.util.Locale
-
-typealias DrainState = ObservationSummary
 
 fun formatDuration(ms: Long): String {
     val seconds = ms.coerceAtLeast(0) / 1000

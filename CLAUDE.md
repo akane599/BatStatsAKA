@@ -69,7 +69,7 @@ Main context is for decisions and edits. Everything that reads a lot or reviews 
 - Compose design: all colors/type/shapes/spacing via `MaterialTheme` + project `Spacing` tokens (none exist yet — add them in `ui/theme/` before restyling); no `Color(0x…)`, raw `.dp`/`.sp` in screen files. Load `compose-design` before designing or restyling any screen.
 - App widgets: RemoteViews XML in `res/layout/widget_*.xml`, driven by `battery/widget/WidgetUpdater.kt` — keep them RemoteViews-compatible (no ViewBinding, no custom views).
 - Strings in `res/values/strings.xml` **and** `values-es/`, `values-tr/` (the hook's `check_resources.py` fails on missing translations/format args); dimensions/colors via theme/resources, never literals in code.
-- `check_resources.py` and `test/…/support/EnglishStrings.kt` read only `values*/strings.xml`; don't split strings into other files until both are updated.
+- `check_resources.py` and `test/…/support/EnglishStrings.kt` read every `values*/strings*.xml` file per locale as one merged table (duplicate keys across files in the same locale fail the check).
 - androidTest finds UI by string text/contentDescription (no testTags yet); renaming strings breaks `NavigationDeviceTest` & co. Palette edits must keep `ThemeContrastTest` (role pairs ≥4.5:1) green.
 - Room bump: `check_migrations.py` + `check_history_queries.py` hard-code the latest `schemas/…/N.json` and split `BatteryDatabase.kt` on `val MIGRATION_3_4`…`fun get(`; update both with the migration.
 - Settings (kmp-settings, `settings/SettingsDefinition.kt`): removing/renaming a key needs `SCHEMA_VERSION` + a `MigrationManager` step in `di/AppModules.kt`.
