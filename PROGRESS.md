@@ -43,6 +43,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Chose standalone `com.android.compose.screenshot` plugin over AGP test suites because AGP is 9.4.0 (suites need ≥ 9.5.0-alpha03) and AGP bumps need approval. Revisit when AGP ≥ 9.5.0-alpha03 (standalone setup is deprecated there). (Superseded 2026-09-28: moved to AGP 9.5.0-alpha07 + test suites, see above.)
 
 ## Known debt / follow-ups
+- Package cycles from the overhaul audit (see `.superpowers/sdd/adaptive-wibbling-twilight/final-module-graph.md` until the workspace is deleted): replace `BatteryGraph` service locator with Koin inject; move AppUsage enums/row into `data.db`; SessionEvidence → data.db; EtaHold off `BatteryRepository.Realtime`; Notifier out of util; SamplingDemand into data.sampling; ChartMath/TimePoint/TimeWindow into a Compose-free file; Destinations out of ui.
 - Review suggestions not yet done: `DetailedStatsTab` enum instead of `Int` tab; one shared Shizuku/access UI class for Dashboard + DetailedStats; `KernelDetailsState` single `sources` list; `DiagnosticsUiState` builder shared by wrapper/tests; previews for DetailedStats tabs 1–5/error, Settings dialogs, SessionDetails failed/recording/interrupted/imported — low
 - Transient UI (snackbars) can't be screenshot-tested: layoutlib captures one frame before `showSnackbar` renders — low
 - DetailedStats/History/Settings `rememberSaveable` keys moved with the split; a state bundle saved by the previous APK won't restore once after update — low
@@ -53,7 +54,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 |---|---|---|---|
 | Security (claude-security) | — | — | `/claude-security` |
 | Compose review | 2026-09-28 | /review-pr (5 agents): 0 critical, 5 important fixed (stale docs, rebaseline data loss, CI artifacts, stale results, confirm tests), @Immutable added; type redesigns deferred | pr-review-toolkit + compose-reviewer |
-| Module graph | 2026-09-28 | Pass (2nd run, AGP 9.5.0-alpha07 + test suite) — deps test-scoped, lazy Test config, release unaffected; med: alpha AGP (user-approved) | module-graph-auditor agent |
+| Module graph | 2026-09-28 (overhaul) | 1 important (unused libs.material) + dep cleanup + WidgetUpdater uncaught exception + 10 `!!` → final fix wave; package cycles (BatteryGraph locator, db↔apps enums, …) → debt | module-graph-auditor agent |
 | Lint (Android lint) | — | — | `./gradlew :app:lintDebug -q` |
 | Emulator QA (API 36) | 2026-09-28 | Pass — all 8 screens reached/interacted, no crash; left one short charging session in the emulator DB | android-emulator-qa skill |
 
