@@ -15,9 +15,8 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [~] P6: tests P6a (5cdc897) + docs P6b (8d74993) done & reviewed; final reviews → fix wave → verification pending; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. Final reviews: done = module graph (`final-module-graph.md`), R1 data (`final-R1-data.md`, With fixes: QS tile stale/tap inverts state → drop ACTIVE_TILE; widget ETA flicker); R3 shared UI running; still to run: R2 ui/screens+viewmodel (opus), compose-reviewer, design critic on renders.
-2. ONE fix wave with all final findings → scoped re-review → fresh verification agent (gate + CI parity + connected non-Shizuku + emulator tile/notification/widget checks).
-3. User runs `/screenshot-rebaseline` + `/device-check`; then finishing-a-development-branch (base: codex/android16-reliability).
+1. FIX-WAVE running (all final findings: `.superpowers/sdd/adaptive-wibbling-twilight/final-*.md`; brief `FIX-WAVE-brief.md`). Then commit, one scoped re-review, fresh verification agent (gate + CI parity + connected non-Shizuku + emulator tile/notification/widget).
+2. User runs `/screenshot-rebaseline` + `/device-check`; then finishing-a-development-branch (base: codex/android16-reliability).
 
 ## Blockers / open questions
 
