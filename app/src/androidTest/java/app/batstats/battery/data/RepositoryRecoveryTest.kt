@@ -8,6 +8,7 @@ import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Handler
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
@@ -169,6 +170,51 @@ class RepositoryRecoveryTest {
             withTimeout(60_000) { fixture.repository.error.first { it == null } }
             assertTrue(fixture.repository.isMonitoringFlow.value)
         } finally { demand.close(); fixture.close() }
+    }
+
+    @Test fun demandHandoffsStampTheLongerIntervalAndKeepOnePollChain(): Unit = runBlocking {
+        val fixture = Fixture()
+        val repository = fixture.repository
+        var phase = "screen-on monitoring"
+        try {
+            DeviceEnvironment.device.wakeUp()
+            withTimeout(60_000) { while (!fixture.context.getSystemService(PowerManager::class.java).isInteractive) delay(100) }
+            repository.startSampling()
+            withTimeout(60_000) { repository.observation.first { it.startedAt != null } }
+
+            phase = "acquire then release while monitoring"
+            val demand = fixture.sampler.acquire("RepositoryRecoveryTest")
+            withTimeout(60_000) { repository.observation.first { it.latest?.expectedIntervalMs == 2_000L } }
+            val gaps = repository.observation.value.gaps
+            demand.close()
+            // The release handoff capture carries the 30 s stamp, so the wait that follows is no gap.
+            val handoff = withTimeout(60_000) { repository.observation.first { it.latest?.expectedIntervalMs == 30_000L } }.latest!!
+            assertEquals(gaps, repository.observation.value.gaps)
+            phase = "first 30 s poll after the handoff"
+            withTimeout(60_000) { repository.observation.first { (it.latest?.elapsedMs ?: 0) > handoff.elapsedMs } }
+            assertEquals("A 30 s wait after a 2 s cadence is not a gap", gaps, repository.observation.value.gaps)
+
+            phase = "token churn"
+            repeat(5) { fixture.sampler.acquire("churn-$it").close() }
+            val held = fixture.sampler.acquire("RepositoryRecoveryTest")
+            try {
+                delay(1_000) // The acquire handoff capture lands first.
+                val windowStart = SystemClock.elapsedRealtime()
+                val polls = java.util.Collections.synchronizedSet(mutableSetOf<Long>())
+                val collector = launch(Dispatchers.Default) {
+                    repository.realtimeFlow.collect { reading ->
+                        reading.sample?.elapsedMs?.takeIf { it > windowStart }?.let(polls::add)
+                    }
+                }
+                delay(6_000)
+                collector.cancelAndJoin()
+                // One 2 s chain gives 3 polls in 6 s; duplicate chains from the churn would give 6 or more.
+                assertTrue("Polls in 6 s: ${polls.size}", polls.size in 2..4)
+            } finally { held.close() }
+        } catch (failure: Throwable) {
+            throw AssertionError("Failed during $phase; observation=${repository.observation.value}; " +
+                "errors=${repository.error.value}", failure)
+        } finally { fixture.close() }
     }
 
     @Test fun demandPollsStayRealtimeOnlyAndSavesFollowPersistPolicy(): Unit = runBlocking {

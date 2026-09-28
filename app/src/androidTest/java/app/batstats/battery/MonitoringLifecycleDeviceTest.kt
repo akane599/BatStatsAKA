@@ -18,6 +18,7 @@ import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.service.BatteryMonitorService
 import app.batstats.battery.service.SamplingDemand
 import app.batstats.test.DeviceEnvironment
+import app.batstats.ui.TestTags
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
@@ -83,16 +84,17 @@ class MonitoringLifecycleDeviceTest {
                 ?.contains(MonitoringText(context).state(PowerState.CHARGING)) == true }
             assertEquals(notificationKey, notification()!!.key)
             assertEquals(0L, notification()!!.notification.`when`)
-            phase = "notification tap opens observation"
+            phase = "notification tap opens Now"
             val title = notification()!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
             assertTrue("Notification shade did not open", device.openNotification())
             val row = device.wait(Until.findObject(By.text(title)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
             row!!.click()
-            val opened = device.wait(Until.hasObject(By.text(context.getString(R.string.monitor_drain_title))), 120_000)
-            DeviceEnvironment.screenshot("notification-opens-observation")
-            assertTrue("Tapping the monitoring notification must open observed drain", opened)
+            // Since P3a the tap sends destination=now: the Now tab, no longer the drain details.
+            val opened = device.wait(Until.hasObject(By.pkg(context.packageName).res(TestTags.TAB_NOW).selected(true)), 120_000)
+            DeviceEnvironment.screenshot("notification-opens-now")
+            assertTrue("Tapping the monitoring notification must open Now", opened)
             phase = "stop monitoring"
             context.stopService(service)
             withTimeout(120_000) { repo.observation.first { it.stopped } }

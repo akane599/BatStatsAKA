@@ -105,7 +105,8 @@ class BatteryRepository(
 
     private val sink = object : SamplerSink {
         override fun onReading(sample: BatterySample, expectedIntervalMs: Long) {
-            _realtime.value = Realtime(sample, calibration.state.value.effective, expectedIntervalMs)
+            // update, not a plain set: a concurrent calibration change retries with the new value.
+            _realtime.update { Realtime(sample, calibration.state.value.effective, expectedIntervalMs) }
         }
 
         override fun onObserved(capture: SamplerCapture): Boolean {
@@ -182,7 +183,8 @@ class BatteryRepository(
 
     /** Activity resume/manual refresh gives ordinary information without starting background work. */
     fun refreshNow(onComplete: suspend (Realtime) -> Unit = {}) {
-        scope.launch {
+        // The capture runs on the sampler thread; callers (e.g. WidgetUpdater) expect the callback on main.
+        scope.launch(Dispatchers.Main.immediate) {
             try { sampler.refresh() }
             finally { onComplete(_realtime.value) }
         }
@@ -268,19 +270,22 @@ class BatteryRepository(
         if (gap) diagnostics.record(DiagnosticCode.OBSERVATION_GAP)
         if (old.counterGaps != summary.counterGaps) diagnostics.record(DiagnosticCode.CHARGE_UNAVAILABLE)
 
-        // A power change or gap closes the open session; the closed row commits with the next one.
+        // A power change or gap closes the open session; the closed row commits in the same
+        // transaction as the new one. [session] changes only after that commit, so a failed write
+        // leaves the old session open and the next capture closes it again: its type no longer
+        // matches the power state (and the failure made that capture a GAP).
         val open = session
-        val ended = if (open != null && (changed || gap)) {
+        val mismatch = open != null && open.type != SessionReport.sessionType(point.power)
+        val ended = if (open != null && (changed || gap || mismatch)) {
             val closing = if (changed && !gap) SessionReport.report(open, raw, sessionEngine.accept(point), sessionExtremes) else open
-            session = null
             closing.copy(endTime = closing.lastSampleTime ?: closing.startTime, activeKey = null,
                 closeReason = if (gap) summary.lastIssue ?: "Observation gap" else "Power state changed")
         } else null
-        val current = session ?: SessionReport.open(point, raw).also {
+        val current = if (open == null || ended != null) {
             sessionEngine.reset()
             sessionExtremes = SessionExtremes()
-            session = it
-        }
+            SessionReport.open(point, raw)
+        } else open
         val sessionBefore = sessionEngine.summary
         val sessionSummary = sessionEngine.accept(point)
         val calibratedUa = BatteryReading.calibratedUa(point.currentUa, calibration.state.value.effective)
@@ -299,10 +304,14 @@ class BatteryRepository(
         _realtime.update { it.copy(sample = mergePersistedReading(it.sample, sample)) }
 
         val state = PersistPolicy.State(point.elapsedMs, raw.status, raw.plugged, raw.levelPercent, point.generation)
-        // An engine gap is a GAP boundary whatever the capture's label; a new session always
-        // saves (no earlier row, a status/plugged change, or that gap).
+        // An engine gap is a GAP boundary whatever the capture's label. A session boundary always
+        // saves, whatever the policy says: the closed row and the new one must reach the database.
         val reason = PersistPolicy.decide(lastPersisted, state, if (gap) Boundary.GAP else point.boundary,
-            point.interactive, capture.poll) ?: return
+            point.interactive, capture.poll) ?: when {
+            ended != null -> if (gap) PersistReason.GAP else PersistReason.POWER
+            open == null -> PersistReason.FIRST
+            else -> return
+        }
         val updated = SessionReport.report(current, sample, sessionSummary, sessionExtremes)
         val interval = DailySummaryAggregator.interval(summaryAtLastPersist, summary, sample.temperatureDeciC)
         val zone = ZoneId.systemDefault()
@@ -317,7 +326,9 @@ class BatteryRepository(
                 persistDao.persistSample(sample, updated, days)
             }
         } catch (e: Exception) {
-            needsSessionRecovery = true // An active row may be left behind: close it before the next write.
+            // Rolled back: [session] is still the open row. Recovery closes any active row before the
+            // next write; that write re-opens or properly closes it.
+            needsSessionRecovery = true
             throw e
         }
         session = updated
@@ -330,7 +341,7 @@ class BatteryRepository(
             _persisted.tryEmit(sample.copy(id = rowId))
             samplesSinceCleanup++
         }
-        if (ended != null) emitTransition(old.latest?.power, point, ended, updated)
+        if (ended != null) emitTransition(ended, point, updated)
         if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= 200 || point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             lastCleanupElapsed = point.elapsedMs
             samplesSinceCleanup = 0
@@ -343,11 +354,18 @@ class BatteryRepository(
         }
     }
 
-    private fun emitTransition(from: PowerState?, point: Observation, ended: ChargeSession, started: ChargeSession) {
+    /** From the ended session's type, so a boundary retried after a failed write still reports its origin. */
+    private fun emitTransition(ended: ChargeSession, point: Observation, started: ChargeSession) {
+        val from = when (ended.type) {
+            SessionType.CHARGE -> PowerState.CHARGING
+            SessionType.DISCHARGE -> PowerState.DISCHARGING
+            SessionType.PLUGGED -> PowerState.PLUGGED
+            SessionType.UNKNOWN -> PowerState.UNKNOWN
+        }
         val powered = setOf(PowerState.CHARGING, PowerState.PLUGGED)
         val plugIn = from == PowerState.DISCHARGING && point.power in powered
         val unplug = from in powered && point.power == PowerState.DISCHARGING
-        if (from == null || !(plugIn || unplug)) return
+        if (!(plugIn || unplug)) return
         _powerTransitions.tryEmit(PowerTransition(from, point.power, point.wallMs, point.elapsedMs, ended.sessionId, started.sessionId))
     }
 

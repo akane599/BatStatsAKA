@@ -53,9 +53,32 @@ class PersistPolicyTest {
         assertEquals(PersistReason.SCREEN_ON_INTERVAL, decide(at(95_000)))
     }
 
-    @Test fun everyScreenOffPollIsPersisted() {
-        assertEquals(PersistReason.SCREEN_OFF_POLL, decide(at(1_000), screenOn = false))
+    @Test fun screenOffPollsArePersistedAtMostEveryThirtyElapsedSeconds() {
+        assertNull(decide(at(1_000), screenOn = false))
+        assertNull(decide(at(29_999), screenOn = false))
+        assertEquals(PersistReason.SCREEN_OFF_POLL, decide(at(30_000), screenOn = false))
+        // A clock that ran backwards cannot suppress a save.
+        assertEquals(PersistReason.SCREEN_OFF_POLL, decide(at(-5_000), screenOn = false))
+    }
+
+    @Test fun screenOffPollAfterDeepSleepIsPersisted() {
+        // 300 s uptime delay; elapsed time includes the suspend, so the poll lands ≥ 300 s later.
         assertEquals(PersistReason.SCREEN_OFF_POLL, decide(at(300_000), screenOn = false))
+        assertEquals(PersistReason.SCREEN_OFF_POLL, decide(at(3_600_000), screenOn = false))
+    }
+
+    @Test fun demandHeldWithTheScreenOffSavesAtMostEveryThirtySeconds() {
+        // A stuck demand token keeps 2 s polls running after the screen turned off.
+        var saved = last
+        val saves = mutableListOf<Long>()
+        for (offset in 2_000L..120_000L step 2_000L) {
+            val poll = at(offset)
+            if (decide(poll, screenOn = false, previous = saved) != null) {
+                saves += offset
+                saved = poll
+            }
+        }
+        assertEquals(listOf(30_000L, 60_000L, 90_000L, 120_000L), saves)
     }
 
     @Test fun voltageOrTemperatureOnlyBroadcastsStayRealtime() {

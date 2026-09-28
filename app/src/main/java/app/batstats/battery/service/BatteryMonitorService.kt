@@ -71,14 +71,19 @@ class BatteryMonitorService : Service() {
             val saved = preferences.getStringSet("latched", emptySet()).orEmpty()
             val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet())
             var alertChannelReady = false
+            var previousIntervalMs: Long? = null
             combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading to settings }
                 .collect { (reading, settings) ->
                     val sample = reading.sample
                     if (sample == null || sample.elapsedMs == null || sample.elapsedMs < monitoringStartedElapsed) return@collect
                     val before = alerts.latches
+                    // The longer of the two cadences around this interval, as ObservationEngine's gap rule
+                    // allows: a 300 s → 30 s switch at screen-on is not a gap.
+                    val intervalMs = maxOf(previousIntervalMs ?: reading.expectedIntervalMs, reading.expectedIntervalMs)
+                    previousIntervalMs = reading.expectedIntervalMs
                     // Calibrated current: an inverted or mA-reporting device still trips the discharge alert.
                     val events = alerts.accept(AlertReading(sample.elapsedMs, sample.levelPercent,
-                        sample.status, sample.plugged, reading.currentUa, sample.temperatureDeciC, reading.expectedIntervalMs),
+                        sample.status, sample.plugged, reading.currentUa, sample.temperatureDeciC, intervalMs),
                         BatteryAlertSettings(settings.lowBatteryAlertEnabled, settings.lowBatteryThreshold,
                             settings.highBatteryAlertEnabled, settings.highBatteryThreshold,
                             settings.temperatureWarningEnabled, settings.temperatureThreshold.toDouble(),
@@ -90,7 +95,9 @@ class BatteryMonitorService : Service() {
                                 alertChannelReady = true
                             }
                             if (Notifier.canPostAlerts(this@BatteryMonitorService)) {
-                                events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, sample, settings) }
+                                // The alert text shows the calibrated current, as the realtime values do.
+                                val shown = sample.copy(currentNowUa = reading.currentUa)
+                                events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, shown, settings) }
                             } else alerts.restoreLatches(before)
                         }
                     } catch (e: CancellationException) {
