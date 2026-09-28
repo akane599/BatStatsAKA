@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark-only app theme (no DayNight). Compose draws everything; this only sets the launch frame.
+         System bars are configured at runtime by enableEdgeToEdge() in BatteryMainActivity. -->
+    <style name="Theme.BatStats" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:colorBackground">@color/window_background</item>
+    </style>
+</resources>

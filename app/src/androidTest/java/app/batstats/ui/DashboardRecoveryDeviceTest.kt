@@ -38,7 +38,7 @@ class DashboardRecoveryDeviceTest {
         try {
             fixture.context.missingBattery = true
             compose.setContent {
-                MainTheme(darkTheme = false, dynamicColor = false) {
+                MainTheme(dynamicColor = false) {
                     DashboardScreen({}, {}, {}, {}, {}, {}, {}, vm)
                 }
             }

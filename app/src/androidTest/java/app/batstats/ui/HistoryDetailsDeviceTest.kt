@@ -67,7 +67,7 @@ class HistoryDetailsDeviceTest {
                 }
             }
             compose.setContent {
-                MainTheme(darkTheme = false, dynamicColor = false) {
+                MainTheme(dynamicColor = false) {
                     if (opened == null) HistoryScreen({}, { opened = it }, history)
                     else SessionDetailsScreen({ opened = null }, details)
                 }

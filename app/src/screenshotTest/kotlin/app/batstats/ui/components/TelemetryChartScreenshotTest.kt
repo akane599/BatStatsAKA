@@ -22,7 +22,7 @@ private val readings = List(30) { i ->
 @ComponentPreviews
 @Composable
 fun TelemetryChartEmptyPreview() {
-    MainTheme(darkTheme = isSystemInDarkTheme()) {
+    MainTheme(oled = isSystemInDarkTheme()) {
         Surface {
             TelemetryChart(title = "Current", unit = "mA", points = emptyList())
         }
@@ -33,7 +33,7 @@ fun TelemetryChartEmptyPreview() {
 @ComponentPreviews
 @Composable
 fun TelemetryChartReadingsPreview() {
-    MainTheme(darkTheme = isSystemInDarkTheme()) {
+    MainTheme(oled = isSystemInDarkTheme()) {
         Surface {
             TelemetryChart(title = "Current", unit = "mA", points = readings)
         }

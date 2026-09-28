@@ -1,11 +1,17 @@
 package app.batstats.battery.data
 
+import androidx.room.withTransaction
+import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionAppUsage
 import app.batstats.battery.measurement.BatteryReading
 import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import java.time.Instant
+import java.time.ZoneId
 
 /** Imported records are historical evidence, never a resumed live observation. */
 object HistoryPolicy {
@@ -73,12 +79,62 @@ object HistoryPolicy {
             require(input.deltaUah == null || (input.screenOnUah ?: 0) + (input.screenOffUah ?: 0) <= input.deltaUah) { "Screen charge exceeds the session total" }
         }
         require(input.estCapacityMah == null || input.estCapacityMah in 1..200_000) { "Invalid legacy capacity estimate" }
+        require(input.capacityEstimateMah == null || input.capacityEstimateMah in 1..200_000) { "Invalid capacity estimate; expected mAh" }
+        require(input.energyNwh == null || input.energyNwh in 0..1_000_000_000_000_000L) { "Invalid session energy; expected nWh" }
+        require(input.peakPowerMw == null || input.peakPowerMw in 0..1_000_000L) { "Invalid peak power; expected mW" }
+        require(input.peakTemperatureDeciC == null || BatteryReading.temperatureDeciC(input.peakTemperatureDeciC) != null) { "Invalid peak temperature; expected tenths Celsius" }
+        require(input.screenOffSuspendMs == null || input.screenOffSuspendMs in 0..input.observedMs) { "Invalid screen-off suspend interval" }
         require(input.lastSampleTime == null || input.lastSampleTime in input.startTime..end) { "Invalid session sample time" }
         return input.copy(sessionId = identity(input.sessionId)!!, observationId = identity(input.observationId),
             endTime = end, activeKey = null, source = source(text(input.source)!!), avgCurrentUa = current(input.avgCurrentUa),
-            closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason))
+            closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason),
+            chargerType = text(input.chargerType), capacityConfidence = text(input.capacityConfidence), capacityBasis = text(input.capacityBasis),
+            // An imported record never gets its end snapshot.
+            appUsageStatus = input.appUsageStatus.takeUnless { it == AppUsageStatus.PENDING })
+    }
+    /** Values written after a session closes (per-app status, capacity estimate) and explanatory text are not its measurement. */
+    private fun measured(s: ChargeSession) = s.copy(closeReason = null, appUsageStatus = null, appUsageBasis = null,
+        capacityEstimateMah = null, capacityConfidence = null, capacityBasis = null)
+    fun sameMeasurement(first: ChargeSession, second: ChargeSession): Boolean = measured(first) == measured(second)
+    /** [incoming], keeping [previous]'s after-close values where the file has none (e.g. an export made before them). */
+    fun mergeDerived(previous: ChargeSession, incoming: ChargeSession): ChargeSession {
+        val usage = if (incoming.appUsageStatus != null) incoming else previous
+        val capacity = if (incoming.capacityEstimateMah != null) incoming else previous
+        return incoming.copy(appUsageStatus = usage.appUsageStatus, appUsageBasis = usage.appUsageBasis,
+            capacityEstimateMah = capacity.capacityEstimateMah, capacityConfidence = capacity.capacityConfidence, capacityBasis = capacity.capacityBasis)
+    }
+    /** Validates a file's per-app rows as whole per-session breakdowns: unique ranks 0..30, at most one "others" row. */
+    fun appUsage(input: List<SessionAppUsage>): List<SessionAppUsage> {
+        val rows = input.map { row ->
+            require(row.rank in 0 until SessionAppUsage.MAX_ROWS) { "Invalid app usage rank" }
+            require(row.powerMah.isFinite() && row.powerMah in 0.0..1_000_000.0) { "Invalid app usage charge; expected mAh" }
+            require(listOf(row.cpuTimeMs, row.foregroundTimeMs, row.backgroundTimeMs, row.wakelockTimeMs, row.mobileBytes, row.wifiBytes)
+                .all { it == null || it >= 0 }) { "Invalid app usage totals" }
+            row.copy(sessionId = checkNotNull(identity(row.sessionId)), packageName = row.packageName.also(::text))
+        }
+        for (group in rows.groupBy { it.sessionId }.values) {
+            require(group.distinctBy { it.rank }.size == group.size) { "Duplicate app usage rank" }
+            require(group.count { it.isOthers } <= 1) { "More than one aggregated app usage row" }
+        }
+        return rows
     }
     fun sameOrigin(first: ChargeSession, second: ChargeSession): Boolean =
         originalId(first.sessionId) == originalId(second.sessionId) && first.startTime == second.startTime && first.type == second.type &&
             first.observationId?.let(::originalId) == second.observationId?.let(::originalId)
+
+    /** Day summaries are kept for every local day that ends after the cutoff: the cutoff's own day stays. */
+    fun retentionCutoffDay(cutoffMs: Long, zone: ZoneId): Long = Instant.ofEpochMilli(cutoffMs).atZone(zone).toLocalDate().toEpochDay()
+
+    /**
+     * Retention: samples and closed sessions older than [cutoffMs] (their app usage cascades), day summaries of days
+     * before the cutoff's day, and snapshots whose session is gone. One transaction.
+     */
+    suspend fun purgeExpired(db: BatteryDatabase, cutoffMs: Long, zone: ZoneId = ZoneId.systemDefault()) {
+        db.withTransaction {
+            db.batteryDao().purge(cutoffMs)
+            db.sessionDao().purge(cutoffMs)
+            db.dailySummaryDao().purgeBefore(retentionCutoffDay(cutoffMs, zone))
+            db.appUsageDao().pruneOrphanSnapshots()
+        }
+    }
 }

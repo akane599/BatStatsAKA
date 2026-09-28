@@ -44,7 +44,7 @@ class DestructiveConfirmDeviceTest {
         refreshing: Boolean = false,
         onResetStats: () -> Unit = {},
     ) = compose.setContent {
-        MainTheme(darkTheme = false) {
+        MainTheme {
             DetailedStatsContent(
                 state = DetailedStatsUiState(
                     snapshot = null,
@@ -72,7 +72,7 @@ class DestructiveConfirmDeviceTest {
     private fun openClearDataDialog(onClearHistory: suspend () -> Unit) {
         compose.setContent {
             val context = LocalContext.current
-            MainTheme(darkTheme = false) {
+            MainTheme {
                 BatterySettingsContent(
                     settings = AppSettings(),
                     settingsError = null,

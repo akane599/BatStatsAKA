@@ -92,6 +92,13 @@ class ObservationEngineTest {
         assertEquals(0.0, result.discharge.chargeMah!!, 0.0)
         assertEquals(0.0, result.discharge.rateMa!!, 0.0)
     }
+    @Test fun smallCounterBlipIsZeroDrainNotACounterGap() {
+        val engine = ObservationEngine()
+        engine.accept(point(0, charge = 1_000_000))
+        val result = engine.accept(point(60_000, charge = 1_002_000))
+        assertEquals(0.0, result.discharge.chargeMah!!, 0.0)
+        assertEquals(0, result.counterGaps)
+    }
     @Test fun counterResetDoesNotBecomeNegativeOrZeroDrain() {
         val engine = ObservationEngine()
         engine.accept(point(0, charge = 1_000_000))
