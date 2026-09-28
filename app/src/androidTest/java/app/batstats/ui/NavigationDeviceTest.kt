@@ -174,7 +174,7 @@ class NavigationDeviceTest {
         // Now's Health panel pushes Health onto the Now tab; re-tapping Now pops back to its root.
         scroll(R.string.now_health_title); click(R.string.now_health_title)
         compose.waitUntil(120_000) { !nowShowing() }
-        compose.onNodeWithText(label(R.string.battery_health)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.health_title)).assertIsDisplayed()
         tab(TestTags.TAB_NOW)
         awaitNow()
     }
