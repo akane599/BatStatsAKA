@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ajustes › Estado (ui/screens/StatusScreen.kt). -->
+<resources>
+    <string name="status_title">Estado</string>
+    <string name="status_back">Atrás</string>
+
+    <!-- Aviso de corrección de calibración -->
+    <string name="status_notice_title">Lecturas de corriente corregidas</string>
+    <string name="status_notice_unit">Este teléfono indica la corriente en miliamperios. Ahora los valores se convierten.</string>
+    <string name="status_notice_sign">Este teléfono indica la descarga como positiva. Ahora el signo se invierte.</string>
+    <string name="status_notice_both">Este teléfono indica la corriente en miliamperios y la descarga como positiva. Ahora los valores se convierten e invierten.</string>
+    <string name="status_notice_same">La lectura de corriente se comprobó con el contador de carga y se ajustó.</string>
+    <string name="status_notice_undo">Deshacer</string>
+    <string name="status_notice_keep">Mantener</string>
+
+    <!-- Acceso avanzado -->
+    <string name="status_access_title">Acceso avanzado</string>
+    <string name="status_access_shizuku">Shizuku</string>
+    <string name="status_access_root">Root</string>
+    <string name="status_access_adb">Permisos por ADB</string>
+    <string name="status_access_none">Ninguno</string>
+    <string name="status_access_checking">Comprobando el acceso…</string>
+    <string name="status_access_on">Las estadísticas por app están disponibles.</string>
+    <string name="status_access_off">Las estadísticas por app necesitan Shizuku, root o permisos por ADB.</string>
+    <string name="status_access_adb_limited">Solo datos de batería. En esta versión de Android, las estadísticas por app necesitan Shizuku o root.</string>
+    <string name="status_access_authorize_hint">Shizuku está en marcha. Autoriza a BatStats para usarlo.</string>
+    <string name="status_access_authorize">Autorizar Shizuku</string>
+    <string name="status_access_check">Volver a comprobar</string>
+    <string name="status_access_checking_short">Comprobando…</string>
+    <string name="status_access_info_title">Acerca del acceso avanzado</string>
+    <string name="status_access_info_body">Las lecturas normales de batería no necesitan acceso especial. Las estadísticas por app vienen del informe de batería de Android, que necesita Shizuku, root o permisos concedidos por ADB.\n\nAndroid cuenta esas estadísticas desde su último reinicio, que puede no coincidir con las sesiones de BatStats.</string>
+
+    <!-- Configuración -->
+    <string name="status_setup_show">Mostrar pasos de configuración</string>
+    <string name="status_setup_hide">Ocultar pasos de configuración</string>
+    <string name="status_setup_intro">Usa cualquiera de estas opciones:</string>
+    <string name="status_setup_shizuku_title">Shizuku</string>
+    <string name="status_setup_shizuku_body">Instala e inicia Shizuku, y luego autoriza a BatStats.</string>
+    <string name="status_setup_root_title">Root</string>
+    <string name="status_setup_root_body">Permite BatStats cuando tu gestor de root lo pida y vuelve a comprobar.</string>
+    <string name="status_setup_adb_title">ADB</string>
+    <string name="status_setup_adb_body">Desde un ordenador con ADB, ejecuta estos comandos y vuelve a comprobar.</string>
+    <string name="status_setup_adb_limited">En Android 16 y posteriores, estos permisos cubren los datos de batería pero no las estadísticas por app.</string>
+    <string name="status_setup_copy">Copiar comandos</string>
+    <string name="status_setup_copied">Copiado</string>
+    <string name="status_setup_commands">Comandos de ADB</string>
+
+    <!-- Calibración -->
+    <string name="status_calibration_title">Calibración de corriente</string>
+    <string name="status_calibration_unit">Unidad</string>
+    <string name="status_calibration_unit_ua">Microamperios</string>
+    <string name="status_calibration_unit_ma">Miliamperios</string>
+    <string name="status_calibration_sign">La descarga se lee</string>
+    <string name="status_calibration_negative">Negativa</string>
+    <string name="status_calibration_positive">Positiva</string>
+    <string name="status_calibration_standard">Estándar de Android</string>
+    <string name="status_calibration_flipped">Invertida al mostrar</string>
+    <string name="status_calibration_detected">Detectada comprobando el contador de carga.</string>
+    <string name="status_calibration_override">Fijada en Ajustes.</string>
+    <string name="status_calibration_default">Aún sin comprobar. Se usa el estándar de Android hasta tener suficientes lecturas.</string>
+    <string name="status_calibration_info_title">Acerca de la calibración</string>
+    <string name="status_calibration_info_body">Los teléfonos indican la corriente de la batería de formas distintas: algunos en miliamperios en lugar de microamperios, otros con la descarga como número positivo. BatStats compara la corriente indicada con el contador de carga mientras monitoriza y corrige lo que muestra.\n\nPuedes fijar la unidad y el signo en Ajustes, y restablecer la detección allí.</string>
+
+    <!-- Problemas recientes -->
+    <string name="status_issues_title">Problemas recientes</string>
+    <string name="status_issues_none">No hay problemas registrados.</string>
+    <string name="status_issues_show_all">Mostrar todos (%1$s)</string>
+    <string name="status_issues_show_fewer">Mostrar menos</string>
+    <string name="status_issues_repeated">%1$s · %2$s veces</string>
+    <string name="status_issues_log_unavailable">Ahora no se puede guardar el registro de problemas. Pueden perderse las entradas recientes.</string>
+    <string name="status_issues_info_title">Acerca de los problemas recientes</string>
+    <string name="status_issues_info_body">BatStats guarda hasta 60 eventos en este teléfono y agrupa las repeticiones. Nunca incluyen listas de apps, informes del sistema sin procesar ni identificadores del dispositivo, y solo salen del teléfono en un informe que compartas.</string>
+    <string name="status_issue_start_failed">La monitorización no pudo iniciarse</string>
+    <string name="status_issue_battery_unavailable">Android no dio ninguna lectura de batería</string>
+    <string name="status_issue_battery_failed">Falló una lectura de batería</string>
+    <string name="status_issue_state_events">No se recibieron los eventos de pantalla y cargador</string>
+    <string name="status_issue_history_failed">No se pudo guardar el historial</string>
+    <string name="status_issue_gap">La monitorización se pausó; el hueco no se cuenta</string>
+    <string name="status_issue_charge_counter">El contador de carga faltaba o se reinició</string>
+    <string name="status_issue_advanced_failed">No se pudieron leer las estadísticas por app</string>
+    <string name="status_issue_format_invalid">No se entendió el informe de batería de Android</string>
+    <string name="status_issue_interrupted">Se interrumpió la lectura de estadísticas por app</string>
+    <string name="status_issue_alert_failed">No se pudo mostrar una alerta de batería</string>
+    <string name="status_issue_notification_failed">La notificación o un widget no se pudo actualizar</string>
+    <string name="status_issue_log_failed">No se pudieron leer los problemas guardados</string>
+
+    <!-- Informe -->
+    <string name="status_report_title">Informe</string>
+    <string name="status_report_body">Un resumen en texto plano para resolver problemas: lecturas, acceso, calibración y eventos recientes. Sin listas de apps, informes del sistema sin procesar ni identificadores del dispositivo.</string>
+    <string name="status_report_share">Compartir informe</string>
+    <string name="status_report_subject">Informe de estado de BatStats</string>
+    <string name="status_report_unavailable">Ninguna app de este teléfono puede compartir el informe.</string>
+</resources>

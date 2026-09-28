@@ -1,11 +1,15 @@
 package app.batstats.ui
 
 import android.Manifest
+import android.app.Activity
+import android.app.Instrumentation
 import android.content.Intent
 import android.content.res.Configuration
+import android.net.Uri
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
 import app.batstats.R
 import app.batstats.battery.BatteryGraph
@@ -18,6 +22,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import org.junit.*
 import org.junit.runner.RunWith
+import java.io.File
 
 @RunWith(AndroidJUnit4::class)
 class NavigationDeviceTest {
@@ -111,21 +116,56 @@ class NavigationDeviceTest {
         backToNow()
 
         tab(TestTags.TAB_SETTINGS)
+        openSettingsData()
+        compose.onNodeWithText(label(R.string.data_settings_restore)).performScrollTo().assertIsDisplayed()
+        capture("settings-data")
+        // An invalid settings file through Data's real restore path; the picker is answered with a file in the app cache.
+        val invalid = File(DeviceEnvironment.context.cacheDir, "navigation-invalid-settings.json").apply { writeText("{invalid}") }
+        try {
+            val before = runBlocking { BatteryGraph.settings.flow.first() }
+            answeringOpenDocument(Uri.fromFile(invalid)) { click(R.string.data_settings_restore) }
+            compose.waitUntil(120_000) {
+                compose.onAllNodesWithText(label(R.string.data_failed_settings_invalid)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithText(label(R.string.data_failed_settings_invalid)).performScrollTo().assertIsDisplayed()
+            Assert.assertEquals(before, runBlocking { BatteryGraph.settings.flow.first() })
+            capture("settings-data-invalid-import")
+        } finally {
+            invalid.delete()
+        }
+    }
+
+    /** Settings › Data from the Settings tab. */
+    private fun openSettingsData() {
+        // The interim BatterySettingsContent's literal row; after the P4b Settings merge this is its Data link.
         compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(EXPORT_DATA_ROW))
         compose.onNodeWithText(EXPORT_DATA_ROW).performClick()
-        compose.onNodeWithText(label(R.string.import_csv)).performScrollTo().assertIsDisplayed()
-        capture("settings-data-export-import")
-        DeviceEnvironment.device.pressBack()
-        compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
-        click(R.string.import_settings_desc)
-        val before = runBlocking { BatteryGraph.settings.flow.first() }
-        compose.onNode(hasSetTextAction()).performTextInput("{invalid}")
-        click(R.string.import_action)
-        compose.waitUntil(120_000) { compose.onAllNodesWithText(label(R.string.settings_invalid_import)).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText(label(R.string.settings_invalid_import)).performScrollTo().assertIsDisplayed()
-        Assert.assertEquals(before, runBlocking { BatteryGraph.settings.flow.first() })
-        capture("settings-invalid-import")
-        click(R.string.cancel)
+        compose.waitUntil(120_000) {
+            compose.onAllNodesWithText(label(R.string.data_stored_title)).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    /**
+     * Runs [block] while every `ACTION_OPEN_DOCUMENT` this process starts is answered at once with [uri] (the
+     * system picker never opens), and waits until one was.
+     */
+    private fun answeringOpenDocument(uri: Uri, block: () -> Unit) {
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val monitor = object : Instrumentation.ActivityMonitor() {
+            override fun onStartActivity(intent: Intent): Instrumentation.ActivityResult? =
+                if (intent.action == Intent.ACTION_OPEN_DOCUMENT) {
+                    Instrumentation.ActivityResult(Activity.RESULT_OK, Intent().setData(uri))
+                } else {
+                    null
+                }
+        }
+        instrumentation.addMonitor(monitor)
+        try {
+            block()
+            compose.waitUntil(10_000) { monitor.hits > 0 }
+        } finally {
+            instrumentation.removeMonitor(monitor)
+        }
     }
 
     @Test fun largeTextDarkThemeKeepsActionsAndResetExplanationReachable() {
