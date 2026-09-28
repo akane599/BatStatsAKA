@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="alarms">Alarmas</string>
+    <string name="tab_now">Ahora</string>
+    <string name="tab_apps">Aplicaciones</string>
     <string name="history">Historial</string>
     <string name="settings">Ajustes</string>
     <string name="data_export_import">Exportar e importar datos</string>
@@ -8,6 +10,7 @@
     <string name="drain_statistics">Estadísticas de descarga</string>
     <string name="session_details">Detalles de la sesión</string>
     <string name="battery_health">Estado de la batería</string>
+    <string name="app_details_placeholder">Detalles de la aplicación próximamente.</string>
     <string name="monitoring">Monitorización</string>
     <string name="charge">Carga</string>
     <string name="discharge">Descarga</string>
