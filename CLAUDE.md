@@ -27,13 +27,15 @@ If the STACK block below still contains placeholders, run `/bootstrap` first.
 - Per-project JDK: if the box has several JDKs, export the `JAVA_HOME` above before Gradle, or pin `org.gradle.java.home` in `gradle.properties`. Never change the project's target JDK to match the machine.
 - Headless emulator: `emulator -avd batstats-api36 -no-window -no-audio -gpu swiftshader_indirect &`
 - Wait for boot: `adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'`
+- `rm -rf` is denied in `.claude/settings.json`; use `rm -r` (never on paths you haven't looked at).
 
 ## Commands (always `--console=plain -q`; never pipe full Gradle output into context)
 - Build:         `./gradlew :app:assembleDebug --console=plain -q`
 - Install + run: `./gradlew :app:installDebug --console=plain -q && adb shell am start -n org.mlm.batstats.debug/app.batstats.battery.BatteryMainActivity`
 - Unit tests:    `./gradlew :app:testDebugUnitTest --console=plain -q`
-- Instrumented:  `./gradlew :app:connectedDebugAndroidTest --console=plain -q` (emulator booted first)
+- Instrumented:  `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku --console=plain -q` (emulator booted; CI's ordinary phase — `@RequiresShizuku` tests need `/device-check`). One class: `-Pandroid.testInstrumentationRunnerArguments.class=<fqcn>`
 - Lint:          `./gradlew :app:lintDebug --console=plain -q`
+- CI parity:     after build/dependency changes run the "Verify and build" step of `.github/workflows/build-apk.yml` (4 python checks + one Gradle line incl. preview variant and lint)
 - Screenshots:   `bash .claude/scripts/run_screenshot_tests.sh` (runs `:app:testDebugScreenshotTestDefaultTestSuite --rerun`, lists failures; exit 0 pass / 1 failures / 3 build broke). Re-baseline: ask the user to run `/screenshot-rebaseline` (never a bare `update…` run: renamed/removed previews leave stale PNGs). `@PreviewTest` previews in `app/src/screenshotTest/kotlin/`, refs in `app/src/screenshotTestDefaultDebug/reference/` (commit with the UI change)
 - Failures only: append `2>&1 | grep -E "error:|FAILED|e: |warning: \[" | head -40`
 - Exit codes:    shell is zsh — a pipe hides Gradle's status (`${PIPESTATUS}` is empty); redirect to a file and check `$?`, or use `$pipestatus[1]`
@@ -59,7 +61,8 @@ Main context is for decisions and edits. Everything that reads a lot or reviews 
 - Compose: stateless composables, `modifier: Modifier = Modifier` first optional param, state hoisted to ViewModel. Screens = public wrapper `XxxScreen` (Koin, flows, effects, launchers, Intents, root/Shizuku) + stateless `XxxContent`; every screen has `@PreviewTest @ScreenPreviews` in `app/src/screenshotTest/kotlin/app/batstats/ui/screens/` (helpers in `ui/ScreenshotPreviews.kt`; dates from `FIXED_TIME_MS`).
 - Compose design: all colors/type/shapes/spacing via `MaterialTheme` + project `Spacing` tokens (none exist yet — add them in `ui/theme/` before restyling); no `Color(0x…)`, raw `.dp`/`.sp` in screen files. Load `compose-design` before designing or restyling any screen.
 - App widgets: RemoteViews XML in `res/layout/widget_*.xml`, driven by `battery/widget/WidgetUpdater.kt` — keep them RemoteViews-compatible (no ViewBinding, no custom views).
-- Strings in `res/values/strings.xml`; dimensions/colors via theme/resources, never literals in code.
+- Strings in `res/values/strings.xml` **and** `values-es/`, `values-tr/` (the hook's `check_resources.py` fails on missing translations/format args); dimensions/colors via theme/resources, never literals in code.
+- Compose behavior tests of `XxxContent` go in `androidTest` (`createAndroidComposeRule<ComponentActivity>()`; no Robolectric). If a test exposes an app bug, log it in PROGRESS.md debt instead of silently changing app behavior.
 - Every new use case / repository / ViewModel gets a unit test. Prefer fakes over mocks.
 - Never bump `compileSdk`/`targetSdk`, AGP, Gradle, Kotlin, or JDK target without asking. Dependencies go through the version catalog if one exists.
 - Never read, print, or commit: keystores, `local.properties`, `google-services.json`, `.env*`.
