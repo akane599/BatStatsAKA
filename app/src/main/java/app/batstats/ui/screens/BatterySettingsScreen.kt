@@ -65,7 +65,11 @@ import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
-/** Settings categories in display order; each renders as a header item plus a section item. */
+/**
+ * Settings categories in display order; each renders as a header item plus a section item, so the
+ * wrapper scrolls to `index * 2`. Keep every category non-empty, or fix that target and the item
+ * indices in BatterySettingsScreenshotTest.
+ */
 private val settingsCategoryOrder = listOf(
     General::class to "General",
     Notifications::class to "Notifications",
@@ -143,7 +147,8 @@ fun BatterySettingsScreen(
 
 /**
  * Stateless settings UI. Suspend callbacks back the reset/import/clear dialogs so their
- * in-progress and error state stays local; the host owns snackbars, scrolling and Intents.
+ * in-progress and error state stays local, and dialog results are posted to [snackbarHostState].
+ * The host supplies that state and [listState], and launches every Intent.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

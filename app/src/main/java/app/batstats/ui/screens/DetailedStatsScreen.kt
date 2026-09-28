@@ -33,7 +33,8 @@ import java.util.Locale
 
 private const val KERNEL_TAB = 6
 
-/** Advanced-access readings shown by [DetailedStatsContent]; mirrors the [DetailedStatsViewModel] flows. */
+/** Non-kernel readings collected by [DetailedStatsScreen]; root kernel data reaches the content through its `kernelContent` slot. */
+@Immutable
 data class DetailedStatsUiState(
     val snapshot: BatteryStatsParser.FullSnapshot?,
     val deviceIdle: BatteryStatsParser.DeviceIdleInfo?,
@@ -46,7 +47,8 @@ data class DetailedStatsUiState(
     val adbCommands: String,
 )
 
-/** Root-only kernel readings for the kernel tab; [cpu], [thermal] and [wakelocks] are read while that tab is shown. */
+/** Root-only kernel readings for the kernel tab: [cpu], [thermal] and [wakelocks] are fetched when the tab opens and on each refresh; [battery] comes from the ViewModel. */
+@Immutable
 data class KernelDetailsState(
     val root: Boolean,
     val battery: KernelStats.Battery?,
@@ -360,7 +362,7 @@ fun DetailedStatsContent(
         } }, confirmButton = { TextButton(onClick = { selected = null }) { Text(stringResource(R.string.adv_close)) } }) }
 }
 
-@Composable fun KernelDetails(state: KernelDetailsState, refresh: () -> Unit) {
+@Composable fun KernelDetails(state: KernelDetailsState, refresh: () -> Unit, modifier: Modifier = Modifier) {
     val root = state.root
     val battery = state.battery
     val errors = state.errors
@@ -369,7 +371,7 @@ fun DetailedStatsContent(
     val thermal = state.thermal
     val locks = state.wakelocks
     val busy = state.busy
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         DetailCard(stringResource(R.string.adv_kernel)) {
             Text(stringResource(R.string.adv_kernel_note))
             if (!root) Text(stringResource(R.string.adv_root_needed))

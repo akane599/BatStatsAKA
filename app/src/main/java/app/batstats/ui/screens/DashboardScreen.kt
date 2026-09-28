@@ -35,6 +35,7 @@ import java.util.Date
 import java.util.Locale
 
 /** Everything [DashboardContent] renders, as plain values collected by [DashboardScreen]. */
+@Immutable
 data class DashboardUiState(
     val reading: BatteryRepository.Realtime = BatteryRepository.Realtime(),
     val observing: Boolean = false,

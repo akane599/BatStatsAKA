@@ -42,7 +42,7 @@ private fun latestSample(): BatterySample = BatterySample(
     source = "BatteryManager",
 )
 
-/** Three hours of 5-minute samples: screen on for the first hour, then screen off. Deterministic. */
+/** Three hours of 5-minute samples: screen on for the first hour, then screen off. */
 private fun recentSamples(): List<BatterySample> = List(SAMPLE_COUNT) { index ->
     val screenOn = index < 12
     val wobble = ((index * 37) % 11 - 5) * 18_000L

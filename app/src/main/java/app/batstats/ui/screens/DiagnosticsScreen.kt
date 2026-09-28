@@ -94,6 +94,7 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
 }
 
 /** Display values derived by [DiagnosticsScreen]; [events] are in recorded (oldest-first) order. */
+@Immutable
 data class DiagnosticsUiState(
     val readingText: String,
     val observationText: String,

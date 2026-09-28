@@ -38,7 +38,7 @@ private fun sampleSession(): ChargeSession = ChargeSession(
     source = "BatteryManager",
 )
 
-/** ~45 readings over the session span, with one discontinuity gap partway through. */
+/** 45 readings over the session span, with one discontinuity gap at index 22. */
 private fun sampleReadings(): List<SessionChartReading> = (0 until 45).map { index ->
     val timestamp = SESSION_START + index * (2 * 60 * 60 * 1_000L / 44)
     val phase = index / 44.0
