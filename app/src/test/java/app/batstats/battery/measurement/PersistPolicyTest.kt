@@ -26,12 +26,19 @@ class PersistPolicyTest {
     }
 
     @Test fun statusOrPluggedChangeIsTheOnlyPowerReason() {
-        assertEquals(PersistReason.POWER, decide(at(500), Boundary.POWER, poll = false))
+        assertEquals(PersistReason.POWER, decide(at(500, status = charging, plugged = 1), Boundary.POWER, poll = false))
         assertEquals(PersistReason.POWER, decide(at(500, status = charging, plugged = 1), poll = false))
         // Same status, another charger (AC → USB) still counts.
         val onAc = at(0, status = charging, plugged = 1)
         assertEquals(PersistReason.POWER, decide(at(500, status = charging, plugged = 2), poll = false, previous = onAc))
         assertEquals(PersistReason.POWER, decide(at(500, plugged = null), poll = true))
+    }
+
+    @Test fun powerLabelledBroadcastWithoutAChangeIsNotPersisted() {
+        // Every ACTION_BATTERY_CHANGED capture is labelled POWER; unchanged status, plugged and level stay realtime.
+        assertNull(decide(at(1_000), Boundary.POWER, poll = false))
+        assertNull(decide(at(1_000), Boundary.POWER, screenOn = false, poll = false))
+        assertEquals(PersistReason.LEVEL, decide(at(1_000, level = 79), Boundary.POWER, poll = false))
     }
 
     @Test fun levelChangeIsPersisted() {

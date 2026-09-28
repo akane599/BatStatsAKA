@@ -19,7 +19,7 @@ class CurrentCalibratorTest {
     )
 
     private fun start(trueUa: Long = -300_000, report: (Long) -> Long = { it }) =
-        calibrator.accept(reading(report(trueUa), if (trueUa < 0) DISCHARGING else CHARGING))
+        calibrator.accept(reading(report(trueUa), if (trueUa < 0) DISCHARGING else CHARGING), if (trueUa < 0) 0 else 1)
 
     /**
      * Feeds [intervals] 30 s captures while [trueUa] (Android sign) flows, reported as report(trueUa).
@@ -32,7 +32,7 @@ class CurrentCalibratorTest {
             elapsed += 30_000
             uptime += (30_000 * awakeShare).toLong()
             charge += trueUa * 30_000 / 3_600_000
-            decision = calibrator.accept(reading(report(trueUa), if (trueUa < 0) DISCHARGING else CHARGING, boundary))
+            decision = calibrator.accept(reading(report(trueUa), if (trueUa < 0) DISCHARGING else CHARGING, boundary), if (trueUa < 0) 0 else 1)
         }
         return decision
     }
@@ -41,10 +41,13 @@ class CurrentCalibratorTest {
     private fun gap(trueUa: Long = -300_000, report: (Long) -> Long = { it }) =
         feed(1, trueUa, report, boundary = Boundary.GAP)
 
-    private fun step(ms: Long, raw: Long?, power: PowerState = DISCHARGING): CalibrationDecision? {
+    /** One capture [ms] later; the counter falls [counterDropUah] (unplugged unless [plugged] says otherwise). */
+    private fun step(ms: Long, raw: Long?, power: PowerState = DISCHARGING, plugged: Int? = if (power == CHARGING) 1 else 0,
+                     counterDropUah: Long = 100): CalibrationDecision? {
         elapsed += ms
         uptime += ms
-        return calibrator.accept(reading(raw, power))
+        charge -= counterDropUah
+        return calibrator.accept(reading(raw, power), plugged)
     }
 
     @Test fun microampDeviceWithAndroidSignIsConfirmedByThreeWindows() {
@@ -77,7 +80,7 @@ class CurrentCalibratorTest {
         assertEquals(CalibrationDecision(microamps.copy(sign = CurrentSign.INVERTED), CalibrationBasis.COUNTER_WINDOWS, 3), micro)
 
         val milli = CurrentCalibrator()
-        fun capture(raw: Long) = milli.accept(reading(raw, DISCHARGING))
+        fun capture(raw: Long) = milli.accept(reading(raw, DISCHARGING), 0)
         capture(300)
         var decision: CalibrationDecision? = null
         repeat(60) {
@@ -131,14 +134,14 @@ class CurrentCalibratorTest {
         assertEquals(1_200_000L, calibrator.windows.single().coveredMs)
 
         val fast = CurrentCalibrator() // 3 A: 20 mAh within the first interval, but only 10 min closes it
-        fast.accept(reading(-3_000_000, DISCHARGING))
+        fast.accept(reading(-3_000_000, DISCHARGING), 0)
         repeat(19) {
             elapsed += 30_000; uptime += 30_000; charge -= 25_000
-            fast.accept(reading(-3_000_000, DISCHARGING))
+            fast.accept(reading(-3_000_000, DISCHARGING), 0)
         }
         assertTrue(fast.windows.isEmpty())
         elapsed += 30_000; uptime += 30_000; charge -= 25_000
-        fast.accept(reading(-3_000_000, DISCHARGING))
+        fast.accept(reading(-3_000_000, DISCHARGING), 0)
         assertEquals(600_000L, fast.windows.single().coveredMs)
         assertEquals(500_000L, fast.windows.single().chargeUah)
     }
@@ -163,6 +166,27 @@ class CurrentCalibratorTest {
         repeat(19) { assertNull(step(2_000, 150_000)) }
         val decision = step(2_000, 150_000)
         assertEquals(CalibrationDecision(microamps.copy(sign = CurrentSign.INVERTED), CalibrationBasis.POSITIVE_WHILE_DISCHARGING, 0), decision)
+    }
+
+    @Test fun chargeHoldWhilePluggedIsNotUnplugged() {
+        // Status "discharging" (3) while plugged in, e.g. a charge limit holding at ~0 mA.
+        repeat(25) { assertNull(step(2_000, 20_000, DISCHARGING, plugged = 1)) }
+        repeat(25) { assertNull(step(2_000, 20_000, DISCHARGING, plugged = null)) }
+        // The same readings unplugged, with the counter falling, do mark the sign.
+        repeat(19) { assertNull(step(2_000, 20_000)) }
+        assertEquals(CurrentSign.INVERTED, step(2_000, 20_000)?.calibration?.sign)
+    }
+
+    @Test fun fastPathNeedsTheCounterToFallWhenItIsReported() {
+        repeat(25) { assertNull(step(2_000, 150_000, counterDropUah = 0)) }
+        repeat(25) { assertNull(step(2_000, 150_000, counterDropUah = -100)) }
+        val noCounter = CurrentCalibrator()
+        var decision: CalibrationDecision? = null
+        repeat(20) {
+            elapsed += 2_000; uptime += 2_000
+            decision = noCounter.accept(reading(150_000, DISCHARGING).copy(chargeUah = null), 0)
+        }
+        assertEquals(CalibrationBasis.POSITIVE_WHILE_DISCHARGING, decision?.basis)
     }
 
     @Test fun aNonPositiveUnpluggedReadingRestartsTheFastPath() {

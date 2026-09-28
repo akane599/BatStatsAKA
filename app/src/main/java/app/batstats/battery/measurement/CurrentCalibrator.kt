@@ -20,7 +20,7 @@ enum class CalibrationBasis {
     /** 3 of the last 4 counter windows agree and none contradicts: unit and sign. */
     COUNTER_WINDOWS,
 
-    /** ≥ 20 discharging readings in a row were positive: sign only; the unit stays µA. */
+    /** ≥ 20 unplugged readings in a row were positive while the counter fell: sign only; the unit stays µA. */
     POSITIVE_WHILE_DISCHARGING,
 }
 
@@ -33,12 +33,19 @@ data class CalibrationDecision(
 
 /**
  * Detects how a device reports `CURRENT_NOW` by comparing ∫raw I dt with the charge counter's Δq.
- * Feed every observation in order with the raw (uncalibrated) `currentUa`; read [decision].
+ * Feed every observation in order with the raw (uncalibrated) `currentUa` and its `EXTRA_PLUGGED`
+ * value; read [decision].
  *
  * Covered interval: both ends have raw current and counter, same generation and power
- * (CHARGING or DISCHARGING), no GAP or sleep gap, a plausible counter step, and the CPU awake for
- * ≥ 90 % of it, so the endpoint currents stand for the interval. A window sums covered intervals
+ * (CHARGING or DISCHARGING), no observation gap (ObservationEngine's rule), a plausible counter
+ * step, and the CPU awake for ≥ 90 % of it, so the endpoint currents stand for the interval
+ * (a suspended interval's awake-time reading would overstate ∫I dt). A window sums covered intervals
  * of one power direction (a direction change discards it) and closes at |Δq| ≥ 20 mAh and ≥ 10 min.
+ *
+ * Fast path: ≥ 20 consecutive unplugged (`plugged == 0`) readings with raw > 0, and — when the
+ * counter is reported — a counter that fell across them, mark the sign inverted. Plugged readings
+ * (e.g. status "discharging" during a charge hold, current ≈ 0) and missing currents neither count
+ * nor reset the run; an unplugged reading ≤ 0 resets it.
  *
  * This only decides: storing, overrides and the Undo notice belong to the caller, and [decision]
  * turning null later means "no conclusion now", not "revert". The counter itself is sanity-checked
@@ -56,6 +63,8 @@ class CurrentCalibrator {
     private var open: OpenWindow? = null
     private val closed = ArrayDeque<CalibrationWindow>()
     private var positiveStreak = 0
+    private var streakFirstUah: Long? = null
+    private var streakLastUah: Long? = null
 
     /** The last [WINDOWS_KEPT] closed windows, oldest first. */
     val windows: List<CalibrationWindow> get() = closed.toList()
@@ -70,11 +79,12 @@ class CurrentCalibrator {
     var counterSuspect: Boolean = false
         private set
 
-    fun accept(point: Observation): CalibrationDecision? {
+    /** @param plugged `BatteryManager.EXTRA_PLUGGED` at this capture (0 = unplugged), null if unknown */
+    fun accept(point: Observation, plugged: Int?): CalibrationDecision? {
         val before = previous
         previous = point
         val raw = point.currentUa
-        if (point.power == PowerState.DISCHARGING && raw != null) positiveStreak = if (raw > 0) positiveStreak + 1 else 0
+        if (plugged == 0 && raw != null) countUnplugged(raw, point.chargeUah)
         val level = point.level
         val chargeUah = point.chargeUah
         if (level != null && level >= MIN_CHECK_LEVEL && chargeUah != null) {
@@ -90,8 +100,33 @@ class CurrentCalibrator {
         open = null
         closed.clear()
         positiveStreak = 0
+        streakFirstUah = null
+        streakLastUah = null
         counterSuspect = false
         decision = null
+    }
+
+    private fun countUnplugged(raw: Long, chargeUah: Long?) {
+        if (raw <= 0) {
+            positiveStreak = 0
+            return
+        }
+        if (positiveStreak == 0) {
+            streakFirstUah = null
+            streakLastUah = null
+        }
+        positiveStreak++
+        if (chargeUah != null) {
+            if (streakFirstUah == null) streakFirstUah = chargeUah
+            streakLastUah = chargeUah
+        }
+    }
+
+    /** True without counter values; otherwise the counter must have fallen across the positive run. */
+    private fun streakCounterFell(): Boolean {
+        val first = streakFirstUah
+        val last = streakLastUah
+        return first == null || last == null || last < first
     }
 
     private fun addInterval(before: Observation, point: Observation) {
@@ -138,7 +173,8 @@ class CurrentCalibrator {
         if (agreed != null && conclusive.size >= WINDOWS_TO_AGREE) {
             return CalibrationDecision(agreed, CalibrationBasis.COUNTER_WINDOWS, conclusive.size)
         }
-        if (positiveStreak >= FAST_PATH_READINGS && conclusive.none { it.sign == CurrentSign.NORMAL }) {
+        val fastPath = positiveStreak >= FAST_PATH_READINGS && streakCounterFell()
+        if (fastPath && conclusive.none { it.sign == CurrentSign.NORMAL }) {
             return CalibrationDecision(CurrentCalibration(sign = CurrentSign.INVERTED), CalibrationBasis.POSITIVE_WHILE_DISCHARGING, 0)
         }
         return null

@@ -35,6 +35,10 @@ object DailySummaryAggregator {
      * The interval ObservationEngine accounted between two summaries: [before] as it stood at the
      * previous persisted sample, [after] including this one (its `latest` is the end reading).
      * Gaps, restarts and resets add nothing. Null when [after] has no observation.
+     *
+     * The whole CPU-suspend delta is attributed to discharge when any discharging time was added.
+     * That is exact only because PersistPolicy persists every status/plugged change, so each
+     * persisted interval has a single power state; an interval mixing states would over-count.
      */
     fun interval(before: ObservationSummary, after: ObservationSummary, endTemperatureDeciC: Int?): DayInterval? {
         val end = after.latest ?: return null
