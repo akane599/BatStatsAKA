@@ -8,7 +8,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] P0a bug fixes · P0b dead code/resources · Contracts
 - [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
 - [~] Wave B: B1a sampler done (4cf382f + fixes 833cc5a; **scoped re-review of the fixes pending**) · B1b settings v3 + gating · B2 per-app repositories · emulator cadence check
-- [x] P3a shell/navigation (merged 935e985) · [~] P3b components/charts (fix round 1 in worktree branch `worktree-agent-a0a2938b2486412ea`; re-review + merge pending)
+- [x] P3a shell/navigation (merged 935e985) · [~] P3b components/charts (review done; fix round 1 **interrupted mid-edit** in worktree `.claude/worktrees/agent-a0a2938b2486412ea` — uncommitted partial work on top of 270ca79; finish, re-review, then merge)
 - [ ] P4a Now → **visual checkpoint with user**
 - [ ] P4b screens (6 agents) ∥ P5 notification/tile/widgets
 - [ ] P4c removal of old screens/shims
