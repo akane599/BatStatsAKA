@@ -10,7 +10,7 @@ import app.batstats.battery.data.sampling.DailySummaryReplay
 import app.batstats.battery.measurement.BatteryReading
 import app.batstats.battery.measurement.CalibrationState
 import app.batstats.battery.measurement.CurrentCalibration
-import app.batstats.battery.measurement.EtaBasis
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.measurement.HealthSummary
 import app.batstats.battery.measurement.PowerState
 import app.batstats.ui.components.chart.TimePoint
@@ -27,43 +27,17 @@ internal object NowMapping {
     /** The live trace breaks where readings are further apart than 3 screen-on polls (the app was away). */
     const val LIVE_MAX_GAP_MS = 95_000L
 
-    /** A capture without an ETA keeps the last one this long (the writer adds it just after the capture). */
-    const val ETA_HOLD_MS = 60_000L
-
-    /** A reading with the ETA it shows: the newest one, or the previous one held across a capture without it. */
-    data class ReadingEta(
-        val reading: BatteryRepository.Realtime = BatteryRepository.Realtime(),
-        val eta: HeldEta? = null,
-    )
-
-    data class HeldEta(val remainingMs: Long, val basis: EtaBasis?, val power: PowerState, val atMs: Long)
-
-    /**
-     * Realtime first carries the raw capture (charging: Android's time to full; discharging: none), then the writer's
-     * copy with its estimate; the next capture drops that again. Keep the last estimate while the power state holds,
-     * for [ETA_HOLD_MS], counted down to this reading.
-     */
-    fun withEta(previous: ReadingEta, reading: BatteryRepository.Realtime): ReadingEta {
-        val sample = reading.sample ?: return previous.copy(reading = reading)
-        val power = reading.powerState
-        val eta = sample.etaMs?.takeIf { it > 0 }
-        val held = when {
-            eta != null -> HeldEta(eta, EtaBasis.entries.firstOrNull { it.name == sample.etaBasis }, power, sample.timestamp)
-            else -> previous.eta?.takeIf { it.power == power && sample.timestamp - it.atMs in 0..ETA_HOLD_MS }
-        }
-        return ReadingEta(reading, held)
-    }
-
     /**
      * Time left needs monitoring (the discharge estimate is the writer's); time to full is shown while charging even
-     * without it, because every capture carries Android's own.
+     * without it, because every capture carries Android's own. The held estimate itself ([EtaHold]) is shared with
+     * the ongoing notification.
      */
-    fun hero(reading: ReadingEta, monitoring: Boolean, startBlocked: Boolean): HeroState {
+    fun hero(reading: EtaHold.Reading, monitoring: Boolean, startBlocked: Boolean): HeroState {
         val realtime = reading.reading
         val sample = realtime.sample
         val showEta = sample != null && (monitoring || realtime.powerState == PowerState.CHARGING)
         val eta = if (showEta && sample != null) {
-            reading.eta?.let { held -> Eta((held.remainingMs - (sample.timestamp - held.atMs)).coerceAtLeast(0), held.basis) }
+            reading.held?.let { held -> Eta((held.remainingMs - (sample.timestamp - held.atMs)).coerceAtLeast(0), held.basis) }
         } else null
         return HeroState(
             hasReading = sample != null,

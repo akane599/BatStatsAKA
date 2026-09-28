@@ -9,10 +9,6 @@ import kotlinx.serialization.Serializable
  * [Now], [History], [Apps] and [Settings] are the top-level tabs; each owns its own
  * [androidx.navigation3.runtime.NavBackStack] (see [TopLevelBackStack]). The rest are detail
  * routes, pushed onto whichever tab is active when they're reached.
- *
- * [DrainStats] has no place in the P4 taxonomy. It is kept only so
- * [app.batstats.ui.screens.DashboardScreen]'s existing "monitor details" button keeps working
- * until Now (P4a) replaces it, and is deleted with the rest of the old screens in P4c.
  */
 @Serializable
 sealed interface Routes : NavKey {
@@ -42,9 +38,6 @@ sealed interface Routes : NavKey {
 
     @Serializable
     data object SettingsStatus : Routes
-
-    @Serializable
-    data object DrainStats : Routes
 }
 
 /** The 4 tabs shown in [app.batstats.ui.screens.MainScreen]'s bar/rail, in display order. */

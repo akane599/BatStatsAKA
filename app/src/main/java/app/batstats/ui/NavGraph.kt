@@ -10,7 +10,6 @@ import app.batstats.ui.navigation.TopLevelBackStack
 import app.batstats.ui.screens.AppDetailsScreen
 import app.batstats.ui.screens.AppsScreen
 import app.batstats.ui.screens.DataScreen
-import app.batstats.ui.screens.DrainStatsScreen
 import app.batstats.ui.screens.HealthScreen
 import app.batstats.ui.screens.HistoryScreen
 import app.batstats.ui.screens.SessionDetailsScreen
@@ -103,11 +102,6 @@ fun NavGraph(
 
             entry<Routes.SettingsStatus> {
                 StatusScreen(onBack = popBack)
-            }
-
-            // Interim only (see Routes.DrainStats); deleted with the old screens in P4c.
-            entry<Routes.DrainStats> {
-                DrainStatsScreen(onBack = popBack)
             }
         },
     )

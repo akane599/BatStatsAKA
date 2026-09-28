@@ -442,13 +442,6 @@ class BatteryRepository(
         batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.
     }
 
-    @Deprecated("Removed in P4c")
-    @OptIn(ExperimentalCoroutinesApi::class)
-    fun recentSamplesFlow(durationMs: Long): Flow<List<BatterySample>> = flow {
-        while (currentCoroutineContext().isActive) { emit(System.currentTimeMillis()); delay(60_000) }
-    }.flatMapLatest { now ->
-        batteryDao.chartSamples(now - durationMs, Long.MAX_VALUE, (durationMs / 360).coerceAtLeast(1))
-    }
     fun samplesBetween(start: Long, end: Long) = batteryDao.samplesBetween(start, end)
     fun samplesForSession(sessionId: String) = batteryDao.samplesForSession(sessionId)
     suspend fun getSettings(): AppSettings = settingsRepository.flow.first()

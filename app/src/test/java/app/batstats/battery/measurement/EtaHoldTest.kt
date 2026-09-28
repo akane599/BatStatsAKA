@@ -1,4 +1,4 @@
-package app.batstats.battery.drain
+package app.batstats.battery.measurement
 
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample

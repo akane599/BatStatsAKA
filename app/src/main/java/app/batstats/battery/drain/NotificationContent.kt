@@ -6,6 +6,7 @@ import app.batstats.battery.data.SessionDrain
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.data.sampling.ChargerType
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.measurement.PowerState
 import app.batstats.settings.StatusIconValue
 import java.text.DateFormat

@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import app.batstats.R
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.util.UpdateGate
 import app.batstats.ui.navigation.Destinations
 import kotlinx.coroutines.flow.Flow

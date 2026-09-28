@@ -22,13 +22,11 @@ import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.sampling.SamplerState
 import app.batstats.battery.data.sampling.SamplingController
 import app.batstats.battery.data.sampling.SharedPreferencesStore
-import app.batstats.battery.drain.AdvancedDrainTracker
 import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.service.MonitoringControl
 import app.batstats.battery.service.MonitoringController
 import app.batstats.battery.service.SamplingDemand
 import app.batstats.battery.shizuku.ShizukuBridge
-import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
@@ -36,7 +34,6 @@ import app.batstats.settings.SettingsMigrations
 import app.batstats.settings.SettingsMigrator
 import app.batstats.viewmodel.AppDetailsViewModel
 import app.batstats.viewmodel.AppsViewModel
-import app.batstats.viewmodel.DashboardViewModel
 import app.batstats.viewmodel.DataViewModel
 import app.batstats.viewmodel.DefaultAppDetailsRepository
 import app.batstats.viewmodel.DefaultAppsRepository
@@ -46,8 +43,6 @@ import app.batstats.viewmodel.DefaultHistoryRepository
 import app.batstats.viewmodel.DefaultNowRepository
 import app.batstats.viewmodel.DefaultSessionDetailsRepository
 import app.batstats.viewmodel.DefaultStatusRepository
-import app.batstats.viewmodel.DetailedStatsViewModel
-import app.batstats.viewmodel.DrainStatsViewModel
 import app.batstats.viewmodel.HealthViewModel
 import app.batstats.viewmodel.HistoryViewModel
 import app.batstats.viewmodel.KmpSettingsStore
@@ -88,8 +83,6 @@ val appModule = module {
     single<SessionSnapshotStore> { RoomSessionSnapshotStore(get()) }
     // Started and stopped by BatteryMonitorService.
     single { SessionSnapshotCollector(get(), get(), get<BatteryRepository>().powerTransitions) }
-    @Suppress("DEPRECATION") // Shim for the old detailed-stats screen until P4c.
-    single { DetailedStatsCollector(get(), get(), get()) }
 
     single<SettingsRepository<AppSettings>> {
         SettingsRepository(dataStore = get(), schema = AppSettingsSchema)
@@ -138,19 +131,15 @@ val appModule = module {
     }
     single<MonitoringControl> { MonitoringController(androidContext(), get()) }
 
-    single { AdvancedDrainTracker(get(), get()) }
     single { DrainNotificationManager(androidContext(), get()) }
 
-    viewModel { DashboardViewModel(androidApplication(), get(), get(), get()) }
     viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get()) }
     viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
-    viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
     // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
     viewModel { HistoryViewModel(DefaultHistoryRepository(get(), get()), get()) }
     viewModel { DataViewModel(DefaultDataRepository(androidContext(), get(), get(), get(), get())) }
     viewModel { StatusViewModel(DefaultStatusRepository(androidContext(), get(), get(), get(), get(), get())) }
     viewModel { HealthViewModel(DefaultHealthRepository(androidContext(), get(), get())) }
-    viewModel { DrainStatsViewModel(get()) }
     // Apps' second get() is the nav entry's SavedStateHandle (sort, query and "show system" survive process death).
     viewModel { AppsViewModel(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()) }
     viewModel { (uid: Int, packageName: String) ->

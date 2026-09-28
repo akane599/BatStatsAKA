@@ -22,6 +22,7 @@ import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.settings.StatusIconValue
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue

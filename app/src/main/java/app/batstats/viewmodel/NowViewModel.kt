@@ -13,6 +13,7 @@ import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.data.uah
 import app.batstats.battery.measurement.CalibrationState
 import app.batstats.battery.measurement.DailySummaryAggregator
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.measurement.HealthSummary
 import app.batstats.battery.service.MonitoringControl
 import app.batstats.settings.useFahrenheit
@@ -62,7 +63,7 @@ class NowViewModel(
     private class Cards(val today: TodayState?, val health: HealthSummary?, val topApps: TopAppsState, val onBattery: ChargeSession?)
 
     private val live: Flow<Live> = combine(
-        source.realtime.scan(NowMapping.ReadingEta()) { previous, reading -> NowMapping.withEta(previous, reading) },
+        source.realtime.scan(EtaHold.Reading()) { previous, reading -> EtaHold.next(previous, reading) },
         monitoring.isMonitoring,
         startBlocked,
     ) { reading, on, blocked ->

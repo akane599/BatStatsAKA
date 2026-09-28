@@ -3,6 +3,7 @@ package app.batstats.battery.drain
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.settings.AppSettings
 import app.batstats.settings.useFahrenheit
 import kotlinx.coroutines.flow.Flow

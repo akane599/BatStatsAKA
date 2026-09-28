@@ -14,7 +14,6 @@ import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.drain.DrainNotificationManager
 import app.batstats.battery.drain.NotificationIssue
-import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.Notifier
 import app.batstats.battery.measurement.BatteryAlerts
@@ -33,8 +32,6 @@ class BatteryMonitorService : Service() {
     private val repository: BatteryRepository by inject()
     private val notifications: DrainNotificationManager by inject()
     private val shell: ShellRunner by inject()
-    @Suppress("DEPRECATION") // The old advanced-stats error line, until P4c reworks the notification source.
-    private val collector: DetailedStatsCollector by inject()
     private val sessionSnapshots: SessionSnapshotCollector by inject()
     private val diagnostics: DiagnosticStore by inject()
     private var started = false
@@ -119,10 +116,10 @@ class BatteryMonitorService : Service() {
         }
         // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once (gated in run).
         serviceScope.launch {
-            val issue = combine(repository.error, shell.lastError, collector.error) { historyError, shellError, collectorError ->
+            val issue = combine(repository.error, shell.lastError) { historyError, shellError ->
                 when {
                     historyError != null -> NotificationIssue.COLLECTION
-                    (collectorError ?: shellError) != null -> NotificationIssue.ADVANCED
+                    shellError != null -> NotificationIssue.ADVANCED
                     else -> null
                 }
             }

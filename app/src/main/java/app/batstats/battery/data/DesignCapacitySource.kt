@@ -77,7 +77,7 @@ class DesignCapacitySource(
 
         /** sysfs `charge_full_design` in µAh through root; null without root or when the read fails. Main-safe. */
         suspend fun readRootChargeFullDesignUah(): Long? = withContext(Dispatchers.IO) {
-            if (RootStatsCollector.isRootAvailable()) RootStatsCollector.getKernelBatteryInfo()?.chargeFullDesign else null
+            if (RootStatsCollector.isRootAvailable()) RootStatsCollector.getChargeFullDesignUah() else null
         }
     }
 }
