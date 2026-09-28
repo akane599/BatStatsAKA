@@ -24,3 +24,7 @@ google-services.json
 
 # Overhaul before/after screenshots (local only, ~14 MB)
 /design/
+
+# Local agent workspaces (plan ledgers, reports, worktrees)
+/.superpowers/
+/.claude/worktrees/

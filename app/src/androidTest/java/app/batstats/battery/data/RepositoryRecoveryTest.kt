@@ -7,23 +7,33 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Handler
+import android.os.PowerManager
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.battery.data.db.BatteryDatabase
+import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.data.sampling.KeyValueStore
+import app.batstats.battery.data.sampling.SamplingController
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
+import app.batstats.battery.measurement.DailySummaryAggregator
+import app.batstats.battery.measurement.PowerState
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
+import app.batstats.test.DeviceEnvironment
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.time.ZoneId
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /** Injected broadcasts/errors exercise recovery; they are not physical battery measurements. */
 @RunWith(AndroidJUnit4::class)
@@ -33,6 +43,7 @@ class RepositoryRecoveryTest {
         @Volatile var missingBattery = false
         @Volatile var throwOnBattery = false
         @Volatile var rejectEvents = false
+        @Volatile var charging = false
         @Volatile var registeredReceiver: BroadcastReceiver? = null
         override fun getNoBackupFilesDir(): File = directory
         override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter?): Intent? {
@@ -41,8 +52,10 @@ class RepositoryRecoveryTest {
             if (missingBattery) return null
             return Intent(Intent.ACTION_BATTERY_CHANGED)
                 .putExtra(BatteryManager.EXTRA_LEVEL, 80).putExtra(BatteryManager.EXTRA_SCALE, 100)
-                .putExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_DISCHARGING)
-                .putExtra(BatteryManager.EXTRA_PLUGGED, 0).putExtra(BatteryManager.EXTRA_VOLTAGE, 4000)
+                .putExtra(BatteryManager.EXTRA_STATUS,
+                    if (charging) BatteryManager.BATTERY_STATUS_CHARGING else BatteryManager.BATTERY_STATUS_DISCHARGING)
+                .putExtra(BatteryManager.EXTRA_PLUGGED, if (charging) BatteryManager.BATTERY_PLUGGED_AC else 0)
+                .putExtra(BatteryManager.EXTRA_VOLTAGE, 4000)
                 .putExtra(BatteryManager.EXTRA_TEMPERATURE, 250).putExtra(BatteryManager.EXTRA_HEALTH, 2)
         }
         override fun registerReceiver(receiver: BroadcastReceiver?, filter: IntentFilter?, flags: Int): Intent? {
@@ -58,6 +71,14 @@ class RepositoryRecoveryTest {
         override fun unregisterReceiver(receiver: BroadcastReceiver?) { registeredReceiver = null }
     }
 
+    /** Calibration and sampler state for one fixture, never the app's own preference files. */
+    internal class MemoryStore : KeyValueStore {
+        private val values = ConcurrentHashMap<String, String>()
+        override fun getString(key: String): String? = values[key]
+        override fun edit(values: Map<String, String?>) =
+            values.forEach { (key, value) -> if (value == null) this.values.remove(key) else this.values[key] = value }
+    }
+
     internal class Fixture {
         val context = ReadingContext(ApplicationProvider.getApplicationContext())
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -67,7 +88,10 @@ class RepositoryRecoveryTest {
         }
         val settings = SettingsRepository<AppSettings>(dataStore = dataStore, schema = AppSettingsSchema)
         val diagnostics = DiagnosticStore(context, scope)
-        val repository = BatteryRepository(context, database, settings, scope, HistoryMaintenance(), diagnostics)
+        val sampler = SamplingController(context, diagnostics)
+        val calibration = CalibrationStore(MemoryStore(), flowOf(CalibrationOverrides()), scope)
+        val repository = BatteryRepository(database, settings, scope, HistoryMaintenance(), diagnostics, sampler,
+            calibration, MemoryStore())
         suspend fun refresh() = withTimeout(60_000) {
             val result = CompletableDeferred<BatteryRepository.Realtime>()
             repository.refreshNow { result.complete(it) }
@@ -75,6 +99,7 @@ class RepositoryRecoveryTest {
         }
         suspend fun close() {
             withContext(Dispatchers.Main.immediate) { repository.stopSampling() }
+            sampler.shutdown()
             scope.coroutineContext[Job]!!.cancelAndJoin()
             database.close()
             context.directory.deleteRecursively()
@@ -121,9 +146,10 @@ class RepositoryRecoveryTest {
 
     @Test fun automaticAndBroadcastReadExceptionsAreRecoverable(): Unit = runBlocking {
         val fixture = Fixture()
+        // A visible surface's demand token: 2 s polls instead of 30 s/300 s.
+        val demand = fixture.sampler.acquire("RepositoryRecoveryTest")
         try {
-            // Force the first automatic poll to fail; the service's sampling coroutine must survive.
-            fixture.settings.update { it.copy(monitoringIntervalIndex = 0) }
+            // Force the first automatic poll to fail; the sampler thread must survive.
             fixture.context.throwOnBattery = true
             fixture.repository.startSampling()
             withTimeout(60_000) { fixture.diagnostics.events.first { events -> events.any { it.code == DiagnosticCode.BATTERY_READ_FAILED } } }
@@ -142,7 +168,61 @@ class RepositoryRecoveryTest {
             withTimeout(60_000) { fixture.repository.observation.first { (it.latest?.elapsedMs ?: 0) > previous && it.gaps > 0 } }
             withTimeout(60_000) { fixture.repository.error.first { it == null } }
             assertTrue(fixture.repository.isMonitoringFlow.value)
-        } finally { fixture.close() }
+        } finally { demand.close(); fixture.close() }
+    }
+
+    @Test fun demandPollsStayRealtimeOnlyAndSavesFollowPersistPolicy(): Unit = runBlocking {
+        val fixture = Fixture()
+        val demand = fixture.sampler.acquire("RepositoryRecoveryTest")
+        val repository = fixture.repository
+        var phase = "monitoring off"
+        try {
+            // Monitoring off: demand polls refresh realtime values but never reach the observation or history.
+            val first = withTimeout(60_000) { repository.realtimeFlow.first { it.sample != null } }.sample!!
+            withTimeout(60_000) { repository.realtimeFlow.first { (it.sample?.elapsedMs ?: 0) > first.elapsedMs!! } }
+            assertEquals(80, repository.readOnce().level)
+            assertNull(repository.observation.value.startedAt)
+            assertEquals(0, fixture.database.batteryDao().count())
+
+            phase = "screen-on monitoring"
+            DeviceEnvironment.device.wakeUp()
+            withTimeout(60_000) { while (!fixture.context.getSystemService(PowerManager::class.java).isInteractive) delay(100) }
+            val saved = async(start = CoroutineStart.UNDISPATCHED) { repository.persisted.first() }
+            repository.startSampling()
+            val row = withTimeout(60_000) { saved.await() }
+            assertTrue(row.id > 0)
+            // Several 2 s polls later, an unchanged screen-on reading is still one row (the next is due at 30 s).
+            withTimeout(60_000) { repository.observation.first { it.screenOn.durationMs >= 6_000 } }
+            assertEquals(1, fixture.database.batteryDao().count())
+            val session = fixture.database.sessionDao().byId(row.sessionId!!)!!
+            assertEquals(SessionType.DISCHARGE, session.type)
+            assertEquals(1, session.activeKey)
+            val today = DailySummaryAggregator.epochDay(row.timestamp, ZoneId.systemDefault())
+            assertEquals(80, fixture.database.dailySummaryDao().byDay(today)?.minLevel)
+
+            phase = "plug-in transition"
+            val transition = async(start = CoroutineStart.UNDISPATCHED) { repository.powerTransitions.first() }
+            fixture.context.charging = true
+            withContext(Dispatchers.Main) {
+                fixture.context.registeredReceiver!!.onReceive(fixture.context, Intent(Intent.ACTION_BATTERY_CHANGED))
+            }
+            val plugIn = withTimeout(60_000) { transition.await() }
+            assertEquals(PowerState.DISCHARGING, plugIn.from)
+            assertEquals(PowerState.CHARGING, plugIn.to)
+            assertEquals(session.sessionId, plugIn.endedSessionId)
+            // Both session rows committed before the transition was emitted.
+            val ended = fixture.database.sessionDao().byId(plugIn.endedSessionId!!)!!
+            assertNull(ended.activeKey)
+            assertNotNull(ended.endTime)
+            val started = fixture.database.sessionDao().byId(plugIn.startedSessionId!!)!!
+            assertEquals(SessionType.CHARGE, started.type)
+            assertEquals(1, started.activeKey)
+            assertEquals("AC", started.chargerType)
+            assertTrue(fixture.database.batteryDao().count() >= 2)
+        } catch (failure: Throwable) {
+            throw AssertionError("Failed during $phase; observation=${repository.observation.value}; " +
+                "errors=${repository.error.value}", failure)
+        } finally { demand.close(); fixture.close() }
     }
 
     @Test fun failedStorageRestartCannotReuseThePreviousObservationAndOrdinaryReadsStayAvailable(): Unit = runBlocking {

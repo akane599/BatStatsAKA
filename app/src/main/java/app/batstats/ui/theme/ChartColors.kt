@@ -23,6 +23,10 @@ data class ChartColors(
     val temperature: Color,
     /** Voltage series. */
     val voltage: Color,
+    /** Battery level line drawn alongside the power trace (neutral, so direction colors stay dominant). */
+    val level: Color,
+    /** Second stacked layer next to [drain] (screen-off drain under screen-on drain in History bars). */
+    val drainSecondary: Color,
     /** Gridlines and the zero baseline. */
     val grid: Color,
     /** Axis tick labels and legends (pair with `MaterialTheme.typography.numericLabel`). */
@@ -30,6 +34,9 @@ data class ChartColors(
 )
 
 private const val FILL_ALPHA = 0.18f
+private val LevelLine = Color(0xFFC9D1DC)
+// Darker amber: ≥3.5:1 on every surface tier, ≥2.2:1 against [ChartColors.drain] so stacked layers separate.
+private val DrainSecondary = Color(0xFFA8743A)
 
 /** Builds the chart palette from the active scheme so grid/labels follow OLED surfaces. */
 fun chartColors(scheme: ColorScheme, bat: BatColors = BatColors.Default): ChartColors = ChartColors(
@@ -39,6 +46,8 @@ fun chartColors(scheme: ColorScheme, bat: BatColors = BatColors.Default): ChartC
     drainFill = bat.drain.copy(alpha = FILL_ALPHA),
     temperature = bat.heat,
     voltage = bat.info,
+    level = LevelLine,
+    drainSecondary = DrainSecondary,
     grid = scheme.outlineVariant,
     axisLabel = scheme.onSurfaceVariant,
 )

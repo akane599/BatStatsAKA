@@ -11,6 +11,7 @@ import androidx.core.app.NotificationCompat
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.measurement.ObservationSummary
+import app.batstats.ui.navigation.Destinations
 import java.text.DateFormat
 import java.util.Date
 
@@ -44,7 +45,8 @@ class DrainNotificationManager(private val context: Context, private val reposit
     ): Notification {
         val content = PendingIntent.getActivity(context, NOTIFICATION_ID,
             Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
-                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP).putExtra("open_drain_stats", true),
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                .putExtra(Destinations.EXTRA_DESTINATION, Destinations.NOW),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val reset = PendingIntent.getBroadcast(context, 1,
             Intent(context, DrainNotificationReceiver::class.java).setAction(DrainNotificationReceiver.ACTION_RESET),

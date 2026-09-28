@@ -83,6 +83,8 @@ class ThemeContrastTest {
                 "chart.drain" to chart.drain,
                 "chart.temperature" to chart.temperature,
                 "chart.voltage" to chart.voltage,
+                "chart.level" to chart.level,
+                "chart.drainSecondary" to chart.drainSecondary,
             )
             s.surfaceTiers().forEach { (tier, surface) ->
                 marks.forEach { (mark, color) -> assertContrast(3.0, name, "$mark on $tier", surface, color) }

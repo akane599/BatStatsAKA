@@ -20,7 +20,6 @@ import app.batstats.battery.measurement.BatteryAlerts
 import app.batstats.battery.measurement.BatteryAlert
 import app.batstats.battery.measurement.BatteryAlertSettings
 import app.batstats.battery.measurement.AlertReading
-import app.batstats.settings.monitoringIntervalMs
 import app.batstats.battery.widget.WidgetUpdater
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -72,12 +71,14 @@ class BatteryMonitorService : Service() {
             val saved = preferences.getStringSet("latched", emptySet()).orEmpty()
             val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet())
             var alertChannelReady = false
-            combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading.sample to settings }
-                .collect { (sample, settings) ->
+            combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading to settings }
+                .collect { (reading, settings) ->
+                    val sample = reading.sample
                     if (sample == null || sample.elapsedMs == null || sample.elapsedMs < monitoringStartedElapsed) return@collect
                     val before = alerts.latches
+                    // Calibrated current: an inverted or mA-reporting device still trips the discharge alert.
                     val events = alerts.accept(AlertReading(sample.elapsedMs, sample.levelPercent,
-                        sample.status, sample.plugged, sample.currentNowUa, sample.temperatureDeciC, settings.monitoringIntervalMs),
+                        sample.status, sample.plugged, reading.currentUa, sample.temperatureDeciC, reading.expectedIntervalMs),
                         BatteryAlertSettings(settings.lowBatteryAlertEnabled, settings.lowBatteryThreshold,
                             settings.highBatteryAlertEnabled, settings.highBatteryThreshold,
                             settings.temperatureWarningEnabled, settings.temperatureThreshold.toDouble(),
