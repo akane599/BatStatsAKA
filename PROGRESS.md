@@ -12,12 +12,12 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
 - [x] P4b ∥ P5 wave: 9 tasks reviewed + merged (7ea5448); WAVE-INTEGRATION de7eae5 (wiring, shims gone, shared design capacity, DAO queries, device tests green one class at a time) — review running
 - [x] P4c removal of old screens/shims (c5bd318)
-- [ ] P6 tests, docs, reviews, fresh verification; user runs `/screenshot-rebaseline` + `/device-check`
+- [~] P6: tests P6a (5cdc897) + docs P6b (8d74993) done & reviewed; final reviews → fix wave → verification pending; user runs `/screenshot-rebaseline` + `/device-check`
 
 ## Next (ordered)
-1. P6a tests (running; brief `P6a-tests-brief.md`). P6b docs done (8d74993).
-2. P6 reviews in parallel: compose-reviewer (ui/), independent design critic (screenshots + brief only), module-graph-auditor; plus the SDD final whole-branch review (most capable model, ledger deferred minors) → ONE fix wave → scoped re-review.
-3. Fresh verification agent (gate + CI parity + connected non-Shizuku); then the user runs `/screenshot-rebaseline` + `/device-check`; finishing-a-development-branch.
+1. Final reviews (ledger "FINAL REVIEW PLAN"): R1 data + module-graph running/done — record results; then R2 ui/screens+viewmodel, R3 components/theme/nav/res, compose-reviewer, design critic on renders.
+2. ONE fix wave with all findings → scoped re-review → fresh verification agent (gate + CI parity + connected non-Shizuku).
+3. User runs `/screenshot-rebaseline` + `/device-check`; then finishing-a-development-branch (base branch: codex/android16-reliability, origin github).
 
 ## Blockers / open questions
 
