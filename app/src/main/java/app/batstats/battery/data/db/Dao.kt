@@ -4,6 +4,7 @@ import androidx.room.*
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageRow
 import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.SessionEvidence
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -98,6 +99,34 @@ interface SessionDao {
 
     @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
     fun session(id: String): Flow<ChargeSession?>
+
+    /** The newest [limit] sessions that stored a capacity estimate, newest first (the Health trend). */
+    @Query("SELECT sessionId, type, startTime, endTime, lastSampleTime, startLevel, endLevel, capacityEstimateMah, capacityConfidence, capacityBasis FROM charge_sessions WHERE capacityEstimateMah IS NOT NULL ORDER BY startTime DESC, sessionId LIMIT :limit")
+    fun capacityEstimates(limit: Int): Flow<List<CapacityEstimateRow>>
+
+    @Query("DELETE FROM battery_samples WHERE sessionId = :id")
+    suspend fun deleteSessionSamples(id: String): Int
+
+    @Query("DELETE FROM app_snapshots WHERE sessionId = :id")
+    suspend fun deleteSessionSnapshots(id: String): Int
+
+    @Query("DELETE FROM charge_sessions WHERE sessionId = :id")
+    suspend fun deleteSessionRow(id: String): Int
+
+    /**
+     * Deletes one session with its readings and app snapshots, all or nothing; the snapshots' uids and the session's
+     * `session_app_usage` rows cascade. Refuses (false) a missing row and the session the writer is recording
+     * ([recordingGeneration], null while monitoring is off; [SessionEvidence.isRecording]): it rewrites that row at
+     * every save, so the session would come straight back. Daily totals are kept.
+     */
+    @Transaction
+    suspend fun deleteSession(id: String, recordingGeneration: String?): Boolean {
+        val row = byId(id) ?: return false
+        if (SessionEvidence.isRecording(row, recordingGeneration)) return false
+        deleteSessionSnapshots(id)
+        deleteSessionSamples(id)
+        return deleteSessionRow(id) > 0
+    }
 
     @Query("UPDATE charge_sessions SET endTime=:end, activeKey=NULL, endLevel=:endLevel, deltaUah=:delta, avgCurrentUa=:avg, estCapacityMah=:cap WHERE sessionId=:id")
     suspend fun complete(id: String, end: Long, endLevel: Int?, delta: Long?, avg: Long?, cap: Int?)

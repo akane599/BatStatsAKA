@@ -27,10 +27,13 @@ data class HealthSummary(val estimate: CapacityEstimate, val designUah: Long?, v
          * sessions' estimates, plus sysfs when read) and health against the design capacity: the Settings override
          * ([designOverrideMah], 0 = auto) or sysfs [chargeFullDesignUah]. Null without any estimate.
          */
-        fun of(estimates: List<CapacityEstimate>, designOverrideMah: Int, chargeFullDesignUah: Long? = null): HealthSummary? {
+        fun of(estimates: List<CapacityEstimate>, designOverrideMah: Int, chargeFullDesignUah: Long? = null): HealthSummary? =
+            withDesign(estimates, CapacityEstimator.designUah(designOverrideMah, chargeFullDesignUah))
+
+        /** As [of], against an already resolved design capacity ([designUah] µAh, null when unknown). */
+        fun withDesign(estimates: List<CapacityEstimate>, designUah: Long?): HealthSummary? {
             val combined = CapacityEstimator.combine(estimates) ?: return null
-            val design = CapacityEstimator.designUah(designOverrideMah, chargeFullDesignUah)
-            return HealthSummary(combined, design, CapacityEstimator.healthPercent(combined.fullUah, design))
+            return HealthSummary(combined, designUah, CapacityEstimator.healthPercent(combined.fullUah, designUah))
         }
 
         /**

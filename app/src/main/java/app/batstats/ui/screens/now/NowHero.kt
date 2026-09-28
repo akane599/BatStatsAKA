@@ -42,18 +42,19 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.TextUnit
 import app.batstats.R
 import app.batstats.battery.data.sampling.ChargerType
 import app.batstats.battery.measurement.EtaBasis
 import app.batstats.battery.measurement.PowerState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
-import app.batstats.ui.components.StatCellDefaults
 import app.batstats.ui.components.headerActionOverhang
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.durationAnnotated
+import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.styledTemplate
+import app.batstats.ui.format.unitSpan
 import app.batstats.ui.theme.BatMotion
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericDisplay
@@ -215,13 +216,6 @@ private fun basisLabel(basis: EtaBasis, power: PowerState): Int = when (basis) {
     EtaBasis.ANDROID -> R.string.now_eta_basis_android
     EtaBasis.TAPER_MODEL -> R.string.now_eta_basis_taper
 }
-
-/** The quieter span for units and words next to a number in [style]. */
-@Composable
-internal fun unitSpan(style: TextStyle): SpanStyle = SpanStyle(
-    fontSize = if (style.fontSize != TextUnit.Unspecified) style.fontSize * StatCellDefaults.UnitScale else TextUnit.Unspecified,
-    color = MaterialTheme.colorScheme.onSurfaceVariant,
-)
 
 /**
  * Ten segments, filled to the level in the direction color. On first load it fills from empty (long, decelerate);

@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerializationException
-import org.koin.core.context.GlobalContext
 import java.io.IOException
 
 /** Export period: history from [days] days before the export until it starts; 0 = everything stored. */
@@ -153,16 +152,6 @@ class DataViewModel(
     private val repository: DataRepository,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
-
-    /**
-     * Interim Koin entry point: `di/AppModules.kt` (frozen during P4b) still says `DataViewModel(get(), androidContext())`.
-     * The controller swaps that line for the explicit one in the P4b-DataStatus report; this constructor can go then.
-     */
-    constructor(manager: ExportImportManager, context: Context) : this(
-        GlobalContext.get().let { koin ->
-            DefaultDataRepository(context.applicationContext, koin.get(), manager, koin.get(), koin.get())
-        },
-    )
 
     private val _state = MutableStateFlow(DataUiState())
     val state: StateFlow<DataUiState> = _state.asStateFlow()

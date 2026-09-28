@@ -10,9 +10,12 @@ private const val SINGLE_POINT_PAD_MS = 30_000L
 @Immutable
 internal class SeriesStats(val latest: Double, val latestTimeMs: Long, val low: Double, val high: Double)
 
-/** A value axis: its data range (already widened for pins, references and zero) and unit caption. */
+/**
+ * A value axis: its data range (already widened for pins, references and zero), unit caption, and the bounds its
+ * ticks stay inside (when every series on it has [ChartSeries.axisBounds]; widened to the data).
+ */
 @Immutable
-internal class AxisModel(val min: Double, val max: Double, val unit: String)
+internal class AxisModel(val min: Double, val max: Double, val unit: String, val bounds: ClosedFloatingPointRange<Double>? = null)
 
 /**
  * Everything about a [TimeSeriesChart] that doesn't depend on pixels: the time span, which axis each series uses,
@@ -33,7 +36,7 @@ internal class ChartModel(
 
     /** Ticks per axis; two axes share gridlines. */
     fun ticks(maxCount: Int): List<NiceTicks> = if (axes.size == 2) {
-        val (left, right) = ChartMath.sharedTicks(axes[0].min..axes[0].max, axes[1].min..axes[1].max, maxCount)
+        val (left, right) = ChartMath.sharedTicks(axes[0].min..axes[0].max, axes[1].min..axes[1].max, maxCount, axes[0].bounds, axes[1].bounds)
         listOf(left, right)
     } else {
         listOf(ChartMath.niceTicks(axes[0].min, axes[0].max, maxCount))
@@ -93,7 +96,13 @@ internal class ChartModel(
                     low = 0.0
                     high = 1.0
                 }
-                AxisModel(low, high, members.firstOrNull()?.let { series[it].unit }.orEmpty())
+                val memberBounds = members.mapNotNull { series[it].axisBounds }
+                val bounds = if (members.isNotEmpty() && memberBounds.size == members.size) {
+                    min(low, memberBounds.minOf { it.start })..max(high, memberBounds.maxOf { it.endInclusive })
+                } else {
+                    null
+                }
+                AxisModel(low, high, members.firstOrNull()?.let { series[it].unit }.orEmpty(), bounds)
             }
             return ChartModel(start, end, axes, axisOf, from, to, stats)
         }

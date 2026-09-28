@@ -58,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -84,8 +83,10 @@ import app.batstats.settings.DesignCapacity
 import app.batstats.settings.useFahrenheit
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
+import app.batstats.ui.format.currentLocale
 import app.batstats.ui.theme.numericBody
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.spacing
@@ -144,19 +145,6 @@ fun SettingsScreen(
         modifier = modifier,
         snackbarHostState = snackbarHostState,
     )
-}
-
-/**
- * Keeps the frozen NavGraph's current `entry<Routes.Settings>` compiling until the controller wires [SettingsScreen]
- * there (with Status); delete it then. Settings is a tab root, so there is no back arrow.
- */
-@Deprecated("Interim: use SettingsScreen", ReplaceWith("SettingsScreen(onOpenData = onExportData, onOpenStatus = {})"))
-@Composable
-fun BatterySettingsScreen(
-    @Suppress("UNUSED_PARAMETER") onBack: () -> Unit,
-    onExportData: () -> Unit,
-) {
-    SettingsScreen(onOpenData = onExportData, onOpenStatus = {})
 }
 
 private fun openAlertChannelSettings(context: Context): Boolean {
@@ -690,10 +678,6 @@ private fun ValuePill(
     }
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
 
 // Dialogs
 
@@ -873,8 +857,5 @@ private fun thresholdText(setting: SettingsThreshold, value: Float, fahrenheit: 
         SettingsThreshold.DISCHARGE_CURRENT -> stringResource(R.string.settings_value_ma, formatWhole(value, locale))
     }
 }
-
-@Composable
-private fun currentLocale(): Locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
 
 private fun formatWhole(value: Float, locale: Locale): String = NumberFormat.getIntegerInstance(locale).format(value.roundToLong())

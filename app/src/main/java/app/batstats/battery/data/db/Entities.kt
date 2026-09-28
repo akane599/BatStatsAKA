@@ -79,6 +79,20 @@ data class ChargeSession(
 
 enum class SessionType { CHARGE, DISCHARGE, PLUGGED, UNKNOWN }
 
+/** A session's stored capacity estimate with what the Health trend shows next to it ([SessionDao.capacityEstimates]). */
+data class CapacityEstimateRow(
+    val sessionId: String,
+    val type: SessionType,
+    val startTime: Long,
+    val endTime: Long?,
+    val lastSampleTime: Long?,
+    val startLevel: Int?,
+    val endLevel: Int?,
+    val capacityEstimateMah: Int,
+    val capacityConfidence: String?,
+    val capacityBasis: String?,
+)
+
 /** Bounded representative chart rows; bucket discontinuities must remain visible. */
 data class SessionChartReading(
     val timestamp: Long,

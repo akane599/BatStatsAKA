@@ -14,6 +14,8 @@ import androidx.test.rule.GrantPermissionRule
 import app.batstats.R
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.BatteryMainActivity
+import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.service.BatteryMonitorService
 import app.batstats.settings.AppSettings
 import app.batstats.test.DeviceEnvironment
@@ -91,29 +93,50 @@ class NavigationDeviceTest {
 
         tab(TestTags.TAB_APPS)
         compose.onNodeWithContentDescription(label(R.string.apps_refresh)).assertIsDisplayed()
-        fun appsShowing(id: Int) = compose.onAllNodesWithText(label(id)).fetchSemanticsNodes().isNotEmpty()
         // Without Shizuku or root (ADB grants can't read per-app stats on API 36) Apps shows the access banner;
         // with access, the list and its search field.
-        compose.waitUntil(120_000) { appsShowing(R.string.apps_access_set_up) || appsShowing(R.string.apps_search) }
+        compose.waitUntil(120_000) { showing(R.string.apps_access_set_up) || showing(R.string.apps_search) }
         capture("apps-access")
-        if (appsShowing(R.string.apps_access_set_up)) {
+        if (showing(R.string.apps_access_set_up)) {
             // "Set up access" opens Settings › Status on the Apps tab; Back returns to Apps.
             click(R.string.apps_access_set_up)
-            compose.waitUntil(120_000) { !appsShowing(R.string.apps_access_set_up) }
-            capture("access-setup")
+            compose.waitUntil(120_000) { showing(R.string.status_access_title) }
+            compose.onNodeWithTag(TestTags.TAB_APPS).assertIsSelected()
+            capture("access-setup-status")
             DeviceEnvironment.device.pressBack()
-            compose.waitUntil(120_000) { appsShowing(R.string.apps_access_set_up) }
+            compose.waitUntil(120_000) { showing(R.string.apps_access_set_up) }
         }
         backToNow()
 
-        tab(TestTags.TAB_HISTORY)
-        compose.onNodeWithText(label(R.string.history_mode_days)).assertIsSelected()
-        capture("history-days")
-        click(R.string.history_mode_sessions)
-        compose.onNodeWithText(label(R.string.history_filter_all)).assertIsDisplayed()
-        capture("history-sessions")
-        // History is a tab root: Back returns to Now.
-        backToNow()
+        // History -> a session's details -> Back to History (Sessions still selected) -> Back to Now.
+        val session = navigationSession()
+        try {
+            runBlocking { BatteryGraph.repo.sessionDao.insert(session) }
+            tab(TestTags.TAB_HISTORY)
+            compose.onNodeWithText(label(R.string.history_mode_days)).assertIsSelected()
+            capture("history-days")
+            click(R.string.history_mode_sessions)
+            compose.onNodeWithText(label(R.string.history_filter_all)).assertIsDisplayed()
+            val row = sessionRowText()
+            // The list is lazy and may hold the emulator's own sessions: scroll until the inserted row is composed.
+            compose.waitUntil(120_000) {
+                runCatching { compose.onNode(hasScrollAction()).performScrollToNode(hasText(row)) }.isSuccess
+            }
+            capture("history-sessions")
+            compose.onNodeWithText(row).performClick()
+            // SessionDetails: the session type as its title and its delete action (the session has no readings).
+            compose.waitUntil(120_000) { showing(R.string.sessiondetails_type_discharge) }
+            compose.onNodeWithContentDescription(label(R.string.sessiondetails_delete)).assertIsDisplayed()
+            compose.onNodeWithTag(TestTags.TAB_HISTORY).assertIsSelected()
+            capture("session-details")
+            DeviceEnvironment.device.pressBack()
+            compose.waitUntil(120_000) { showing(R.string.history_filter_all) }
+            compose.onNodeWithText(label(R.string.history_mode_sessions)).assertIsSelected()
+            // History is a tab root: Back returns to Now.
+            backToNow()
+        } finally {
+            runBlocking { BatteryGraph.repo.sessionDao.deleteSession(session.sessionId, recordingGeneration = null) }
+        }
 
         tab(TestTags.TAB_SETTINGS)
         openSettingsData()
@@ -124,25 +147,62 @@ class NavigationDeviceTest {
         try {
             val before = runBlocking { BatteryGraph.settings.flow.first() }
             answeringOpenDocument(Uri.fromFile(invalid)) { click(R.string.data_settings_restore) }
-            compose.waitUntil(120_000) {
-                compose.onAllNodesWithText(label(R.string.data_failed_settings_invalid)).fetchSemanticsNodes().isNotEmpty()
-            }
+            compose.waitUntil(120_000) { showing(R.string.data_failed_settings_invalid) }
             compose.onNodeWithText(label(R.string.data_failed_settings_invalid)).performScrollTo().assertIsDisplayed()
             Assert.assertEquals(before, runBlocking { BatteryGraph.settings.flow.first() })
             capture("settings-data-invalid-import")
         } finally {
             invalid.delete()
         }
+
+        // Back to Settings, then Settings › Status; Back returns to Settings.
+        DeviceEnvironment.device.pressBack()
+        compose.waitUntil(120_000) { showing(R.string.settings_monitoring_title) }
+        scroll(R.string.settings_status_link)
+        click(R.string.settings_status_link)
+        compose.waitUntil(120_000) { showing(R.string.status_access_title) }
+        compose.onNodeWithTag(TestTags.TAB_SETTINGS).assertIsSelected()
+        capture("settings-status")
+        DeviceEnvironment.device.pressBack()
+        compose.waitUntil(120_000) { showing(R.string.settings_monitoring_title) }
+        backToNow()
+    }
+
+    private fun showing(id: Int) = compose.onAllNodesWithText(label(id)).fetchSemanticsNodes().isNotEmpty()
+
+    /**
+     * A closed, imported discharge session from yesterday, so it sorts near the top of History's newest-first list
+     * (a session row doesn't touch the daily totals).
+     */
+    private fun navigationSession(): ChargeSession {
+        val start = System.currentTimeMillis() - SESSION_AGE_MS
+        return ChargeSession(
+            "navigation-session", SessionType.DISCHARGE, start, start + 7 * 60_000L, 63, 58, 70_000, -600_000, null,
+            observationId = "navigation-import", lastSampleTime = start + 7 * 60_000L, observedMs = 7 * 60_000L,
+            counterCoveredMs = 7 * 60_000L, screenOnMs = 7 * 60_000L, screenOffMs = 0,
+            source = "import:navigation BatteryManager counter observations",
+        )
+    }
+
+    /** The session row's second line: "7 min · 63% → 58%". */
+    private fun sessionRowText(): String {
+        val context = DeviceEnvironment.context
+        return context.getString(
+            R.string.history_session_detail,
+            context.getString(R.string.now_duration_minutes, "7"),
+            context.getString(
+                R.string.history_level_change,
+                context.getString(R.string.history_percent, "63"),
+                context.getString(R.string.history_percent, "58"),
+            ),
+        )
     }
 
     /** Settings › Data from the Settings tab. */
     private fun openSettingsData() {
-        // The interim BatterySettingsContent's literal row; after the P4b Settings merge this is its Data link.
-        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasText(EXPORT_DATA_ROW))
-        compose.onNodeWithText(EXPORT_DATA_ROW).performClick()
-        compose.waitUntil(120_000) {
-            compose.onAllNodesWithText(label(R.string.data_stored_title)).fetchSemanticsNodes().isNotEmpty()
-        }
+        scroll(R.string.settings_data_link)
+        click(R.string.settings_data_link)
+        compose.waitUntil(120_000) { showing(R.string.data_stored_title) }
     }
 
     /**
@@ -176,18 +236,15 @@ class NavigationDeviceTest {
         compose.onNodeWithText(label(R.string.now_start_monitoring)).assertIsDisplayed()
         capture("now-dark-font200")
         scroll(R.string.now_apps_title); capture("now-cards-dark-font200")
+        // Settings' only destructive row at 200 %: its explanation and both actions stay readable and apart.
         tab(TestTags.TAB_SETTINGS)
-        compose.onNodeWithContentDescription(label(R.string.settings_more)).performClick()
-        click(R.string.reset_settings_desc)
-        compose.onNodeWithText(label(R.string.reset_all_settings)).performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.reset_all)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.cancel)).assertIsDisplayed()
-        val resetVisible = compose.onNodeWithText(label(R.string.reset_ui)).fetchSemanticsNode().boundsInRoot
-        val resetAll = compose.onNodeWithText(label(R.string.reset_all)).fetchSemanticsNode().boundsInRoot
-        val cancel = compose.onNodeWithText(label(R.string.cancel)).fetchSemanticsNode().boundsInRoot
-        Assert.assertTrue("Reset actions must not overlap at200% font", resetVisible.bottom <= resetAll.top && resetAll.bottom <= cancel.top)
-        capture("settings-reset-dark-font200")
-        click(R.string.cancel) // Inspect the destructive control without resetting preferences.
+        scroll(R.string.settings_reset_calibration); click(R.string.settings_reset_calibration)
+        compose.onNodeWithText(label(R.string.settings_reset_calibration_body)).assertIsDisplayed()
+        val confirm = compose.onNodeWithText(label(R.string.settings_reset_calibration_confirm)).fetchSemanticsNode().boundsInRoot
+        val cancel = compose.onNodeWithText(label(R.string.settings_cancel)).fetchSemanticsNode().boundsInRoot
+        Assert.assertFalse("Dialog actions must not overlap at 200% font", confirm.overlaps(cancel))
+        capture("settings-reset-calibration-dark-font200")
+        click(R.string.settings_cancel) // Inspect the control without forgetting the calibration.
         backToNow()
         changedOrientation = true
         DeviceEnvironment.device.setOrientationLeft()
@@ -210,23 +267,23 @@ class NavigationDeviceTest {
         backToNow()
 
         tab(TestTags.TAB_HISTORY)
-        compose.onNode(hasSetTextAction()).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.history_mode_days)).assertIsDisplayed()
         backToNow()
 
         tab(TestTags.TAB_SETTINGS)
-        compose.onNodeWithContentDescription(label(R.string.settings_more)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.settings_monitoring_title)).assertIsDisplayed()
         backToNow()
 
         // Now's Health panel pushes Health onto the Now tab; re-tapping Now pops back to its root.
         scroll(R.string.now_health_title); click(R.string.now_health_title)
         compose.waitUntil(120_000) { !nowShowing() }
         compose.onNodeWithText(label(R.string.health_title)).assertIsDisplayed()
+        capture("health")
         tab(TestTags.TAB_NOW)
         awaitNow()
     }
 
     private companion object {
-        /** A literal in the interim BatterySettingsContent (replaced in P4b); it opens Settings › Data. */
-        const val EXPORT_DATA_ROW = "Export Battery Data"
+        const val SESSION_AGE_MS = 26 * 60 * 60_000L
     }
 }

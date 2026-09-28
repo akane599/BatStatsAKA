@@ -33,19 +33,22 @@ import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.displayName
-import app.batstats.ui.components.chart.TimeAxisFormatter
-import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
+import app.batstats.ui.format.compactDuration
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.dayAwareTime
+import app.batstats.ui.format.durationString
+import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.formatRate
 import app.batstats.ui.theme.spacing
 import app.batstats.viewmodel.DrainState
 import app.batstats.viewmodel.HealthState
 import app.batstats.viewmodel.SinceUnplugState
 import app.batstats.viewmodel.TodayState
 import app.batstats.viewmodel.TopAppsState
-import java.util.Calendar
-import java.util.TimeZone
 
 private const val TODAY_MAH_TEMPLATE = 8_888.0
 
@@ -97,10 +100,6 @@ internal fun SinceUnplugPanel(
         }
     }
 }
-
-/** [timeMs] as a time on [referenceMs]'s local day, else with its date ("Oct 8, 6:10 PM"). */
-internal fun dayAwareTime(formatter: TimeAxisFormatter, timeMs: Long, referenceMs: Long): String =
-    formatter.format(timeMs, if (sameLocalDay(timeMs, referenceMs, formatter.zone)) TimeGranularity.MINUTES else TimeGranularity.DATE_TIME)
 
 /** %/h when the capacity is known, else the average mA; the other figure and the duration go underneath. */
 @Composable
@@ -271,10 +270,6 @@ internal fun CalibrationNotice(
     }
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
 
 /** A navigation hint for a tappable panel, sized like a touch target so it lines up with the gutter. */
 @Composable
@@ -287,12 +282,4 @@ private fun Chevron() {
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-internal fun sameLocalDay(firstMs: Long, secondMs: Long, zone: TimeZone): Boolean {
-    val first = Calendar.getInstance(zone).apply { timeInMillis = firstMs }
-    val second = Calendar.getInstance(zone).apply { timeInMillis = secondMs }
-    return first.get(Calendar.ERA) == second.get(Calendar.ERA) &&
-        first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
-        first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
 }

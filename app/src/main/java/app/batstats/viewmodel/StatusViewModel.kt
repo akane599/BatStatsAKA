@@ -36,9 +36,6 @@ import java.time.Instant
 enum class AccessMode { SHIZUKU, ROOT, ADB, NONE }
 
 @Immutable
-data class ShizukuState(val running: Boolean = false, val authorized: Boolean = false)
-
-@Immutable
 data class AccessState(
     val mode: AccessMode = AccessMode.NONE,
     /** A probe is running (on open, after a Shizuku change, or "Check again"). */
@@ -48,7 +45,7 @@ data class AccessState(
     /** False from Android 16: ADB grants still read the battery, but Android refuses the per-app dump. */
     val adbCoversAppStats: Boolean = true,
 ) {
-    val canAuthorizeShizuku: Boolean get() = shizuku.running && !shizuku.authorized
+    val canAuthorizeShizuku: Boolean get() = shizuku.running && !shizuku.granted
 }
 
 /** The calibration in use and where it comes from; [notice] is the correction awaiting Undo/Keep. */

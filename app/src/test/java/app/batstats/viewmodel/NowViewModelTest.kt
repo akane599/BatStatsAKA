@@ -8,6 +8,7 @@ import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageRow
 import app.batstats.battery.apps.AppUsageSnapshot
 import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.data.DesignCapacityReading
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.DailySummary
@@ -306,6 +307,25 @@ class NowViewModelTest {
         }
     }
 
+    @Test fun resetIsIgnoredUnlessTheWindowIsCurrent() = runTest {
+        // Plugged in while the confirmation was open: the open session is the CHARGE one, which Reset must not end.
+        monitoring.isMonitoring.value = true
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0, status = 2))
+        repo.active.value = session("charge", type = SessionType.CHARGE)
+        repo.discharge.value = listOf(drainSession("last", endTime = T0 - 20 * MINUTE))
+        val (vm, state) = start()
+        assertFalse(state().sinceUnplug!!.current)
+
+        vm.onEvent(NowEvent.ResetObservation)
+        assertEquals(0, repo.resets)
+
+        // Never on battery: nothing to reset either.
+        repo.discharge.value = emptyList()
+        runCurrent()
+        vm.onEvent(NowEvent.ResetObservation)
+        assertEquals(0, repo.resets)
+    }
+
     @Test fun todayFollowsTheLocalDayAcrossMidnight() = runTest {
         val today = DailySummaryAggregator.epochDay(T0, ZoneOffset.UTC)
         repo.days.value = mapOf(
@@ -336,9 +356,17 @@ class NowViewModelTest {
             assertNull(healthPercent)
         }
 
-        repo.settings.value = AppSettings(designCapacityMah = 5_000)
+        repo.design.value = DesignCapacityReading.Known(5_000_000, fromSettings = true)
         runCurrent()
         assertEquals(82.0, state().health!!.healthPercent!!, 1e-9)
+
+        // Auto design on a rooted phone: the shared source's sysfs value gives the same % as on the Health screen.
+        repo.design.value = DesignCapacityReading.Known(4_100_000, fromSettings = false)
+        runCurrent()
+        assertEquals(100.0, state().health!!.healthPercent!!, 1e-9)
+        repo.design.value = DesignCapacityReading.Checking
+        runCurrent()
+        assertNull(state().health!!.healthPercent)
 
         repo.sessions.value = emptyList()
         runCurrent()
@@ -393,10 +421,8 @@ class NowViewModelTest {
 
         vm.onEvent(NowEvent.UndoCalibration)
         vm.onEvent(NowEvent.KeepCalibration)
-        vm.onEvent(NowEvent.ResetObservation)
         assertEquals(1, repo.undos)
         assertEquals(1, repo.dismissals)
-        assertEquals(1, repo.resets)
 
         repo.calibration.value = CalibrationState(effective = detected, detected = detected)
         runCurrent()
@@ -408,6 +434,7 @@ class NowViewModelTest {
         override val realtime = MutableStateFlow(BatteryRepository.Realtime())
         override val calibration = MutableStateFlow(CalibrationState())
         override val settings = MutableStateFlow(AppSettings())
+        override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = cached
         val active = MutableStateFlow<ChargeSession?>(null)

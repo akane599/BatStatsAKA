@@ -56,6 +56,7 @@ import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.BarChart
 import app.batstats.ui.components.chart.BarEntry
@@ -66,9 +67,9 @@ import app.batstats.ui.components.chart.NumberFormatter
 import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.displayName
-import app.batstats.ui.screens.now.currentLocale
-import app.batstats.ui.screens.now.dayAwareTime
-import app.batstats.ui.screens.now.formatNumber
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.dayAwareTime
+import app.batstats.ui.format.formatNumber
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericHeadline
@@ -342,7 +343,7 @@ private fun ActivityPanels(usage: AppUsageDetails) {
         ) { lock ->
             DetailItem(
                 title = lock.tag,
-                value = durationText(lock.totalMs),
+                value = appDurationText(lock.totalMs),
                 supporting = stringResource(
                     R.string.apps_details_joined,
                     pluralStringResource(R.plurals.apps_details_times, lock.count, lock.count),
@@ -368,7 +369,7 @@ private fun ActivityPanels(usage: AppUsageDetails) {
 private fun TaskRow(task: TaskItem, countPlural: Int) {
     DetailItem(
         title = task.name,
-        value = durationText(task.totalMs),
+        value = appDurationText(task.totalMs),
         supporting = pluralStringResource(countPlural, task.count, task.count),
     )
 }

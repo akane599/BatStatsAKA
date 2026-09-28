@@ -58,7 +58,10 @@ data class NotificationContent(
 
     /** The pure builder: string resources through [resolve], so JVM tests use the real English templates. */
     class Builder(private val resolve: (Int, Array<out Any>) -> String) {
-        constructor(context: Context) : this({ id, arguments -> context.getString(id, *arguments) })
+        // No arguments: getString(id) skips the formatter, so a literal "%" in a label (es "Al 100 %") stays text.
+        constructor(context: Context) : this({ id, arguments ->
+            if (arguments.isEmpty()) context.getString(id) else context.getString(id, *arguments)
+        })
 
         private fun text(id: Int, vararg arguments: Any) = resolve(id, arguments)
 

@@ -6,6 +6,8 @@ import app.batstats.battery.apps.SessionSnapshotStore
 import app.batstats.battery.apps.toAppUsageSnapshot
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.CalibrationStore
+import app.batstats.battery.data.DesignCapacityReading
+import app.batstats.battery.data.DesignCapacitySource
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
@@ -27,6 +29,9 @@ interface NowRepository {
     val realtime: StateFlow<BatteryRepository.Realtime>
     val calibration: StateFlow<CalibrationState>
     val settings: Flow<AppSettings>
+
+    /** The app-wide design capacity (Settings override, else sysfs read once through root), shared with Health. */
+    val design: Flow<DesignCapacityReading>
 
     /** The last privileged dump's per-app usage, or null; reading it never starts a dump. */
     val cachedAppUsage: Flow<AppUsageSnapshot?>
@@ -59,10 +64,12 @@ class DefaultNowRepository(
     appStats: AppStatsRepository,
     private val snapshots: SessionSnapshotStore,
     settingsRepository: SettingsRepository<AppSettings>,
+    designCapacity: DesignCapacitySource,
 ) : NowRepository {
     override val realtime = repository.realtimeFlow
     override val calibration = calibrationStore.state
     override val settings = settingsRepository.flow
+    override val design = designCapacity.design
     override val cachedAppUsage = appStats.cached.map { it?.toAppUsageSnapshot() }
     override val activeSession = repository.activeSessionFlow
     override fun samplesSince(fromMs: Long) = repository.samplesBetween(fromMs, Long.MAX_VALUE)

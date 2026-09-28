@@ -49,6 +49,7 @@ import app.batstats.battery.measurement.CapacityConfidence
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.ChartDefaults
 import app.batstats.ui.components.chart.ChartReference
@@ -60,10 +61,10 @@ import app.batstats.ui.components.chart.TimePoint
 import app.batstats.ui.components.chart.TimeSeriesChart
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.headerActionOverhang
-import app.batstats.ui.screens.now.currentLocale
-import app.batstats.ui.screens.now.formatNumber
-import app.batstats.ui.screens.now.styledTemplate
-import app.batstats.ui.screens.now.unitSpan
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.styledTemplate
+import app.batstats.ui.format.unitSpan
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericBody
 import app.batstats.ui.theme.numericDisplay
@@ -263,10 +264,6 @@ private fun Message(title: String, body: String) {
     }
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
 
 /** Capacity · Design · Cycles (the last only where Android reports cycles, API 34+). */
 @Composable

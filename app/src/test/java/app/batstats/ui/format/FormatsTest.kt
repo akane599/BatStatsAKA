@@ -1,13 +1,16 @@
-package app.batstats.ui.screens.now
+package app.batstats.ui.format
 
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
 import app.batstats.R
 import java.util.Locale
+import java.util.TimeZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class NowFormatTest {
+class FormatsTest {
     private val us = Locale.US
     private val es = Locale.forLanguageTag("es-ES")
     private val tr = Locale.forLanguageTag("tr-TR")
@@ -74,5 +77,16 @@ class NowFormatTest {
         assertEquals(listOf("%"), turkish.spanStyles.map { turkish.text.substring(it.start, it.end) })
         assertEquals("78 %", styledTemplate("%1\$s %%", listOf("78"), quiet).text)
         assertEquals("<1 min", styledTemplate("<1 min", emptyList(), quiet).text)
+    }
+
+    @Test fun sameLocalDayComparesCalendarDaysInTheGivenZone() {
+        val utc = TimeZone.getTimeZone("UTC")
+        val tokyo = TimeZone.getTimeZone("Asia/Tokyo")
+        val lateEvening = 1_760_000_000_000L - 1_760_000_000_000L % (24 * hour) + 23 * hour // 23:00 UTC
+        assertTrue(sameLocalDay(lateEvening, lateEvening - 22 * hour, utc))
+        assertFalse(sameLocalDay(lateEvening, lateEvening + 2 * hour, utc))
+        // 23:00 UTC is 08:00 the next day in Tokyo, so 21:00 UTC (06:00) is the same Tokyo day and 13:00 UTC is not.
+        assertTrue(sameLocalDay(lateEvening, lateEvening - 2 * hour, tokyo))
+        assertFalse(sameLocalDay(lateEvening, lateEvening - 10 * hour, tokyo))
     }
 }

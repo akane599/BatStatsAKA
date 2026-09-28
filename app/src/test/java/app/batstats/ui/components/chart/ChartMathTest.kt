@@ -104,6 +104,38 @@ class ChartMathTest {
     }
 
     @Test
+    fun sharedTicks_neverTicksABoundedAxisOutsideItsBounds() {
+        // SessionDetails' discharge chart: current 0…−600 mA, level 0–100 %. Unbounded, 4 shared ticks win and the
+        // level axis runs to 150 %.
+        val (_, unbounded) = ChartMath.sharedTicks(-600.0..0.0, 0.0..100.0, 4)
+        assertEquals(NiceTicks(0.0, 150.0, 50.0), unbounded)
+
+        val (current, level) = ChartMath.sharedTicks(-600.0..0.0, 0.0..100.0, 4, rightBounds = 0.0..100.0)
+        assertEquals(NiceTicks(0.0, 100.0, 50.0), level)
+        assertEquals(level.count, current.count)
+        assertCovers(current, -600.0, 0.0, 4)
+
+        // With more room the bounded axis still gets its quarter steps, and the other axis adapts.
+        val (roomy, quarters) = ChartMath.sharedTicks(-600.0..0.0, 0.0..100.0, 6, rightBounds = 0.0..100.0)
+        assertEquals(NiceTicks(0.0, 100.0, 25.0), quarters)
+        assertEquals(quarters.count, roomy.count)
+        assertCovers(roomy, -600.0, 0.0, 6)
+
+        // A bounded left axis is honoured the same way.
+        val (left, _) = ChartMath.sharedTicks(0.0..100.0, -600.0..0.0, 4, leftBounds = 0.0..100.0)
+        assertTrue(left.max <= 100.0)
+    }
+
+    @Test
+    fun sharedTicks_splitsABoundedAxisEvenlyWhenNoNiceCountFits() {
+        // 0–70 has no nice 3–5 tick split inside its bounds: 3 even ticks over the bounds, and 3 on the other axis.
+        val (current, bounded) = ChartMath.sharedTicks(-600.0..0.0, 0.0..70.0, 5, rightBounds = 0.0..70.0)
+        assertEquals(NiceTicks(0.0, 70.0, 35.0), bounded)
+        assertEquals(3, current.count)
+        assertCovers(current, -600.0, 0.0, 3)
+    }
+
+    @Test
     fun decimalsFor_matchesTheStep() {
         assertEquals(2, ChartMath.decimalsFor(0.25))
         assertEquals(1, ChartMath.decimalsFor(2.5))

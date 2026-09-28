@@ -116,6 +116,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="app.batstats.battery.drain.ACTION_RESET" />
+                <action android:name="app.batstats.battery.drain.ACTION_STOP" />
             </intent-filter>
         </receiver>
     </application>

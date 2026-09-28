@@ -1,19 +1,30 @@
-package app.batstats.ui.screens.now
+package app.batstats.ui.format
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
 import app.batstats.R
+import app.batstats.ui.components.StatCellDefaults
 import app.batstats.ui.components.chart.MINUS_SIGN
+import app.batstats.ui.components.chart.TimeAxisFormatter
+import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.formatWithMinus
 import java.text.NumberFormat
+import java.util.Calendar
 import java.util.Locale
+import java.util.TimeZone
 import kotlin.math.abs
+
+// Number, duration and time formatting shared by the screens (Now, History, SessionDetails, Health, Apps, Settings,
+// Status). Screen-specific labels stay private to their screen. The duration/unit strings keep their `now_*` keys.
 
 private const val MINUTE_MS = 60_000L
 private val PLACEHOLDER = Regex("%(\\d+)\\$[sd]|%%")
@@ -99,4 +110,23 @@ internal fun styledTemplate(template: String, args: List<String>, rest: SpanStyl
         index = match.range.last + 1
     }
     if (index < template.length) withStyle(rest) { append(template.substring(index)) }
+}
+
+/** The quieter span for units and words next to a number in [style]. */
+@Composable
+internal fun unitSpan(style: TextStyle): SpanStyle = SpanStyle(
+    fontSize = if (style.fontSize != TextUnit.Unspecified) style.fontSize * StatCellDefaults.UnitScale else TextUnit.Unspecified,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+)
+
+/** [timeMs] as a time on [referenceMs]'s local day, else with its date ("Oct 8, 6:10 PM"). */
+internal fun dayAwareTime(formatter: TimeAxisFormatter, timeMs: Long, referenceMs: Long): String =
+    formatter.format(timeMs, if (sameLocalDay(timeMs, referenceMs, formatter.zone)) TimeGranularity.MINUTES else TimeGranularity.DATE_TIME)
+
+internal fun sameLocalDay(firstMs: Long, secondMs: Long, zone: TimeZone): Boolean {
+    val first = Calendar.getInstance(zone).apply { timeInMillis = firstMs }
+    val second = Calendar.getInstance(zone).apply { timeInMillis = secondMs }
+    return first.get(Calendar.ERA) == second.get(Calendar.ERA) &&
+        first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
+        first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
 }

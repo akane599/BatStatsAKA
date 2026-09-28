@@ -64,6 +64,7 @@ import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.ChartDefaults
 import app.batstats.ui.components.chart.ChartScrubState
@@ -75,15 +76,15 @@ import app.batstats.ui.components.chart.rememberChartScrubState
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.displayName
 import app.batstats.ui.components.headerActionOverhang
-import app.batstats.ui.screens.now.compactDuration
-import app.batstats.ui.screens.now.currentLocale
-import app.batstats.ui.screens.now.dayAwareTime
-import app.batstats.ui.screens.now.durationAnnotated
-import app.batstats.ui.screens.now.durationString
-import app.batstats.ui.screens.now.formatNumber
-import app.batstats.ui.screens.now.formatRate
-import app.batstats.ui.screens.now.styledTemplate
-import app.batstats.ui.screens.now.unitSpan
+import app.batstats.ui.format.compactDuration
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.dayAwareTime
+import app.batstats.ui.format.durationAnnotated
+import app.batstats.ui.format.durationString
+import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.formatRate
+import app.batstats.ui.format.styledTemplate
+import app.batstats.ui.format.unitSpan
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericDisplay
@@ -118,9 +119,9 @@ private const val PARTIAL_COVERAGE = 0.9
 @Composable
 fun SessionDetailsScreen(
     onBack: () -> Unit,
+    onOpenApp: (uid: Int, packageName: String) -> Unit,
     vm: SessionDetailsViewModel,
     modifier: Modifier = Modifier,
-    onOpenApp: (uid: Int, packageName: String) -> Unit = { _, _ -> },
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val demand: SamplingDemand = koinInject()
@@ -423,6 +424,7 @@ private fun ChartPanels(charts: SessionCharts, recording: Boolean, useFahrenheit
                 format = NumberFormatter(percent, maxDecimals = 0),
                 axisMin = 0.0,
                 axisMax = 100.0,
+                axisBounds = 0.0..100.0,
             ),
         )
     }
@@ -671,7 +673,3 @@ private fun basisLabel(basis: AppUsageBasis): Int = when (basis) {
     AppUsageBasis.ABSOLUTE -> R.string.sessiondetails_apps_basis_absolute
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}

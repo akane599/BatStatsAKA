@@ -56,7 +56,7 @@ class StatusViewModelTest {
 
         // Shizuku starts but isn't authorized yet: probe again, offer authorization.
         repo.detected = AccessMode.NONE
-        repo.shizuku.value = ShizukuState(running = true, authorized = false)
+        repo.shizuku.value = ShizukuState(running = true, granted = false)
         runCurrent()
         assertEquals(listOf(false, false), repo.probes)
         assertEquals(AccessMode.NONE, state().access.mode)
@@ -64,7 +64,7 @@ class StatusViewModelTest {
 
         // Authorized: probed once more, and Shizuku is in use.
         repo.detected = AccessMode.SHIZUKU
-        repo.shizuku.value = ShizukuState(running = true, authorized = true)
+        repo.shizuku.value = ShizukuState(running = true, granted = true)
         runCurrent()
         assertEquals(3, repo.probes.size)
         assertEquals(AccessMode.SHIZUKU, state().access.mode)

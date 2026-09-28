@@ -9,8 +9,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * The ongoing notification's actions. Its PendingIntents name this receiver explicitly, so the manifest's intent
- * filter (ACTION_RESET only) needs no entry for [ACTION_STOP].
+ * The ongoing notification's actions. Its PendingIntents name this receiver explicitly; the manifest's intent filter
+ * still lists both actions, so delivery keeps working if Android starts requiring explicit intents to match a filter.
  */
 class DrainNotificationReceiver : BroadcastReceiver(), KoinComponent {
     companion object {

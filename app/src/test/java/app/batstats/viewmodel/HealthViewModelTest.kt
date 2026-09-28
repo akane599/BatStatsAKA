@@ -1,11 +1,11 @@
 package app.batstats.viewmodel
 
+import app.batstats.battery.data.DesignCapacityReading
+import app.batstats.battery.data.db.CapacityEstimateRow
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.CapacityConfidence
 import app.batstats.battery.measurement.HealthSummary
-import app.batstats.settings.AppSettings
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -48,13 +48,14 @@ class HealthViewModelTest {
             session("s$i", endTime = T0 - i * DAY, capacityMah = if (i < 50) 4_000 + (i % 7) * 40 else 3_000, confidence = confidence)
         }
         repo.sessions.value = sessions
-        repo.settings.value = AppSettings(designCapacityMah = 5_000)
+        repo.design.value = DesignCapacityReading.Known(5_000_000, fromSettings = true)
         val state = start()
 
-        val now = NowMapping.healthSummary(sessions.take(HealthSummary.SESSIONS), 5_000)?.let(NowMapping::health)
+        val now = NowMapping.healthSummary(sessions.take(HealthSummary.SESSIONS), 5_000_000)?.let(NowMapping::health)
         with(state()) {
             assertTrue(loaded)
-            assertEquals(listOf(HealthViewModel.TREND_SESSIONS), repo.limits)
+            assertEquals(listOf(HealthSummary.SESSIONS), repo.sessionLimits)
+            assertEquals(listOf(HealthViewModel.TREND_SESSIONS), repo.trendLimits)
             assertEquals(now?.capacityMah, summary?.capacityMah)
             assertEquals(now?.confidence, summary?.confidence)
             assertEquals(now?.healthPercent, summary?.healthPercent)
@@ -64,14 +65,11 @@ class HealthViewModelTest {
             assertTrue(summary!!.capacityMah >= 4_000)
             assertEquals(DesignCapacityState.Known(5_000, DesignSource.SETTINGS), design)
         }
-        // With a design override, sysfs is never read (no root prompt).
-        assertEquals(0, repo.sysfsReads)
     }
 
-    @Test fun autoDesignReadsSysfsOnceShowingCheckingUntilItAnswers() = runTest {
+    @Test fun theSharedDesignCapacityShowsCheckingThenTheBatterysValue() = runTest {
         repo.sessions.value = listOf(session("a", endTime = T0, capacityMah = 4_500, confidence = "HIGH"))
-        val pending = CompletableDeferred<Long?>()
-        repo.sysfs = pending
+        repo.design.value = DesignCapacityReading.Checking
         val state = start()
 
         with(state()) {
@@ -80,43 +78,25 @@ class HealthViewModelTest {
             assertNull(summary?.healthPercent)
         }
 
-        pending.complete(5_000_000L)
+        // sysfs answered (auto design, rooted): the same design Now's card uses.
+        repo.design.value = DesignCapacityReading.Known(5_000_400, fromSettings = false)
         runCurrent()
         with(state()) {
             assertEquals(DesignCapacityState.Known(5_000, DesignSource.BATTERY), design)
-            assertEquals(90.0, summary!!.healthPercent!!, 1e-9)
+            assertEquals(4_500_000 * 100.0 / 5_000_400, summary!!.healthPercent!!, 1e-9)
+            assertEquals(
+                NowMapping.healthSummary(repo.sessions.value, 5_000_400)?.healthPercent,
+                summary?.healthPercent,
+            )
         }
-        assertEquals(1, repo.sysfsReads)
 
-        // A new session doesn't read sysfs again; switching the override on and back to auto does.
-        repo.sessions.value = repo.sessions.value + session("b", endTime = T0 - DAY, capacityMah = 4_400, confidence = "LOW")
-        runCurrent()
-        assertEquals(1, repo.sysfsReads)
-        repo.sysfs = answered(null)
-        repo.settings.value = AppSettings(designCapacityMah = 4_800)
-        runCurrent()
-        assertEquals(DesignCapacityState.Known(4_800, DesignSource.SETTINGS), state().design)
-        repo.settings.value = AppSettings(designCapacityMah = 0)
-        runCurrent()
-        assertEquals(2, repo.sysfsReads)
         // No root (or nothing plausible reported): unknown, and no health %.
+        repo.design.value = DesignCapacityReading.Unknown
+        runCurrent()
         with(state()) {
             assertEquals(DesignCapacityState.Unknown, design)
             assertNull(summary?.healthPercent)
         }
-    }
-
-    @Test fun implausibleSysfsOrInvalidOverrideLeavesTheDesignUnknown() = runTest {
-        repo.sessions.value = listOf(session("a", endTime = T0, capacityMah = 4_500, confidence = "MEDIUM"))
-        // 5,000 "mAh" in a µAh field is a unit error (CapacityEstimator.PLAUSIBLE_FULL_UAH), and 500 mAh is outside the
-        // setting's range (read as auto).
-        repo.sysfs = answered(5_000L)
-        repo.settings.value = AppSettings(designCapacityMah = 500)
-        val state = start()
-
-        assertEquals(DesignCapacityState.Unknown, state().design)
-        assertNull(state().summary?.healthPercent)
-        assertEquals(1, repo.sysfsReads)
     }
 
     @Test fun noEstimatesYetStillShowsDesignAndCycles() = runTest {
@@ -125,7 +105,7 @@ class HealthViewModelTest {
             session("short", endTime = T0 - DAY),
             session("junk", endTime = T0 - 2 * DAY, capacityMah = 4_000, confidence = "SOMEDAY"),
         )
-        repo.settings.value = AppSettings(designCapacityMah = 5_000)
+        repo.design.value = DesignCapacityReading.Known(5_000_000, fromSettings = true)
         repo.cycles = 312
         val state = start()
 
@@ -168,23 +148,30 @@ class HealthViewModelTest {
     }
 
     private class FakeHealthRepository : HealthRepository {
-        override val settings = MutableStateFlow(AppSettings())
+        override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val sessions = MutableStateFlow<List<ChargeSession>>(emptyList())
-        val limits = mutableListOf<Int>()
-        /** No root by default: the read answers null at once. */
-        var sysfs: CompletableDeferred<Long?> = answered(null)
-        var sysfsReads = 0
+        val sessionLimits = mutableListOf<Int>()
+        val trendLimits = mutableListOf<Int>()
         override var cyclesSupported = true
         var cycles: Int? = null
 
         override fun recentSessions(limit: Int): Flow<List<ChargeSession>> {
-            limits += limit
+            sessionLimits += limit
             return sessions.map { it.take(limit) }
         }
 
-        override suspend fun chargeFullDesignUah(): Long? {
-            sysfsReads++
-            return sysfs.await()
+        // The projection query: sessions with an estimate only, newest first, bounded.
+        override fun capacityEstimates(limit: Int): Flow<List<CapacityEstimateRow>> {
+            trendLimits += limit
+            return sessions.map { rows ->
+                rows.mapNotNull { row ->
+                    val mah = row.capacityEstimateMah ?: return@mapNotNull null
+                    CapacityEstimateRow(
+                        row.sessionId, row.type, row.startTime, row.endTime, row.lastSampleTime, row.startLevel, row.endLevel,
+                        mah, row.capacityConfidence, row.capacityBasis,
+                    )
+                }.take(limit)
+            }
         }
 
         override suspend fun cycleCount(): Int? = cycles
@@ -194,9 +181,6 @@ class HealthViewModelTest {
         const val T0 = 1_760_001_600_000L
         const val HOUR = 3_600_000L
         const val DAY = 24 * HOUR
-
-        // Not CompletableDeferred(null): that overload takes a parent Job and never completes.
-        fun answered(uah: Long?) = CompletableDeferred<Long?>().also { it.complete(uah) }
 
         fun session(
             id: String,

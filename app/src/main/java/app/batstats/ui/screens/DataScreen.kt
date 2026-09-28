@@ -51,6 +51,7 @@ import app.batstats.R
 import app.batstats.battery.data.HistoryLimits
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.theme.spacing
@@ -480,7 +481,3 @@ private fun Field(label: String, content: @Composable () -> Unit) {
     }
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}

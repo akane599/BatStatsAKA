@@ -66,7 +66,7 @@ fun StatusScreenPreview() {
 fun StatusScreenShizukuPreview() {
     Status(
         StatusUiState(
-            access = AccessState(AccessMode.SHIZUKU, shizuku = ShizukuState(running = true, authorized = true), adbCommands = commands),
+            access = AccessState(AccessMode.SHIZUKU, shizuku = ShizukuState(running = true, granted = true), adbCommands = commands),
             calibration = CalibrationStatus(),
             nowMs = FIXED_TIME_MS,
         ),
@@ -97,7 +97,7 @@ fun StatusScreenAuthorizePreview() {
         StatusUiState(
             access = AccessState(
                 AccessMode.NONE,
-                shizuku = ShizukuState(running = true, authorized = false),
+                shizuku = ShizukuState(running = true, granted = false),
                 adbCommands = commands,
                 adbCoversAppStats = false,
             ),

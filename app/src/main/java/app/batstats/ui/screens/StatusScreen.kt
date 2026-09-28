@@ -61,9 +61,11 @@ import app.batstats.battery.measurement.CurrentSign
 import app.batstats.battery.measurement.CurrentUnit
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
+import app.batstats.ui.format.sameLocalDay
 import app.batstats.ui.theme.spacing
 import app.batstats.viewmodel.AccessMode
 import app.batstats.viewmodel.AccessState
@@ -74,7 +76,6 @@ import app.batstats.viewmodel.StatusIssueKind
 import app.batstats.viewmodel.StatusUiState
 import app.batstats.viewmodel.StatusViewModel
 import org.koin.androidx.compose.koinViewModel
-import java.util.Calendar
 import java.util.TimeZone
 
 /** Two columns from this window width, as on Now: access on the start side, the rest on the end. */
@@ -498,15 +499,3 @@ private fun ReportPanel(shareUnavailable: Boolean, onShare: () -> Unit, modifier
     }
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-private fun sameLocalDay(firstMs: Long, secondMs: Long, zone: TimeZone): Boolean {
-    val first = Calendar.getInstance(zone).apply { timeInMillis = firstMs }
-    val second = Calendar.getInstance(zone).apply { timeInMillis = secondMs }
-    return first.get(Calendar.ERA) == second.get(Calendar.ERA) &&
-        first.get(Calendar.YEAR) == second.get(Calendar.YEAR) &&
-        first.get(Calendar.DAY_OF_YEAR) == second.get(Calendar.DAY_OF_YEAR)
-}

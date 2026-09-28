@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
     android:orientation="vertical"
     android:gravity="center"
@@ -14,6 +15,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content">
 
+        <!-- RemoteViews inflate without AppCompat, so app:tint wouldn't apply; WidgetUpdater re-tints per direction. -->
         <ImageView
             android:id="@+id/icon"
             android:layout_width="@dimen/widget_icon_size"
@@ -21,7 +23,8 @@
             android:importantForAccessibility="no"
             android:src="@drawable/ic_battery"
             android:layout_marginEnd="@dimen/widget_icon_margin_end"
-            android:tint="@color/widget_on_surface_variant" />
+            android:tint="@color/widget_on_surface_variant"
+            tools:ignore="UseAppTint" />
 
         <TextView
             android:id="@+id/title"

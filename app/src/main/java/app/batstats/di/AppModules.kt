@@ -10,6 +10,7 @@ import app.batstats.battery.apps.RoomSessionSnapshotStore
 import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.apps.SessionSnapshotStore
 import app.batstats.battery.apps.ShellRunnerStatsShell
+import app.batstats.battery.data.DesignCapacitySource
 import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.CalibrationOverrides
@@ -33,15 +34,27 @@ import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.SettingsMigrations
 import app.batstats.settings.SettingsMigrator
+import app.batstats.viewmodel.AppDetailsViewModel
+import app.batstats.viewmodel.AppsViewModel
 import app.batstats.viewmodel.DashboardViewModel
 import app.batstats.viewmodel.DataViewModel
+import app.batstats.viewmodel.DefaultAppDetailsRepository
+import app.batstats.viewmodel.DefaultAppsRepository
+import app.batstats.viewmodel.DefaultDataRepository
+import app.batstats.viewmodel.DefaultHealthRepository
+import app.batstats.viewmodel.DefaultHistoryRepository
 import app.batstats.viewmodel.DefaultNowRepository
+import app.batstats.viewmodel.DefaultSessionDetailsRepository
+import app.batstats.viewmodel.DefaultStatusRepository
 import app.batstats.viewmodel.DetailedStatsViewModel
 import app.batstats.viewmodel.DrainStatsViewModel
+import app.batstats.viewmodel.HealthViewModel
 import app.batstats.viewmodel.HistoryViewModel
+import app.batstats.viewmodel.KmpSettingsStore
 import app.batstats.viewmodel.NowViewModel
 import app.batstats.viewmodel.SessionDetailsViewModel
 import app.batstats.viewmodel.SettingsViewModel
+import app.batstats.viewmodel.StatusViewModel
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
 import io.github.mlmgames.settings.core.backup.SettingsBackupManager
@@ -102,6 +115,11 @@ val appModule = module {
         )
     }
 
+    // One design capacity for Now's Health card and the Health screen: sysfs is read once (root), then cached.
+    single {
+        DesignCapacitySource(get<SettingsRepository<AppSettings>>().flow, DesignCapacitySource::readRootChargeFullDesignUah, get())
+    }
+
     single { HistoryMaintenance() }
     single { HistoryRetention(get(), get<SettingsRepository<AppSettings>>().flow) }
     single { ExportImportManager(androidContext(), get(), get()) }
@@ -124,12 +142,22 @@ val appModule = module {
     single { DrainNotificationManager(androidContext(), get()) }
 
     viewModel { DashboardViewModel(androidApplication(), get(), get(), get()) }
-    viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get()), get(), get()) }
-    viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
+    viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get()) }
+    viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
     viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
-    viewModel { HistoryViewModel(get()) }
-    viewModel { DataViewModel(get(), androidContext()) }
+    // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
+    viewModel { HistoryViewModel(DefaultHistoryRepository(get(), get()), get()) }
+    viewModel { DataViewModel(DefaultDataRepository(androidContext(), get(), get(), get(), get())) }
+    viewModel { StatusViewModel(DefaultStatusRepository(androidContext(), get(), get(), get(), get(), get())) }
+    viewModel { HealthViewModel(DefaultHealthRepository(androidContext(), get(), get())) }
     viewModel { DrainStatsViewModel(get()) }
+    // Apps' second get() is the nav entry's SavedStateHandle (sort, query and "show system" survive process death).
+    viewModel { AppsViewModel(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()) }
+    viewModel { (uid: Int, packageName: String) ->
+        AppDetailsViewModel(DefaultAppDetailsRepository(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()), uid, packageName)
+    }
 
-    viewModel { (sessionId: String) -> SessionDetailsViewModel(get(), get(), sessionId) }
+    viewModel { (sessionId: String) ->
+        SessionDetailsViewModel(DefaultSessionDetailsRepository(get(), get(), get(), get(), get(), get(), get()), get(), sessionId)
+    }
 }

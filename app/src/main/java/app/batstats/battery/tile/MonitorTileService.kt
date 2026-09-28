@@ -1,5 +1,6 @@
 package app.batstats.battery.tile
 
+import android.annotation.SuppressLint
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
@@ -85,6 +86,8 @@ class MonitorTileService : TileService(), KoinComponent {
         tile.updateTile()
     }
 
+    // The deprecated Intent overload runs below API 34 only, where it is the one that exists.
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
         val intent = Intent(this, BatteryMainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

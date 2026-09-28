@@ -85,15 +85,16 @@ import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.ValueFormatter
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.displayName
-import app.batstats.ui.screens.now.CompactDuration
-import app.batstats.ui.screens.now.compactDuration
-import app.batstats.ui.screens.now.currentLocale
-import app.batstats.ui.screens.now.dayAwareTime
-import app.batstats.ui.screens.now.formatNumber
+import app.batstats.ui.format.CompactDuration
+import app.batstats.ui.format.compactDuration
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.dayAwareTime
+import app.batstats.ui.format.formatNumber
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -613,7 +614,7 @@ private fun sortLabel(sort: AppSort): Int = when (sort) {
 @Composable
 private fun sortValueText(value: Double, sort: AppSort): String = when (sort) {
     AppSort.BATTERY -> valueWithUnit(formatMah(value, currentLocale()), stringResource(R.string.now_unit_mah))
-    AppSort.CPU, AppSort.FOREGROUND, AppSort.BACKGROUND -> durationText(value.toLong())
+    AppSort.CPU, AppSort.FOREGROUND, AppSort.BACKGROUND -> appDurationText(value.toLong())
     AppSort.NETWORK -> bytesText(value.toLong())
 }
 
@@ -641,7 +642,7 @@ private const val MINUTE_MS = 60 * SECOND_MS
 
 /** "1:24 h", "12 min" or "40 s" as one string. */
 @Composable
-internal fun durationText(ms: Long): String {
+internal fun appDurationText(ms: Long): String {
     val duration = appDuration(ms, currentLocale())
     return valueWithUnit(duration.value, stringResource(duration.unit))
 }
@@ -668,7 +669,7 @@ internal fun bytesText(bytes: Long): String {
     return valueWithUnit(size.value, stringResource(size.unit))
 }
 
-/** Durations for chart legends and readouts, formatted like [durationText]. */
+/** Durations for chart legends and readouts, formatted like [appDurationText]. */
 @Composable
 internal fun rememberDurationFormatter(): ValueFormatter {
     val locale = currentLocale()
@@ -699,10 +700,6 @@ internal fun DurationCell(label: String, ms: Long?, modifier: Modifier = Modifie
     )
 }
 
-@Composable
-internal fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
 
 /** One entry of a details list: a name (up to two lines), its value at the end, and an optional line under it. */
 @Composable

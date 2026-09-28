@@ -149,9 +149,9 @@ internal object NowMapping {
     )
 
     /** The newest sessions' stored estimates → [HealthSummary] (the rule the Health screen shares). */
-    fun healthSummary(sessions: List<ChargeSession>, designOverrideMah: Int): HealthSummary? = HealthSummary.of(
+    fun healthSummary(sessions: List<ChargeSession>, designUah: Long?): HealthSummary? = HealthSummary.withDesign(
         sessions.mapNotNull { HealthSummary.storedEstimate(it.capacityEstimateMah, it.capacityConfidence, it.capacityBasis) },
-        designOverrideMah,
+        designUah,
     )
 
     fun health(summary: HealthSummary) = HealthState(summary.estimate.fullMah, summary.estimate.confidence, summary.healthPercent)

@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -39,7 +40,8 @@ private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 /**
  * Now, stateless: [state] in, [onEvent] out. One scrolling page under the status bar (no top bar: the hero is the
  * header). Phones stack notice, hero, trace, since unplug, Today, Health and Top apps; from 840 dp the live half
- * (notice, hero, trace) and the cards sit side by side. The Reset confirmation is local UI state.
+ * (notice, hero, trace) and the cards sit side by side. The Reset confirmation is local UI state, tied to the window
+ * it was opened for: it closes when that window stops being the current one (plugged in, monitoring stopped).
  */
 @Composable
 fun NowContent(
@@ -48,7 +50,14 @@ fun NowContent(
     modifier: Modifier = Modifier,
     scrubState: ChartScrubState = rememberChartScrubState(),
 ) {
-    var confirmReset by rememberSaveable { mutableStateOf(false) }
+    // The start of the current window the confirmation was opened for; null when it's closed.
+    var resetWindowStart by rememberSaveable { mutableStateOf<Long?>(null) }
+    val currentWindowStart = state.sinceUnplug?.takeIf { it.current }?.startedAtMs
+    // Plugging in (or stopping monitoring) while the dialog is open ends the window: Reset would otherwise end the
+    // new CHARGE session. A new window after a gap isn't the one the user asked about either.
+    LaunchedEffect(currentWindowStart) {
+        if (resetWindowStart != currentWindowStart) resetWindowStart = null
+    }
     val spacing = MaterialTheme.spacing
     val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
     val column = Arrangement.spacedBy(spacing.sm)
@@ -77,7 +86,7 @@ fun NowContent(
             state.sinceUnplug,
             monitoring = state.hero.monitoring,
             nowMs = state.nowMs,
-            onReset = { confirmReset = true },
+            onReset = { resetWindowStart = currentWindowStart },
             modifier = Modifier.fillMaxWidth(),
         )
         TodayPanel(state.today, onOpen = { onEvent(NowEvent.OpenHistory) }, modifier = Modifier.fillMaxWidth())
@@ -110,19 +119,19 @@ fun NowContent(
         }
     }
 
-    if (confirmReset) {
+    if (resetWindowStart != null && resetWindowStart == currentWindowStart) {
         AlertDialog(
-            onDismissRequest = { confirmReset = false },
+            onDismissRequest = { resetWindowStart = null },
             title = { Text(stringResource(R.string.now_reset_title)) },
             text = { Text(stringResource(R.string.now_reset_body)) },
             confirmButton = {
                 TextButton(onClick = {
-                    confirmReset = false
+                    resetWindowStart = null
                     onEvent(NowEvent.ResetObservation)
                 }) { Text(stringResource(R.string.now_reset_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { confirmReset = false }) { Text(stringResource(R.string.now_cancel)) }
+                TextButton(onClick = { resetWindowStart = null }) { Text(stringResource(R.string.now_cancel)) }
             },
         )
     }

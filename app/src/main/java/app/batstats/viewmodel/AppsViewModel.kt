@@ -40,9 +40,6 @@ import kotlinx.coroutines.withContext
 /** How the Apps list is ordered; each order is also the value its rows show. */
 enum class AppSort { BATTERY, CPU, FOREGROUND, BACKGROUND, NETWORK }
 
-/** Shizuku's state as the access banner needs it: running, and whether it allowed BatStats. */
-data class ShizukuState(val running: Boolean, val granted: Boolean)
-
 /** The access facts a "no access" result is explained with, read when the result comes back. */
 data class AccessSnapshot(
     val mode: ShellRunner.Mode,

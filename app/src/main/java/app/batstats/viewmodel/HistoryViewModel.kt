@@ -161,7 +161,7 @@ class DefaultHistoryRepository(
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModel(
     private val source: HistoryRepository,
-    private val savedState: SavedStateHandle = SavedStateHandle(),
+    private val savedState: SavedStateHandle,
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,

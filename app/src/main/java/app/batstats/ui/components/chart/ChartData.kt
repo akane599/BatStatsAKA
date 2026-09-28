@@ -79,6 +79,8 @@ sealed interface SeriesStyle {
  * @param format formats readout, reference and summary values (tick labels use the axis step's decimals).
  * @param axisMin / [axisMax] a value the axis always includes (e.g. 0 and 100 for level %); readings beyond it
  *   still widen the axis. `null` follows the data.
+ * @param axisBounds the values the series can take (0..100 for level %): its axis never gets a tick outside them,
+ *   also when it shares gridlines with a second axis. Readings outside still widen the bounds. `null` = unbounded.
  * @param maxGapMs also break the line where consecutive points are further apart than this; `null` breaks only
  *   at gap markers.
  * @param showPoints draw a dot at every point, for sparse measurements such as capacity estimates.
@@ -92,6 +94,7 @@ data class ChartSeries(
     val format: ValueFormatter = NumberFormatter(unit),
     val axisMin: Double? = null,
     val axisMax: Double? = null,
+    val axisBounds: ClosedFloatingPointRange<Double>? = null,
     val maxGapMs: Long? = null,
     val showPoints: Boolean = false,
 )

@@ -10,11 +10,11 @@ import app.batstats.battery.apps.TopApps
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.data.uah
 import app.batstats.battery.measurement.CalibrationState
 import app.batstats.battery.measurement.DailySummaryAggregator
 import app.batstats.battery.measurement.HealthSummary
 import app.batstats.battery.service.MonitoringControl
-import app.batstats.settings.designCapacityOverrideMah
 import app.batstats.settings.useFahrenheit
 import app.batstats.ui.components.chart.ChartMath
 import java.time.ZoneId
@@ -93,8 +93,8 @@ class NowViewModel(
 
     private val health: Flow<HealthSummary?> = combine(
         source.recentSessions(HealthSummary.SESSIONS),
-        source.settings.map { it.designCapacityOverrideMah }.distinctUntilChanged(),
-    ) { sessions, designMah -> NowMapping.healthSummary(sessions, designMah) }
+        source.design.map { it.uah }.distinctUntilChanged(),
+    ) { sessions, designUah -> NowMapping.healthSummary(sessions, designUah) }
 
     private val topApps: Flow<TopAppsState> = combine(
         source.cachedAppUsage,
@@ -131,7 +131,8 @@ class NowViewModel(
         when (event) {
             NowEvent.ToggleMonitoring -> toggleMonitoring()
             is NowEvent.SelectRange -> range.value = event.range
-            NowEvent.ResetObservation -> source.resetObservation()
+            // Only the current on-battery window can be reset: a Reset racing a plug-in must not end the CHARGE session.
+            NowEvent.ResetObservation -> if (state.value.sinceUnplug?.current == true) source.resetObservation()
             NowEvent.UndoCalibration -> source.undoCalibration()
             NowEvent.KeepCalibration -> source.dismissCalibrationNotice()
             NowEvent.OpenHistory, NowEvent.OpenHealth, NowEvent.OpenApps, is NowEvent.OpenApp -> Unit

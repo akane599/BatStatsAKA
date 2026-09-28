@@ -124,6 +124,7 @@ fun TwoSeriesChartPreview() {
                     format = NumberFormatter("%", maxDecimals = 0),
                     axisMin = 0.0,
                     axisMax = 100.0,
+                    axisBounds = 0.0..100.0,
                 ),
             ),
             scrubState = rememberChartScrubState(initialTimeMs = FIXED_TIME_MS - 20 * MINUTE),

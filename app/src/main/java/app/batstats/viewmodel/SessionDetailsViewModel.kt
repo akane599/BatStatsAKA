@@ -3,7 +3,6 @@ package app.batstats.viewmodel
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.withTransaction
 import app.batstats.battery.apps.AppInfo
 import app.batstats.battery.apps.AppInfoSource
 import app.batstats.battery.apps.AppLabel
@@ -227,9 +226,8 @@ interface SessionDetailsRepository {
 }
 
 /**
- * [SessionDetailsRepository] over the app's repositories. The data layer has no per-session delete yet, so
- * [deleteSession] runs its statements here, serialized with imports and clears (see the P4b report for the DAO
- * method that should replace them).
+ * [SessionDetailsRepository] over the app's repositories. [deleteSession] is [app.batstats.battery.data.db.SessionDao.deleteSession],
+ * serialized with imports and clears.
  */
 class DefaultSessionDetailsRepository(
     private val repository: BatteryRepository,
@@ -255,27 +253,12 @@ class DefaultSessionDetailsRepository(
 
     override suspend fun deleteSession(id: String): Boolean {
         if (repository.isClearingHistory) return false
-        return maintenance.mutations.withLock {
-            database.withTransaction {
-                val row = database.sessionDao().byId(id) ?: return@withTransaction false
-                // The writer rewrites its open row at every save: a recording session would come straight back.
-                if (SessionEvidence.isRecording(row, currentGeneration())) return@withTransaction false
-                database.appUsageDao().deleteSessionUsage(id)
-                delete("DELETE FROM app_snapshots WHERE sessionId = ?", id)
-                delete("DELETE FROM battery_samples WHERE sessionId = ?", id)
-                delete("DELETE FROM charge_sessions WHERE sessionId = ?", id) > 0
-            }
-        }
+        return maintenance.mutations.withLock { database.sessionDao().deleteSession(id, currentGeneration()) }
     }
 
     private fun currentGeneration(): String? {
         val observation = repository.observation.value
         return if (repository.isMonitoringFlow.value && !observation.stopped) observation.latest?.generation else null
-    }
-
-    private fun delete(sql: String, id: String): Int = database.compileStatement(sql).use { statement ->
-        statement.bindString(1, id)
-        statement.executeUpdateDelete()
     }
 }
 

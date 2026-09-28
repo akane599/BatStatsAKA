@@ -1,5 +1,6 @@
 package app.batstats.battery.drain
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Paint
 import android.graphics.Typeface
@@ -10,6 +11,7 @@ import android.text.TextPaint
 import android.text.style.RelativeSizeSpan
 import android.util.TypedValue
 import app.batstats.R
+import kotlin.math.roundToInt
 
 /**
  * Picks, for each text slot of [NotificationContent], the longest form that fits its view unclipped: a reading is
@@ -70,14 +72,17 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
         }
 
         /** A paint for a text appearance as a TextView would apply it (size at the font scale, family, style). */
+        @SuppressLint("ResourceType") // The indices are positions in the attribute array below, not styleable ids.
         private fun paint(context: Context, appearance: Int): TextPaint {
             // Sorted by attribute id, as obtainStyledAttributes requires.
             val attributes = context.obtainStyledAttributes(appearance,
                 intArrayOf(android.R.attr.textSize, android.R.attr.textStyle, android.R.attr.fontFamily))
             try {
                 return TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-                    textSize = attributes.getDimension(0, 0f).takeIf { it > 0 }
-                        ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, DEFAULT_TEXT_SP, context.resources.displayMetrics)
+                    // Whole pixels, as TextView reads a text appearance's size: 12 sp at 2.625x is drawn at 32 px, not
+                    // 31.5, and that rounding alone widens a full line 2 by a few characters.
+                    textSize = attributes.getDimensionPixelSize(0, 0).takeIf { it > 0 }?.toFloat()
+                        ?: TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, DEFAULT_TEXT_SP, context.resources.displayMetrics).roundToInt().toFloat()
                     typeface = Typeface.create(attributes.getString(2), attributes.getInt(1, Typeface.NORMAL))
                     // The layouts draw every value, line 2 and the footer with tabular figures.
                     fontFeatureSettings = "tnum"

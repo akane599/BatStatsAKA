@@ -34,6 +34,40 @@ class ChartModelTest {
     }
 
     @Test
+    fun axisBoundsApplyOnlyWhenEverySeriesOnTheAxisHasThem() {
+        val model = ChartModel.of(
+            listOf(
+                ChartSeries("Current", points(-600.0, -10.0), signed, unit = "mA"),
+                ChartSeries("Level", points(80.0, 20.0), solid, unit = "%", axisMin = 0.0, axisMax = 100.0, axisBounds = 0.0..100.0),
+            ),
+            window = null,
+            references = emptyList(),
+        )
+        assertNull(model.axes[0].bounds)
+        assertEquals(0.0..100.0, model.axes[1].bounds)
+        val ticks = model.ticks(4)
+        assertEquals(ticks[0].count, ticks[1].count)
+        assertTrue(ticks[1].max <= 100.0)
+
+        // Readings outside the bounds widen them (the data is never cut off).
+        val over = ChartModel.of(
+            listOf(ChartSeries("Level", points(20.0, 104.0), solid, unit = "%", axisBounds = 0.0..100.0)),
+            window = null,
+            references = emptyList(),
+        )
+        assertEquals(0.0..104.0, over.axes[0].bounds)
+        val mixed = ChartModel.of(
+            listOf(
+                ChartSeries("A", points(1.0), solid, unit = "%", axisBounds = 0.0..100.0),
+                ChartSeries("B", points(2.0), solid, unit = "%"),
+            ),
+            window = null,
+            references = emptyList(),
+        )
+        assertNull(mixed.axes[0].bounds)
+    }
+
+    @Test
     fun seriesWithTheSameUnitShareOneAxis() {
         val model = ChartModel.of(
             listOf(

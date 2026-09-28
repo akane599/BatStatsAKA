@@ -79,21 +79,41 @@ object ChartMath {
 
     /**
      * Ticks for two axes that share gridlines: the same count (3..[maxCount]) on both, picked to waste the least
-     * axis span beyond the data.
+     * axis span beyond the data. An axis with bounds ([leftBounds] / [rightBounds], e.g. 0..100 for level %) never gets
+     * a tick outside them: counts that would need one are skipped, and if every count does, the bounded axis is split
+     * evenly over its bounds (3 ticks).
      */
-    fun sharedTicks(left: ClosedFloatingPointRange<Double>, right: ClosedFloatingPointRange<Double>, maxCount: Int): Pair<NiceTicks, NiceTicks> {
+    fun sharedTicks(
+        left: ClosedFloatingPointRange<Double>,
+        right: ClosedFloatingPointRange<Double>,
+        maxCount: Int,
+        leftBounds: ClosedFloatingPointRange<Double>? = null,
+        rightBounds: ClosedFloatingPointRange<Double>? = null,
+    ): Pair<NiceTicks, NiceTicks> {
         var best: Pair<NiceTicks, NiceTicks>? = null
         var bestWaste = Double.MAX_VALUE
         for (n in maxCount.coerceAtLeast(3) downTo 3) {
             val l = alignedTicks(left.start, left.endInclusive, n)
             val r = alignedTicks(right.start, right.endInclusive, n)
+            if (!within(l, leftBounds) || !within(r, rightBounds)) continue
             val waste = waste(l, left) + waste(r, right)
             if (waste < bestWaste - EPSILON) {
                 best = l to r
                 bestWaste = waste
             }
         }
-        return best ?: (alignedTicks(left.start, left.endInclusive, 3) to alignedTicks(right.start, right.endInclusive, 3))
+        return best ?: (fallbackTicks(left, leftBounds) to fallbackTicks(right, rightBounds))
+    }
+
+    private fun within(ticks: NiceTicks, bounds: ClosedFloatingPointRange<Double>?): Boolean {
+        if (bounds == null) return true
+        val tolerance = EPSILON * max(1.0, ticks.step)
+        return ticks.min >= bounds.start - tolerance && ticks.max <= bounds.endInclusive + tolerance
+    }
+
+    private fun fallbackTicks(data: ClosedFloatingPointRange<Double>, bounds: ClosedFloatingPointRange<Double>?): NiceTicks {
+        if (bounds == null || !(bounds.endInclusive > bounds.start)) return alignedTicks(data.start, data.endInclusive, 3)
+        return NiceTicks(clean(bounds.start), clean(bounds.endInclusive), (bounds.endInclusive - bounds.start) / 2)
     }
 
     /** Fraction digits a label needs to show [step] exactly (0.25 → 2, 2.5 → 1, 500 → 0). */

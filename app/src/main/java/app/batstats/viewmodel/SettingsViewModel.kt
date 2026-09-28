@@ -1,6 +1,5 @@
 package app.batstats.viewmodel
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.data.CalibrationStore
@@ -10,8 +9,6 @@ import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.SettingsWrites
 import io.github.mlmgames.settings.core.SettingMeta
 import io.github.mlmgames.settings.core.SettingsRepository
-import io.github.mlmgames.settings.core.backup.SettingsBackupManager
-import io.github.mlmgames.settings.core.managers.ResetManager
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -156,20 +153,6 @@ class SettingsViewModel(
     private val store: SettingsStore,
     private val calibration: CalibrationStore,
 ) : ViewModel() {
-    /**
-     * Interim: matches the frozen `di/AppModules.kt` line (`SettingsViewModel(androidContext(), get(), get(), get(),
-     * get())`; its last `get()` now resolves the [CalibrationStore]) until the controller wires
-     * `SettingsViewModel(KmpSettingsStore(get()), get())`. Delete it then.
-     */
-    @Deprecated("Interim DI shim", ReplaceWith("SettingsViewModel(KmpSettingsStore(repository), calibration)"))
-    constructor(
-        @Suppress("UNUSED_PARAMETER") context: Context,
-        repository: SettingsRepository<AppSettings>,
-        @Suppress("UNUSED_PARAMETER") resetManager: ResetManager<AppSettings>,
-        @Suppress("UNUSED_PARAMETER") backupManager: SettingsBackupManager<AppSettings>,
-        calibration: CalibrationStore,
-    ) : this(KmpSettingsStore(repository), calibration)
-
     private val error = MutableStateFlow<SettingsError?>(null)
 
     val state: StateFlow<SettingsUiState> = combine(store.settings, calibration.state, error, ::SettingsUiState)

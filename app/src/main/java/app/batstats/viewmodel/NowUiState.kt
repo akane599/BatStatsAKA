@@ -116,7 +116,7 @@ data class TodayState(
 data class HealthState(
     val capacityMah: Int,
     val confidence: CapacityConfidence,
-    /** Capacity vs the design capacity from Settings; null when that is on Auto. */
+    /** Capacity vs the design capacity (Settings, else the battery's sysfs value); null when neither is known. */
     val healthPercent: Double?,
 )
 

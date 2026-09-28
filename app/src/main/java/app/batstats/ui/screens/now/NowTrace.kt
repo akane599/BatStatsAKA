@@ -29,6 +29,9 @@ import app.batstats.ui.components.chart.MINUS_SIGN
 import app.batstats.ui.components.chart.NumberFormatter
 import app.batstats.ui.components.chart.TimeSeriesChart
 import app.batstats.ui.components.chart.rememberChartScrubState
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.formatSigned
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.numericTitle

@@ -64,6 +64,7 @@ import app.batstats.ui.components.AppIconDefaults
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
+import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
 import app.batstats.ui.components.chart.BarChart
@@ -76,9 +77,9 @@ import app.batstats.ui.components.chart.TimeAxisFormatter
 import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.headerActionOverhang
-import app.batstats.ui.screens.now.currentLocale
-import app.batstats.ui.screens.now.durationString
-import app.batstats.ui.screens.now.formatNumber
+import app.batstats.ui.format.currentLocale
+import app.batstats.ui.format.durationString
+import app.batstats.ui.format.formatNumber
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -87,7 +88,6 @@ import app.batstats.viewmodel.AppUsageHint
 import app.batstats.viewmodel.DayEntry
 import app.batstats.viewmodel.DayFigures
 import app.batstats.viewmodel.DayRange
-import app.batstats.viewmodel.DaysState
 import app.batstats.viewmodel.HistoryEvent
 import app.batstats.viewmodel.HistoryMode
 import app.batstats.viewmodel.HistoryUiState
@@ -123,15 +123,6 @@ fun HistoryScreen(
         onEvent = { event -> if (event is HistoryEvent.OpenSession) onOpenSession(event.sessionId) else vm.onEvent(event) },
         modifier = modifier,
     )
-}
-
-/**
- * Interim overload matching the current `NavGraph` call. History is a tab root, so there is no back arrow and
- * [onBack] is unused; delete this once the entry calls `HistoryScreen(onOpenSession = …)`.
- */
-@Composable
-fun HistoryScreen(@Suppress("UNUSED_PARAMETER") onBack: () -> Unit, onOpenSession: (String) -> Unit) {
-    HistoryScreen(onOpenSession = onOpenSession)
 }
 
 /**
@@ -604,10 +595,6 @@ private fun LoadFailed(onRetry: () -> Unit, modifier: Modifier = Modifier) {
     )
 }
 
-@Composable
-private fun QuietText(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
 
 /** "812 mAh" with the unit at label size (as the chart's unit caption) and in the quieter color. */
 @Composable
