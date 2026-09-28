@@ -14,7 +14,6 @@ import app.batstats.ui.navigation.Destinations
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import org.koin.core.component.KoinComponent
@@ -30,23 +29,30 @@ class MonitorTileService : TileService(), KoinComponent {
     private val demand: SamplingDemand by inject()
     private val monitoring: MonitoringControl by inject()
 
-    private var scope: CoroutineScope? = null
-    private var demandToken: AutoCloseable? = null
+    private val session = TileListenSession()
 
     override fun onStartListening() {
         super.onStartListening()
-        demandToken = demand.acquire(DEMAND_TAG)
         val listenScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        scope = listenScope
+        session.start(listenScope, demand.acquire(DEMAND_TAG))
         combine(repository.realtimeFlow, monitoring.isMonitoring, ::render).launchIn(listenScope)
     }
 
     override fun onStopListening() {
-        scope?.cancel()
-        scope = null
-        demandToken?.close()
-        demandToken = null
+        session.stop()
         super.onStopListening()
+    }
+
+    /** Defensive: covers the tile being removed from the shade while still listening. */
+    override fun onTileRemoved() {
+        session.stop()
+        super.onTileRemoved()
+    }
+
+    /** Defensive: covers the service being torn down without a preceding [onStopListening]. */
+    override fun onDestroy() {
+        session.stop()
+        super.onDestroy()
     }
 
     override fun onClick() {
