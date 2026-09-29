@@ -9,7 +9,7 @@ Android app developed on Ubuntu, CLI only (no Android Studio in the loop). Keep 
 
 <!-- STACK:BEGIN  (filled by /bootstrap — do not hand-edit values you haven't verified) -->
 - Language: Kotlin only (no Java) · New code in: Kotlin
-- UI: Compose (Material 3) · previews: 0 in main · screenshot tests: compose-preview via AGP test suite `screenshotTest` (engine 0.0.1-alpha16; host TZ/locale pinned to UTC/en-US) · dark-only (+ OLED toggle) · dynamic color: opt-in (API 31+, accents only) · custom typography: Space Grotesk (`res/font`, numbers use `tnum`) · literal colors outside theme: 0 · raw `.dp` in `ui/screens`: 54 · 4 XML layouts are RemoteViews app widgets only
+- UI: Compose (Material 3) · previews: 0 in main · screenshot tests: compose-preview via AGP test suite `screenshotTest` (engine 0.0.1-alpha16; host TZ/locale pinned to UTC/en-US) · dark-only (+ OLED toggle) · dynamic color: opt-in (API 31+, accents only) · custom typography: Space Grotesk (`res/font`, numbers use `tnum`) · literal colors outside theme: 0 · raw `.dp` in `ui/screens`: 0 · 6 XML layouts are RemoteViews only (3 widgets + `widget_common`, 2 notification)
 - JDK: build targets 21; `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` (system default; pinned in gradle.properties: no)
 - Gradle 9.7.1 · AGP 9.5.0-alpha07 (alpha, for screenshot test suites) · Kotlin 2.4.20 · compileSdk 37 · minSdk 26 · version catalog: yes (`gradle/libs.versions.toml`)
 - Modules: `:app` · applicationId `org.mlm.batstats` (debug: `.debug`, preview: `.preview`) ≠ namespace `app.batstats`

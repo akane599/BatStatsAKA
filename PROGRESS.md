@@ -12,11 +12,11 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
 - [x] P4b ∥ P5 wave: 9 tasks reviewed + merged (7ea5448); WAVE-INTEGRATION de7eae5 (wiring, shims gone, shared design capacity, DAO queries, device tests green one class at a time) — review running
 - [x] P4c removal of old screens/shims (c5bd318)
-- [~] P6: tests P6a (5cdc897) + docs P6b (8d74993) done & reviewed; final reviews → fix wave → verification pending; user runs `/screenshot-rebaseline` + `/device-check`
+- [x] P6: tests (5cdc897), docs (8d74993), final reviews (module graph, data, screens, shared UI, compose, design critique) → one fix wave (990d8a3, re-review clean), fresh verification PASS (CI parity, 540 unit, 69/70 connected + 1 flake re-passed, smoke). **Waiting on the user:** `/screenshot-rebaseline` + `/device-check`.
 
 ## Next (ordered)
-1. FIX-WAVE running (all final findings: `.superpowers/sdd/adaptive-wibbling-twilight/final-*.md`; brief `FIX-WAVE-brief.md`). Then commit, one scoped re-review, fresh verification agent (gate + CI parity + connected non-Shizuku + emulator tile/notification/widget).
-2. User runs `/screenshot-rebaseline` + `/device-check`; then finishing-a-development-branch (base: codex/android16-reliability).
+1. User runs `/screenshot-rebaseline` (all refs stale since the theme change; review the new PNGs, commit them) and `/device-check` (Shizuku phase; ShizukuDeviceTest's invariant changed in P4c).
+2. superpowers:finishing-a-development-branch for `feat/overhaul` (base `codex/android16-reliability`, origin GitHub); then delete `.superpowers/sdd/adaptive-wibbling-twilight/` and the `worktree-agent-*` branches/worktrees.
 
 ## Blockers / open questions
 
@@ -27,6 +27,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Added Compose Preview Screenshot Testing (`com.android.compose.screenshot` 0.0.1-alpha16) + smoke test `TelemetryChartScreenshotTest` (light/dark/1.5× font). Verified by: independent agent — `assembleDebug` exit 0, `testDebugUnitTest` 107/107, `validateDebugScreenshotTest` 3/3, refs unchanged
 
 ## Decision log (never delete, one line each)
+- 2026-09-29 Overhaul executed via subagent-driven development; ~47 controller rulings (listed in the final session summary; ledger `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` until deleted). User decisions at the Now checkpoint: look approved, 2×2 phone readouts, since-unplug = open discharge session. Notable: QS tile without ACTIVE_TILE; Reset settings removed; Sparkline removed; package-cycle refactor deferred to debt.
 - 2026-09-28 — Overhaul outline token: M3 `outline` = #63758D (approved #3A4452 kept as `outlineVariant`) because #3A4452 was 1.45–1.95:1 on surfaces (invisible Switch track); smallest lightening passing ≥3:1 on every tier.
 - 2026-09-28 — Overhaul ETA/calibration: "sleep gaps" skip only observation gaps (engine's awake-time rule), not CPU-suspended intervals — counter Δq across suspend is real idle drain. Calibration fast path requires plugged == 0 and a falling counter.
 - 2026-09-28 — Overhaul persistence: screen-off polls saved at most every 30 s (elapsed clock) so a stuck 2 s demand token can't write every 2 s; a session end always forces a save.
@@ -52,10 +53,10 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 | Area | Last run | Result | Command |
 |---|---|---|---|
 | Security (claude-security) | — | — | `/claude-security` |
-| Compose review | 2026-09-28 | /review-pr (5 agents): 0 critical, 5 important fixed (stale docs, rebaseline data loss, CI artifacts, stale results, confirm tests), @Immutable added; type redesigns deferred | pr-review-toolkit + compose-reviewer |
+| Compose review | 2026-09-29 (overhaul) | compose-reviewer + independent design critic: 2 important (tab switch wiped tab state/VMs; Apps search async text) + error-treatment unification, History labels at 1.5× — all fixed in 990d8a3 | android-kmp-playbook:compose-reviewer + design critic on renders |
 | Module graph | 2026-09-28 (overhaul) | 1 important (unused libs.material) + dep cleanup + WidgetUpdater uncaught exception + 10 `!!` → final fix wave; package cycles (BatteryGraph locator, db↔apps enums, …) → debt | module-graph-auditor agent |
-| Lint (Android lint) | — | — | `./gradlew :app:lintDebug -q` |
-| Emulator QA (API 36) | 2026-09-28 | Pass — all 8 screens reached/interacted, no crash; left one short charging session in the emulator DB | android-emulator-qa skill |
+| Lint (Android lint) | 2026-09-29 | Pass (debug + preview, 0 errors) | `./gradlew :app:lintDebug :app:lintPreview -q` |
+| Emulator QA (API 36) | 2026-09-29 (overhaul) | Pass — connected non-Shizuku 69/70 (+1 flake re-passed), 4-tab smoke no crash; tile/widget/notification checked in the fix wave | fresh verification agent |
 
 ## Environment notes (quirks discovered)
 - AGP 9.5.0-alpha07 registers `generate<Variant>ComposePreviewRunfiles` for every Compose variant; realizing all tasks (`./gradlew tasks --all`) fails on `release` (unit tests disabled). Normal builds are fine. List tasks via `tasks.names` in an init script instead.
