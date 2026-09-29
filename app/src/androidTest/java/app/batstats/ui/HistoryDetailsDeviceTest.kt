@@ -85,7 +85,7 @@ class HistoryDetailsDeviceTest {
         val sessionDetail = text(
             R.string.history_session_detail,
             text(R.string.now_duration_minutes, "3"),
-            text(R.string.history_level_change, text(R.string.history_percent, "80"), text(R.string.history_percent, "79")),
+            text(R.string.history_level_change, text(R.string.percent_value, "80"), text(R.string.percent_value, "79")),
         )
         try {
             runBlocking {
@@ -118,8 +118,8 @@ class HistoryDetailsDeviceTest {
                 MainTheme(dynamicColor = false) {
                     when (opened) {
                         null -> HistoryScreen(onOpenSession = { opened = it }, vm = history)
-                        "scripted-session" -> SessionDetailsScreen(onBack = { opened = null }, onOpenApp = { _, _ -> }, vm = details)
-                        else -> SessionDetailsScreen(onBack = { opened = null }, onOpenApp = { _, _ -> }, vm = elsewhere)
+                        "scripted-session" -> SessionDetailsScreen(onBack = { opened = null }, onOpenApp = { _, _ -> }, onOpenAccessSetup = {}, vm = details)
+                        else -> SessionDetailsScreen(onBack = { opened = null }, onOpenApp = { _, _ -> }, onOpenAccessSetup = {}, vm = elsewhere)
                     }
                 }
             }

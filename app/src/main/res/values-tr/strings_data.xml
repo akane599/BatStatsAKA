@@ -2,7 +2,6 @@
 <!-- Ayarlar › Veriler (ui/screens/DataScreen.kt). "Ölçümler" pil örnekleridir. -->
 <resources>
     <string name="data_title">Veriler</string>
-    <string name="data_back">Geri</string>
 
     <!-- Kayıtlı geçmiş -->
     <string name="data_stored_title">Kayıtlı geçmiş</string>

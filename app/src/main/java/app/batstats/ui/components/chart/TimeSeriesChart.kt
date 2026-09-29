@@ -168,7 +168,7 @@ private fun Plot(
 ) {
     val colors = MaterialTheme.chartColors
     val labelStyle = MaterialTheme.typography.numericLabel.copy(color = colors.axisLabel)
-    val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = rememberTextMeasurer(cacheSize = CHART_TEXT_CACHE_SIZE)
     val density = LocalDensity.current
     val progress = remember { Animatable(if (drawnIn.value) 1f else 0f) }
     LaunchedEffect(Unit) {

@@ -1,5 +1,6 @@
 package app.batstats.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.data.CalibrationStore
@@ -118,6 +119,7 @@ enum class SettingsThreshold(val fieldName: String, val alert: SettingsSwitch, p
 enum class SettingsError { WRITE_FAILED, INVALID_DESIGN_CAPACITY }
 
 /** Plain values; the screen formats them for the viewer's locale. */
+@Immutable
 data class SettingsUiState(
     val settings: AppSettings = AppSettingsSchema.default,
     val calibration: CalibrationState = CalibrationState(),

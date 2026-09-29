@@ -116,12 +116,8 @@ class BatteryMonitorService : Service() {
         }
         // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once (gated in run).
         serviceScope.launch {
-            val issue = combine(repository.error, shell.lastError) { historyError, shellError ->
-                when {
-                    historyError != null -> NotificationIssue.COLLECTION
-                    shellError != null -> NotificationIssue.ADVANCED
-                    else -> null
-                }
+            val issue = combine(repository.error, shell.lastError, shell.access) { historyError, shellError, access ->
+                NotificationIssue.of(historyError, shellError, hasAdvancedAccess = access != ShellRunner.Mode.NONE)
             }
             notifications.run(issue) { content ->
                 display("notification") {
@@ -131,9 +127,10 @@ class BatteryMonitorService : Service() {
         }
         serviceScope.launch {
             val gate = UpdateGate<WidgetUpdater.Content>()
-            combine(repository.realtimeFlow, repository.settingsFlow.map { it.useFahrenheit }.distinctUntilChanged()) { reading, fahrenheit ->
-                reading.sample?.let { sample -> WidgetUpdater.content(this@BatteryMonitorService, sample, monitoring = true, fahrenheit) to sample.screenOn }
-            }.filterNotNull().collectLatest { (content, screenOn) ->
+            // Held estimate: one content per capture, and the time widget never drops to "—" between them.
+            combine(WidgetUpdater.readings(repository.realtimeFlow), repository.settingsFlow.map { it.useFahrenheit }.distinctUntilChanged()) { reading, fahrenheit ->
+                WidgetUpdater.content(this@BatteryMonitorService, reading, monitoring = true, fahrenheit) to (reading.reading.sample?.screenOn != false)
+            }.collectLatest { (content, screenOn) ->
                 if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest
                 val shown = display("widget") { WidgetUpdater.deliver(this@BatteryMonitorService, content) }
                 gate.pushed(content.takeIf { shown }, SystemClock.uptimeMillis())

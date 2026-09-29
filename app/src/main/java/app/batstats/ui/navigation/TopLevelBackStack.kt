@@ -17,6 +17,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
  * Rules:
  * - [select] on the already-selected tab pops that tab's stack back to its root.
  * - [select] on a different tab switches the visible stack; no stack's contents change.
+ * - [openRoot] shows a tab at its root, popping that tab's stack (only that one) whether or not it is visible.
  * - [onBack] pops the visible tab's stack. Popping the last entry of a non-[Routes.Now] tab
  *   switches to [Routes.Now] instead of leaving that tab empty. Popping [Routes.Now]'s root
  *   returns `false` so the caller (the system back handler) can finish the activity.
@@ -35,6 +36,9 @@ class TopLevelBackStack(
     /** The back stack `NavDisplay` should render: the currently visible tab's. */
     val backStack: NavBackStack<NavKey> get() = backStacks.getValue(selectedTab)
 
+    /** [tab]'s own stack: every tab's entries stay decorated (state, ViewModels) while another tab is visible. */
+    fun stack(tab: Routes): NavBackStack<NavKey> = backStacks.getValue(tab)
+
     fun select(tab: Routes) {
         if (tab == selectedTab) {
             val stack = backStacks.getValue(tab)
@@ -42,6 +46,13 @@ class TopLevelBackStack(
         } else {
             setSelectedTab(tab)
         }
+    }
+
+    /** Shows [tab] at its root, whichever tab is visible: a link to what the tab itself shows first. */
+    fun openRoot(tab: Routes) {
+        val stack = backStacks.getValue(tab)
+        while (stack.size > 1) stack.removeAt(stack.lastIndex)
+        if (tab != selectedTab) setSelectedTab(tab)
     }
 
     /** Pushes [route] onto the currently visible tab's stack. */

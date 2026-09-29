@@ -1,9 +1,13 @@
 package app.batstats.viewmodel
 
+import androidx.compose.runtime.Immutable
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -94,7 +98,9 @@ enum class ReadProblem {
 
 /** The last read's problem; none while the last read was good. */
 sealed interface StatsProblem {
+    @Immutable
     data class NoAccess(val problem: AccessProblem) : StatsProblem
+    @Immutable
     data class Failed(val problem: ReadProblem) : StatsProblem
 }
 
@@ -230,6 +236,7 @@ internal class StatsLoader(private val scope: CoroutineScope, private val source
 }
 
 /** "Android stats since …": the dump's window and device-wide times. Durations in ms; null when Android gave none. */
+@Immutable
 data class StatsSummary(
     val startedAtMs: Long?,
     val capturedAtMs: Long,
@@ -263,6 +270,7 @@ data class StatsSummary(
  * One app in the list: [value] is the current sort's metric (mAh, ms, or bytes; null when Android gave none) and
  * [share] its part of every app's total for that metric (0..1, hidden system apps included).
  */
+@Immutable
 data class AppListRow(
     val uid: Int,
     val packageName: String,
@@ -276,6 +284,7 @@ data class AppListRow(
  * also over stale data). [loading] drives the refresh indicator. [rows] are filtered by [query] and [showSystem] and
  * ordered by [sort]; [hiddenSystem] counts search matches hidden because they're system components.
  */
+@Immutable
 data class AppsUiState(
     val nowMs: Long = 0,
     val loading: Boolean = false,
@@ -313,8 +322,14 @@ class AppsViewModel(
 ) : ViewModel() {
     private val loader = StatsLoader(viewModelScope, source)
 
-    /** The search text, updated synchronously so the text field never lags its own input. */
-    val query: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
+    /**
+     * The search text for the field: Compose state written synchronously on each keystroke, so fast typing or an
+     * IME never loses characters or moves the cursor (a flow collected in the UI lands a frame late). It is also
+     * saved (process death), from where [queryFlow] feeds the filter.
+     */
+    var query: String by mutableStateOf(savedState[KEY_QUERY] ?: "")
+        private set
+    private val queryFlow: StateFlow<String> = savedState.getStateFlow(KEY_QUERY, "")
     private val sort = savedState.getStateFlow(KEY_SORT, AppSort.BATTERY.name)
         .map { name -> AppSort.entries.firstOrNull { it.name == name } ?: AppSort.BATTERY }
     private val showSystem = savedState.getStateFlow(KEY_SHOW_SYSTEM, false)
@@ -325,7 +340,7 @@ class AppsViewModel(
 
     private val catalog: Flow<Catalog?> = source.cached.mapLatest { snapshot -> snapshot?.let { catalog(it) } }
 
-    private val controls = combine(sort, query, showSystem, ::Controls)
+    private val controls = combine(sort, queryFlow, showSystem, ::Controls)
 
     val state: StateFlow<AppsUiState> = combine(catalog, controls, loader.loading, loader.problem) { catalog, controls, loading, problem ->
         val base = AppsUiState(
@@ -347,7 +362,10 @@ class AppsViewModel(
         when (event) {
             AppsEvent.Refresh -> loader.load(force = true)
             is AppsEvent.SetSort -> savedState[KEY_SORT] = event.sort.name
-            is AppsEvent.SetQuery -> savedState[KEY_QUERY] = event.query
+            is AppsEvent.SetQuery -> {
+                query = event.query
+                savedState[KEY_QUERY] = event.query
+            }
             is AppsEvent.SetShowSystem -> savedState[KEY_SHOW_SYSTEM] = event.show
             // Navigation and Shizuku's permission prompt are the screen wrapper's.
             is AppsEvent.OpenApp, AppsEvent.OpenAccessSetup, AppsEvent.AllowShizuku -> Unit

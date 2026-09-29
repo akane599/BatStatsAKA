@@ -104,7 +104,7 @@ class MonitoringNotificationTest {
         assertTrue(collapsed.text(R.id.notification_headline) in content.headline)
         assertEquals(content.level, collapsed.text(R.id.notification_level))
         assertTrue(collapsed.text(R.id.notification_summary) in content.summary)
-        assertEquals(context.getString(R.string.notification_percent, "78"), content.level)
+        assertEquals(context.getString(R.string.percent_value, "78"), content.level)
 
         val (expanded, _) = inflate(notification.bigContentView)
         assertTrue(expanded.text(R.id.notification_state) in content.state)

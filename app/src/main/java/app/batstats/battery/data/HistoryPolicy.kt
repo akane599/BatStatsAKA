@@ -18,12 +18,14 @@ object HistoryPolicy {
     private val canonicalJson = Json { encodeDefaults = true }
     private const val MAX_TIMESTAMP = 253402300799999L // end of year9999, milliseconds since Unix epoch
     fun originalId(value: String) = value.removePrefix("import:")
-    private fun identity(value: String?): String? = value?.let {
-        require(it.isNotBlank() && originalId(it).length <= 240 && it.none { c -> c.isISOControl() }) { "Invalid history identity" }
-        "import:${originalId(it)}"
+    private fun requiredIdentity(value: String): String {
+        require(value.isNotBlank() && originalId(value).length <= 240 && value.none { c -> c.isISOControl() }) { "Invalid history identity" }
+        return "import:${originalId(value)}"
     }
+    private fun identity(value: String?): String? = value?.let { requiredIdentity(it) }
     private fun source(value: String) = "import:${value.removePrefix("import:").take(128)}"
-    private fun text(value: String?): String? = value?.also { require(it.length <= 512 && it.trimStart().firstOrNull() !in listOf('=', '+', '-', '@') && '\u0000' !in it) { "Invalid history text" } }
+    private fun requiredText(value: String): String = value.also { require(it.length <= 512 && it.trimStart().firstOrNull() !in listOf('=', '+', '-', '@') && '\u0000' !in it) { "Invalid history text" } }
+    private fun text(value: String?): String? = value?.let { requiredText(it) }
     private fun epoch(value: Long) { require(value in 0..MAX_TIMESTAMP) { "Invalid timestamp; expected Unix milliseconds" } }
     private fun charge(value: Long?): Long? {
         if (value == Long.MIN_VALUE || value == Int.MIN_VALUE.toLong()) return null
@@ -47,7 +49,7 @@ object HistoryPolicy {
         require(input.cycleCount == null || input.cycleCount >= 0) { "Invalid cycle count" }
         require(input.energyNwh == null || BatteryReading.energyNwh(input.energyNwh) != null) { "Invalid energy; expected nWh" }
         require(input.etaMs == null || input.etaMs in 1..604_800_000L) { "Invalid remaining-time estimate" }
-        val normalized = input.copy(id = 0, source = source(text(input.source)!!),
+        val normalized = input.copy(id = 0, source = source(requiredText(input.source)),
             sessionId = identity(input.sessionId), observationId = identity(input.observationId),
             currentNowUa = current(input.currentNowUa), currentAverageUa = current(input.currentAverageUa),
             chargeCounterUah = charge(input.chargeCounterUah), voltageMv = voltage, temperatureDeciC = temperature,
@@ -85,8 +87,8 @@ object HistoryPolicy {
         require(input.peakTemperatureDeciC == null || BatteryReading.temperatureDeciC(input.peakTemperatureDeciC) != null) { "Invalid peak temperature; expected tenths Celsius" }
         require(input.screenOffSuspendMs == null || input.screenOffSuspendMs in 0..input.observedMs) { "Invalid screen-off suspend interval" }
         require(input.lastSampleTime == null || input.lastSampleTime in input.startTime..end) { "Invalid session sample time" }
-        return input.copy(sessionId = identity(input.sessionId)!!, observationId = identity(input.observationId),
-            endTime = end, activeKey = null, source = source(text(input.source)!!), avgCurrentUa = current(input.avgCurrentUa),
+        return input.copy(sessionId = requiredIdentity(input.sessionId), observationId = identity(input.observationId),
+            endTime = end, activeKey = null, source = source(requiredText(input.source)), avgCurrentUa = current(input.avgCurrentUa),
             closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason),
             chargerType = text(input.chargerType), capacityConfidence = text(input.capacityConfidence), capacityBasis = text(input.capacityBasis),
             // An imported record never gets its end snapshot.

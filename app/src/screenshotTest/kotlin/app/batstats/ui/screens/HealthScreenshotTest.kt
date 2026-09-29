@@ -78,7 +78,7 @@ private fun apiBelow34() = HealthUiState(
 
 @Composable
 private fun HealthPreviewContent(state: HealthUiState) {
-    HealthContent(state = state, onBack = {}, onOpenDesignCapacity = {}, onOpenSession = {})
+    HealthContent(state = state, onBack = {}, onSetDesignCapacity = {}, onOpenSession = {})
 }
 
 @PreviewTest

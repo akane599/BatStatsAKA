@@ -42,7 +42,6 @@
     <string name="history_session_span_now">%1$s – now</string>
     <string name="history_session_detail">%1$s · %2$s</string>
     <string name="history_level_change">%1$s → %2$s</string>
-    <string name="history_percent">%1$s%%</string>
     <string name="history_type_charge">Charge</string>
     <string name="history_type_discharge">Discharge</string>
     <string name="history_type_plugged">Plugged in, not charging</string>

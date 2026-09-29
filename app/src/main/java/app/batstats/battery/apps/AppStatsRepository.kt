@@ -135,7 +135,7 @@ class AppStatsRepository(
     }
 
     private fun describe(failure: ShellRunner.Outcome.Failure): String = when (failure.mode) {
-        ShellRunner.Mode.NONE -> NO_ACCESS_MESSAGE
+        ShellRunner.Mode.NONE -> failure.message // Not reached: read() returns NoAccess for a NONE failure.
         ShellRunner.Mode.SHIZUKU ->
             "Shizuku is connected but the dump failed: ${failure.message}. Try again, or restart Shizuku."
         ShellRunner.Mode.ROOT ->
@@ -148,7 +148,5 @@ class AppStatsRepository(
         const val COMMAND = "dumpsys batterystats -c --charged"
         const val TTL_MS = 60_000L
         const val FORMAT_UNAVAILABLE = "Battery statistics format unavailable or incomplete"
-        const val NO_ACCESS_MESSAGE =
-            "Need Shizuku, root, or ADB-granted DUMP and PACKAGE_USAGE_STATS with usage app-op access. See Advanced statistics > Access setup."
     }
 }

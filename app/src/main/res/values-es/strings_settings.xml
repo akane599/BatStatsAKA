@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="settings_value_percent">%1$s %%</string>
 
     <string name="settings_dismiss">Cerrar</string>
     <string name="settings_save">Guardar</string>

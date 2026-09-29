@@ -331,9 +331,9 @@ object BatteryStatsParser {
                     else syncs += SyncStats(uid, label, pkgs, name, count, time, p.int(8), p.long(7))
                 }
                 "nt" -> {
-                    val bytes = (4..7).map { p.long(it) }
-                    if (bytes.any { it == null }) { rejected++; return@forEach }
-                    network += NetworkStats(uid, label, pkgs, bytes[0]!!, bytes[1]!!, bytes[2]!!, bytes[3]!!,
+                    val bytes = (4..7).mapNotNull { p.long(it) }
+                    if (bytes.size != 4) { rejected++; return@forEach }
+                    network += NetworkStats(uid, label, pkgs, bytes[0], bytes[1], bytes[2], bytes[3],
                         p.long(14), p.long(15), p.long(12)?.div(1000), p.int(13))
                 }
                 "sr" -> {
@@ -347,13 +347,13 @@ object BatteryStatsParser {
                         processes += ProcessStats(uid, label, pkgs, name, user, system, foreground, starts) else rejected++
                 }
                 "sgt", "wsgt" -> if (uid == 0) {
-                    val times = (4..8).map { p.long(it) }
-                    if (times.any { it == null }) { rejected++; return@forEach }
-                    val total = times.sumOf { it!!.toDouble() }
+                    val times = (4..8).mapNotNull { p.long(it) }
+                    if (times.size != 5) { rejected++; return@forEach }
+                    val total = times.sumOf { it.toDouble() }
                     times.forEachIndexed { level, time ->
-                        val fraction = if (total > 0) (time!! / total).toFloat() else 0f
-                        if (p[3] == "sgt") signals += SignalStrengthStats(level, time!!, fraction)
-                        else wifi += WifiSignalStats(level, time!!, fraction)
+                        val fraction = if (total > 0) (time / total).toFloat() else 0f
+                        if (p[3] == "sgt") signals += SignalStrengthStats(level, time, fraction)
+                        else wifi += WifiSignalStats(level, time, fraction)
                     }
                 }
                 "gble" -> if (uid == 0) {

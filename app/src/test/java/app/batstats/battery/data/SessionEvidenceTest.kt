@@ -19,6 +19,15 @@ class SessionEvidenceTest {
         assertFalse(SessionEvidence.isRecording(session().copy(activeKey = null), "current"))
         assertTrue(SessionEvidence.isRecording(session(), "current"))
     }
+    @Test fun measuredChargeNeedsThisAppsCoverageAndTheCounter() {
+        val measured = session().copy(deltaUah = -812_000, counterCoveredMs = 60_000)
+        assertEquals(-812_000L, SessionEvidence.measuredChargeUah(measured))
+        assertNull("Legacy row", SessionEvidence.measuredChargeUah(measured.copy(source = "legacy")))
+        assertNull("Imported legacy row", SessionEvidence.measuredChargeUah(measured.copy(source = "import:legacy")))
+        assertNull("No observation", SessionEvidence.measuredChargeUah(measured.copy(observationId = null)))
+        assertNull("Counter never covered it", SessionEvidence.measuredChargeUah(measured.copy(counterCoveredMs = 0)))
+        assertNull("Nothing moved", SessionEvidence.measuredChargeUah(measured.copy(deltaUah = null)))
+    }
     @Test fun chartsUseLastEvidenceWithoutExtendingStoppedObservationToNow() {
         val session = session()
         assertEquals(61_000L, SessionEvidence.lastEvidence(session))

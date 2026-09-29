@@ -63,7 +63,6 @@
     <string name="apps_empty_body">Android, istatistikleri baştan başladığından beri hiçbir uygulama kullanımı saymadı.</string>
 
     <!-- AppDetails -->
-    <string name="apps_details_back">Geri</string>
     <string name="apps_details_app_info">Uygulama bilgisi</string>
     <string name="apps_details_caption_since">%1$s itibarıyla · güncellendi %2$s</string>
     <string name="apps_details_battery">Kullanılan pil</string>
@@ -131,4 +130,6 @@
     <string name="apps_details_history_series">Kullanılan pil</string>
     <string name="apps_details_history_info_title">Pildeki oturumlar hakkında</string>
     <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. BatStats, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
+    <string name="apps_details_nothing_else">Bu uygulama için kaydedilen başka bir şey yok.</string>
+    <string name="apps_summary_capacity_source">Android tahmini</string>
 </resources>

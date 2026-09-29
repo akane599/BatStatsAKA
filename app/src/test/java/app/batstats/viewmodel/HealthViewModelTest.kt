@@ -147,6 +147,28 @@ class HealthViewModelTest {
         }
     }
 
+    @Test fun setDesignCapacityWritesTheOverrideAndAFailureShowsUntilTheNextWriteSucceeds() = runTest {
+        val vm = HealthViewModel(repo, computeDispatcher = dispatcher)
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+
+        vm.setDesignCapacity(4_800)
+        runCurrent()
+        assertEquals(listOf(4_800), repo.designWrites)
+        assertEquals(false, vm.state.value.designWriteFailed)
+
+        repo.failWrites = true
+        vm.setDesignCapacity(5_000)
+        runCurrent()
+        assertTrue(vm.state.value.designWriteFailed)
+
+        repo.failWrites = false
+        vm.setDesignCapacity(0)
+        runCurrent()
+        assertEquals(listOf(4_800, 0), repo.designWrites)
+        assertEquals(false, vm.state.value.designWriteFailed)
+    }
+
     private class FakeHealthRepository : HealthRepository {
         override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val sessions = MutableStateFlow<List<ChargeSession>>(emptyList())
@@ -175,6 +197,14 @@ class HealthViewModelTest {
         }
 
         override suspend fun cycleCount(): Int? = cycles
+
+        val designWrites = mutableListOf<Int>()
+        var failWrites = false
+
+        override suspend fun setDesignCapacity(mAh: Int) {
+            check(!failWrites) { "disk full" }
+            designWrites += mAh
+        }
     }
 
     private companion object {

@@ -2,7 +2,6 @@
 <!-- Apps and AppDetails (ui/screens/AppsScreen.kt, AppDetailsScreen.kt). Keys prefixed apps_. -->
 <resources>
     <!-- Units and joins (not translated). -->
-    <string name="apps_value_unit" translatable="false">%1$s %2$s</string>
     <string name="apps_unit_bytes" translatable="false">B</string>
     <string name="apps_unit_kb" translatable="false">kB</string>
     <string name="apps_unit_mb" translatable="false">MB</string>
@@ -73,7 +72,6 @@
     <string name="apps_empty_body">Android hasn\'t counted any app use since its stats last started over.</string>
 
     <!-- AppDetails -->
-    <string name="apps_details_back">Back</string>
     <string name="apps_details_app_info">App info</string>
     <string name="apps_details_caption_since">Since %1$s · updated %2$s</string>
     <string name="apps_details_battery">Battery used</string>
@@ -141,4 +139,6 @@
     <string name="apps_details_history_series">Battery used</string>
     <string name="apps_details_history_info_title">About sessions on battery</string>
     <string name="apps_details_history_info_body">Each bar is one time on battery in the last 30 days (up to 14), from unplug to plug-in. BatStats reads Android\'s stats at both ends when it has access, and keeps the top 30 apps of each.\n\nA session where this app wasn\'t in the top 30 shows as 0.</string>
+    <string name="apps_details_nothing_else">Nothing else recorded for this app.</string>
+    <string name="apps_summary_capacity_source">Android\'s estimate</string>
 </resources>

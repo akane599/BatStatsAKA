@@ -6,8 +6,10 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.text.format.DateFormat
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
@@ -107,13 +109,31 @@ class TimeAxisFormatter internal constructor(
 }
 
 /**
- * The default [TimeAxisFormatter]: current locale, default time zone, system 12/24-hour setting. It is rebuilt when
- * any of the three changes: the locale through the Configuration, the zone and the 12/24-hour setting through the
- * system's time-zone / time-changed broadcasts (neither is part of the Configuration), so a chart that nothing else
- * recomposes still re-formats.
+ * The app's one [TimeAxisFormatter], provided at the root by [ProvideTimeAxisFormatter] so its time-settings
+ * receiver is registered once, not per chart or label. Null outside a provider (previews, component tests).
+ */
+val LocalTimeAxisFormatter = compositionLocalOf<TimeAxisFormatter?> { null }
+
+/** Provides one shared formatter (and one broadcast receiver) to everything in [content]. */
+@Composable
+fun ProvideTimeAxisFormatter(content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalTimeAxisFormatter provides buildTimeAxisFormatter(), content = content)
+}
+
+/**
+ * The default [TimeAxisFormatter]: current locale, default time zone, system 12/24-hour setting — the shared one
+ * from [LocalTimeAxisFormatter] when provided, else one of its own (same rules).
  */
 @Composable
-fun rememberTimeAxisFormatter(): TimeAxisFormatter {
+fun rememberTimeAxisFormatter(): TimeAxisFormatter = LocalTimeAxisFormatter.current ?: buildTimeAxisFormatter()
+
+/**
+ * Rebuilt when the locale, the zone or the 12/24-hour setting changes: the locale through the Configuration, the zone
+ * and the 12/24-hour setting through the system's time-zone / time-changed broadcasts (neither is part of the
+ * Configuration), so a chart that nothing else recomposes still re-formats.
+ */
+@Composable
+private fun buildTimeAxisFormatter(): TimeAxisFormatter {
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0] ?: Locale.getDefault()
     timeSettingsRevision() // subscribes: a zone or 12/24-hour change recomposes this, and the reads below see it

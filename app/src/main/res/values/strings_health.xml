@@ -7,7 +7,6 @@
     <string name="health_title">Battery health</string>
     <string name="health_label">Health</string>
     <!-- The health figure: the number, then a quieter percent sign, in the locale's order -->
-    <string name="health_percent">%1$s%%</string>
     <string name="health_of_design">of design capacity</string>
     <string name="health_capacity">Capacity</string>
     <string name="health_design">Design</string>

@@ -92,11 +92,11 @@ class AppsViewModelTest {
         vm.onEvent(AppsEvent.SetSort(AppSort.CPU))
         vm.onEvent(AppsEvent.SetQuery("goo"))
         runCurrent()
-        assertEquals("goo", vm.query.value)
+        assertEquals("goo", vm.query)
 
         // A new ViewModel over the same saved state (process death) comes back with the same controls.
         val (restored, restoredState) = start(saved)
-        assertEquals("goo", restored.query.value)
+        assertEquals("goo", restored.query)
         with(restoredState()) {
             assertEquals(AppSort.CPU, sort)
             assertTrue(showSystem)

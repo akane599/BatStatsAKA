@@ -21,6 +21,7 @@ import app.batstats.ui.screens.now.NowContent
 import app.batstats.viewmodel.DrainState
 import app.batstats.viewmodel.Eta
 import app.batstats.viewmodel.HealthState
+import app.batstats.viewmodel.EtaPending
 import app.batstats.viewmodel.HeroState
 import app.batstats.viewmodel.NowUiState
 import app.batstats.viewmodel.Readouts
@@ -125,7 +126,13 @@ private fun charging() = discharging().copy(
 
 /** Monitoring stopped: no time left, the last on-battery window as it ended, the live trace from demand polls only. */
 private fun monitoringOff() = discharging().copy(
-    hero = HeroState(hasReading = true, level = 67, power = PowerState.DISCHARGING, monitoring = false),
+    hero = HeroState(
+        hasReading = true,
+        level = 67,
+        power = PowerState.DISCHARGING,
+        monitoring = false,
+        etaPending = EtaPending.NEEDS_MONITORING_LEFT,
+    ),
     trace = discharging().trace.copy(points = liveDrain.takeLast(90)),
     sinceUnplug = sinceUnplug.copy(current = false, endedAtMs = FIXED_TIME_MS - 40 * MINUTE),
 )
@@ -133,7 +140,13 @@ private fun monitoringOff() = discharging().copy(
 /** First launch: a reading, nothing recorded yet, no per-app data. */
 private fun empty() = NowUiState(
     nowMs = FIXED_TIME_MS,
-    hero = HeroState(hasReading = true, level = 80, power = PowerState.DISCHARGING, monitoring = false),
+    hero = HeroState(
+        hasReading = true,
+        level = 80,
+        power = PowerState.DISCHARGING,
+        monitoring = false,
+        etaPending = EtaPending.NEEDS_MONITORING_LEFT,
+    ),
     readouts = Readouts(currentMa = -388.0, powerW = -1.54, temperatureC = 29.8, voltageV = 3.97),
     trace = TraceState(window = TimeWindow(FIXED_TIME_MS - TraceRange.LIVE.spanMs, FIXED_TIME_MS), maxGapMs = 95_000L),
 )

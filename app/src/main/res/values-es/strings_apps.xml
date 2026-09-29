@@ -63,7 +63,6 @@
     <string name="apps_empty_body">Android no ha contado uso de ninguna app desde que sus estadísticas volvieron a empezar.</string>
 
     <!-- AppDetails -->
-    <string name="apps_details_back">Atrás</string>
     <string name="apps_details_app_info">Info. de la app</string>
     <string name="apps_details_caption_since">Desde %1$s · actualizado %2$s</string>
     <string name="apps_details_battery">Batería usada</string>
@@ -131,4 +130,6 @@
     <string name="apps_details_history_series">Batería usada</string>
     <string name="apps_details_history_info_title">Acerca de las sesiones con batería</string>
     <string name="apps_details_history_info_body">Cada barra es un periodo con batería de los últimos 30 días (hasta 14), desde que se desconecta hasta que se conecta. BatStats lee las estadísticas de Android en ambos extremos cuando tiene acceso y guarda las 30 primeras apps de cada uno.\n\nUna sesión en la que esta app no estuvo entre las 30 primeras aparece como 0.</string>
+    <string name="apps_details_nothing_else">No hay nada más registrado para esta app.</string>
+    <string name="apps_summary_capacity_source">Estimación de Android</string>
 </resources>

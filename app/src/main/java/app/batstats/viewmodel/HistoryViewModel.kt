@@ -90,7 +90,14 @@ data class SessionsState(
     val loading: Boolean = true,
     val failed: Boolean = false,
     val hasMore: Boolean = false,
-)
+) {
+    /** [rows] by the local day they started, newest day first (rows are newest first, so each day is contiguous). */
+    val days: List<SessionDay> = rows.groupBy { it.startDay }.map { (day, dayRows) -> SessionDay(day, dayRows) }
+}
+
+/** The sessions that started on one local [epochDay], newest first: one panel in History › Sessions. */
+@Immutable
+data class SessionDay(val epochDay: Long, val rows: List<SessionRow>)
 
 /**
  * One session: [endMs] is its end, the time now while it is being recorded, or its last saved reading when it was
@@ -119,6 +126,8 @@ sealed interface HistoryEvent {
     data class SelectFilter(val filter: SessionFilter) : HistoryEvent
     data object LoadMore : HistoryEvent
     data object Retry : HistoryEvent
+    /** From Now's Today card: Days, with today selected. */
+    data object ShowToday : HistoryEvent
     /** Navigation: the screen opens SessionDetails. */
     data class OpenSession(val sessionId: String) : HistoryEvent
 }
@@ -232,6 +241,10 @@ class HistoryViewModel(
             }
             HistoryEvent.LoadMore -> page.update { it.copy(limit = it.limit + PAGE_SIZE) }
             HistoryEvent.Retry -> page.update { it.copy(revision = it.revision + 1) }
+            HistoryEvent.ShowToday -> {
+                savedState[KEY_MODE] = HistoryMode.DAYS.name
+                savedState[KEY_DAY] = DailySummaryAggregator.epochDay(clock(), zone())
+            }
             is HistoryEvent.OpenSession -> Unit
         }
     }
@@ -313,7 +326,8 @@ internal object HistoryMapping {
             recording = recording,
             startLevel = session.startLevel,
             endLevel = session.endLevel,
-            chargeMah = session.deltaUah?.let { abs(it) / UAH_PER_MAH },
+            // Same rule as SessionDetails: legacy rows and sessions the counter never covered show no charge.
+            chargeMah = SessionEvidence.measuredChargeUah(session)?.let { abs(it) / UAH_PER_MAH },
             appUsage = if (session.type == SessionType.DISCHARGE) {
                 when (session.appUsageStatus) {
                     AppUsageStatus.NO_ACCESS -> AppUsageHint.NO_ACCESS

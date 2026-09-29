@@ -13,4 +13,13 @@
     <string name="component_app_unknown">Unknown app</string>
     <string name="component_info_open">About %1$s</string>
     <string name="component_no_value" translatable="false">—</string>
+    <string name="calibration_notice_title">Current readings corrected</string>
+    <string name="calibration_notice_unit">This phone reports current in milliamps. Values are now converted.</string>
+    <string name="calibration_notice_sign">This phone reports drain as positive. The sign is now flipped.</string>
+    <string name="calibration_notice_both">This phone reports current in milliamps and drain as positive. Values are now converted and flipped.</string>
+    <string name="calibration_notice_same">The current reading was checked against the charge counter and adjusted.</string>
+    <string name="calibration_notice_undo">Undo</string>
+    <string name="calibration_notice_keep">Keep</string>
+    <string name="percent_value">%1$s%%</string>
+    <string name="value_unit" translatable="false">%1$s %2$s</string>
 </resources>

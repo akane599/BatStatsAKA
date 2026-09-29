@@ -18,25 +18,21 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
 import androidx.compose.material.icons.rounded.Share
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,18 +44,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.measurement.CalibrationSource
-import app.batstats.battery.measurement.CurrentCalibration
 import app.batstats.battery.measurement.CurrentSign
 import app.batstats.battery.measurement.CurrentUnit
+import app.batstats.ui.components.CalibrationNotice
+import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
@@ -144,19 +139,12 @@ fun StatusContent(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.status_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.status_back))
-                    }
-                },
-            )
+            DetailTopBar(stringResource(R.string.status_title), onBack)
         },
     ) { padding ->
         val access: @Composable () -> Unit = {
             state.calibration.notice?.let { notice ->
-                CorrectionNotice(
+                CalibrationNotice(
                     notice,
                     onUndo = { onEvent(StatusEvent.UndoCalibration) },
                     onKeep = { onEvent(StatusEvent.KeepCalibration) },
@@ -188,42 +176,6 @@ fun StatusContent(
                 access()
                 rest()
             }
-        }
-    }
-}
-
-/** The pending correction, in the info family, with Undo and Keep (same wording as Now's notice). */
-@Composable
-private fun CorrectionNotice(
-    calibration: CurrentCalibration,
-    onUndo: () -> Unit,
-    onKeep: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val content = MaterialTheme.colorScheme.onTertiaryContainer
-    val body = when {
-        calibration.unit == CurrentUnit.MILLIAMPS && calibration.sign == CurrentSign.INVERTED -> R.string.status_notice_both
-        calibration.unit == CurrentUnit.MILLIAMPS -> R.string.status_notice_unit
-        calibration.sign == CurrentSign.INVERTED -> R.string.status_notice_sign
-        else -> R.string.status_notice_same
-    }
-    Panel(modifier, color = MaterialTheme.colorScheme.tertiaryContainer) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-            Icon(Icons.Rounded.Tune, contentDescription = null, tint = content)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xxs)) {
-                Text(
-                    stringResource(R.string.status_notice_title),
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = content,
-                )
-                Text(stringResource(body), style = MaterialTheme.typography.bodyMedium, color = content)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            val colors = ButtonDefaults.textButtonColors(contentColor = content)
-            TextButton(onClick = onUndo, colors = colors) { Text(stringResource(R.string.status_notice_undo)) }
-            TextButton(onClick = onKeep, colors = colors) { Text(stringResource(R.string.status_notice_keep)) }
         }
     }
 }
@@ -410,13 +362,7 @@ private fun IssuesPanel(state: StatusUiState, modifier: Modifier = Modifier) {
         title = stringResource(R.string.status_issues_title),
         trailing = { InfoSheet(stringResource(R.string.status_issues_info_title), stringResource(R.string.status_issues_info_body)) },
     ) {
-        if (state.issueLogUnavailable) {
-            Text(
-                stringResource(R.string.status_issues_log_unavailable),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
+        if (state.issueLogUnavailable) Notice(stringResource(R.string.status_issues_log_unavailable))
         if (issues.isEmpty()) {
             Row(horizontalArrangement = Arrangement.spacedBy(spacing.xs), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Rounded.CheckCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -488,14 +434,7 @@ private fun ReportPanel(shareUnavailable: Boolean, onShare: () -> Unit, modifier
             Icon(Icons.Rounded.Share, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Text(stringResource(R.string.status_report_share), modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
         }
-        if (shareUnavailable) {
-            Text(
-                stringResource(R.string.status_report_unavailable),
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
+        if (shareUnavailable) Notice(stringResource(R.string.status_report_unavailable))
     }
 }
 

@@ -102,6 +102,7 @@ class BatteryRepository(
         data class Sample(val capture: SamplerCapture) : Event
         data object Stop : Event
         data object Reset : Event
+        data object Backfill : Event
         data class Clear(val result: CompletableDeferred<Unit>) : Event
     }
 
@@ -147,6 +148,8 @@ class BatteryRepository(
                             finishSession("Observation reset by user")
                             seedDischargeEta()
                         }
+                        // With monitoring on, its start already ran it, before this generation's first capture.
+                        Event.Backfill -> if (generation == null) backfillDailySummaries()
                         is Event.Clear -> clear(event.result)
                     }
                 } catch (e: Exception) {
@@ -199,6 +202,14 @@ class BatteryRepository(
     suspend fun readOnce(): Realtime {
         val sample = sampler.readOnce() ?: return _realtime.value
         return Realtime(sample, calibration.state.value.effective)
+    }
+
+    /**
+     * The once-per-install daily-summary backfill at app start as well as at monitoring start, so an upgrade with
+     * monitoring off still fills History › Days. Runs on the writer; a no-op once done.
+     */
+    fun backfillDailySummariesOnce() {
+        events.trySend(Event.Backfill)
     }
 
     fun resetObservation() {
@@ -402,9 +413,9 @@ class BatteryRepository(
 
     /**
      * Once per install: rebuilds `daily_summaries` from the stored samples, one UTC day of rows at a
-     * time. It runs in the writer before this generation's first capture, so it never races the live
-     * day rows; it replaces the rows it computes, so an interrupted run simply repeats. A failure
-     * leaves the flag unset and retries at the next start.
+     * time. It runs in the writer at app start with no generation running, or before a generation's first
+     * capture, so it never races the live day rows; it replaces the rows it computes, so an interrupted run
+     * simply repeats. A failure leaves the flag unset and retries at the next app or monitoring start.
      */
     private suspend fun backfillDailySummaries() {
         if (samplerState.backfillDone) return
@@ -437,9 +448,18 @@ class BatteryRepository(
 
     private suspend fun cleanup(now: Long) {
         // Waits for the settings migration (v2 "auto-cleanup off" becomes Forever); throws if it failed.
-        retention.cutoff(now)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
+        val purgeFailure = try {
+            retention.cutoff(now)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e
+        }
+        // The size bound never waits on the retention setting: a failed cutoff still trims.
         sessionDao.boundStorage()
         batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.
+        purgeFailure?.let { throw it }
     }
 
     fun samplesBetween(start: Long, end: Long) = batteryDao.samplesBetween(start, end)

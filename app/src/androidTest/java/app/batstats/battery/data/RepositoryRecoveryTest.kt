@@ -14,7 +14,9 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.battery.data.db.BatteryDatabase
+import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.data.sampling.DailySummaryReplay
 import app.batstats.battery.data.sampling.KeyValueStore
 import app.batstats.battery.data.sampling.SamplingController
 import app.batstats.battery.diagnostics.DiagnosticCode
@@ -300,6 +302,26 @@ class RepositoryRecoveryTest {
         } catch (failure: Throwable) {
             throw AssertionError("Failed during $phase; observation=${fixture.repository.observation.value}; " +
                 "monitoring=${fixture.repository.isMonitoringFlow.value}; errors=${fixture.repository.error.value}", failure)
+        } finally { fixture.close() }
+    }
+
+    @Test fun dailySummaryBackfillRunsAtAppStartWithMonitoringOff(): Unit = runBlocking {
+        val fixture = Fixture()
+        try {
+            // An upgrade: this app's own stored samples, no daily rows yet, monitoring never started.
+            val start = System.currentTimeMillis() - 3_600_000
+            val generation = UUID.randomUUID().toString()
+            repeat(5) { i ->
+                fixture.database.batteryDao().insertSample(BatterySample(timestamp = start + i * 60_000L,
+                    levelPercent = 80 - i, status = BatteryManager.BATTERY_STATUS_DISCHARGING, plugged = 0,
+                    currentNowUa = -500_000, chargeCounterUah = 3_000_000L - i * 8_000, voltageMv = 4000,
+                    temperatureDeciC = 250, health = 2, screenOn = true, elapsedMs = 1_000_000L + i * 60_000,
+                    uptimeMs = 1_000_000L + i * 60_000, observationId = generation, source = DailySummaryReplay.SAMPLE_SOURCE))
+            }
+            assertEquals(0, fixture.database.dailySummaryDao().count())
+            fixture.repository.backfillDailySummariesOnce()
+            withTimeout(60_000) { while (fixture.database.dailySummaryDao().count() == 0) delay(50) }
+            assertFalse(fixture.repository.isMonitoringFlow.value)
         } finally { fixture.close() }
     }
 

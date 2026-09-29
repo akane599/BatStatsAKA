@@ -29,15 +29,13 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
-import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
-import androidx.navigation3.runtime.NavEntryDecorator
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import app.batstats.R
 import app.batstats.battery.apps.AppInfoSource
 import app.batstats.ui.NavGraph
 import app.batstats.ui.TestTags
 import app.batstats.ui.components.AppIconLoader
 import app.batstats.ui.components.LocalAppIconLoader
+import app.batstats.ui.components.chart.ProvideTimeAxisFormatter
 import app.batstats.ui.navigation.Routes
 import app.batstats.ui.navigation.openDestination
 import app.batstats.ui.navigation.rememberTopLevelBackStack
@@ -59,14 +57,16 @@ private val TAB_ITEMS = listOf(
  * The 4-tab shell: Now · History · Apps · Settings, bottom bar below [RAIL_MIN_WIDTH_DP], a rail
  * at or above it. [destination] is a `destination` deep-link extra value (see
  * `app.batstats.ui.navigation.Destinations`), applied once via [onDestinationHandled].
- * Every screen below gets app icons from [AppInfoSource] through [LocalAppIconLoader].
+ * Every screen below gets app icons from [AppInfoSource] through [LocalAppIconLoader] and one shared time formatter
+ * through `LocalTimeAxisFormatter`.
  */
 @Composable
 fun MainScreen(destination: String? = null, onDestinationHandled: () -> Unit = {}) {
     val appInfo: AppInfoSource = koinInject()
     val icons = remember(appInfo) { AppInfoIconLoader(appInfo) }
     CompositionLocalProvider(LocalAppIconLoader provides icons) {
-        TabShell(destination, onDestinationHandled)
+        // One time formatter (one time-settings receiver) for every chart and time label below.
+        ProvideTimeAxisFormatter { TabShell(destination, onDestinationHandled) }
     }
 }
 
@@ -86,10 +86,6 @@ private fun TabShell(destination: String?, onDestinationHandled: () -> Unit) {
         topLevelBackStack.onBack()
     }
 
-    val decorators: List<NavEntryDecorator<Any>> = listOf(
-        rememberSaveableStateHolderNavEntryDecorator(),
-        rememberViewModelStoreNavEntryDecorator(),
-    )
     val useRail = LocalConfiguration.current.screenWidthDp >= RAIL_MIN_WIDTH_DP
 
     // Each inset is owned by exactly one layer, so it's applied exactly once:
@@ -149,7 +145,6 @@ private fun TabShell(destination: String?, onDestinationHandled: () -> Unit) {
                     }
                     NavGraph(
                         topLevelBackStack,
-                        decorators,
                         Modifier
                             .weight(1f)
                             .padding(padding)
@@ -162,7 +157,6 @@ private fun TabShell(destination: String?, onDestinationHandled: () -> Unit) {
             } else {
                 NavGraph(
                     topLevelBackStack,
-                    decorators,
                     Modifier.padding(padding).consumeWindowInsets(padding),
                 )
             }

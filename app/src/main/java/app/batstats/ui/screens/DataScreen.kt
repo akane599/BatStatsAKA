@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteForever
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -26,14 +23,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -42,14 +36,14 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.data.HistoryLimits
+import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
+import app.batstats.ui.components.NoticeTone
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
@@ -139,14 +133,7 @@ fun DataContent(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.data_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.data_back))
-                    }
-                },
-            )
+            DetailTopBar(stringResource(R.string.data_title), onBack)
         },
     ) { padding ->
         val history: @Composable () -> Unit = {
@@ -226,7 +213,6 @@ private fun ExportPanel(state: DataUiState, onEvent: (DataEvent) -> Unit, modifi
                 ),
                 selectedIndex = state.range.ordinal,
                 onSelect = { onEvent(DataEvent.SelectRange(HistoryRange.entries[it])) },
-                contentDescription = period,
             )
         }
         Field(stringResource(R.string.data_export_include)) {
@@ -287,30 +273,27 @@ private fun SettingsBackupPanel(state: DataUiState, onEvent: (DataEvent) -> Unit
     }
 }
 
-/** The destructive row: one tonal tap target that opens the confirmation; the result shows under it. */
+/**
+ * The destructive action: what it deletes, then one error-tinted tonal button that opens the confirmation. The
+ * result shows under the button, outside it, so it is read on its own.
+ */
 @Composable
 private fun ClearPanel(state: DataUiState, onEvent: (DataEvent) -> Unit, modifier: Modifier = Modifier) {
-    val spacing = MaterialTheme.spacing
-    val enabled = state.idle
-    val tint = if (enabled) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(
-        onClick = { onEvent(DataEvent.RequestClear) },
-        modifier = modifier,
-        enabled = enabled,
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainer,
-    ) {
-        Column(Modifier.padding(spacing.md), verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                Icon(Icons.Rounded.DeleteForever, contentDescription = null, tint = tint)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing.xxs)) {
-                    Text(stringResource(R.string.data_clear_action), style = MaterialTheme.typography.titleMedium, color = tint)
-                    QuietText(stringResource(R.string.data_clear_hint))
-                }
-            }
-            val outcome = state.outcome
-            if (outcome != null && outcome.task == DataTask.CLEAR) OutcomeLine(outcome)
+    Panel(modifier) {
+        QuietText(stringResource(R.string.data_clear_hint))
+        FilledTonalButton(
+            onClick = { onEvent(DataEvent.RequestClear) },
+            enabled = state.idle,
+            colors = ButtonDefaults.filledTonalButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            ),
+        ) {
+            Icon(Icons.Rounded.DeleteForever, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Text(stringResource(R.string.data_clear_action), modifier = Modifier.padding(start = ButtonDefaults.IconSpacing))
         }
+        val outcome = state.outcome
+        if (outcome != null && outcome.task == DataTask.CLEAR) OutcomeLine(outcome)
     }
 }
 
@@ -325,13 +308,7 @@ private fun ClearDialog(step: ClearStep, onEvent: (DataEvent) -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
                 Text(stringResource(R.string.data_clear_body))
                 if (running) LinearProgressIndicator(Modifier.fillMaxWidth())
-                if (step == ClearStep.FAILED) {
-                    Text(
-                        stringResource(R.string.data_clear_failed),
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
+                if (step == ClearStep.FAILED) Notice(stringResource(R.string.data_clear_failed))
             }
         },
         confirmButton = {
@@ -403,26 +380,14 @@ private fun TaskStatus(state: DataUiState, vararg tasks: DataTask) {
     }
 }
 
-/** One sentence with a success or problem glyph; announced when it appears. */
+/** One sentence with a success or problem glyph (the app's quiet [Notice]); announced when it appears. */
 @Composable
 private fun OutcomeLine(outcome: DataOutcome, modifier: Modifier = Modifier) {
-    val failed = outcome is DataOutcome.Failed
-    Row(
-        modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xs),
-    ) {
-        Icon(
-            if (failed) Icons.Rounded.ErrorOutline else Icons.Rounded.CheckCircle,
-            contentDescription = null,
-            tint = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            outcomeText(outcome),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.bodyMedium,
-            color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
-        )
-    }
+    Notice(
+        outcomeText(outcome),
+        modifier,
+        tone = if (outcome is DataOutcome.Failed) NoticeTone.PROBLEM else NoticeTone.DONE,
+    )
 }
 
 @Composable

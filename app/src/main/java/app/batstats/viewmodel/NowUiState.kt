@@ -46,7 +46,27 @@ data class HeroState(
     val monitoring: Boolean = false,
     /** Android refused the foreground-service start; cleared by the next attempt or once monitoring runs. */
     val startBlocked: Boolean = false,
+    /** Why there is no [eta] yet, in words for this power state; null when nothing should be said. */
+    val etaPending: EtaPending? = null,
 )
+
+/**
+ * The line in place of a missing estimate: time left only while discharging, time to full only while charging, and
+ * nothing when plugged but not charging (e.g. full at 100 %) or when Android doesn't say.
+ */
+enum class EtaPending {
+    /** Discharging, monitoring: the writer's estimate is on its way. */
+    ESTIMATING_LEFT,
+
+    /** Charging, monitoring, and Android gave no time to full yet. */
+    ESTIMATING_FULL,
+
+    /** Discharging without monitoring: time left needs it. */
+    NEEDS_MONITORING_LEFT,
+
+    /** Charging without monitoring and without Android's own estimate. */
+    NEEDS_MONITORING_FULL,
+}
 
 /** [basis] is null when the stored name is unknown (e.g. written by a newer build). */
 @Immutable

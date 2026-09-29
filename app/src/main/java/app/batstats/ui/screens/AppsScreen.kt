@@ -36,13 +36,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SearchOff
-import androidx.compose.material3.ButtonColors
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -61,8 +58,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -84,6 +79,8 @@ import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
+import app.batstats.ui.components.NoticeTone
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
@@ -95,6 +92,8 @@ import app.batstats.ui.format.compactDuration
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.dayAwareTime
 import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.valueWithUnit
+import app.batstats.ui.format.formatMah
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -109,7 +108,6 @@ import app.batstats.viewmodel.ReadProblem
 import app.batstats.viewmodel.StatsProblem
 import app.batstats.viewmodel.StatsSummary
 import java.util.Locale
-import kotlin.math.abs
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
 
@@ -131,7 +129,6 @@ fun AppsScreen(
     vm: AppsViewModel = koinViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    val query by vm.query.collectAsStateWithLifecycle()
     val shizuku: ShizukuBridge = koinInject()
     LifecycleStartEffect(vm) {
         vm.onStart()
@@ -139,7 +136,7 @@ fun AppsScreen(
     }
     AppsContent(
         state = state,
-        query = query,
+        query = vm.query,
         onEvent = { event ->
             when (event) {
                 is AppsEvent.OpenApp -> onOpenApp(event.uid, event.packageName)
@@ -466,6 +463,8 @@ private fun StatsSummaryPanel(summary: StatsSummary, nowMs: Long, modifier: Modi
                 summary.capacityMah?.let { formatNumber(it, 0, locale) } ?: stringResource(R.string.component_no_value),
                 Modifier.weight(1f),
                 unit = summary.capacityMah?.let { stringResource(R.string.now_unit_mah) },
+                // Android's own full-capacity figure, not the app's measured one (Now's Health, Health).
+                supporting = summary.capacityMah?.let { stringResource(R.string.apps_summary_capacity_source) },
             )
         }
     }
@@ -526,8 +525,9 @@ private fun LoadingRows(modifier: Modifier = Modifier) {
 }
 
 /**
- * The last read's problem: an access banner (info family; "Set up access" opens Settings › Status, and Shizuku
- * can be asked directly when it runs) or a read failure (heat family) with Try again. Nothing when there's none.
+ * The last read's problem as the app's quiet [Notice]: an access hint (info accent; "Set up access" opens Settings ›
+ * Status, and Shizuku can be asked directly when it runs) or a read failure (error accent) with Try again. Nothing
+ * when there's none.
  */
 @Composable
 internal fun StatsProblemNotice(
@@ -540,51 +540,25 @@ internal fun StatsProblemNotice(
     when (problem) {
         null -> Unit
         is StatsProblem.NoAccess -> Notice(
-            icon = Icons.Rounded.Key,
-            title = stringResource(R.string.apps_access_title),
-            body = stringResource(accessBody(problem.problem)),
-            container = MaterialTheme.colorScheme.tertiaryContainer,
-            content = MaterialTheme.colorScheme.onTertiaryContainer,
+            message = stringResource(accessBody(problem.problem)),
             modifier = modifier,
-        ) { colors ->
+            title = stringResource(R.string.apps_access_title),
+            tone = NoticeTone.INFO,
+            icon = Icons.Rounded.Key,
+            framed = true,
+        ) {
             if (problem.problem == AccessProblem.SHIZUKU_NOT_ALLOWED) {
-                TextButton(onClick = onAllowShizuku, colors = colors) { Text(stringResource(R.string.apps_access_allow)) }
+                TextButton(onClick = onAllowShizuku) { Text(stringResource(R.string.apps_access_allow)) }
             }
-            TextButton(onClick = onSetUp, colors = colors) { Text(stringResource(R.string.apps_access_set_up)) }
+            TextButton(onClick = onSetUp) { Text(stringResource(R.string.apps_access_set_up)) }
         }
         is StatsProblem.Failed -> Notice(
-            icon = Icons.Rounded.ErrorOutline,
-            title = stringResource(R.string.apps_failed_title),
-            body = stringResource(failedBody(problem.problem)),
-            container = MaterialTheme.colorScheme.errorContainer,
-            content = MaterialTheme.colorScheme.onErrorContainer,
+            message = stringResource(failedBody(problem.problem)),
             modifier = modifier,
-        ) { colors ->
-            TextButton(onClick = onRetry, colors = colors) { Text(stringResource(R.string.apps_retry)) }
-        }
-    }
-}
-
-@Composable
-private fun Notice(
-    icon: ImageVector,
-    title: String,
-    body: String,
-    container: Color,
-    content: Color,
-    modifier: Modifier = Modifier,
-    actions: @Composable (ButtonColors) -> Unit,
-) {
-    Panel(modifier.fillMaxWidth(), color = container) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-            Icon(icon, contentDescription = null, tint = content)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xxs)) {
-                Text(title, modifier = Modifier.semantics { heading() }, style = MaterialTheme.typography.titleSmall, color = content)
-                Text(body, style = MaterialTheme.typography.bodyMedium, color = content)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            actions(ButtonDefaults.textButtonColors(contentColor = content))
+            title = stringResource(R.string.apps_failed_title),
+            framed = true,
+        ) {
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.apps_retry)) }
         }
     }
 }
@@ -620,11 +594,6 @@ private fun sortValueText(value: Double, sort: AppSort): String = when (sort) {
 
 // Shared with AppDetails.
 
-/** mAh with one decimal below 10, so small users don't all read "0". */
-internal fun formatMah(value: Double, locale: Locale): String = formatNumber(value, if (abs(value) < 10) 1 else 0, locale)
-
-@Composable
-internal fun valueWithUnit(value: String, unit: String): String = stringResource(R.string.apps_value_unit, value, unit)
 
 /**
  * Now's compact duration ("1:24" h, "12" min), plus whole seconds under a minute: wakelocks, jobs and CPU time are
@@ -678,7 +647,7 @@ internal fun rememberDurationFormatter(): ValueFormatter {
         R.string.now_unit_minutes to stringResource(R.string.now_unit_minutes),
         R.string.apps_unit_seconds to stringResource(R.string.apps_unit_seconds),
     )
-    val template = stringResource(R.string.apps_value_unit)
+    val template = stringResource(R.string.value_unit)
     return remember(locale, units, template) {
         ValueFormatter { ms ->
             val duration = appDuration(ms.toLong(), locale)

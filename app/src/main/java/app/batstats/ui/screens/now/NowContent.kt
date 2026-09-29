@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import app.batstats.R
+import app.batstats.ui.components.CalibrationNotice
 import app.batstats.ui.components.chart.ChartScrubState
 import app.batstats.ui.components.chart.rememberChartScrubState
 import app.batstats.ui.theme.spacing

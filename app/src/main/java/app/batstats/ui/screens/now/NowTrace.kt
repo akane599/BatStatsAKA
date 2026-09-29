@@ -21,7 +21,7 @@ import app.batstats.R
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
-import app.batstats.ui.components.StatCellDefaults
+import app.batstats.ui.components.statCellFitsInline
 import app.batstats.ui.components.chart.ChartDefaults
 import app.batstats.ui.components.chart.ChartScrubState
 import app.batstats.ui.components.chart.ChartSeries
@@ -159,17 +159,11 @@ internal fun ReadoutGrid(readouts: Readouts, useFahrenheit: Boolean, modifier: M
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val quarter = (maxWidth - spacing.md * (READOUTS - 1)) / READOUTS
         val lines = cells.map { ReadoutLine(it.label, it.indicator != null, it.template, it.unit) }
-        val fits = remember(lines, quarter, labelStyle, valueStyle, density) {
+        val fits = remember(lines, quarter, labelStyle, valueStyle, density, spacing) {
             val available = with(density) { quarter.toPx() }
-            // StatCell's indicator dot and its gap (8 + 8 dp); the unit sits 4 dp after the value.
-            val indicator = with(density) { (spacing.xs + spacing.xs).toPx() }
-            val unitGap = with(density) { spacing.xxs.toPx() }
-            val unitStyle = valueStyle.copy(fontSize = valueStyle.fontSize * StatCellDefaults.UnitScale)
+            // StatCell's own measure (dot, gaps, unit scale), so the grid choice follows the cell.
             lines.all { line ->
-                val label = measurer.measure(line.label, labelStyle).size.width + if (line.dot) indicator else 0f
-                val value = measurer.measure(line.template, valueStyle).size.width + unitGap +
-                    measurer.measure(line.unit, unitStyle).size.width
-                label <= available && value <= available
+                statCellFitsInline(measurer, density, spacing, line.label, line.dot, line.template, line.unit, labelStyle, valueStyle, available)
             }
         }
         if (fits) {

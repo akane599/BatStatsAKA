@@ -53,6 +53,23 @@ class TopLevelBackStackTest {
     }
 
     @Test
+    fun `openRoot switches to a tab at its root and leaves the other stacks alone`() {
+        backStacks.getValue(Routes.History).add(Routes.SessionDetails("42"))
+        backStacks.getValue(Routes.Now).add(Routes.Health)
+
+        subject.openRoot(Routes.History)
+
+        assertEquals(Routes.History, subject.selectedTab)
+        assertEquals(listOf(Routes.History), backStacks.getValue(Routes.History).toList())
+        assertEquals(listOf(Routes.Now, Routes.Health), backStacks.getValue(Routes.Now).toList())
+    }
+
+    @Test
+    fun `stack is each tab's own back stack`() {
+        TOP_LEVEL_TABS.forEach { assertEquals(backStacks.getValue(it), subject.stack(it)) }
+    }
+
+    @Test
     fun `navigate pushes onto the currently selected tab`() {
         selected = Routes.Apps
 

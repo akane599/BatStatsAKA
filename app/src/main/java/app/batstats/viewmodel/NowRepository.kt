@@ -30,7 +30,10 @@ interface NowRepository {
     val calibration: StateFlow<CalibrationState>
     val settings: Flow<AppSettings>
 
-    /** The app-wide design capacity (Settings override, else sysfs read once through root), shared with Health. */
+    /**
+     * The app-wide design capacity shared with Health, only when already known (the Settings override, or a root
+     * read Health or Status started): Now never starts the root read itself.
+     */
     val design: Flow<DesignCapacityReading>
 
     /** The last privileged dump's per-app usage, or null; reading it never starts a dump. */
@@ -69,7 +72,7 @@ class DefaultNowRepository(
     override val realtime = repository.realtimeFlow
     override val calibration = calibrationStore.state
     override val settings = settingsRepository.flow
-    override val design = designCapacity.design
+    override val design = designCapacity.known
     override val cachedAppUsage = appStats.cached.map { it?.toAppUsageSnapshot() }
     override val activeSession = repository.activeSessionFlow
     override fun samplesSince(fromMs: Long) = repository.samplesBetween(fromMs, Long.MAX_VALUE)

@@ -21,6 +21,12 @@ private const val MAX_TIME_TICKS = 7
 /** Tick rows are at least this many label heights apart. */
 private const val Y_TICK_SPACING = 1.8f
 
+/**
+ * Text layouts a chart keeps: every axis label (up to 6 value rows, 7 time ticks, legend and scrub readout) must stay
+ * cached while the live window slides every 2 s; the measurer's default of 8 would re-layout most of them each frame.
+ */
+internal const val CHART_TEXT_CACHE_SIZE = 32
+
 /** Time labels are at least this many gaps apart. */
 private const val TIME_LABEL_SPACING = 3
 

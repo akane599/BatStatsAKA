@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Now screen (ui/screens/now/**). Machine-quality translation; flagged for native review. -->
 <resources>
-    <string name="now_level">%1$s %%</string>
 
     <string name="now_duration_days_hours">%1$s d %2$s h</string>
     <string name="now_duration_hours_minutes">%1$s h %2$s min</string>
@@ -90,11 +89,5 @@
     <string name="now_apps_empty">Todavía no hay datos por app.</string>
     <string name="now_apps_open">Abrir Apps</string>
 
-    <string name="now_calibration_title">Lecturas de corriente corregidas</string>
-    <string name="now_calibration_unit">Este teléfono informa la corriente en miliamperios. Ahora los valores se convierten.</string>
-    <string name="now_calibration_sign">Este teléfono informa el consumo como positivo. Ahora el signo se invierte.</string>
-    <string name="now_calibration_both">Este teléfono informa la corriente en miliamperios y el consumo como positivo. Ahora los valores se convierten e invierten.</string>
-    <string name="now_calibration_same">La lectura de corriente se comprobó con el contador de carga y se ajustó.</string>
-    <string name="now_calibration_undo">Deshacer</string>
-    <string name="now_calibration_keep">Mantener</string>
+    <string name="now_eta_estimating_full">Calculando el tiempo hasta llenar</string>
 </resources>

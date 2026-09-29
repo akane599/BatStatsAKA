@@ -1,12 +1,7 @@
 package app.batstats.ui.components.chart
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.batstats.ui.ComponentPreviews
@@ -232,70 +227,19 @@ fun EmptyBarChartPreview() {
 @PreviewTest
 @ComponentPreviews
 @Composable
-fun SparklineAndBreakdownPreview() {
+fun BreakdownBarPreview() {
     val colors = MaterialTheme.chartColors
     ScreenshotTheme {
-        Column(
-            Modifier.padding(MaterialTheme.spacing.md),
-            verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
-        ) {
-            Panel(title = "Today") {
-                Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Level", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Sparkline(sessionLevel, Modifier.fillMaxWidth())
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text("Power", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Sparkline(liveCurrent, Modifier.fillMaxWidth(), style = ChartDefaults.directionStyle(filled = false))
-                    }
-                }
-            }
-            Panel(title = "Time on battery") {
-                BreakdownBar(
-                    segments = listOf(
-                        BreakdownSegment("Foreground", 72.0, colors.drain),
-                        BreakdownSegment("Background", 34.0, colors.voltage),
-                        BreakdownSegment("Cached", 8.0, colors.axisLabel),
-                    ),
-                    format = { minutes -> "${minutes.toInt()} min" },
-                )
-            }
+        Panel(Modifier.padding(MaterialTheme.spacing.md), title = "Time on battery") {
+            BreakdownBar(
+                segments = listOf(
+                    BreakdownSegment("Foreground", 72.0, colors.drain),
+                    BreakdownSegment("Background", 34.0, colors.voltage),
+                    BreakdownSegment("Cached", 8.0, colors.axisLabel),
+                ),
+                format = { minutes -> "${minutes.toInt()} min" },
+            )
         }
     }
 }
 
-/** Level with a gap marker and a sampling hole (maxGapMs), a signed trace with gaps, and an empty sparkline. */
-@PreviewTest
-@ComponentPreviews
-@Composable
-fun SparklineGapsAndEmptyPreview() {
-    val levelWithGaps = sessionLevel.mapIndexed { i, point -> if (i == 40) point.copy(value = null) else point }
-        .filterIndexed { i, _ -> i !in 60..75 }
-    val label = @Composable { text: String ->
-        Text(text, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-    ScreenshotTheme {
-        Panel(Modifier.padding(MaterialTheme.spacing.md), title = "Sparklines") {
-            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
-                Column(Modifier.weight(1f)) {
-                    label("Gaps")
-                    Sparkline(levelWithGaps, Modifier.fillMaxWidth(), maxGapMs = 5 * MINUTE)
-                }
-                Column(Modifier.weight(1f)) {
-                    label("Signed, gaps")
-                    Sparkline(
-                        liveCurrent.filterIndexed { i, _ -> i !in 100..130 },
-                        Modifier.fillMaxWidth(),
-                        style = ChartDefaults.directionStyle(filled = false),
-                        maxGapMs = MINUTE,
-                    )
-                }
-                Column(Modifier.weight(1f)) {
-                    label("Empty")
-                    Sparkline(emptyList(), Modifier.fillMaxWidth())
-                }
-            }
-        }
-    }
-}

@@ -3,6 +3,7 @@ package app.batstats.battery.apps
 import app.batstats.battery.apps.SessionSnapshotCollector.Companion.BASELINE_DEBOUNCE_MS
 import app.batstats.battery.apps.SessionSnapshotCollector.Companion.END_DEBOUNCE_MS
 import app.batstats.battery.apps.SessionSnapshotCollector.Companion.STARTUP_SWEEP_DELAY_MS
+import app.batstats.battery.apps.SessionSnapshotCollector.Companion.SWEEP_DEBOUNCE_MS
 import app.batstats.battery.data.PowerTransition
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.PowerState
@@ -241,6 +242,40 @@ class SessionSnapshotCollectorTest {
         assertNull("Legacy rows stay without a status", store.status("legacy"))
         assertEquals(AppUsageStatus.PENDING, store.status("B"))
         assertNotNull(store.baselines["B"])
+    }
+
+    @Test fun aResetThatReopensTheDischargeSessionFailsTheClosedOneWithoutATransition() = runTest {
+        store.openDischarge("A")
+        start()
+        advance(STARTUP_SWEEP_DELAY_MS)
+        // Reset: the repository closes A (no open session until the next capture), then opens B. No transition.
+        store.sessions.getValue("A").closed = true
+        store.open.value = null
+        runCurrent()
+        store.openDischarge("B")
+        runCurrent()
+        advance(SWEEP_DEBOUNCE_MS - 1)
+        assertEquals(AppUsageStatus.PENDING, store.status("A"))
+        advance(1)
+        assertEquals(AppUsageStatus.FAILED, store.status("A"))
+        assertEquals("The new open session is not swept", AppUsageStatus.PENDING, store.status("B"))
+    }
+
+    @Test fun aPlugInSeenAsAnOpenSessionChangeBeforeItsTransitionStillGetsItsEnd() = runTest {
+        store.openDischarge("A")
+        start()
+        stats.results += ready(100, 1 to 3.0)
+        // The open-session query answers before the transition arrives.
+        store.sessions.getValue("A").closed = true
+        store.openCharge("C")
+        runCurrent()
+        advance(1_000)
+        assertTrue(transitions.tryEmit(PowerTransition(PowerState.DISCHARGING, PowerState.CHARGING, 0, 0, "A", "C")))
+        runCurrent()
+        advance(SWEEP_DEBOUNCE_MS)
+        assertEquals("Reserved by its transition: the sweep leaves it", AppUsageStatus.PENDING, store.status("A"))
+        advance(END_DEBOUNCE_MS)
+        assertEquals(AppUsageStatus.READY, store.status("A"))
     }
 
     @Test fun aSessionThatAlreadyHasABaselineKeepsItAcrossARestart() = runTest {

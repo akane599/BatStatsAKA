@@ -9,11 +9,14 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.flow.transformLatest
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 
 /** The design capacity the health % is computed against, and where it comes from. */
@@ -33,9 +36,10 @@ val DesignCapacityReading.uah: Long? get() = (this as? DesignCapacityReading.Kno
 
 /**
  * One app-wide design capacity for Now's Health card and the Health screen, so both show the same health %: the
- * Settings override (mAh; 0 or an invalid value = auto) wins; on auto, sysfs `charge_full_design` is read once through
- * root ([readChargeFullDesignUah]) and cached. It is re-read only when the override switches back to auto, never per
- * screen or subscriber, so a root prompt can't repeat and a reopened screen doesn't flash "Checking". A value outside
+ * Settings override (mAh; 0 or an invalid value = auto) wins; on auto, sysfs `charge_full_design` is read through
+ * root ([readChargeFullDesignUah]) and cached. Only [design] (Health, an explicit path) starts that read, once; it is
+ * re-read when the override switches back to auto or after [recheck], never per screen or subscriber, so a root
+ * prompt can't repeat and a reopened screen doesn't flash "Checking". [known] (Now) never reads. A value outside
  * [CapacityEstimator.PLAUSIBLE_FULL_UAH] (e.g. mAh in the µAh field) or a failed read is [DesignCapacityReading.Unknown].
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -44,20 +48,42 @@ class DesignCapacitySource(
     private val readChargeFullDesignUah: suspend () -> Long?,
     scope: CoroutineScope,
 ) {
+    private val overrideMah = settings.map { it.designCapacityOverrideMah }.distinctUntilChanged()
+
+    /** The last sysfs result; null before the first read of this process has answered. */
+    private val lastRead = MutableStateFlow<DesignCapacityReading?>(null)
+
+    /** Bumped by [recheck]: [design] reads sysfs again, on auto. */
+    private val rereads = MutableStateFlow(0)
+
     /** Starts with the first subscriber and then stays up in [scope], replaying the latest reading. */
-    val design: Flow<DesignCapacityReading> = settings
-        .map { it.designCapacityOverrideMah }
-        .distinctUntilChanged()
-        .transformLatest { overrideMah ->
-            if (overrideMah > 0) {
-                emit(DesignCapacityReading.Known(overrideMah * UAH_PER_MAH, fromSettings = true))
+    val design: Flow<DesignCapacityReading> = combine(overrideMah, rereads, ::Pair)
+        .transformLatest { (mah, _) ->
+            if (mah > 0) {
+                emit(DesignCapacityReading.Known(mah * UAH_PER_MAH, fromSettings = true))
             } else {
                 emit(DesignCapacityReading.Checking)
-                emit(readSysfs())
+                emit(readSysfs().also { lastRead.value = it })
             }
         }
         .distinctUntilChanged()
         .shareIn(scope, SharingStarted.Lazily, replay = 1)
+
+    /**
+     * The design capacity only when it is already known — the override, or a root read [design] has made — and
+     * [DesignCapacityReading.Unknown] otherwise. Never starts privileged work: Now reads this.
+     */
+    val known: Flow<DesignCapacityReading> = combine(overrideMah, lastRead) { mah, read ->
+        if (mah > 0) DesignCapacityReading.Known(mah * UAH_PER_MAH, fromSettings = true) else read ?: DesignCapacityReading.Unknown
+    }.distinctUntilChanged()
+
+    /**
+     * The user asked to check access again (Status "Check again", after the root cache was reset): an Unknown sysfs
+     * reading is read again, since a slow root grant can answer after the first read timed out. A known one is kept.
+     */
+    fun recheck() {
+        if (lastRead.value == DesignCapacityReading.Unknown) rereads.update { it + 1 }
+    }
 
     private suspend fun readSysfs(): DesignCapacityReading {
         val uah = try {

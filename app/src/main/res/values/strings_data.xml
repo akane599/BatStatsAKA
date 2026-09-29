@@ -2,7 +2,6 @@
 <!-- Settings › Data (ui/screens/DataScreen.kt). "Readings" are battery samples. -->
 <resources>
     <string name="data_title">Data</string>
-    <string name="data_back">Back</string>
 
     <!-- Stored history -->
     <string name="data_stored_title">Stored history</string>

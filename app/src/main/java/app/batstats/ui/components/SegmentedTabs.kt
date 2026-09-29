@@ -23,11 +23,13 @@ import app.batstats.ui.theme.spacing
 /**
  * A quiet single-choice row (ranges, modes): equal-width text options, the selected one on a raised pill
  * (`secondaryContainer`, `shapes.small`), no track or outline. Each option is a 48 dp tab target with selected state
- * for TalkBack; the row is a selectable group described by [contentDescription].
+ * for TalkBack; the row is a selectable group.
  *
  * @param labels short sentence-case labels ("Live", "1h"; "Days", "Sessions"), one line each; the options share the
  *   width equally, so a label longer than its share ellipsizes (use chips for long or many options).
  * @param selectedIndex the selected option; any other value selects none.
+ * @param contentDescription names the group for TalkBack when nothing visible does ("Time range"); leave it null when
+ *   a visible label sits right above the row, or TalkBack reads the name twice.
  */
 @Composable
 fun SegmentedTabs(

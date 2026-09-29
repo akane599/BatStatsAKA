@@ -4,7 +4,6 @@
      at the current font size and shade width, so keep each shorter form really shorter. -->
 <resources>
     <!-- First lines: "−612 mA · 2.4 W" with "78%" trailing; the plain-text title "78% · On battery" -->
-    <string name="notification_percent">%1$s%%</string>
     <string name="notification_headline">%1$s · %2$s</string>
     <string name="notification_title">%1$s · %2$s</string>
     <string name="notification_waiting">Waiting for a battery reading</string>

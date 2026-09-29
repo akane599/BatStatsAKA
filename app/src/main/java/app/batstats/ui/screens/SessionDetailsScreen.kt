@@ -17,9 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Key
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
@@ -30,7 +30,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -61,8 +60,11 @@ import app.batstats.battery.service.SamplingDemand
 import app.batstats.ui.components.AppIconPlaceholder
 import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.AppRow
+import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
+import app.batstats.ui.components.NoticeTone
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
@@ -80,17 +82,17 @@ import app.batstats.ui.format.compactDuration
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.dayAwareTime
 import app.batstats.ui.format.durationAnnotated
-import app.batstats.ui.format.durationString
 import app.batstats.ui.format.formatNumber
 import app.batstats.ui.format.formatRate
 import app.batstats.ui.format.styledTemplate
 import app.batstats.ui.format.unitSpan
+import app.batstats.ui.format.percentUnit
+import app.batstats.ui.format.mahText
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericDisplay
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.spacing
-import app.batstats.viewmodel.DrainState
 import app.batstats.viewmodel.SessionApps
 import app.batstats.viewmodel.SessionCharts
 import app.batstats.viewmodel.SessionDetailsEvent
@@ -114,12 +116,14 @@ private const val PARTIAL_COVERAGE = 0.9
 /**
  * SessionDetails, wired: the ViewModel (Koin, keyed to the session id by the caller), 2 s sampling while a
  * **recording** session is shown and the screen is started (released at onStop, and as soon as the session ends), and
- * the way back after a delete. [onOpenApp] opens an app's details from the per-app list.
+ * the way back after a delete. [onOpenApp] opens an app's details from the per-app list; [onOpenAccessSetup] opens
+ * Settings › Status from its no-access line.
  */
 @Composable
 fun SessionDetailsScreen(
     onBack: () -> Unit,
     onOpenApp: (uid: Int, packageName: String) -> Unit,
+    onOpenAccessSetup: () -> Unit,
     vm: SessionDetailsViewModel,
     modifier: Modifier = Modifier,
 ) {
@@ -139,6 +143,7 @@ fun SessionDetailsScreen(
             when (event) {
                 SessionDetailsEvent.Back -> onBack()
                 is SessionDetailsEvent.OpenApp -> onOpenApp(event.uid, event.packageName)
+                SessionDetailsEvent.OpenAccessSetup -> onOpenAccessSetup()
                 else -> vm.onEvent(event)
             }
         },
@@ -173,22 +178,17 @@ fun SessionDetailsContent(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(ready?.summary?.type?.let(::typeLabel) ?: R.string.sessiondetails_title)) },
-                navigationIcon = {
-                    IconButton(onClick = { onEvent(SessionDetailsEvent.Back) }) {
-                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.sessiondetails_back))
+            DetailTopBar(
+                title = stringResource(ready?.summary?.type?.let(::typeLabel) ?: R.string.sessiondetails_title),
+                onBack = { onEvent(SessionDetailsEvent.Back) },
+            ) {
+                // Hidden while recording: the writer would re-create the session at its next save.
+                if (canDelete) {
+                    IconButton(onClick = { confirmDelete = true }) {
+                        Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.sessiondetails_delete))
                     }
-                },
-                actions = {
-                    // Hidden while recording: the writer would re-create the session at its next save.
-                    if (canDelete) {
-                        IconButton(onClick = { confirmDelete = true }) {
-                            Icon(Icons.Rounded.Delete, contentDescription = stringResource(R.string.sessiondetails_delete))
-                        }
-                    }
-                },
-            )
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -252,6 +252,7 @@ private fun SessionPage(
                 apps,
                 referenceMs = summary.endedAtMs,
                 onOpenApp = { uid, packageName -> onEvent(SessionDetailsEvent.OpenApp(uid, packageName)) },
+                onOpenAccessSetup = { onEvent(SessionDetailsEvent.OpenAccessSetup) },
                 modifier = Modifier.fillMaxWidth(),
             )
         }
@@ -410,7 +411,7 @@ private fun ChartPanels(charts: SessionCharts, recording: Boolean, useFahrenheit
     val currentLabel = stringResource(R.string.sessiondetails_series_current)
     val levelLabel = stringResource(R.string.sessiondetails_series_level)
     val milliamps = stringResource(R.string.now_unit_ma)
-    val percent = stringResource(R.string.now_unit_percent)
+    val percent = percentUnit().sign
     val direction = ChartDefaults.directionStyle()
     val levelStyle = ChartDefaults.solidStyle(MaterialTheme.chartColors.level)
     val main = remember(charts.currentMa, charts.level, currentLabel, levelLabel, milliamps, percent, direction, levelStyle) {
@@ -474,37 +475,10 @@ private fun DrainPanel(drain: SessionInsights.Drain, modifier: Modifier = Modifi
         StatCell(
             stringResource(R.string.sessiondetails_deep_sleep),
             drain.deepSleepPercent?.let { formatNumber(it, 0, currentLocale()) } ?: stringResource(R.string.component_no_value),
-            unit = stringResource(R.string.now_unit_percent),
+            unit = percentUnit().sign,
+            unitFirst = percentUnit().first,
             supporting = if (drain.deepSleepScreenOff) stringResource(R.string.sessiondetails_deep_sleep_screen_off) else null,
         )
-    }
-}
-
-/**
- * %/h when the capacity is known, else the average mA; the other figure and the duration go underneath. A screen
- * state the session never had is a bare dash.
- */
-@Composable
-private fun DrainCell(label: String, drain: DrainState, modifier: Modifier = Modifier) {
-    val locale = currentLocale()
-    val noValue = stringResource(R.string.component_no_value)
-    if (drain.durationMs <= 0) {
-        StatCell(label, noValue, modifier)
-        return
-    }
-    val duration = durationString(drain.durationMs)
-    val milliamps = drain.currentMa?.let { formatNumber(it, 0, locale) }
-    val perHour = drain.percentPerHour
-    if (perHour != null) {
-        StatCell(
-            label,
-            formatRate(perHour, locale),
-            modifier,
-            unit = stringResource(R.string.now_unit_percent_per_hour),
-            supporting = stringResource(R.string.sessiondetails_drain_supporting, milliamps ?: noValue, duration),
-        )
-    } else {
-        StatCell(label, milliamps ?: noValue, modifier, unit = stringResource(R.string.now_unit_ma), supporting = duration)
     }
 }
 
@@ -562,13 +536,15 @@ private fun ChargingPanel(charging: SessionInsights.Charging, useFahrenheit: Boo
 
 /**
  * The per-app breakdown: its basis, then icon · label · mAh · share rows (each opens the app), the folded tail, and
- * "Show all" past [COLLAPSED_APPS]. Without rows, one line says why ([SessionApps] status).
+ * "Show all" past [COLLAPSED_APPS]. Without rows, one line says why ([SessionApps] status); without access it offers
+ * the access setup, as Apps does.
  */
 @Composable
 private fun AppsPanel(
     apps: SessionApps,
     referenceMs: Long,
     onOpenApp: (uid: Int, packageName: String) -> Unit,
+    onOpenAccessSetup: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = MaterialTheme.spacing
@@ -583,8 +559,15 @@ private fun AppsPanel(
             is SessionApps.Ready -> AppRows(apps, referenceMs, onOpenApp, gutter)
             SessionApps.Pending -> QuietText(stringResource(R.string.sessiondetails_apps_pending), gutter)
             SessionApps.Collecting -> QuietText(stringResource(R.string.sessiondetails_apps_collecting), gutter)
-            SessionApps.NoAccess -> QuietText(stringResource(R.string.sessiondetails_apps_no_access), gutter)
-            SessionApps.Failed -> QuietText(stringResource(R.string.sessiondetails_apps_failed), gutter)
+            SessionApps.NoAccess -> Notice(
+                stringResource(R.string.sessiondetails_apps_no_access),
+                gutter,
+                tone = NoticeTone.INFO,
+                icon = Icons.Rounded.Key,
+            ) {
+                TextButton(onClick = onOpenAccessSetup) { Text(stringResource(R.string.apps_access_set_up)) }
+            }
+            SessionApps.Failed -> Notice(stringResource(R.string.sessiondetails_apps_failed), gutter)
             SessionApps.NotRecorded -> QuietText(stringResource(R.string.sessiondetails_apps_not_recorded), gutter)
             SessionApps.Empty -> QuietText(stringResource(R.string.sessiondetails_apps_empty), gutter)
         }
@@ -599,8 +582,6 @@ private fun AppRows(
     gutter: Modifier,
 ) {
     var expanded by rememberSaveable { mutableStateOf(false) }
-    val locale = currentLocale()
-    val mah = stringResource(R.string.now_unit_mah)
     val capturedAt = apps.capturedAtMs
     val caption = if (apps.soFar && capturedAt != null) {
         stringResource(R.string.sessiondetails_apps_so_far, dayAwareTime(rememberTimeAxisFormatter(), capturedAt, referenceMs))
@@ -614,7 +595,7 @@ private fun AppRows(
         AppRow(
             icon = { AppLabelIcon(app.packageName, app.label) },
             label = app.label.displayName(),
-            value = "${formatNumber(app.powerMah, if (app.powerMah < 10) 1 else 0, locale)} $mah",
+            value = mahText(app.powerMah),
             share = app.share,
             onClick = { onOpenApp(app.uid, app.packageName) },
         )
@@ -626,7 +607,7 @@ private fun AppRows(
         AppRow(
             icon = { AppIconPlaceholder(others, icon = Icons.Rounded.MoreHoriz) },
             label = others,
-            value = "${formatNumber(othersMah, if (othersMah < 10) 1 else 0, locale)} $mah",
+            value = mahText(othersMah),
             share = apps.othersShare,
         )
     }

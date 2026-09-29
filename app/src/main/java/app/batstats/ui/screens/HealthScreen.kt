@@ -9,30 +9,26 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ShowChart
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,8 +42,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.CapacityConfidence
+import app.batstats.settings.DesignCapacity
+import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
@@ -65,6 +64,7 @@ import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.formatNumber
 import app.batstats.ui.format.styledTemplate
 import app.batstats.ui.format.unitSpan
+import app.batstats.ui.format.percentAnnotated
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericBody
 import app.batstats.ui.theme.numericDisplay
@@ -99,78 +99,86 @@ private const val READOUT_TEMPLATE = 8_888.0
 @Composable
 fun HealthScreen(
     onBack: () -> Unit,
-    onOpenDesignCapacity: () -> Unit,
     onOpenSession: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier,
     vm: HealthViewModel = koinViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
-    HealthContent(state, onBack, onOpenDesignCapacity, onOpenSession, modifier)
+    HealthContent(state, onBack, vm::setDesignCapacity, onOpenSession, modifier)
 }
 
 /**
- * Health, stateless. A back row, then the hero (health % of design with its bar, or why it can't be shown yet, and
- * the capacity / design / cycles readouts behind it), the capacity trend and the latest estimates. Every estimate is
- * shown with its confidence; how they're measured is in the hero's ⓘ. From 840 dp the hero and the history sit side
- * by side.
+ * Health, stateless. The pinned detail header, then the hero (health % of design with its bar, or why it can't be
+ * shown yet, and the capacity / design / cycles readouts behind it), the capacity trend and the latest estimates.
+ * Every estimate is shown with its confidence; how they're measured is in the hero's ⓘ. Without a design capacity,
+ * "Set design capacity" opens the Settings dialog right here and [onSetDesignCapacity] writes it. From 840 dp the hero
+ * and the history sit side by side.
  */
 @Composable
 fun HealthContent(
     state: HealthUiState,
     onBack: () -> Unit,
-    onOpenDesignCapacity: () -> Unit,
+    onSetDesignCapacity: (mAh: Int) -> Unit,
     onOpenSession: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spacing = MaterialTheme.spacing
     val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
     val column = Arrangement.spacedBy(spacing.sm)
+    var editDesign by rememberSaveable { mutableStateOf(false) }
 
-    Column(
-        modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
-            .verticalScroll(rememberScrollState())
-            .padding(start = spacing.md, end = spacing.md, bottom = spacing.md),
-        verticalArrangement = column,
-    ) {
-        HealthHeader(onBack)
-        if (!state.loaded) return@Column
-
-        val hero: @Composable () -> Unit = { HealthHero(state, onOpenDesignCapacity, Modifier.fillMaxWidth()) }
-        val trend: @Composable () -> Unit = { TrendPanel(state.estimates, state.design, Modifier.fillMaxWidth()) }
-        val listed = state.estimates.isNotEmpty()
-        val list: @Composable () -> Unit = { EstimatesPanel(state.estimates, onOpenSession, Modifier.fillMaxWidth()) }
-        if (twoColumns) {
-            // Hero + trend beside the list keeps the columns close in height; without a list the trend moves over.
-            Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                Column(Modifier.weight(1f), verticalArrangement = column) {
-                    hero()
-                    if (listed) trend()
-                }
-                Column(Modifier.weight(1f), verticalArrangement = column) { if (listed) list() else trend() }
-            }
-        } else {
-            hero()
-            trend()
-            if (listed) list()
+    Scaffold(
+        modifier = modifier,
+        topBar = { DetailTopBar(stringResource(R.string.health_title), onBack) },
+    ) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(start = spacing.md, end = spacing.md, bottom = spacing.md),
+            verticalArrangement = column,
+        ) {
+            if (!state.loaded) return@Column
+            HealthBody(state, twoColumns, onEditDesign = { editDesign = true }, onOpenSession)
         }
+    }
+
+    if (editDesign) {
+        DesignCapacityDialog(
+            current = (state.design as? DesignCapacityState.Known)?.takeIf { it.source == DesignSource.SETTINGS }?.mah
+                ?: DesignCapacity.AUTO,
+            onSave = { mAh ->
+                editDesign = false
+                onSetDesignCapacity(mAh)
+            },
+            onDismiss = { editDesign = false },
+        )
     }
 }
 
-/** Back and the screen title; the arrow's glyph sits on the page gutter, as in a top app bar. */
 @Composable
-private fun HealthHeader(onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().offset(x = -MaterialTheme.spacing.sm), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.back))
+private fun HealthBody(state: HealthUiState, twoColumns: Boolean, onEditDesign: () -> Unit, onOpenSession: (String) -> Unit) {
+    val spacing = MaterialTheme.spacing
+    val column = Arrangement.spacedBy(spacing.sm)
+    if (state.designWriteFailed) Notice(stringResource(R.string.settings_write_failed), framed = true)
+    val hero: @Composable () -> Unit = { HealthHero(state, onEditDesign, Modifier.fillMaxWidth()) }
+    val trend: @Composable () -> Unit = { TrendPanel(state.estimates, state.design, Modifier.fillMaxWidth()) }
+    val listed = state.estimates.isNotEmpty()
+    val list: @Composable () -> Unit = { EstimatesPanel(state.estimates, onOpenSession, Modifier.fillMaxWidth()) }
+    if (twoColumns) {
+        // Hero + trend beside the list keeps the columns close in height; without a list the trend moves over.
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            Column(Modifier.weight(1f), verticalArrangement = column) {
+                hero()
+                if (listed) trend()
+            }
+            Column(Modifier.weight(1f), verticalArrangement = column) { if (listed) list() else trend() }
         }
-        Text(
-            stringResource(R.string.health_title),
-            modifier = Modifier.semantics { heading() },
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
+    } else {
+        hero()
+        trend()
+        if (listed) list()
     }
 }
 
@@ -180,7 +188,7 @@ private fun HealthHeader(onBack: () -> Unit) {
  * and the Settings action shows whenever no design capacity is known.
  */
 @Composable
-private fun HealthHero(state: HealthUiState, onOpenDesignCapacity: () -> Unit, modifier: Modifier = Modifier) {
+private fun HealthHero(state: HealthUiState, onEditDesign: () -> Unit, modifier: Modifier = Modifier) {
     Panel(modifier, color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = MaterialTheme.shapes.large) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -206,7 +214,7 @@ private fun HealthHero(state: HealthUiState, onOpenDesignCapacity: () -> Unit, m
         }
         Readouts(summary, state.design, state.cycles)
         if (state.design == DesignCapacityState.Unknown) {
-            FilledTonalButton(onClick = onOpenDesignCapacity, modifier = Modifier.fillMaxWidth()) {
+            FilledTonalButton(onClick = onEditDesign, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.health_set_design))
             }
         }
@@ -226,7 +234,7 @@ private fun HealthFigure(percent: Double) {
         itemVerticalAlignment = Alignment.Bottom,
     ) {
         Text(
-            styledTemplate(stringResource(R.string.health_percent), listOf(number), unitSpan(style)),
+            percentAnnotated(number, unitSpan(style)),
             style = style,
             color = MaterialTheme.colorScheme.onSurface,
         )

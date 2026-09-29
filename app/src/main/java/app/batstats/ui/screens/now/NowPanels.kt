@@ -5,13 +5,10 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -21,15 +18,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import app.batstats.R
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.measurement.CapacityConfidence
-import app.batstats.battery.measurement.CurrentCalibration
-import app.batstats.battery.measurement.CurrentSign
-import app.batstats.battery.measurement.CurrentUnit
 import app.batstats.ui.components.AppLabelIcon
+import app.batstats.ui.screens.DrainCell
 import app.batstats.ui.components.AppRow
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
@@ -40,11 +33,10 @@ import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.format.compactDuration
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.dayAwareTime
-import app.batstats.ui.format.durationString
 import app.batstats.ui.format.formatNumber
-import app.batstats.ui.format.formatRate
+import app.batstats.ui.format.percentUnit
+import app.batstats.ui.format.mahText
 import app.batstats.ui.theme.spacing
-import app.batstats.viewmodel.DrainState
 import app.batstats.viewmodel.HealthState
 import app.batstats.viewmodel.SinceUnplugState
 import app.batstats.viewmodel.TodayState
@@ -93,32 +85,12 @@ internal fun SinceUnplugPanel(
                 stringResource(R.string.now_deep_sleep),
                 state.deepSleepPercent?.let { formatNumber(it, 0, currentLocale()) } ?: stringResource(R.string.component_no_value),
                 Modifier.weight(1f),
-                unit = stringResource(R.string.now_unit_percent),
+                unit = percentUnit().sign,
+                unitFirst = percentUnit().first,
             )
             // Reset starts a new window; it has nothing to do with a window that already ended.
             if (state.current) TextButton(onClick = onReset) { Text(stringResource(R.string.now_reset)) }
         }
-    }
-}
-
-/** %/h when the capacity is known, else the average mA; the other figure and the duration go underneath. */
-@Composable
-private fun DrainCell(label: String, drain: DrainState, modifier: Modifier = Modifier) {
-    val locale = currentLocale()
-    val noValue = stringResource(R.string.component_no_value)
-    val duration = durationString(drain.durationMs)
-    val milliamps = drain.currentMa?.let { formatNumber(it, 0, locale) }
-    val perHour = drain.percentPerHour
-    if (perHour != null) {
-        StatCell(
-            label,
-            formatRate(perHour, locale),
-            modifier,
-            unit = stringResource(R.string.now_unit_percent_per_hour),
-            supporting = stringResource(R.string.now_drain_supporting, milliamps ?: noValue, duration),
-        )
-    } else {
-        StatCell(label, milliamps ?: noValue, modifier, unit = stringResource(R.string.now_unit_ma), supporting = duration)
     }
 }
 
@@ -165,7 +137,8 @@ internal fun HealthPanel(health: HealthState?, onOpen: () -> Unit, modifier: Mod
                     stringResource(R.string.now_health_of_design),
                     formatNumber(percent, 0, locale),
                     Modifier.weight(1f),
-                    unit = stringResource(R.string.now_unit_percent),
+                    unit = percentUnit().sign,
+                    unitFirst = percentUnit().first,
                 )
             }
         }
@@ -211,14 +184,12 @@ internal fun TopAppsPanel(
                     stringResource(basisLabel(apps.basis), dayAwareTime(formatter, apps.capturedAtMs, nowMs)),
                     Modifier.padding(horizontal = spacing.md),
                 )
-                val locale = currentLocale()
-                val mah = stringResource(R.string.now_unit_mah)
                 apps.rows.forEach { app ->
                     val label = app.label.displayName()
                     AppRow(
                         icon = { AppLabelIcon(app.packageName, app.label) },
                         label = label,
-                        value = "${formatNumber(app.powerMah, if (app.powerMah < 10) 1 else 0, locale)} $mah",
+                        value = mahText(app.powerMah),
                         share = app.share,
                         onClick = { onOpenApp(app.uid, app.packageName) },
                     )
@@ -233,43 +204,6 @@ private fun basisLabel(basis: AppUsageBasis): Int = when (basis) {
     AppUsageBasis.WINDOW_RESET -> R.string.now_apps_basis_reset
     AppUsageBasis.ABSOLUTE -> R.string.now_apps_basis_absolute
 }
-
-/** A detected current correction was applied: say what changed, with Undo and Keep. */
-@Composable
-internal fun CalibrationNotice(
-    calibration: CurrentCalibration,
-    onUndo: () -> Unit,
-    onKeep: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val content = MaterialTheme.colorScheme.onTertiaryContainer
-    val body = when {
-        calibration.unit == CurrentUnit.MILLIAMPS && calibration.sign == CurrentSign.INVERTED -> R.string.now_calibration_both
-        calibration.unit == CurrentUnit.MILLIAMPS -> R.string.now_calibration_unit
-        calibration.sign == CurrentSign.INVERTED -> R.string.now_calibration_sign
-        else -> R.string.now_calibration_same
-    }
-    Panel(modifier, color = MaterialTheme.colorScheme.tertiaryContainer) {
-        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-            Icon(Icons.Rounded.Tune, contentDescription = null, tint = content)
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xxs)) {
-                Text(
-                    stringResource(R.string.now_calibration_title),
-                    modifier = Modifier.semantics { heading() },
-                    style = MaterialTheme.typography.titleSmall,
-                    color = content,
-                )
-                Text(stringResource(body), style = MaterialTheme.typography.bodyMedium, color = content)
-            }
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            val colors = ButtonDefaults.textButtonColors(contentColor = content)
-            TextButton(onClick = onUndo, colors = colors) { Text(stringResource(R.string.now_calibration_undo)) }
-            TextButton(onClick = onKeep, colors = colors) { Text(stringResource(R.string.now_calibration_keep)) }
-        }
-    }
-}
-
 
 /** A navigation hint for a tappable panel, sized like a touch target so it lines up with the gutter. */
 @Composable

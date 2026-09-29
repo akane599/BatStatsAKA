@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.retryWhen
+import kotlinx.coroutines.flow.withIndex
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -32,8 +33,11 @@ import java.util.concurrent.ConcurrentHashMap
  *   BASELINE as the session's breakdown (READY + basis); [AppStatsResult.NoAccess] → NO_ACCESS,
  *   [AppStatsResult.Failed] → FAILED. Once the debounce has passed, a later transition no longer cancels it.
  * - **Abandoned:** closed DISCHARGE sessions still PENDING that no end is being taken for (closed by Stop,
- *   process death, a gap, or a plug-in cancelled by an unplug) are marked FAILED: at every transition, and
+ *   process death, a gap, a Reset, or a plug-in cancelled by an unplug) are marked FAILED: at every transition,
+ *   [SWEEP_DEBOUNCE_MS] after every change of open session (a Reset or gap reopens one without a transition), and
  *   [STARTUP_SWEEP_DELAY_MS] after start (after the repository has closed a session left open by a dead process).
+ *   A plug-in's ended session is reserved from the moment its transition arrives, so a sweep never fails it while
+ *   its end waits out the debounce.
  */
 class SessionSnapshotCollector(
     private val stats: AppStatsSource,
@@ -43,7 +47,7 @@ class SessionSnapshotCollector(
     private val warn: (String) -> Unit = { Log.w(LOG_TAG, it) },
 ) {
     private val writes = Mutex()
-    // Sessions whose END is being taken; the sweep leaves them alone. Added before the handler returns.
+    // Plug-in ends waiting out their debounce or being taken; every sweep leaves them alone.
     private val endsInProgress: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     /** Runs until cancelled; the service cancels it when monitoring stops. */
@@ -62,39 +66,58 @@ class SessionSnapshotCollector(
             warn("open session query failed (${cause.javaClass.simpleName}: ${cause.message}); retrying in ${OPEN_SESSION_RETRY_MS / 1000} s")
             delay(OPEN_SESSION_RETRY_MS)
             true
-        }.distinctUntilChanged().collectLatest { open -> // distinct: a retry re-emits the same session
-            if (open?.type != SessionType.DISCHARGE) return@collectLatest
-            guarded("baseline") {
-                if (store.hasBaseline(open.sessionId)) return@guarded
-                delay(BASELINE_DEBOUNCE_MS)
-                when (val result = stats.snapshot(force = true)) {
-                    is AppStatsResult.Ready -> {
-                        val saved = writes.withLock { store.saveBaseline(open.sessionId, result.snapshot.toAppUsageSnapshot()) }
-                        if (saved) log("baseline stored session=${open.sessionId} apps=${result.snapshot.apps.size}")
-                    }
-                    // Nothing stored: the session ends ABSOLUTE if a dump works at plug-in, else NO_ACCESS/FAILED.
-                    AppStatsResult.NoAccess -> log("baseline skipped: no privileged access")
-                    is AppStatsResult.Failed -> log("baseline failed: ${result.message}")
+        }.distinctUntilChanged().withIndex().collectLatest { (index, open) -> // distinct: a retry re-emits the same session
+            coroutineScope {
+                // The first emission is the start, which has its own sweep (after the repository's recovery).
+                if (index > 0) launch {
+                    delay(SWEEP_DEBOUNCE_MS)
+                    guarded("sweep") { failAbandoned() }
                 }
+                if (open?.type == SessionType.DISCHARGE) guarded("baseline") { baseline(open.sessionId) }
             }
+        }
+    }
+
+    private suspend fun baseline(sessionId: String) {
+        if (store.hasBaseline(sessionId)) return
+        delay(BASELINE_DEBOUNCE_MS)
+        when (val result = stats.snapshot(force = true)) {
+            is AppStatsResult.Ready -> {
+                val saved = writes.withLock { store.saveBaseline(sessionId, result.snapshot.toAppUsageSnapshot()) }
+                if (saved) log("baseline stored session=$sessionId apps=${result.snapshot.apps.size}")
+            }
+            // Nothing stored: the session ends ABSOLUTE if a dump works at plug-in, else NO_ACCESS/FAILED.
+            AppStatsResult.NoAccess -> log("baseline skipped: no privileged access")
+            is AppStatsResult.Failed -> log("baseline failed: ${result.message}")
         }
     }
 
     private suspend fun onTransition(transition: PowerTransition?, scope: CoroutineScope) {
         if (transition == null) {
             delay(STARTUP_SWEEP_DELAY_MS)
-            failAbandoned(except = null)
+            failAbandoned()
             return
         }
         val ended = transition.endedSessionId?.takeIf { transition.isPlugIn }
-        failAbandoned(except = ended)
-        if (ended == null) return
-        delay(END_DEBOUNCE_MS)
-        // Past the debounce: a later transition must not cancel the dump, but stopping the service does.
+        if (ended == null) {
+            failAbandoned()
+            return
+        }
+        // Reserved at once: the open-session sweep runs [SWEEP_DEBOUNCE_MS] after the same plug-in.
         endsInProgress += ended
-        scope.launch {
-            try { guarded("end") { finishEnded(ended) } }
-            finally { endsInProgress -= ended }
+        var handedOff = false
+        try {
+            failAbandoned()
+            delay(END_DEBOUNCE_MS)
+            // Past the debounce: a later transition must not cancel the dump, but stopping the service does.
+            scope.launch {
+                try { guarded("end") { finishEnded(ended) } }
+                finally { endsInProgress -= ended }
+            }
+            handedOff = true
+        } finally {
+            // Cancelled by the next transition (or a sweep error): that transition's sweep may now fail it.
+            if (!handedOff) endsInProgress -= ended
         }
     }
 
@@ -116,9 +139,9 @@ class SessionSnapshotCollector(
         if (result !is AppStatsResult.Ready) log("end not captured session=$sessionId result=$result")
     }
 
-    private suspend fun failAbandoned(except: String?) = writes.withLock {
+    private suspend fun failAbandoned() = writes.withLock {
         store.pendingClosedDischarges()
-            .filter { it != except && it !in endsInProgress }
+            .filter { it !in endsInProgress }
             .forEach { sessionId ->
                 store.setStatus(sessionId, AppUsageStatus.FAILED)
                 log("breakdown not captured session=$sessionId")
@@ -144,6 +167,7 @@ class SessionSnapshotCollector(
         const val END_DEBOUNCE_MS = 10_000L
         const val BASELINE_DEBOUNCE_MS = 30_000L
         const val STARTUP_SWEEP_DELAY_MS = 30_000L
+        const val SWEEP_DEBOUNCE_MS = 5_000L
         const val OPEN_SESSION_RETRY_MS = 60_000L
 
         /** Set on the in-memory open session at creation: a breakdown is only ever taken for discharge sessions. */

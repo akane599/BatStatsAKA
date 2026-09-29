@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- The Now screen (ui/screens/now/**). Machine-quality translation; flagged for native review. -->
 <resources>
-    <string name="now_level">%%%1$s</string>
 
     <string name="now_duration_days_hours">%1$s g %2$s sa</string>
     <string name="now_duration_hours_minutes">%1$s sa %2$s dk</string>
@@ -90,11 +89,5 @@
     <string name="now_apps_empty">Henüz uygulama başına veri yok.</string>
     <string name="now_apps_open">Uygulamaları aç</string>
 
-    <string name="now_calibration_title">Akım okumaları düzeltildi</string>
-    <string name="now_calibration_unit">Bu telefon akımı miliamper olarak bildiriyor. Değerler artık dönüştürülüyor.</string>
-    <string name="now_calibration_sign">Bu telefon tüketimi pozitif olarak bildiriyor. İşaret artık çevriliyor.</string>
-    <string name="now_calibration_both">Bu telefon akımı miliamper, tüketimi pozitif olarak bildiriyor. Değerler artık dönüştürülüp çevriliyor.</string>
-    <string name="now_calibration_same">Akım okuması şarj sayacıyla karşılaştırıldı ve ayarlandı.</string>
-    <string name="now_calibration_undo">Geri al</string>
-    <string name="now_calibration_keep">Koru</string>
+    <string name="now_eta_estimating_full">Dolma süresi hesaplanıyor</string>
 </resources>

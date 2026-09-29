@@ -3,7 +3,6 @@
 <resources>
     <string name="health_title">Salud de la batería</string>
     <string name="health_label">Salud</string>
-    <string name="health_percent">%1$s %%</string>
     <string name="health_of_design">de la capacidad de diseño</string>
     <string name="health_capacity">Capacidad</string>
     <string name="health_design">Diseño</string>

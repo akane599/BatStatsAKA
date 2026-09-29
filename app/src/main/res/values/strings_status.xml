@@ -5,16 +5,8 @@
     <string name="status_unit_ma" translatable="false">mA</string>
 
     <string name="status_title">Status</string>
-    <string name="status_back">Back</string>
 
     <!-- Calibration correction notice (same as on Now) -->
-    <string name="status_notice_title">Current readings corrected</string>
-    <string name="status_notice_unit">This phone reports current in milliamps. Values are now converted.</string>
-    <string name="status_notice_sign">This phone reports drain as positive. The sign is now flipped.</string>
-    <string name="status_notice_both">This phone reports current in milliamps and drain as positive. Values are now converted and flipped.</string>
-    <string name="status_notice_same">The current reading was checked against the charge counter and adjusted.</string>
-    <string name="status_notice_undo">Undo</string>
-    <string name="status_notice_keep">Keep</string>
 
     <!-- Advanced access -->
     <string name="status_access_title">Advanced access</string>

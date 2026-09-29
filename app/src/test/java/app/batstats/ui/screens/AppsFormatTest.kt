@@ -1,6 +1,7 @@
 package app.batstats.ui.screens
 
 import app.batstats.R
+import app.batstats.ui.format.formatMah
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Test

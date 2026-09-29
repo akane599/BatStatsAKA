@@ -2,16 +2,8 @@
 <!-- Ajustes › Estado (ui/screens/StatusScreen.kt). -->
 <resources>
     <string name="status_title">Estado</string>
-    <string name="status_back">Atrás</string>
 
     <!-- Aviso de corrección de calibración -->
-    <string name="status_notice_title">Lecturas de corriente corregidas</string>
-    <string name="status_notice_unit">Este teléfono indica la corriente en miliamperios. Ahora los valores se convierten.</string>
-    <string name="status_notice_sign">Este teléfono indica la descarga como positiva. Ahora el signo se invierte.</string>
-    <string name="status_notice_both">Este teléfono indica la corriente en miliamperios y la descarga como positiva. Ahora los valores se convierten e invierten.</string>
-    <string name="status_notice_same">La lectura de corriente se comprobó con el contador de carga y se ajustó.</string>
-    <string name="status_notice_undo">Deshacer</string>
-    <string name="status_notice_keep">Mantener</string>
 
     <!-- Acceso avanzado -->
     <string name="status_access_title">Acceso avanzado</string>

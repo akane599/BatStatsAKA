@@ -107,6 +107,46 @@ class DesignCapacitySourceTest {
         assertEquals(DesignCapacityReading.Unknown, design())
     }
 
+    @Test fun knownNeverStartsTheRootReadButUsesOneHealthMade() = runTest {
+        sysfs = answered(5_000_000)
+        val source = source()
+        var now: DesignCapacityReading? = null
+        backgroundScope.launch { source.known.collect { now = it } }
+        runCurrent()
+        assertEquals(DesignCapacityReading.Unknown, now)
+        source.recheck()
+        runCurrent()
+        assertEquals("Now and a recheck alone never read", 0, reads)
+
+        // Health opens: its read is what Now then shows.
+        observe(source)
+        assertEquals(1, reads)
+        assertEquals(DesignCapacityReading.Known(5_000_000, fromSettings = false), now)
+
+        settings.value = AppSettings(designCapacityMah = 4_800)
+        runCurrent()
+        assertEquals(DesignCapacityReading.Known(4_800_000, fromSettings = true), now)
+        assertEquals(1, reads)
+    }
+
+    @Test fun recheckReadsAnUnknownCapacityAgainAndKeepsAKnownOne() = runTest {
+        sysfs = answered(null) // The su grant answered too late: no root at the first read.
+        val source = source()
+        val design = observe(source)
+        assertEquals(DesignCapacityReading.Unknown, design())
+        assertEquals(1, reads)
+
+        sysfs = answered(5_000_000)
+        source.recheck()
+        runCurrent()
+        assertEquals(DesignCapacityReading.Known(5_000_000, fromSettings = false), design())
+        assertEquals(2, reads)
+
+        source.recheck()
+        runCurrent()
+        assertEquals("A known capacity is not read again", 2, reads)
+    }
+
     private companion object {
         // Not CompletableDeferred(null): that overload takes a parent Job and never completes.
         fun answered(uah: Long?) = CompletableDeferred<Long?>().also { it.complete(uah) }

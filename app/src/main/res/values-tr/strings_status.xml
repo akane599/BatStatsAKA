@@ -2,16 +2,8 @@
 <!-- Ayarlar › Durum (ui/screens/StatusScreen.kt). -->
 <resources>
     <string name="status_title">Durum</string>
-    <string name="status_back">Geri</string>
 
     <!-- Kalibrasyon düzeltme bildirimi -->
-    <string name="status_notice_title">Akım ölçümleri düzeltildi</string>
-    <string name="status_notice_unit">Bu telefon akımı miliamper olarak bildiriyor. Değerler artık dönüştürülüyor.</string>
-    <string name="status_notice_sign">Bu telefon deşarjı pozitif bildiriyor. İşaret artık çevriliyor.</string>
-    <string name="status_notice_both">Bu telefon akımı miliamper olarak ve deşarjı pozitif bildiriyor. Değerler artık dönüştürülüp çevriliyor.</string>
-    <string name="status_notice_same">Akım ölçümü şarj sayacıyla karşılaştırıldı ve ayarlandı.</string>
-    <string name="status_notice_undo">Geri al</string>
-    <string name="status_notice_keep">Koru</string>
 
     <!-- Gelişmiş erişim -->
     <string name="status_access_title">Gelişmiş erişim</string>

@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import app.batstats.BuildConfig
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.CalibrationStore
+import app.batstats.battery.data.DesignCapacitySource
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticEvent
 import app.batstats.battery.diagnostics.DiagnosticReport
@@ -114,7 +115,7 @@ interface StatusRepository {
     val adbCommands: List<String>
     val adbCoversAppStats: Boolean
 
-    /** Probes the backends; [recheck] also forgets cached root results (the user asked). */
+    /** Probes the backends; [recheck] also forgets cached root results and re-reads an unknown design capacity (the user asked). */
     suspend fun detectAccess(recheck: Boolean): AccessMode
     fun requestShizukuPermission()
     fun undoCalibration()
@@ -225,7 +226,10 @@ class StatusViewModel(
     }
 }
 
-/** [StatusRepository] over [ShellRunner], [ShizukuBridge], [CalibrationStore], [DiagnosticStore] and [BatteryRepository]. */
+/**
+ * [StatusRepository] over [ShellRunner], [ShizukuBridge], [CalibrationStore], [DiagnosticStore], [BatteryRepository]
+ * and [DesignCapacitySource].
+ */
 class DefaultStatusRepository(
     context: Context,
     private val shell: ShellRunner,
@@ -233,6 +237,7 @@ class DefaultStatusRepository(
     private val calibrationStore: CalibrationStore,
     private val diagnostics: DiagnosticStore,
     private val battery: BatteryRepository,
+    private val designCapacity: DesignCapacitySource,
 ) : StatusRepository {
     override val access: Flow<AccessMode> = shell.access.map { it.toAccessMode() }
     override val shizuku: Flow<ShizukuState> = combine(bridge.running, bridge.granted) { running, granted -> ShizukuState(running, granted) }
@@ -252,7 +257,10 @@ class DefaultStatusRepository(
 
     override suspend fun detectAccess(recheck: Boolean): AccessMode {
         if (recheck) shell.invalidateMode()
-        return shell.detectMode(forceRefresh = true).toAccessMode()
+        val mode = shell.detectMode(forceRefresh = true).toAccessMode()
+        // After the fresh root probe: a grant that answered too late for the first read can now be read.
+        if (recheck) designCapacity.recheck()
+        return mode
     }
 
     override fun requestShizukuPermission() = bridge.requestPermission()

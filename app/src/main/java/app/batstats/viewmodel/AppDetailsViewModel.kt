@@ -1,11 +1,14 @@
 package app.batstats.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.apps.AppInfo
 import app.batstats.battery.apps.AppLabel
+import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.BatteryDatabase
+import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.util.BatteryStatsParser
 import kotlinx.coroutines.CancellationException
@@ -21,16 +24,25 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** One discharge session with per-app data: this app's mAh in it, or null when it wasn't among the session's top 30. */
+@Immutable
 data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMah: Double?)
 
 /** [AppStatsReader] plus this app's history across stored sessions. */
 interface AppDetailsRepository : AppStatsReader {
     /**
-     * DISCHARGE sessions overlapping [fromMs]..[toMs] whose per-app breakdown is READY, oldest first, each with
-     * [uid]'s row when the session listed it.
+     * The sessions overlapping [fromMs]..[toMs] that [inAppHistory] keeps, oldest first, each with [uid]'s row when
+     * the session listed it.
      */
     suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage>
 }
+
+/**
+ * Whether a session belongs in AppDetails' history: a DISCHARGE whose breakdown is READY and measured from unplug to
+ * plug-in (DELTA), as the panel's ⓘ says. ABSOLUTE (no reading at unplug: "since the last full charge") and
+ * WINDOW_RESET breakdowns cover other windows, so their bars would not compare.
+ */
+internal fun ChargeSession.inAppHistory(): Boolean =
+    type == SessionType.DISCHARGE && appUsageStatus == AppUsageStatus.READY && appUsageBasis == AppUsageBasis.DELTA
 
 /** [AppDetailsRepository] over the shared reader and the `session_app_usage` rows (A3's DAOs, read on IO). */
 class DefaultAppDetailsRepository(
@@ -39,7 +51,7 @@ class DefaultAppDetailsRepository(
 ) : AppDetailsRepository, AppStatsReader by reader {
     override suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
         val sessions = database.sessionDao().sessionsBetween(fromMs, toMs)
-            .filter { it.type == SessionType.DISCHARGE && it.appUsageStatus == AppUsageStatus.READY }
+            .filter { it.inAppHistory() }
         if (sessions.isEmpty()) return@withContext emptyList()
         val rows = database.appUsageDao().usageForSessionsBetween(sessions.first().startTime, toMs)
             .filter { it.uid == uid && !it.isOthers }
@@ -51,13 +63,17 @@ class DefaultAppDetailsRepository(
 /** A wakelock's effect: [CPU] keeps the processor awake (partial); [SCREEN] keeps the display on. */
 enum class WakelockKind { CPU, SCREEN }
 
+@Immutable
 data class WakelockItem(val tag: String, val kind: WakelockKind, val totalMs: Long, val count: Int)
+@Immutable
 data class AlarmItem(val tag: String, val wakeups: Int)
 
 /** A job or a sync: its name (job service or sync authority), runs and total run time. */
+@Immutable
 data class TaskItem(val name: String, val count: Int, val totalMs: Long)
 
 /** Bytes by network and direction; [radioActiveMs] = time this app kept the mobile radio active. */
+@Immutable
 data class NetworkUsage(
     val mobileRxBytes: Long?,
     val mobileTxBytes: Long?,
@@ -67,6 +83,7 @@ data class NetworkUsage(
 )
 
 /** Hardware time (ms): GPS, other sensors, camera, flashlight, audio, video, Bluetooth scans. */
+@Immutable
 data class HardwareUsage(
     val gpsMs: Long? = null,
     val sensorsMs: Long? = null,
@@ -82,6 +99,7 @@ data class HardwareUsage(
  * the foreground, as the Apps list's Foreground order), [foregroundServiceMs], [backgroundMs], [cachedMs]. Lists are for this uid only, largest first; [network] is null and
  * [hardware] empty when Android counted nothing.
  */
+@Immutable
 data class AppUsageDetails(
     val powerMah: Double,
     val share: Float,
@@ -99,7 +117,8 @@ data class AppUsageDetails(
     val hardware: HardwareUsage = HardwareUsage(),
 )
 
-/** Sessions on battery with per-app data (oldest first), and in how many of them this app was listed. */
+/** Sessions on battery with unplug-to-plug-in per-app data (oldest first), and in how many this app was listed. */
+@Immutable
 data class AppHistory(val sessions: List<AppSessionUsage>) {
     val listedIn: Int get() = sessions.count { it.powerMah != null }
 }
@@ -109,6 +128,7 @@ data class AppHistory(val sessions: List<AppSessionUsage>) {
  * installed. [capturedAtMs]/[startedAtMs] describe the dump shown (null before a good read); with a dump, a null
  * [usage] means Android counted nothing for this app. [history] is null while it loads.
  */
+@Immutable
 data class AppDetailsUiState(
     val uid: Int,
     val packageName: String,

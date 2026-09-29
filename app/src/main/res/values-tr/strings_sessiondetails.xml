@@ -2,7 +2,6 @@
 <resources>
     <!-- Top bar and delete -->
     <string name="sessiondetails_title">Oturum</string>
-    <string name="sessiondetails_back">Geri</string>
     <string name="sessiondetails_delete">Oturumu sil</string>
     <string name="sessiondetails_delete_title">Bu oturum silinsin mi?</string>
     <string name="sessiondetails_delete_body">Okumaları ve uygulama bazında kullanımı da silinir. Günlük toplamlar değişmez.</string>
@@ -54,7 +53,6 @@
     <string name="sessiondetails_screen_off">Ekran kapalı</string>
     <string name="sessiondetails_deep_sleep">Derin uyku</string>
     <string name="sessiondetails_deep_sleep_screen_off">Ekran kapalıyken</string>
-    <string name="sessiondetails_drain_supporting">%1$s mA · %2$s</string>
     <string name="sessiondetails_drain_info_title">Tüketim hakkında</string>
     <string name="sessiondetails_drain_info_body">Ekran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar. İlk sayı, pilin tam kapasitesinin payı olarak saatlik ortalama tüketimdir; mA aynı tüketimin akım olarak değeridir.\n\nDerin uyku, işlemcinin tamamen uykuda olduğu sürenin oranıdır. Ekran kapalıyken yüksek olmalıdır: düşükse bir şey telefonu uyanık tuttu.</string>
 

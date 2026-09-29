@@ -2,7 +2,6 @@
 <!-- Ajustes › Datos (ui/screens/DataScreen.kt). "Lecturas" son las muestras de batería. -->
 <resources>
     <string name="data_title">Datos</string>
-    <string name="data_back">Atrás</string>
 
     <!-- Historial guardado -->
     <string name="data_stored_title">Historial guardado</string>

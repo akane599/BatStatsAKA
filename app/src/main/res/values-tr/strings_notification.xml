@@ -2,7 +2,6 @@
 <!-- The ongoing monitoring notification. Machine-quality translation; flagged for native review. Keep the
      …_short / …_minimal forms and the grid labels short (see values/strings_notification.xml). -->
 <resources>
-    <string name="notification_percent">%%%1$s</string>
     <string name="notification_headline">%1$s · %2$s</string>
     <string name="notification_title">%1$s · %2$s</string>
     <string name="notification_waiting">Pil okuması bekleniyor</string>

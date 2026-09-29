@@ -91,7 +91,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         withContext(Dispatchers.IO) {
             val payload = snapshot(from, to, includeSamples, includeSessions)
             val folder = DocumentFile.fromTreeUri(context, tree) ?: error("Cannot open export folder")
-            val stamp = payload.exportedAtEpochMs!!
+            val stamp = checkNotNull(payload.exportedAtEpochMs) { "An export snapshot always carries its time" }
             val exportContext = currentCoroutineContext()
             val created = mutableListOf<DocumentFile>()
             try {
@@ -201,7 +201,10 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                     else -> {
                         require(previous.source.startsWith("import:") && HistoryPolicy.sameOrigin(previous, session)) { "Conflicting imported session" }
                         require(session.endTime != previous.endTime) { "Conflicting values for one imported session window" }
-                        if (session.endTime!! < previous.endTime!!) { skipped++; continue }
+                        // Imported and stored rows always carry an end (HistoryPolicy.session sets one).
+                        val incomingEnd = checkNotNull(session.endTime) { "Imported session without an end" }
+                        val storedEnd = checkNotNull(previous.endTime) { "Imported session without an end" }
+                        if (incomingEnd < storedEnd) { skipped++; continue }
                         require(session.observedMs >= previous.observedMs && session.counterCoveredMs >= previous.counterCoveredMs) { "Incompatible imported session coverage" }
                         db.sessionDao().update(merged); updated++
                     }

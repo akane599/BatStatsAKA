@@ -9,26 +9,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -53,6 +48,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.apps.AppLabel
 import app.batstats.battery.shizuku.ShizukuBridge
+import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.InfoSheet
 import app.batstats.ui.components.Panel
@@ -70,6 +66,8 @@ import app.batstats.ui.components.displayName
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.dayAwareTime
 import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.formatMah
+import app.batstats.ui.format.percentUnit
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericHeadline
@@ -171,6 +169,8 @@ fun AppDetailsContent(
             CpuPanel(usage, Modifier.fillMaxWidth())
             usage.network?.let { NetworkPanel(it, Modifier.fillMaxWidth()) }
             HardwarePanel(usage.hardware, Modifier.fillMaxWidth())
+            // A light app ends after a few panels: say so, so the empty space below reads as the end.
+            if (usage.isSparse) QuietText(stringResource(R.string.apps_details_nothing_else), Modifier.padding(horizontal = spacing.md))
         }
     }
     val secondary: @Composable () -> Unit = {
@@ -179,25 +179,33 @@ fun AppDetailsContent(
         }
     }
 
-    PullToRefreshBox(
-        isRefreshing = state.loading,
-        onRefresh = { onEvent(AppDetailsEvent.Refresh) },
-        modifier = modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top)),
-    ) {
-        Column(
-            Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(bottom = spacing.md),
+    Scaffold(
+        modifier = modifier,
+        topBar = {
+            // The hero names the app; the bar keeps Back and "App info" (Android's settings page for the package).
+            DetailTopBar(title = null, onBack = { onEvent(AppDetailsEvent.Back) }) {
+                if (state.canOpenAppInfo) {
+                    TextButton(onClick = { onEvent(AppDetailsEvent.OpenAppInfo) }) {
+                        Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                        Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                        Text(stringResource(R.string.apps_details_app_info))
+                    }
+                }
+            }
+        },
+    ) { padding ->
+        PullToRefreshBox(
+            isRefreshing = state.loading,
+            onRefresh = { onEvent(AppDetailsEvent.Refresh) },
+            modifier = Modifier.fillMaxSize().padding(padding),
         ) {
-            DetailsTopRow(
-                canOpenAppInfo = state.canOpenAppInfo,
-                onBack = { onEvent(AppDetailsEvent.Back) },
-                onOpenAppInfo = { onEvent(AppDetailsEvent.OpenAppInfo) },
-            )
-            Column(Modifier.padding(horizontal = spacing.md), verticalArrangement = column) {
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = spacing.md, end = spacing.md, bottom = spacing.md),
+                verticalArrangement = column,
+            ) {
                 if (twoColumns) {
                     Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                         Column(Modifier.weight(1f), verticalArrangement = column) { primary() }
@@ -212,29 +220,9 @@ fun AppDetailsContent(
     }
 }
 
-/** Back on the start; "App info" (Android's settings page for the package) on the end when the package is installed. */
-@Composable
-private fun DetailsTopRow(canOpenAppInfo: Boolean, onBack: () -> Unit, onOpenAppInfo: () -> Unit, modifier: Modifier = Modifier) {
-    // xxs + the buttons' own inset puts both glyphs on the 16 dp gutter.
-    Row(
-        modifier
-            .fillMaxWidth()
-            .padding(horizontal = MaterialTheme.spacing.xxs),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(onClick = onBack) {
-            Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = stringResource(R.string.apps_details_back))
-        }
-        Spacer(Modifier.weight(1f))
-        if (canOpenAppInfo) {
-            TextButton(onClick = onOpenAppInfo) {
-                Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text(stringResource(R.string.apps_details_app_info))
-            }
-        }
-    }
-}
+/** Nothing past CPU: no network, hardware, wakelocks, alarms, jobs or syncs. */
+private val AppUsageDetails.isSparse: Boolean
+    get() = network == null && hardware == HardwareUsage() && wakelocks.isEmpty() && alarms.isEmpty() && jobs.isEmpty() && syncs.isEmpty()
 
 /**
  * The app (icon, name), the dump's window, and its battery use with its share of all apps. Without a row in the
@@ -282,7 +270,8 @@ private fun DetailsHero(state: AppDetailsUiState, modifier: Modifier = Modifier)
                     stringResource(R.string.apps_details_share),
                     formatNumber(usage.share * 100.0, if (usage.share < 0.1f) 1 else 0, locale),
                     Modifier.weight(1f),
-                    unit = stringResource(R.string.now_unit_percent),
+                    unit = percentUnit().sign,
+                    unitFirst = percentUnit().first,
                     valueStyle = MaterialTheme.typography.numericHeadline,
                 )
             }
@@ -470,15 +459,16 @@ private fun HistoryPanel(history: AppHistory, modifier: Modifier = Modifier) {
         QuietText(stringResource(R.string.apps_details_history_caption, history.listedIn, history.sessions.size))
         val formatter = rememberTimeAxisFormatter()
         val mah = stringResource(R.string.now_unit_mah)
-        var selected by rememberSaveable { mutableStateOf<Int?>(null) }
+        // Saved by session, so a new session (or a refresh) never moves the selection to another bar.
+        var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
         BarChart(
             entries = history.sessions.map { BarEntry(formatter.format(it.startMs, TimeGranularity.DAYS), listOf(it.powerMah ?: 0.0)) },
             segments = listOf(BarSegment(stringResource(R.string.apps_details_history_series), MaterialTheme.chartColors.drain)),
             modifier = Modifier.fillMaxWidth(),
             unit = mah,
             format = NumberFormatter(mah),
-            selectedIndex = selected?.takeIf { it in history.sessions.indices },
-            onSelect = { selected = it },
+            selectedIndex = history.sessions.indexOfFirst { it.sessionId == selectedId }.takeIf { it >= 0 },
+            onSelect = { index -> selectedId = index?.let { history.sessions.getOrNull(it)?.sessionId } },
         )
     }
 }

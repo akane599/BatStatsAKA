@@ -44,6 +44,7 @@ import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericLabel
 import app.batstats.ui.theme.spacing
 import java.text.NumberFormat
+import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
@@ -60,9 +61,45 @@ private const val MIN_BAR_TICKS = 3
 private const val MAX_BAR_TICKS = 5
 private const val BAR_TICK_SPACING = 1.8f
 
-/** One bar: [values] stack bottom-up in [BarSegment] order (negative and non-finite values count as 0). */
+/**
+ * One bar: [values] stack bottom-up in [BarSegment] order (negative and non-finite values count as 0). [shortLabel]
+ * ("T", "7") replaces [label] under every bar when the full labels don't fit; [label] is always the spoken name.
+ */
 @Immutable
-data class BarEntry(val label: String, val values: List<Double>)
+data class BarEntry(val label: String, val values: List<Double>, val shortLabel: String? = null)
+
+/** Which category labels a [BarChart] draws ([shown], by bar index) and whether in their short form. */
+@Immutable
+internal data class BarLabelPlan(val short: Boolean, val shown: Set<Int>)
+
+/**
+ * The category-label rule: every bar keeps its full label when they all fit their slots ([slot] wide, [gap] apart);
+ * else every bar gets its short label when those fit; else every Nth label is drawn (N = the smallest stride at
+ * which the narrower form fits), counted from the newest bar, with the first bar taking the place of the label
+ * nearest to it, so the newest and the oldest are always labelled. A [selected] bar is always labelled; labels
+ * closer than the stride yield to it. Deterministic: labels never drop by collision.
+ */
+internal fun barLabelPlan(fullWidths: List<Float>, shortWidths: List<Float>?, slot: Float, gap: Float, selected: Int?): BarLabelPlan {
+    val count = fullWidths.size
+    if (count == 0) return BarLabelPlan(short = false, shown = emptySet())
+    val all = (0 until count).toSet()
+    val widestFull = fullWidths.max() + gap
+    if (widestFull <= slot) return BarLabelPlan(short = false, shown = all)
+    val widestShort = shortWidths?.takeIf { it.size == count }?.let { it.max() + gap }
+    if (widestShort != null && widestShort <= slot) return BarLabelPlan(short = true, shown = all)
+    val short = widestShort != null && widestShort < widestFull
+    val stride = if (slot > 0f) max(1, ceil((if (short) widestShort ?: widestFull else widestFull) / slot).toInt()) else count
+    val shown = (0 until count).filter { (count - 1 - it) % stride == 0 }.toMutableSet()
+    if (0 !in shown) {
+        shown.removeAll { it < stride }
+        shown += 0
+    }
+    if (selected != null && selected in 0 until count && selected !in shown) {
+        shown.removeAll { abs(it - selected) < stride }
+        shown += selected
+    }
+    return BarLabelPlan(short, shown)
+}
 
 /** A stack layer's legend name and color (e.g. "Screen on" / "Screen off"). */
 @Immutable
@@ -80,8 +117,9 @@ object BarChartDefaults {
 
 /**
  * Stacked bars over categories (e.g. one per day: screen-on vs screen-off drain), on a value axis from zero.
- * Bars are at most 24 dp wide with a 4 dp rounded top and a 2 dp gap between layers; category labels thin out
- * (keeping the newest, rightmost) when they would collide. A legend row appears for two or more [segments].
+ * Bars are at most 24 dp wide with a 4 dp rounded top and a 2 dp gap between layers. Category labels follow
+ * [barLabelPlan]: full, else short ([BarEntry.shortLabel]), else every Nth with the newest, oldest and selected bars
+ * always labelled. A legend row appears for two or more [segments].
  *
  * Selection is optional: pass [onSelect] to make bars tappable (the whole slot is the target; tapping the selected
  * bar clears it) and to add one TalkBack action per bar ("Select Oct 9") plus "Clear selection". With a
@@ -189,7 +227,7 @@ private fun Bars(
     val colors = MaterialTheme.chartColors
     val labelStyle = MaterialTheme.typography.numericLabel.copy(color = colors.axisLabel)
     val capStyle = MaterialTheme.typography.numericLabel.copy(color = MaterialTheme.colorScheme.onSurface)
-    val textMeasurer = rememberTextMeasurer()
+    val textMeasurer = rememberTextMeasurer(cacheSize = CHART_TEXT_CACHE_SIZE)
     val hit = remember { BarHitArea() }
     val currentSelected by rememberUpdatedState(selectedIndex)
     val currentOnSelect by rememberUpdatedState(onSelect)
@@ -280,10 +318,21 @@ private fun Bars(
                     }
                 }
 
-                val categoryLabels = entries.map { textMeasurer.measure(it.label, labelStyle) }
-                val widestLabel = categoryLabels.maxOf { it.size.width } + gap
-                val stride = max(1, ceil(widestLabel / slot).toInt())
                 val selected = selectedIndex?.takeIf { it in entries.indices }
+                val fullLabels = entries.map { textMeasurer.measure(it.label, labelStyle) }
+                val shortLabels = if (entries.all { it.shortLabel != null }) {
+                    entries.map { textMeasurer.measure(it.shortLabel.orEmpty(), labelStyle) }
+                } else {
+                    null
+                }
+                val plan = barLabelPlan(
+                    fullLabels.map { it.size.width.toFloat() },
+                    shortLabels?.map { it.size.width.toFloat() },
+                    slot,
+                    gap,
+                    selected,
+                )
+                val categoryLabels = if (plan.short && shortLabels != null) shortLabels else fullLabels
                 val capLabel = selected?.let { textMeasurer.measure(format.format(totals[it]), capStyle) }
                 val capOffset = selected?.let { index ->
                     val label = capLabel ?: return@let Offset.Zero
@@ -306,7 +355,7 @@ private fun Bars(
                         drawPath(barPaths[i], barColors[i], alpha = alpha)
                     }
                     for (i in categoryLabels.indices) {
-                        if ((categoryLabels.size - 1 - i) % stride != 0) continue
+                        if (i !in plan.shown) continue
                         val label = categoryLabels[i]
                         val center = plotLeft + slot * (i + 0.5f)
                         val x = (center - label.size.width / 2).coerceIn(0f, max(0f, size.width - label.size.width))

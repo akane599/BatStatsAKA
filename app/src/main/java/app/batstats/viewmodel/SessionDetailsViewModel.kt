@@ -189,6 +189,9 @@ sealed interface SessionDetailsEvent {
     data object Delete : SessionDetailsEvent
     data object DismissDeleteError : SessionDetailsEvent
     data class OpenApp(val uid: Int, val packageName: String) : SessionDetailsEvent
+
+    /** Navigation: Settings › Status, from the no-access line of the per-app list. */
+    data object OpenAccessSetup : SessionDetailsEvent
 }
 
 // ---- Data seam ----
@@ -318,7 +321,7 @@ internal object SessionDetailsMapping {
             endedAtMs = endMs.coerceAtLeast(session.startTime),
             startLevel = session.startLevel,
             endLevel = if (recording) latest?.levelPercent ?: session.endLevel else session.endLevel,
-            chargeMah = session.deltaUah?.takeIf { counter }?.div(1_000.0),
+            chargeMah = SessionEvidence.measuredChargeUah(session)?.div(1_000.0),
             energyWh = session.energyNwh?.takeIf { counter }?.div(NWH_PER_WH),
             averageMa = session.avgCurrentUa?.takeIf { measured && session.counterCoveredMs >= MIN_COUNTER_MS }?.let { abs(it) / 1_000.0 },
             counterCoverage = if (measured && session.observedMs >= MIN_COUNTER_MS) {
@@ -541,7 +544,7 @@ class SessionDetailsViewModel(
         when (event) {
             SessionDetailsEvent.Delete -> delete()
             SessionDetailsEvent.DismissDeleteError -> deletion.compareAndSet(Deletion.FAILED, Deletion.IDLE)
-            SessionDetailsEvent.Back, is SessionDetailsEvent.OpenApp -> Unit
+            SessionDetailsEvent.Back, is SessionDetailsEvent.OpenApp, SessionDetailsEvent.OpenAccessSetup -> Unit
         }
     }
 

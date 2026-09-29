@@ -27,6 +27,26 @@ class FormatsTest {
         assertEquals("9.1", formatRate(9.14, us))
     }
 
+    @Test fun onePercentRuleForEveryLocale() {
+        // The three `percent_value` templates (en, es, tr): the sign's side for a StatCell, the text for the rest.
+        val en = percentUnitOf("%1\$s%%")
+        val esUnit = percentUnitOf("%1\$s %%")
+        val trUnit = percentUnitOf("%%%1\$s")
+        assertEquals("%", en.sign)
+        assertFalse(en.first)
+        assertFalse(esUnit.first)
+        assertTrue("Turkish writes %94", trUnit.first)
+        assertEquals("%94", styledTemplate("%%%1\$s", listOf("94"), quiet).text)
+        assertEquals("94 %", styledTemplate("%1\$s %%", listOf("94"), quiet).text)
+    }
+
+    @Test fun milliampHoursKeepADecimalBelowTen() {
+        assertEquals("0.4", formatMah(0.4, us))
+        assertEquals("812", formatMah(812.3, us))
+        assertEquals("9,9", formatMah(9.94, tr))
+        assertEquals("1.240", formatMah(1_240.0, tr))
+    }
+
     @Test fun signedValuesShowTheirDirectionButNeverASignedZero() {
         assertEquals("−412", formatSigned(-412.0, 0, us))
         assertEquals("+1,452", formatSigned(1_452.0, 0, us))

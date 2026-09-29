@@ -6,6 +6,7 @@ import android.app.Instrumentation
 import android.content.Intent
 import android.content.res.Configuration
 import android.net.Uri
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -170,6 +171,10 @@ class NavigationDeviceTest {
 
     private fun showing(id: Int) = compose.onAllNodesWithText(label(id)).fetchSemanticsNodes().isNotEmpty()
 
+    /** The visible screen's vertical scroll position (its one scrollable container). */
+    private fun scrollOffset(): Float =
+        compose.onNode(hasScrollAction()).fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
+
     /**
      * A closed, imported discharge session from yesterday, so it sorts near the top of History's newest-first list
      * (a session row doesn't touch the daily totals).
@@ -192,8 +197,8 @@ class NavigationDeviceTest {
             context.getString(R.string.now_duration_minutes, "7"),
             context.getString(
                 R.string.history_level_change,
-                context.getString(R.string.history_percent, "63"),
-                context.getString(R.string.history_percent, "58"),
+                context.getString(R.string.percent_value, "63"),
+                context.getString(R.string.percent_value, "58"),
             ),
         )
     }
@@ -281,6 +286,54 @@ class NavigationDeviceTest {
         capture("health")
         tab(TestTags.TAB_NOW)
         awaitNow()
+    }
+
+    /**
+     * Every tab keeps its screen state and ViewModel while another tab is shown: History's mode and filter, a
+     * scrolled Settings page, and (when this device can read per-app stats) Apps' search and sort.
+     */
+    @Test fun tabStateSurvivesARoundTripThroughAnotherTab() {
+        compose.waitUntil(120_000) { BatteryGraph.repo.realtimeFlow.value.level != null }
+        awaitNow()
+
+        tab(TestTags.TAB_HISTORY)
+        click(R.string.history_mode_sessions)
+        compose.waitUntil(120_000) { showing(R.string.history_filter_discharge) }
+        click(R.string.history_filter_discharge)
+        compose.onNodeWithText(label(R.string.history_filter_discharge)).assertIsSelected()
+        tab(TestTags.TAB_NOW)
+        awaitNow()
+        tab(TestTags.TAB_HISTORY)
+        compose.onNodeWithText(label(R.string.history_mode_sessions)).assertIsSelected()
+        compose.onNodeWithText(label(R.string.history_filter_discharge)).assertIsSelected()
+        capture("tab-state-history")
+
+        // Settings scrolled to its Data link (the last panel) keeps its scroll position after the round trip.
+        tab(TestTags.TAB_SETTINGS)
+        scroll(R.string.settings_data_link)
+        compose.waitForIdle()
+        val scrolled = scrollOffset()
+        Assert.assertTrue("Settings should be scrolled down, was $scrolled", scrolled > 0f)
+        tab(TestTags.TAB_NOW)
+        awaitNow()
+        tab(TestTags.TAB_SETTINGS)
+        compose.waitForIdle()
+        Assert.assertEquals(scrolled, scrollOffset(), 1f)
+        compose.onNodeWithText(label(R.string.settings_data_link)).assertIsDisplayed()
+
+        tab(TestTags.TAB_APPS)
+        compose.waitUntil(120_000) { showing(R.string.apps_access_set_up) || showing(R.string.apps_search) }
+        if (showing(R.string.apps_search)) {
+            compose.onNodeWithText(label(R.string.apps_search)).performTextInput("go")
+            click(R.string.apps_sort_cpu)
+            tab(TestTags.TAB_NOW)
+            awaitNow()
+            tab(TestTags.TAB_APPS)
+            compose.onNodeWithText("go").assertIsDisplayed()
+            compose.onNodeWithText(label(R.string.apps_sort_cpu)).assertIsSelected()
+        }
+        // Without Shizuku or root (the ordinary emulator) Apps has no list, so only History and Settings are checked.
+        backToNow()
     }
 
     private companion object {

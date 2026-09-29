@@ -3,7 +3,6 @@
 <resources>
     <string name="health_title">Pil sağlığı</string>
     <string name="health_label">Sağlık</string>
-    <string name="health_percent">%%%1$s</string>
     <string name="health_of_design">tasarım kapasitesine göre</string>
     <string name="health_capacity">Kapasite</string>
     <string name="health_design">Tasarım</string>

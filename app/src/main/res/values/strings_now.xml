@@ -2,7 +2,6 @@
 <!-- The Now screen (ui/screens/now/**). Units that never change are translatable="false" (base only). -->
 <resources>
     <!-- Units -->
-    <string name="now_unit_percent" translatable="false" formatted="false">%</string>
     <string name="now_unit_ma" translatable="false">mA</string>
     <string name="now_unit_mah" translatable="false">mAh</string>
     <string name="now_unit_w" translatable="false">W</string>
@@ -11,7 +10,6 @@
     <string name="now_unit_fahrenheit" translatable="false">°F</string>
     <string name="now_unit_percent_per_hour" translatable="false" formatted="false">%/h</string>
     <!-- Level: %1$s is the number (the rest renders smaller) -->
-    <string name="now_level">%1$s%%</string>
 
     <!-- Durations: numbers render large, the rest smaller -->
     <string name="now_duration_days_hours">%1$s d %2$s h</string>
@@ -109,11 +107,5 @@
     <string name="now_apps_open">Open Apps</string>
 
     <!-- Current calibration notice -->
-    <string name="now_calibration_title">Current readings corrected</string>
-    <string name="now_calibration_unit">This phone reports current in milliamps. Values are now converted.</string>
-    <string name="now_calibration_sign">This phone reports drain as positive. The sign is now flipped.</string>
-    <string name="now_calibration_both">This phone reports current in milliamps and drain as positive. Values are now converted and flipped.</string>
-    <string name="now_calibration_same">The current reading was checked against the charge counter and adjusted.</string>
-    <string name="now_calibration_undo">Undo</string>
-    <string name="now_calibration_keep">Keep</string>
+    <string name="now_eta_estimating_full">Estimating time to full</string>
 </resources>

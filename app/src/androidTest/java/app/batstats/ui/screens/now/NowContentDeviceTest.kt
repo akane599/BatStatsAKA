@@ -99,7 +99,7 @@ class NowContentDeviceTest {
     @Test fun dischargingShowsTheHeroAndReadouts() {
         setContent(discharging())
         compose.onNodeWithText(label(R.string.now_state_discharging)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.now_level, "67")).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.percent_value, "67")).assertIsDisplayed()
         compose.onNode(hasText(label(R.string.now_eta_left), substring = true)).assertIsDisplayed()
         compose.onNodeWithText(label(R.string.now_readout_current)).assertIsDisplayed()
         compose.onNodeWithText(label(R.string.now_readout_power)).assertIsDisplayed()
@@ -111,7 +111,7 @@ class NowContentDeviceTest {
     @Test fun chargingShowsTimeToFullInsteadOfTimeLeft() {
         setContent(charging())
         compose.onNodeWithText(label(R.string.now_state_charging)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.now_level, "54")).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.percent_value, "54")).assertIsDisplayed()
         compose.onNode(hasText(label(R.string.now_eta_to_full), substring = true)).assertIsDisplayed()
         compose.onAllNodesWithText(label(R.string.now_eta_left), substring = true).assertCountEquals(0)
         compose.onNodeWithText(label(R.string.now_stop_monitoring)).assertIsDisplayed()
@@ -125,11 +125,11 @@ class NowContentDeviceTest {
 
     @Test fun calibrationNoticeFiresUndoAndKeep() {
         setContent(discharging().copy(calibrationNotice = CurrentCalibration(CurrentUnit.MILLIAMPS, CurrentSign.NORMAL)))
-        compose.onNodeWithText(label(R.string.now_calibration_title)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.now_calibration_unit)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.now_calibration_undo)).performClick()
+        compose.onNodeWithText(label(R.string.calibration_notice_title)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.calibration_notice_unit)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.calibration_notice_undo)).performClick()
         assertEquals(listOf(NowEvent.UndoCalibration), events)
-        compose.onNodeWithText(label(R.string.now_calibration_keep)).performClick()
+        compose.onNodeWithText(label(R.string.calibration_notice_keep)).performClick()
         assertEquals(listOf(NowEvent.UndoCalibration, NowEvent.KeepCalibration), events)
     }
 

@@ -16,7 +16,23 @@ import java.util.Locale
 import java.util.TimeZone
 
 /** Why the notification shows an issue line; the details are in the app. */
-enum class NotificationIssue { COLLECTION, ADVANCED }
+enum class NotificationIssue {
+    COLLECTION,
+    ADVANCED,
+    ;
+
+    companion object {
+        /**
+         * History problems first. A failed privileged read counts only for a user with advanced access set up: without
+         * any, every read "fails" by design and the line would never leave the notification.
+         */
+        fun of(historyError: String?, shellError: String?, hasAdvancedAccess: Boolean): NotificationIssue? = when {
+            historyError != null -> COLLECTION
+            shellError != null && hasAdvancedAccess -> ADVANCED
+            else -> null
+        }
+    }
+}
 
 /**
  * What the ongoing notification is built from — the sources Now uses: the calibrated realtime reading with its held
@@ -173,7 +189,7 @@ data class NotificationContent(
             if (kept.isEmpty() || form.toString().length < kept.last().toString().length) kept + form else kept
         }
 
-        private fun percent(value: Double, locale: Locale) = text(R.string.notification_percent, formatNumber(value, 0, locale))
+        private fun percent(value: Double, locale: Locale) = text(R.string.percent_value, formatNumber(value, 0, locale))
 
         /** "5 h 10 min", "45 min", "2 d 3 h", "<1 min". */
         private fun duration(ms: Long, locale: Locale): String {

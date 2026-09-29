@@ -28,15 +28,18 @@ import androidx.compose.ui.layout.MeasureScope
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.isSpecified
+import app.batstats.ui.theme.Spacing
 import app.batstats.ui.theme.numericTitle
 import app.batstats.ui.theme.spacing
 import kotlin.math.ceil
@@ -73,6 +76,7 @@ private val VALUE_SCALES = floatArrayOf(1f, 0.9f, 0.8f, 0.7f)
  * unit and change height (moving everything below). Pass [sizingTemplate] to fit once instead.
  *
  * @param value the formatted number only ("−412"); put the unit in [unit] so it renders quieter.
+ * @param unitFirst the unit goes before the value on a shared line (Turkish "%94"; see `ui/format` `percentUnit`).
  * @param indicator a small dot before the label, tying the value to a chart color (e.g. the trace direction).
  * @param valueStyle `numericTitle` by default; `numericHeadline` for the large Now readouts. A style without a
  *   font size falls back to `numericTitle`'s size.
@@ -92,6 +96,7 @@ fun StatCell(
     indicator: Color? = null,
     valueStyle: TextStyle = MaterialTheme.typography.numericTitle,
     sizingTemplate: String? = null,
+    unitFirst: Boolean = false,
 ) {
     val fallbackSize = MaterialTheme.typography.numericTitle.fontSize
     val sized = if (valueStyle.fontSize.isSpecified) valueStyle else valueStyle.copy(fontSize = fallbackSize)
@@ -109,7 +114,7 @@ fun StatCell(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        ValueLine(value, unit, sized, sizingTemplate)
+        ValueLine(value, unit, sized, sizingTemplate, unitFirst)
         if (supporting != null) {
             Text(
                 supporting,
@@ -121,9 +126,11 @@ fun StatCell(
 }
 
 @Composable
-private fun ValueLine(value: String, unit: String?, style: TextStyle, template: String?) {
+private fun ValueLine(value: String, unit: String?, style: TextStyle, template: String?, unitFirst: Boolean) {
     val gap = MaterialTheme.spacing.xxs
-    val policy = remember(gap, unit != null, template != null) { ValueLinePolicy(gap, unit != null, template != null) }
+    val policy = remember(gap, unit != null, template != null, unitFirst) {
+        ValueLinePolicy(gap, unit != null, template != null, unitFirst)
+    }
     Layout(
         content = {
             Text(value, style = style, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, softWrap = false)
@@ -141,6 +148,32 @@ private fun ValueLine(value: String, unit: String?, style: TextStyle, template: 
         },
         measurePolicy = policy,
     )
+}
+
+/**
+ * Whether a [StatCell] with this [label] (after its indicator dot when [hasIndicator]) and [value] + [unit] fits
+ * [maxWidthPx] at full size: the label unclipped and the value line at scale 1 with the unit beside it
+ * ([fitValueLine]). Measured with StatCell's own dot, gaps and unit scale, for layouts that pick a grid from it
+ * (Now's readouts) and must stay in step with the cell. [valueStyle] must have a specified font size.
+ */
+internal fun statCellFitsInline(
+    measurer: TextMeasurer,
+    density: Density,
+    spacing: Spacing,
+    label: String,
+    hasIndicator: Boolean,
+    value: String,
+    unit: String?,
+    labelStyle: TextStyle,
+    valueStyle: TextStyle,
+    maxWidthPx: Float,
+): Boolean = with(density) {
+    val dot = if (hasIndicator) IndicatorSize.toPx() + spacing.xs.toPx() else 0f
+    val labelWidth = measurer.measure(label, labelStyle).size.width + dot
+    val valueWidth = measurer.measure(value, valueStyle).size.width
+    val unitWidth = unit?.let { measurer.measure(it, valueStyle.scaled(StatCellDefaults.UnitScale)).size.width }
+    val fit = fitValueLine(valueWidth, unitWidth, spacing.xxs.roundToPx(), maxWidthPx.toInt())
+    labelWidth <= maxWidthPx && fit.scale == 1f && !fit.unitBelow
 }
 
 /** Font size (and an sp line height) times [scale]; [this] must have a specified font size. */
@@ -196,11 +229,13 @@ private fun ValueLineFit.fits(valueWidth: Int, unitWidth: Int?, gap: Int, maxWid
  * Value and unit measured at full size, then drawn scaled (graphics layer) as [fitValueLine] decides. Scaling
  * keeps them real `Text`s (semantics, font scale) without subcomposition, so intrinsic measurement works.
  * Children: value, then the unit if [hasUnit], then the sizing template if [hasTemplate] (measured, never placed).
+ * With [unitFirst] a shared line starts with the unit; stacked, the unit stays under the value.
  */
 private class ValueLinePolicy(
     private val gap: Dp,
     private val hasUnit: Boolean,
     private val hasTemplate: Boolean,
+    private val unitFirst: Boolean,
 ) : MeasurePolicy {
     private fun <T> List<T>.unit(): T? = if (hasUnit) this[1] else null
 
@@ -217,20 +252,23 @@ private class ValueLinePolicy(
         val valueBaseline = value.baseline()
         val baseline = max(valueBaseline, unit?.baseline() ?: 0)
         val valueTop = baseline - scale * valueBaseline
-        val valueRight = scale * value.width
         val lineWidth: Float
         val lineHeight: Float
+        val valueX: Float
         val unitX: Float
         val unitY: Float
         if (unit != null && fit.unitBelow) {
+            valueX = 0f
             unitX = 0f
             unitY = valueTop + scale * value.height
-            lineWidth = max(valueRight, scale * unit.width)
+            lineWidth = max(scale * value.width, scale * unit.width)
             lineHeight = unitY + scale * unit.height
         } else {
-            unitX = valueRight + gapPx
+            val leadingUnit = unit != null && unitFirst
+            valueX = if (leadingUnit && unit != null) scale * unit.width + gapPx else 0f
+            unitX = if (leadingUnit) 0f else scale * value.width + gapPx
             unitY = baseline - scale * (unit?.baseline() ?: 0)
-            lineWidth = if (unit != null) unitX + scale * unit.width else valueRight
+            lineWidth = if (unit != null) scale * (value.width + unit.width) + gapPx else scale * value.width
             // Full-size line height, whatever the scale: shrinking never changes the cell's height.
             lineHeight = max(value.height - valueBaseline, unit?.let { it.height - it.baseline() } ?: 0).toFloat() + baseline
         }
@@ -250,7 +288,7 @@ private class ValueLinePolicy(
                     }
                 }
             }
-            value.placeScaled(0f, valueTop)
+            value.placeScaled(valueX, valueTop)
             unit?.placeScaled(unitX, unitY)
         }
     }

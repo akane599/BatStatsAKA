@@ -7,14 +7,17 @@ import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import app.batstats.R
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.BatteryMainActivity
+import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.measurement.BatteryReading
+import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.util.TimeEstimator
 import app.batstats.settings.useFahrenheit
@@ -24,6 +27,10 @@ import java.util.Locale
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -72,28 +79,49 @@ object WidgetUpdater {
     /** Called from each provider's onUpdate/onDeleted/onEnabled/onDisabled: its placed widgets changed. */
     fun invalidate(provider: Class<out AppWidgetProvider>) = widgetIds.invalidate(provider)
 
+    /**
+     * The monitoring service's widget stream: each capture with its held estimate ([EtaHold], as the notification
+     * holds it). Realtime carries every capture twice, raw (no discharge estimate) and then the writer's copy; without
+     * the hold the time widget would flash "—" and push twice per capture. Readings without a sample are skipped.
+     */
+    fun readings(realtime: Flow<BatteryRepository.Realtime>): Flow<EtaHold.Reading> = realtime
+        .scan(EtaHold.Reading()) { held, reading -> EtaHold.next(held, reading) }
+        .drop(1)
+        .filter { it.reading.sample != null }
+
+    /** A host request: one fresh reading within the receiver's goAsync window; a failure never reaches the process. */
     fun refresh(context: Context, pending: BroadcastReceiver.PendingResult) {
         val appContext = context.applicationContext
         CoroutineScope(Dispatchers.Main.immediate).launch {
             try {
-                val repository = BatteryGraph.repo
-                val fahrenheit = try { repository.getSettings().useFahrenheit }
-                    catch (e: CancellationException) { throw e }
+                withTimeoutOrNull(REFRESH_TIMEOUT_MS) {
+                    val repository = BatteryGraph.repo
+                    val fahrenheit = try {
+                        withTimeoutOrNull(SETTINGS_TIMEOUT_MS) { repository.getSettings().useFahrenheit } ?: lastFahrenheit
+                    } catch (e: CancellationException) { throw e }
                     catch (_: Exception) { lastFahrenheit }
-                // Read last, so the push follows the capture in the sampler's queue order. Stays within
-                // the receiver's goAsync window, falling back to the last realtime value.
-                val reading = withTimeoutOrNull(REFRESH_TIMEOUT_MS) { repository.readOnce() } ?: repository.realtimeFlow.value
-                push(appContext, reading.sample, repository.isMonitoringFlow.value, fahrenheit)
+                    // Read last, so the push follows the capture in the sampler's queue order; falls back to the last
+                    // realtime value. The fresh capture carries no estimate: the service's last one is held across it.
+                    val fresh = withTimeoutOrNull(READ_TIMEOUT_MS) { repository.readOnce() } ?: repository.realtimeFlow.value
+                    val reading = EtaHold.next(EtaHold.next(EtaHold.Reading(), repository.realtimeFlow.value), fresh)
+                    deliver(appContext, content(appContext, reading, repository.isMonitoringFlow.value, fahrenheit))
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(LOG_TAG, "Widget refresh failed (${e.javaClass.simpleName})")
+            } finally {
+                pending.finish()
             }
-            finally { pending.finish() }
         }
     }
 
     fun push(context: Context, sample: BatterySample?, monitoring: Boolean = true, fahrenheit: Boolean = lastFahrenheit) =
-        deliver(context, content(context, sample, monitoring, fahrenheit))
+        deliver(context, content(context, EtaHold.next(EtaHold.Reading(), BatteryRepository.Realtime(sample)), monitoring, fahrenheit))
 
-    fun content(context: Context, sample: BatterySample?, monitoring: Boolean, fahrenheit: Boolean): Content {
+    fun content(context: Context, reading: EtaHold.Reading, monitoring: Boolean, fahrenheit: Boolean): Content {
         lastFahrenheit = fahrenheit // For pushes that don't pass it, e.g. the service's final paused push.
+        val sample = reading.reading.sample
         val freshness = sample?.timestamp?.let {
             DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
         } ?: context.getString(R.string.widget_no_reading)
@@ -103,7 +131,7 @@ object WidgetUpdater {
                 if (fahrenheit) String.format(Locale.getDefault(), "%.1f °F", it / 10.0 * 1.8 + 32)
                 else String.format(Locale.getDefault(), "%.1f °C", it / 10.0)
             } ?: "—",
-            estimate = if (monitoring) TimeEstimator.etaString(context, sample) ?: "—" else "—",
+            estimate = if (monitoring) TimeEstimator.etaString(context, reading) ?: "—" else "—",
             caption = if (monitoring) context.getString(R.string.widget_read_at, freshness)
                 else context.getString(R.string.widget_paused_at, freshness),
             direction = sample?.let { directionFor(BatteryReading.powerState(it.status, it.plugged), it.levelPercent) }
@@ -145,5 +173,9 @@ object WidgetUpdater {
 
     fun showPlaceholder(context: Context) = push(context, null, monitoring = false)
 
-    private const val REFRESH_TIMEOUT_MS = 8_000L
+    private const val LOG_TAG = "WidgetUpdater"
+    // A receiver's goAsync window is about 10 s: settings then the reading, all of it capped.
+    private const val SETTINGS_TIMEOUT_MS = 2_000L
+    private const val READ_TIMEOUT_MS = 6_000L
+    private const val REFRESH_TIMEOUT_MS = 9_000L
 }

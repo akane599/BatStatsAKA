@@ -207,6 +207,22 @@ class HistoryViewModelTest {
         assertEquals(T0 - MINUTE, state().sessions.rows[0].endMs)
     }
 
+    @Test fun sessionRowsHideChargeSessionDetailsWouldHide() = runTest {
+        val measured = session("measured", SessionType.DISCHARGE, start = T0 - 3 * HOUR, end = T0 - 2 * HOUR, last = T0 - 2 * HOUR,
+            observation = "obs-old", delta = 300_000, status = null)
+        repo.sessionRows.value = listOf(
+            measured,
+            measured.copy(sessionId = "legacy", source = "legacy"),
+            measured.copy(sessionId = "uncovered", counterCoveredMs = 0),
+        )
+        val (_, state) = start()
+
+        val charge = state().sessions.rows.associate { it.sessionId to it.chargeMah }
+        assertEquals(300.0, charge.getValue("measured")!!, 1e-9)
+        assertNull("Legacy rows: SessionDetails hides it too", charge.getValue("legacy"))
+        assertNull("The counter never covered it", charge.getValue("uncovered"))
+    }
+
     @Test fun chipsFilterTheQueryAndPagesGrowFiftyAtATime() = runTest {
         repo.sessionRows.value = List(120) { i ->
             session("s$i", if (i % 2 == 0) SessionType.DISCHARGE else SessionType.CHARGE, start = T0 - i * HOUR, end = T0 - i * HOUR + MINUTE,
@@ -259,6 +275,22 @@ class HistoryViewModelTest {
         assertFalse(state().sessions.failed)
         assertEquals(listOf("s"), state().sessions.rows.map { it.sessionId })
         assertFalse(state().days.failed)
+    }
+
+    @Test fun showTodaySwitchesToDaysWithTodaySelected() = runTest {
+        repo.summaries.value = listOf(day(TODAY, onUah = 900_000, offUah = 100_000, onMs = HOUR, offMs = HOUR, chargedUah = 0, suspendMs = null))
+        val saved = SavedStateHandle()
+        val (vm, state) = start(saved)
+        vm.onEvent(HistoryEvent.SelectMode(HistoryMode.SESSIONS))
+        vm.onEvent(HistoryEvent.SelectDay(TODAY - 2))
+        runCurrent()
+
+        vm.onEvent(HistoryEvent.ShowToday)
+        runCurrent()
+
+        assertEquals(HistoryMode.DAYS, state().mode)
+        assertEquals(TODAY, state().selectedDay)
+        assertEquals("Saved, so it survives process death", TODAY, saved.get<Long>(HistoryViewModel.KEY_DAY))
     }
 
     @Test fun monitoringIsPassedThrough() = runTest {
@@ -332,6 +364,7 @@ class HistoryViewModelTest {
             estCapacityMah = null,
             observationId = observation,
             lastSampleTime = last,
+            counterCoveredMs = HOUR,
             source = "BatteryManager",
             appUsageStatus = status,
         )

@@ -27,18 +27,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
-import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -62,14 +57,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.measurement.CalibrationState
@@ -82,6 +74,7 @@ import app.batstats.settings.CurrentUnitOverride
 import app.batstats.settings.DesignCapacity
 import app.batstats.settings.useFahrenheit
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
@@ -108,7 +101,6 @@ import org.koin.androidx.compose.koinViewModel
 private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 
 /** Longest design capacity the field accepts (30000). */
-private const val DESIGN_CAPACITY_MAX_DIGITS = 5
 
 /** M3's content alpha for a disabled control. */
 private const val DISABLED_ALPHA = 0.38f
@@ -499,27 +491,15 @@ private fun DataPanel(
     }
 }
 
-/** A failed write, in the heat family, until dismissed or the next write succeeds; announced politely. */
+/** A failed write, as the app's quiet [Notice], until dismissed or the next write succeeds; announced politely. */
 @Composable
 private fun ErrorBanner(error: SettingsError, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    val spacing = MaterialTheme.spacing
-    val content = MaterialTheme.colorScheme.onErrorContainer
     val message = when (error) {
         SettingsError.WRITE_FAILED -> R.string.settings_write_failed
         SettingsError.INVALID_DESIGN_CAPACITY -> R.string.settings_design_capacity_invalid
     }
-    Panel(
-        modifier.semantics { liveRegion = LiveRegionMode.Polite },
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentPadding = PaddingValues(start = spacing.md, top = spacing.xs, end = spacing.xxs, bottom = spacing.xs),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-            Icon(Icons.Rounded.ErrorOutline, contentDescription = null, tint = content)
-            Text(stringResource(message), Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium, color = content)
-            IconButton(onClick = onDismiss) {
-                Icon(Icons.Rounded.Close, contentDescription = stringResource(R.string.settings_dismiss), tint = content)
-            }
-        }
+    Notice(stringResource(message), modifier, framed = true) {
+        TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_dismiss)) }
     }
 }
 
@@ -621,7 +601,6 @@ private fun SegmentedRow(setting: SettingsChoice, settings: AppSettings, onEvent
             labels = setting.optionLabels(),
             selectedIndex = setting.selectedIndex(settings),
             onSelect = { onEvent(SettingsEvent.SetChoice(setting, it)) },
-            contentDescription = title,
         )
     }
 }
@@ -746,44 +725,6 @@ private fun ThresholdDialog(
     )
 }
 
-/** mAh as digits; empty means automatic. Save stays off until the value is 0, empty or in range. */
-@Composable
-private fun DesignCapacityDialog(current: Int, onSave: (Int) -> Unit, onDismiss: () -> Unit) {
-    var text by rememberSaveable {
-        mutableStateOf(if (DesignCapacity.isValid(current) && current != DesignCapacity.AUTO) current.toString() else "")
-    }
-    val mAh = if (text.isEmpty()) DesignCapacity.AUTO else text.toIntOrNull()
-    val valid = mAh != null && DesignCapacity.isValid(mAh)
-    val locale = currentLocale()
-    val low = formatWhole(DesignCapacity.RANGE_MAH.first.toFloat(), locale)
-    val high = formatWhole(DesignCapacity.RANGE_MAH.last.toFloat(), locale)
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.settings_design_capacity)) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { input -> text = input.filter(Char::isDigit).take(DESIGN_CAPACITY_MAX_DIGITS) },
-                modifier = Modifier.fillMaxWidth(),
-                textStyle = MaterialTheme.typography.numericBody,
-                placeholder = { Text(stringResource(R.string.option_auto)) },
-                suffix = { Text(stringResource(R.string.settings_unit_mah)) },
-                supportingText = {
-                    Text(stringResource(if (valid) R.string.settings_design_capacity_hint else R.string.settings_design_capacity_error, low, high))
-                },
-                isError = !valid,
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                shape = MaterialTheme.shapes.small,
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { if (mAh != null && valid) onSave(mAh) }, enabled = valid) { Text(stringResource(R.string.settings_save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
-    )
-}
-
 // Labels and formatting
 
 private fun SettingsChoice.titleRes(): Int = when (this) {
@@ -847,7 +788,7 @@ private fun thresholdText(setting: SettingsThreshold, value: Float, fahrenheit: 
     val locale = currentLocale()
     return when (setting) {
         SettingsThreshold.LOW_BATTERY, SettingsThreshold.HIGH_BATTERY ->
-            stringResource(R.string.settings_value_percent, formatWhole(value, locale))
+            stringResource(R.string.percent_value, formatWhole(value, locale))
         SettingsThreshold.TEMPERATURE ->
             if (fahrenheit) {
                 stringResource(R.string.settings_value_fahrenheit, formatWhole(value * 9 / 5 + 32, locale))

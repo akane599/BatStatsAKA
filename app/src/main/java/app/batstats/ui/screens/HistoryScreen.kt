@@ -31,7 +31,6 @@ import androidx.compose.material.icons.automirrored.rounded.BatteryUnknown
 import androidx.compose.material.icons.rounded.BarChart
 import androidx.compose.material.icons.rounded.Battery3Bar
 import androidx.compose.material.icons.rounded.BatteryChargingFull
-import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Power
 import androidx.compose.material3.FilterChip
@@ -42,11 +41,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.FirstBaseline
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
@@ -63,6 +66,7 @@ import app.batstats.battery.data.db.SessionType
 import app.batstats.ui.components.AppIconDefaults
 import app.batstats.ui.components.EmptyState
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
@@ -80,6 +84,9 @@ import app.batstats.ui.components.headerActionOverhang
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.durationString
 import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.percentUnit
+import app.batstats.ui.format.formatPercent
+import app.batstats.ui.format.mahText
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -98,6 +105,7 @@ import app.batstats.viewmodel.SessionsState
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.max
 import org.koin.androidx.compose.koinViewModel
 
 /** Two columns (chart beside the day list) from this window width, as on Now. */
@@ -110,14 +118,23 @@ private const val PERCENT_TEMPLATE = 100.0
 /**
  * History, wired: the Koin [HistoryViewModel] (mode, range, chip and selected day survive process death through its
  * SavedStateHandle). Opening a session leaves through [onOpenSession]; every other [HistoryEvent] goes to the VM.
+ * [showToday] (Now's Today card) switches to Days with today selected, once, then reports [onTodayShown].
  */
 @Composable
 fun HistoryScreen(
     onOpenSession: (sessionId: String) -> Unit,
     modifier: Modifier = Modifier,
+    showToday: Boolean = false,
+    onTodayShown: () -> Unit = {},
     vm: HistoryViewModel = koinViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    LaunchedEffect(showToday) {
+        if (showToday) {
+            vm.onEvent(HistoryEvent.ShowToday)
+            onTodayShown()
+        }
+    }
     HistoryContent(
         state = state,
         onEvent = { event -> if (event is HistoryEvent.OpenSession) onOpenSession(event.sessionId) else vm.onEvent(event) },
@@ -248,7 +265,11 @@ private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (Hi
         }
         val entries = remember(days.days, state.range, labels) {
             days.days.map { day ->
-                BarEntry(labels.bar(day.epochDay, state.range), listOf(day.figures?.screenOnMah ?: 0.0, day.figures?.screenOffMah ?: 0.0))
+                BarEntry(
+                    labels.bar(day.epochDay, state.range),
+                    listOf(day.figures?.screenOnMah ?: 0.0, day.figures?.screenOffMah ?: 0.0),
+                    shortLabel = labels.barShort(day.epochDay, state.range),
+                )
             }
         }
         val selectedIndex = days.days.indexOfFirst { it.epochDay == state.selectedDay }.takeIf { it >= 0 }
@@ -317,7 +338,8 @@ private fun DayFiguresBlock(title: String, figures: DayFigures?, modifier: Modif
                 stringResource(R.string.history_deep_sleep),
                 figures.deepSleepPercent?.let { formatNumber(it, 0, locale) } ?: stringResource(R.string.component_no_value),
                 Modifier.weight(1f),
-                unit = stringResource(R.string.now_unit_percent),
+                unit = percentUnit().sign,
+                unitFirst = percentUnit().first,
                 sizingTemplate = formatNumber(PERCENT_TEMPLATE, 0, locale),
             )
             StatCell(
@@ -363,7 +385,7 @@ private fun DayRow(day: DayEntry, label: String, selected: Boolean, onClick: () 
     val mah = stringResource(R.string.now_unit_mah)
     val screenOn = durationString(figures.screenOnMs)
     val detail = if (figures.chargedMah >= 1) {
-        stringResource(R.string.history_day_detail_charged, screenOn, "${formatNumber(figures.chargedMah, 0, locale)} $mah")
+        stringResource(R.string.history_day_detail_charged, screenOn, mahText(figures.chargedMah))
     } else {
         stringResource(R.string.history_day_detail, screenOn)
     }
@@ -380,17 +402,40 @@ private fun DayRow(day: DayEntry, label: String, selected: Boolean, onClick: () 
     }
 }
 
-/** A row's first line: [title] at the start and its number at the end, on one baseline; the lines under it get the full width. */
+/**
+ * A row's first line: [title] at the start and its number at the end, on one baseline; the lines under it get the
+ * full width. When the title would wrap beside the number (a long time range at a large font), the number moves under
+ * the whole title instead of sitting beside its first line.
+ */
 @Composable
 private fun TitleAndValue(title: String, value: AnnotatedString, titleStyle: TextStyle, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm)) {
-        Text(
-            title,
-            modifier = Modifier.weight(1f).alignByBaseline(),
-            style = titleStyle,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(value, modifier = Modifier.alignByBaseline(), style = MaterialTheme.typography.numericBody)
+    val gap = MaterialTheme.spacing.sm
+    Layout(
+        content = {
+            Text(title, style = titleStyle, color = MaterialTheme.colorScheme.onSurface)
+            Text(value, style = MaterialTheme.typography.numericBody)
+        },
+        modifier = modifier.fillMaxWidth(),
+    ) { measurables, constraints ->
+        val gapPx = gap.roundToPx()
+        val number = measurables[1].measure(constraints.copy(minWidth = 0, minHeight = 0))
+        val titleWidth = measurables[0].maxIntrinsicWidth(Constraints.Infinity)
+        val width = if (constraints.hasBoundedWidth) constraints.maxWidth else titleWidth + gapPx + number.width
+        if (titleWidth + gapPx + number.width <= width) {
+            val text = measurables[0].measure(Constraints(maxWidth = width - gapPx - number.width))
+            val baseline = max(text[FirstBaseline], number[FirstBaseline])
+            val height = max(baseline - text[FirstBaseline] + text.height, baseline - number[FirstBaseline] + number.height)
+            layout(width, height) {
+                text.placeRelative(0, baseline - text[FirstBaseline])
+                number.placeRelative(width - number.width, baseline - number[FirstBaseline])
+            }
+        } else {
+            val text = measurables[0].measure(Constraints(maxWidth = width))
+            layout(width, text.height + number.height) {
+                text.placeRelative(0, 0)
+                number.placeRelative(0, text.height)
+            }
+        }
     }
 }
 
@@ -418,17 +463,17 @@ private fun LazyListScope.sessionsItems(
         else -> {
             // Newest first, so each start day is one contiguous group. Two columns read row by row, newest first.
             val open: (String) -> Unit = { onEvent(HistoryEvent.OpenSession(it)) }
-            sessions.rows.groupBy { it.startDay }.toList().chunked(if (twoColumns) 2 else 1).forEach { line ->
-                item(key = "sessions-day-${line.first().first}") {
+            sessions.days.chunked(if (twoColumns) 2 else 1).forEach { line ->
+                item(key = "sessions-day-${line.first().epochDay}") {
                     // Side by side, the two day panels of a line share their height.
                     Row(
                         if (twoColumns) Modifier.height(IntrinsicSize.Max) else Modifier,
                         horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
                     ) {
-                        line.forEach { (day, rows) ->
+                        line.forEach { day ->
                             SessionDayPanel(
-                                title = labels.full(day, state.todayEpochDay),
-                                rows = rows,
+                                title = labels.full(day.epochDay, state.todayEpochDay),
+                                rows = day.rows,
                                 formatter = formatter,
                                 onOpen = open,
                                 modifier = Modifier.weight(1f).then(if (twoColumns) Modifier.fillMaxHeight() else Modifier),
@@ -521,8 +566,8 @@ private fun SessionRowItem(row: SessionRow, formatter: TimeAxisFormatter, onClic
     val noValue = stringResource(R.string.component_no_value)
     val levels = stringResource(
         R.string.history_level_change,
-        row.startLevel?.let { stringResource(R.string.history_percent, formatNumber(it.toDouble(), 0, locale)) } ?: noValue,
-        row.endLevel?.let { stringResource(R.string.history_percent, formatNumber(it.toDouble(), 0, locale)) } ?: noValue,
+        row.startLevel?.let { formatPercent(it.toDouble()) } ?: noValue,
+        row.endLevel?.let { formatPercent(it.toDouble()) } ?: noValue,
     )
     val detail = stringResource(R.string.history_session_detail, durationString(row.endMs - row.startMs), levels)
     val charge = row.chargeMah?.let { mah ->
@@ -583,16 +628,17 @@ private fun SessionTypeIcon(type: SessionType, modifier: Modifier = Modifier) {
 
 // ---- Shared ----
 
+/** A failed read, as the app's quiet [Notice], with Try again. */
 @Composable
 private fun LoadFailed(onRetry: () -> Unit, modifier: Modifier = Modifier) {
-    EmptyState(
-        title = stringResource(R.string.history_failed_title),
+    Notice(
+        message = stringResource(R.string.history_failed_body),
         modifier = modifier,
-        body = stringResource(R.string.history_failed_body),
-        icon = Icons.Rounded.ErrorOutline,
-        actionLabel = stringResource(R.string.history_retry),
-        onAction = onRetry,
-    )
+        title = stringResource(R.string.history_failed_title),
+        framed = true,
+    ) {
+        TextButton(onClick = onRetry) { Text(stringResource(R.string.history_retry)) }
+    }
 }
 
 
@@ -609,12 +655,17 @@ private fun numberWithUnit(number: String, unit: String): AnnotatedString {
     }
 }
 
-/** Day names for the list ("Today", "Yesterday", "Tue, Oct 7") and the bars ("Tue" for a week, "Oct 7" beyond). */
+/**
+ * Day names for the list ("Today", "Yesterday", "Tue, Oct 7") and the bars ("Tue" for a week, "Oct 7" beyond; when
+ * those don't fit, e.g. at a large font, the short "T" / "7" under every bar).
+ */
 @Stable
 private class DayLabels(locale: Locale, private val today: String, private val yesterday: String) {
     private val full = pattern(locale, "MMMEd")
     private val weekday = pattern(locale, "EEE")
+    private val narrowWeekday = pattern(locale, "EEEEE")
     private val short = pattern(locale, "MMMd")
+    private val dayOfMonth = pattern(locale, "d")
 
     fun full(epochDay: Long, todayEpochDay: Long): String = when (epochDay) {
         todayEpochDay -> today
@@ -624,6 +675,9 @@ private class DayLabels(locale: Locale, private val today: String, private val y
 
     fun bar(epochDay: Long, range: DayRange): String =
         (if (range == DayRange.WEEK) weekday else short).format(LocalDate.ofEpochDay(epochDay))
+
+    fun barShort(epochDay: Long, range: DayRange): String =
+        (if (range == DayRange.WEEK) narrowWeekday else dayOfMonth).format(LocalDate.ofEpochDay(epochDay))
 
     private companion object {
         fun pattern(locale: Locale, skeleton: String): DateTimeFormatter =

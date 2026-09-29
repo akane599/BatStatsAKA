@@ -2,7 +2,6 @@
 <!-- The Settings screen (ui/screens/SettingsScreen.kt). Unit templates that never change are translatable="false" (base only). -->
 <resources>
     <!-- Value templates: %1$s is a number formatted for the locale -->
-    <string name="settings_value_percent">%1$s%%</string>
     <string name="settings_value_ma" translatable="false">%1$s mA</string>
     <string name="settings_value_mah" translatable="false">%1$s mAh</string>
     <string name="settings_value_celsius" translatable="false">%1$s °C</string>

@@ -48,6 +48,39 @@ internal fun formatSigned(value: Double, decimals: Int, locale: Locale): String 
     return if (value > 0 && text != format.format(0.0)) "+$text" else text
 }
 
+/** mAh with one decimal below 10, so small users don't all read "0". */
+internal fun formatMah(value: Double, locale: Locale): String = formatNumber(value, if (abs(value) < 10) 1 else 0, locale)
+
+/** A number and its unit as one string ("812 mAh", "1:24 h"): the one join every screen uses. */
+@Composable
+internal fun valueWithUnit(value: String, unit: String): String = stringResource(R.string.value_unit, value, unit)
+
+/** "812 mAh" ([formatMah] + the unit), for lists, captions and sentences. */
+@Composable
+internal fun mahText(value: Double): String = valueWithUnit(formatMah(value, currentLocale()), stringResource(R.string.now_unit_mah))
+
+/**
+ * A percentage the locale's way, from the one `percent_value` template: "94%", Spanish "94 %", Turkish "%94". Every
+ * percent on screen goes through it (text) or [percentUnit] (a StatCell's value + unit).
+ */
+@Composable
+internal fun formatPercent(value: Double, decimals: Int = 0): String =
+    stringResource(R.string.percent_value, formatNumber(value, decimals, currentLocale()))
+
+/** The "%" sign as a StatCell unit and whether this locale writes it first ([StatCellDefaults]; `unitFirst`). */
+internal class PercentUnit(val sign: String, val first: Boolean)
+
+@Composable
+internal fun percentUnit(): PercentUnit = percentUnitOf(stringResource(R.string.percent_value))
+
+/** The sign and its side from a `percent_value` template (en "%1$s%%", tr "%%%1$s"): pure, for tests. */
+internal fun percentUnitOf(template: String): PercentUnit = PercentUnit("%", first = template.trimStart().startsWith("%%"))
+
+/** A percentage with the number in the surrounding style and the sign in [rest] (quieter), in the locale's order. */
+@Composable
+internal fun percentAnnotated(number: String, rest: SpanStyle): AnnotatedString =
+    styledTemplate(stringResource(R.string.percent_value), listOf(number), rest)
+
 /** Small rates keep a second decimal so a real drain never reads as 0.0. */
 internal fun formatRate(value: Double, locale: Locale): String = formatNumber(value, if (abs(value) < 1) 2 else 1, locale)
 

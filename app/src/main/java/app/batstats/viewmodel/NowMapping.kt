@@ -47,7 +47,15 @@ internal object NowMapping {
             eta = eta,
             monitoring = monitoring,
             startBlocked = startBlocked && !monitoring,
+            etaPending = if (sample == null || eta != null) null else etaPending(realtime.powerState, monitoring),
         )
+    }
+
+    /** What to say without an estimate ([EtaPending]); null outside discharging and charging. */
+    fun etaPending(power: PowerState, monitoring: Boolean): EtaPending? = when (power) {
+        PowerState.DISCHARGING -> if (monitoring) EtaPending.ESTIMATING_LEFT else EtaPending.NEEDS_MONITORING_LEFT
+        PowerState.CHARGING -> if (monitoring) EtaPending.ESTIMATING_FULL else EtaPending.NEEDS_MONITORING_FULL
+        PowerState.PLUGGED, PowerState.UNKNOWN -> null
     }
 
     fun readouts(reading: BatteryRepository.Realtime) = Readouts(

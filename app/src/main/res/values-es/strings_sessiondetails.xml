@@ -2,7 +2,6 @@
 <resources>
     <!-- Top bar and delete -->
     <string name="sessiondetails_title">Sesión</string>
-    <string name="sessiondetails_back">Atrás</string>
     <string name="sessiondetails_delete">Eliminar sesión</string>
     <string name="sessiondetails_delete_title">¿Eliminar esta sesión?</string>
     <string name="sessiondetails_delete_body">Sus lecturas y el uso por app se eliminan con ella. Los totales diarios no cambian.</string>
@@ -54,7 +53,6 @@
     <string name="sessiondetails_screen_off">Pantalla apagada</string>
     <string name="sessiondetails_deep_sleep">Suspensión profunda</string>
     <string name="sessiondetails_deep_sleep_screen_off">Con la pantalla apagada</string>
-    <string name="sessiondetails_drain_supporting">%1$s mA · %2$s</string>
     <string name="sessiondetails_drain_info_title">Acerca del consumo</string>
     <string name="sessiondetails_drain_info_body">Pantalla encendida y apagada cuentan solo el tiempo con batería. El primer número es el consumo medio por hora como parte de la capacidad total de la batería; mA es el mismo consumo como corriente.\n\nSuspensión profunda es cuánto tiempo el procesador estuvo totalmente dormido. Con la pantalla apagada debería ser alta: si es baja, algo mantuvo el teléfono despierto.</string>
 

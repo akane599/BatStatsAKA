@@ -3,7 +3,6 @@
 <resources>
     <!-- Top bar and delete -->
     <string name="sessiondetails_title">Session</string>
-    <string name="sessiondetails_back">Back</string>
     <string name="sessiondetails_delete">Delete session</string>
     <string name="sessiondetails_delete_title">Delete this session?</string>
     <string name="sessiondetails_delete_body">Its readings and per-app usage are deleted with it. Daily totals stay as they are.</string>
@@ -55,7 +54,6 @@
     <string name="sessiondetails_screen_off">Screen off</string>
     <string name="sessiondetails_deep_sleep">Deep sleep</string>
     <string name="sessiondetails_deep_sleep_screen_off">With the screen off</string>
-    <string name="sessiondetails_drain_supporting">%1$s mA · %2$s</string>
     <string name="sessiondetails_drain_info_title">About drain</string>
     <string name="sessiondetails_drain_info_body">Screen on and screen off count only time on battery. The first number is the average drain per hour as a share of the battery\'s full capacity; mA is the same drain as current.\n\nDeep sleep is how much of the time the processor was fully asleep. With the screen off it should be high: if it is low, something kept the phone awake.</string>
 

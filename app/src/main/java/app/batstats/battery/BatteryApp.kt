@@ -12,6 +12,7 @@ import app.batstats.settings.AppSettings
 import app.batstats.settings.SettingsMigrator
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
@@ -25,6 +26,7 @@ class BatteryApp : Application() {
     private val settingsMigrator: SettingsMigrator by inject()
     private val shizukuBridge: ShizukuBridge by inject()
     private val appInfo: AppInfoRepository by inject()
+    private val repository: BatteryRepository by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -48,6 +50,12 @@ class BatteryApp : Application() {
         // Settings migration; history retention cleanup waits until it has ended.
         appScope.launch {
             settingsMigrator.run()
+        }
+
+        // History › Days for upgraders with monitoring off: the one-time backfill also runs at app start (the
+        // repository is created here, off the main thread).
+        appScope.launch(Dispatchers.IO) {
+            repository.backfillDailySummariesOnce()
         }
     }
 }

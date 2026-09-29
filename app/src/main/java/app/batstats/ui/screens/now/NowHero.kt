@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -33,7 +32,15 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.res.stringResource
@@ -48,18 +55,20 @@ import app.batstats.battery.data.sampling.ChargerType
 import app.batstats.battery.measurement.EtaBasis
 import app.batstats.battery.measurement.PowerState
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.headerActionOverhang
 import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.durationAnnotated
 import app.batstats.ui.format.formatNumber
-import app.batstats.ui.format.styledTemplate
 import app.batstats.ui.format.unitSpan
+import app.batstats.ui.format.percentAnnotated
 import app.batstats.ui.theme.BatMotion
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.numericDisplay
 import app.batstats.ui.theme.numericHeadline
 import app.batstats.ui.theme.spacing
+import app.batstats.viewmodel.EtaPending
 import app.batstats.viewmodel.HeroState
 
 private const val LEVEL_SEGMENTS = 10
@@ -84,13 +93,7 @@ internal fun NowHero(hero: HeroState, onToggleMonitoring: () -> Unit, modifier: 
         }
         LevelAndEta(hero)
         LevelBar(hero.level, hero.hasReading, color)
-        if (hero.startBlocked) {
-            Text(
-                stringResource(R.string.now_start_blocked),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
+        if (hero.startBlocked) Notice(stringResource(R.string.now_start_blocked))
         MonitoringButton(hero.monitoring, onToggleMonitoring, Modifier.fillMaxWidth())
     }
 }
@@ -166,7 +169,7 @@ private fun LevelText(level: Int?) {
     val style = MaterialTheme.typography.numericDisplay
     val quiet = unitSpan(style)
     val number = level?.let { formatNumber(it.toDouble(), 0, currentLocale()) } ?: stringResource(R.string.component_no_value)
-    Text(styledTemplate(stringResource(R.string.now_level), listOf(number), quiet), style = style, color = MaterialTheme.colorScheme.onSurface)
+    Text(percentAnnotated(number, quiet), style = style, color = MaterialTheme.colorScheme.onSurface)
 }
 
 @Composable
@@ -194,11 +197,12 @@ private fun EtaText(hero: HeroState) {
                     textAlign = TextAlign.End,
                 )
             }
-        } else if (hero.hasReading) {
-            val waiting = when {
-                hero.monitoring -> R.string.now_eta_estimating
-                hero.power == PowerState.CHARGING -> R.string.now_eta_needs_monitoring_charge
-                else -> R.string.now_eta_needs_monitoring
+        } else if (hero.etaPending != null) {
+            val waiting = when (hero.etaPending) {
+                EtaPending.ESTIMATING_LEFT -> R.string.now_eta_estimating
+                EtaPending.ESTIMATING_FULL -> R.string.now_eta_estimating_full
+                EtaPending.NEEDS_MONITORING_LEFT -> R.string.now_eta_needs_monitoring
+                EtaPending.NEEDS_MONITORING_FULL -> R.string.now_eta_needs_monitoring_charge
             }
             Text(
                 stringResource(waiting),
@@ -227,22 +231,50 @@ private fun LevelBar(level: Int?, hasReading: Boolean, color: Color) {
     val fill = animatedFill(target, hasReading)
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
     val shape = MaterialTheme.shapes.extraSmall
-    Row(
-        Modifier.fillMaxWidth().height(MaterialTheme.spacing.sm).clearAndSetSemantics { },
-        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.xxs),
-    ) {
-        repeat(LEVEL_SEGMENTS) { index ->
-            val part = (fill * LEVEL_SEGMENTS - index).coerceIn(0f, 1f)
-            Box(Modifier.weight(1f).fillMaxHeight().clip(shape).background(track)) {
-                if (part > 0f) Box(Modifier.fillMaxHeight().fillMaxWidth(part).background(color))
-            }
-        }
-    }
+    val gapDp = MaterialTheme.spacing.xxs
+    // One draw pass reads the fill: the animation redraws the bar each frame without recomposing anything.
+    Spacer(
+        Modifier
+            .fillMaxWidth()
+            .height(MaterialTheme.spacing.sm)
+            .clearAndSetSemantics { }
+            .drawWithCache {
+                val gap = gapDp.toPx()
+                val segment = (size.width - gap * (LEVEL_SEGMENTS - 1)) / LEVEL_SEGMENTS
+                val segmentSize = Size(segment, size.height)
+                val radius = CornerRadius(shape.topStart.toPx(segmentSize, this))
+                val rtl = layoutDirection == LayoutDirection.Rtl
+                // Segment 0 is at the start edge; each fills from its start.
+                val lefts = List(LEVEL_SEGMENTS) { index ->
+                    val start = index * (segment + gap)
+                    if (rtl) size.width - start - segment else start
+                }
+                val outlines = lefts.map { left ->
+                    Path().apply { addRoundRect(RoundRect(Rect(Offset(left, 0f), segmentSize), radius)) }
+                }
+                onDrawBehind {
+                    val filled = fill() * LEVEL_SEGMENTS
+                    lefts.forEachIndexed { index, left ->
+                        drawPath(outlines[index], track)
+                        val part = (filled - index).coerceIn(0f, 1f)
+                        if (part > 0f) {
+                            val width = segment * part
+                            clipPath(outlines[index]) {
+                                drawRect(color, Offset(if (rtl) left + segment - width else left, 0f), Size(width, size.height))
+                            }
+                        }
+                    }
+                }
+            },
+    )
 }
 
-/** 0 → [target] once per screen (saved, so no replay on return or rotation); skipped in previews. */
+/**
+ * 0 → [target] once per screen (saved, so no replay on return or rotation); skipped in previews. Read the returned
+ * lambda in draw only, so the animation doesn't recompose.
+ */
 @Composable
-private fun animatedFill(target: Float, hasReading: Boolean): Float {
+private fun animatedFill(target: Float, hasReading: Boolean): () -> Float {
     val inspection = LocalInspectionMode.current
     var played by rememberSaveable { mutableStateOf(inspection) }
     val fill = remember { Animatable(if (played) target else 0f) }
@@ -256,7 +288,7 @@ private fun animatedFill(target: Float, hasReading: Boolean): Float {
             }
         }
     }
-    return fill.value
+    return { fill.value }
 }
 
 @Composable
