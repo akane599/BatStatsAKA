@@ -15,8 +15,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] P6: tests, docs, final reviews → fix wave (990d8a3), verification PASS, screenshots rebaselined (e667cf9, 201/201), /device-check PASS (ordinary 70/70, Shizuku 1/1)
 
 ## Next (ordered)
-1. PR #1 (https://github.com/akane599/BatStatsAKA/pull/1, feat/overhaul → codex/android16-reliability): address review feedback on `feat/overhaul`; watch CI (`test_if_it_builds.yml`).
-2. After it merges: delete `.superpowers/sdd/adaptive-wibbling-twilight/`, the `worktree-agent-*` branches and `.claude/worktrees/*`.
+1. PR #1 (https://github.com/akane599/BatStatsAKA/pull/1, feat/overhaul → codex/android16-reliability): all checks green on ae28239 (both build jobs incl. the 16 KB-page emulator suite). Merge when reviewed; handle any feedback on `feat/overhaul`.
 
 ## Blockers / open questions
 
@@ -27,7 +26,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Added Compose Preview Screenshot Testing (`com.android.compose.screenshot` 0.0.1-alpha16) + smoke test `TelemetryChartScreenshotTest` (light/dark/1.5× font). Verified by: independent agent — `assembleDebug` exit 0, `testDebugUnitTest` 107/107, `validateDebugScreenshotTest` 3/3, refs unchanged
 
 ## Decision log (never delete, one line each)
-- 2026-09-29 Overhaul executed via subagent-driven development; ~47 controller rulings (listed in the final session summary; ledger `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` until deleted). User decisions at the Now checkpoint: look approved, 2×2 phone readouts, since-unplug = open discharge session. Notable: QS tile without ACTIVE_TILE; Reset settings removed; Sparkline removed; package-cycle refactor deferred to debt.
+- 2026-09-29 Overhaul executed via subagent-driven development; ~47 controller rulings (listed in the final session summary; ledger deleted after CI went green). User decisions at the Now checkpoint: look approved, 2×2 phone readouts, since-unplug = open discharge session. Notable: QS tile without ACTIVE_TILE; Reset settings removed; Sparkline removed; package-cycle refactor deferred to debt.
 - 2026-09-28 — Overhaul outline token: M3 `outline` = #63758D (approved #3A4452 kept as `outlineVariant`) because #3A4452 was 1.45–1.95:1 on surfaces (invisible Switch track); smallest lightening passing ≥3:1 on every tier.
 - 2026-09-28 — Overhaul ETA/calibration: "sleep gaps" skip only observation gaps (engine's awake-time rule), not CPU-suspended intervals — counter Δq across suspend is real idle drain. Calibration fast path requires plugged == 0 and a falling counter.
 - 2026-09-28 — Overhaul persistence: screen-off polls saved at most every 30 s (elapsed clock) so a stuck 2 s demand token can't write every 2 s; a session end always forces a save.
@@ -43,7 +42,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Chose standalone `com.android.compose.screenshot` plugin over AGP test suites because AGP is 9.4.0 (suites need ≥ 9.5.0-alpha03) and AGP bumps need approval. Revisit when AGP ≥ 9.5.0-alpha03 (standalone setup is deprecated there). (Superseded 2026-09-28: moved to AGP 9.5.0-alpha07 + test suites, see above.)
 
 ## Known debt / follow-ups
-- Package cycles from the overhaul audit (see `.superpowers/sdd/adaptive-wibbling-twilight/final-module-graph.md` until the workspace is deleted): replace `BatteryGraph` service locator with Koin inject; move AppUsage enums/row into `data.db`; SessionEvidence → data.db; EtaHold off `BatteryRepository.Realtime`; Notifier out of util; SamplingDemand into data.sampling; ChartMath/TimePoint/TimeWindow into a Compose-free file; Destinations out of ui.
+- Package cycles from the overhaul audit: replace `BatteryGraph` service locator with Koin inject; move AppUsage enums/row into `data.db`; SessionEvidence → data.db; EtaHold off `BatteryRepository.Realtime`; Notifier out of util; SamplingDemand into data.sampling; ChartMath/TimePoint/TimeWindow into a Compose-free file; Destinations out of ui.
 - Review suggestions not yet done: `DetailedStatsTab` enum instead of `Int` tab; one shared Shizuku/access UI class for Dashboard + DetailedStats; `KernelDetailsState` single `sources` list; `DiagnosticsUiState` builder shared by wrapper/tests; previews for DetailedStats tabs 1–5/error, Settings dialogs, SessionDetails failed/recording/interrupted/imported — low
 - Transient UI (snackbars) can't be screenshot-tested: layoutlib captures one frame before `showSnackbar` renders — low
 - DetailedStats/History/Settings `rememberSaveable` keys moved with the split; a state bundle saved by the previous APK won't restore once after update — low
@@ -59,6 +58,7 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 | Emulator QA (API 36) | 2026-09-29 (overhaul, /device-check) | Pass — ordinary 70/70 (19 classes), Shizuku 1/1 (official Shizuku 13.6.0 as shell); API 36 ranchu, 4 KB pages; screenshot suite 201/201 after rebaseline (e667cf9) | `bash scripts/check_android_device.sh` |
 
 ## Environment notes (quirks discovered)
+- CI's device jobs use the `pixel_2` profile (411×731 dp): device tests must scroll to below-the-fold content. The 16 KB-page job needs 4 GB emulator RAM (at 2 GB the low-memory killer took the app under test). `check_android_device.sh` saves `<phase>-crash-logcat.txt` / `<phase>-logcat-tail.txt` for failed phases in the uploaded reports.
 - AGP 9.5.0-alpha07 registers `generate<Variant>ComposePreviewRunfiles` for every Compose variant; realizing all tasks (`./gradlew tasks --all`) fails on `release` (unit tests disabled). Normal builds are fine. List tasks via `tasks.names` in an init script instead.
 - Suite task names are variant-first (`testDebugScreenshotTestDefaultTestSuite`), not the doc's `testScreenshotTestDefaultDebugTestSuite`.
 - Screenshot plugin truncates `@Preview(name=…)` at "." (`"Font 1.5"` → `5_….png`); keep preview names dot-free.
