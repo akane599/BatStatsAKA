@@ -1,6 +1,6 @@
 ---
 name: new-screen
-description: Scaffold a new BatStats Compose screen the way the existing 8 are built — Koin wrapper + stateless XxxContent, Navigation 3 route in ui/NavGraph.kt, strings in all locales, optional ViewModel + unit test, and a @ScreenPreviews screenshot test with reference images. Use when the user asks to add a screen/page/destination.
+description: Scaffold a new BatStats Compose screen the way the existing screens are built — Koin wrapper + stateless XxxContent, Navigation 3 route in ui/NavGraph.kt, strings in all locales, optional ViewModel + unit test, and a @ScreenPreviews screenshot test with reference images. Use when the user asks to add a screen/page/destination.
 argument-hint: "<ScreenName> — <one-line purpose>"
 ---
 

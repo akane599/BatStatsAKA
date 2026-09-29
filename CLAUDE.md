@@ -13,7 +13,7 @@ Android app developed on Ubuntu, CLI only (no Android Studio in the loop). Keep 
 - JDK: build targets 21; `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64` (system default; pinned in gradle.properties: no)
 - Gradle 9.7.1 · AGP 9.5.0-alpha07 (alpha, for screenshot test suites) · Kotlin 2.4.20 · compileSdk 37 · minSdk 26 · version catalog: yes (`gradle/libs.versions.toml`)
 - Modules: `:app` · applicationId `org.mlm.batstats` (debug: `.debug`, preview: `.preview`) ≠ namespace `app.batstats`
-- Architecture: single-module MVVM; layers `ui/` (navigation, components/chart, theme, screens) `viewmodel/` `data/` `di/` + feature package `battery/` (apps, data/db, data/sampling, service, measurement, drain, diagnostics, shizuku, util, widget)
+- Architecture: single-module MVVM; layers `ui/` (navigation, components/chart, theme, format, util, screens + screens/now) `viewmodel/` `data/` `di/` + feature package `battery/` (apps, data/db, data/sampling, service, measurement, drain, diagnostics, shizuku, tile, util, widget)
 - DI: koin · DB: room · Network: none · Async: coroutines/Flow
 - Navigation: Navigation 3 (`NavDisplay`/`NavKey`, `ui/NavGraph.kt`) · Firebase: no
 - Tests: JUnit4 + kotlinx-coroutines-test (no mockk/turbine) · androidTest: yes (UiAutomator + Compose UI test) · Espresso: no

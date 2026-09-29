@@ -2,7 +2,7 @@
 
 Replace `Xxx`/`xxx`. Imports shown are the non-obvious ones; let the compiler tell you the rest.
 State lives in the ViewModel as a nested `Ui` class (the `HistoryViewModel.Ui` pattern), so `viewmodel/` never
-imports from `ui/`. If the wrapper instead combines several flows (as `DashboardScreen` does), declare an
+imports from `ui/`. If the wrapper instead combines several flows, declare an
 `@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
 
 ## `ui/screens/XxxScreen.kt`
