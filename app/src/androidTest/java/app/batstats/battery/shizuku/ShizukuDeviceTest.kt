@@ -8,7 +8,8 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 import app.batstats.battery.BatteryGraph
 import app.batstats.battery.BatteryMainActivity
-import app.batstats.battery.util.DetailedStatsCollector
+import app.batstats.battery.apps.AppStatsRepository
+import app.batstats.battery.apps.AppStatsResult
 import app.batstats.battery.util.ShellRunner
 import app.batstats.test.DeviceEnvironment
 import app.batstats.test.RequiresShizuku
@@ -35,7 +36,7 @@ class ShizukuDeviceTest {
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
         val bridge = GlobalContext.get().get<ShizukuBridge>()
         val shell = GlobalContext.get().get<ShellRunner>()
-        val collector = GlobalContext.get().get<DetailedStatsCollector>()
+        val appStats = GlobalContext.get().get<AppStatsRepository>()
         var stoppedServer = false
         try {
             await { bridge.ping() }
@@ -64,9 +65,10 @@ class ShizukuDeviceTest {
             assertEquals(ShizukuBridge.Failure.COMMAND, (forbidden as ShizukuBridge.RunResult.Error).reason)
             bridge.unbind() // Destroy and restart the real helper, with authorization retained.
             assertTrue(bridge.run("dumpsys battery") is ShizukuBridge.RunResult.Success)
-            assertTrue("Android16 report must have a valid window", collector.refresh(force = true))
-            assertNotNull(collector.snapshot.value)
-            assertTrue(collector.snapshot.value!!.source.contains("SHIZUKU"))
+            val dump = appStats.snapshot(force = true)
+            assertTrue("Android16 report must have a valid window", dump is AppStatsResult.Ready)
+            assertNotNull(appStats.cached.value)
+            assertTrue(appStats.cached.value!!.source.contains("SHIZUKU"))
             DeviceEnvironment.screenshot("shizuku-connected")
 
             val pids = device.executeShellCommand("pidof shizuku_server").trim()
@@ -76,9 +78,10 @@ class ShizukuDeviceTest {
             await { !bridge.running.value && !bridge.granted.value }
             assertEquals(ShizukuBridge.Failure.NOT_RUNNING,
                 (bridge.run("dumpsys battery") as ShizukuBridge.RunResult.Error).reason)
-            collector.accessChanged(shell.detectMode(true))
-            assertNotEquals(ShellRunner.Mode.SHIZUKU, shell.access.value)
-            assertNull("No stale advanced report after losing its source", collector.snapshot.value)
+            assertNotEquals(ShellRunner.Mode.SHIZUKU, shell.detectMode(true))
+            val lost = appStats.snapshot(force = true)
+            assertFalse("No stale SHIZUKU-sourced report once its source is gone",
+                lost is AppStatsResult.Ready && lost.snapshot.source.contains("SHIZUKU"))
             val reading = CompletableDeferred<Int?>()
             BatteryGraph.repo.refreshNow { reading.complete(it.level) }
             assertNotNull("Ordinary battery data survives Shizuku loss", withTimeout(120_000) { reading.await() })
@@ -89,8 +92,8 @@ class ShizukuDeviceTest {
             stoppedServer = false
             assertEquals(ShellRunner.Mode.SHIZUKU, shell.detectMode(true))
             assertTrue(bridge.run("dumpsys battery") is ShizukuBridge.RunResult.Success)
-            assertTrue(collector.refresh(force = true))
-            assertNotNull(collector.snapshot.value)
+            assertTrue(appStats.snapshot(force = true) is AppStatsResult.Ready)
+            assertNotNull(appStats.cached.value)
             DeviceEnvironment.screenshot("shizuku-reconnected")
         } catch (failure: Throwable) {
             runCatching { DeviceEnvironment.screenshot("shizuku-failure") }

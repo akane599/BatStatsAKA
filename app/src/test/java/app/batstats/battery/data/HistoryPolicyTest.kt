@@ -1,8 +1,14 @@
 package app.batstats.battery.data
 
+import app.batstats.battery.apps.AppUsageBasis
+import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.*
 import org.junit.Assert.*
 import org.junit.Test
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 class HistoryPolicyTest {
     private fun sample() = BatterySample(timestamp = 1000, levelPercent = 0, status = 3, plugged = 0,
@@ -48,5 +54,50 @@ class HistoryPolicyTest {
             session().copy(deltaUah = -1), session().copy(cpuSuspendMs = 1001), session().copy(endTime = 999))) {
             assertThrows(IllegalArgumentException::class.java) { HistoryPolicy.session(bad) }
         }
+    }
+    @Test fun v5SessionFieldsAreValidatedAndAPendingBreakdownIsNotImported() {
+        val full = session().copy(chargerType = "USB", energyNwh = 3_900_000, peakPowerMw = 4500, peakTemperatureDeciC = 310,
+            screenOffSuspendMs = 0, capacityEstimateMah = 4800, capacityConfidence = "HIGH", capacityBasis = "COUNTER_SPAN",
+            appUsageStatus = AppUsageStatus.READY, appUsageBasis = AppUsageBasis.DELTA)
+        val imported = HistoryPolicy.session(full)
+        assertEquals(full.copy(sessionId = "import:session", observationId = "import:observation", endTime = 2000, activeKey = null,
+            source = "import:legacy", closeReason = "Imported snapshot; monitoring was not resumed"), imported)
+        assertEquals(imported, HistoryPolicy.session(imported))
+        assertNull(HistoryPolicy.session(full.copy(appUsageStatus = AppUsageStatus.PENDING)).appUsageStatus)
+        for (bad in listOf(full.copy(energyNwh = -1), full.copy(peakPowerMw = -1), full.copy(peakPowerMw = 2_000_000),
+            full.copy(peakTemperatureDeciC = 2000), full.copy(screenOffSuspendMs = 1001), full.copy(capacityEstimateMah = 0),
+            full.copy(chargerType = "=HYPERLINK()"), full.copy(capacityBasis = "@x"))) {
+            assertThrows(IllegalArgumentException::class.java) { HistoryPolicy.session(bad) }
+        }
+    }
+    @Test fun afterCloseValuesAreNotPartOfTheMeasurementAndAreKeptWhenAFileLacksThem() {
+        val ready = session().copy(appUsageStatus = AppUsageStatus.READY, appUsageBasis = AppUsageBasis.WINDOW_RESET,
+            capacityEstimateMah = 4800, capacityConfidence = "LOW", capacityBasis = "COUNTER_SPAN", closeReason = "Power state changed")
+        val bare = session()
+        assertTrue(HistoryPolicy.sameMeasurement(ready, bare))
+        assertFalse(HistoryPolicy.sameMeasurement(ready, bare.copy(deltaUah = 999)))
+        assertEquals(ready.copy(closeReason = null), HistoryPolicy.mergeDerived(ready, bare))
+        assertEquals(bare.copy(appUsageStatus = AppUsageStatus.FAILED), HistoryPolicy.mergeDerived(ready, bare.copy(appUsageStatus = AppUsageStatus.FAILED))
+            .copy(capacityEstimateMah = null, capacityConfidence = null, capacityBasis = null))
+    }
+    @Test fun appUsageRowsAreWholeRankedBreakdowns() {
+        fun row(rank: Int, others: Boolean = false) = SessionAppUsage("session", rank, 10_000 + rank, "app.$rank", 1.5, cpuTimeMs = 10,
+            isOthers = others, basis = AppUsageBasis.DELTA)
+        val valid = (0 until SessionAppUsage.MAX_ROWS).map { row(it, others = it == SessionAppUsage.MAX_ROWS - 1) } + row(0).copy(sessionId = "other")
+        val imported = HistoryPolicy.appUsage(valid)
+        assertEquals(setOf("import:session", "import:other"), imported.map { it.sessionId }.toSet())
+        assertEquals(imported, HistoryPolicy.appUsage(imported))
+        for (bad in listOf(listOf(row(SessionAppUsage.MAX_ROWS)), listOf(row(-1)), listOf(row(0), row(0)), listOf(row(0, true), row(1, true)),
+            listOf(row(0).copy(powerMah = -0.1)), listOf(row(0).copy(powerMah = Double.POSITIVE_INFINITY)), listOf(row(0).copy(wifiBytes = -1)),
+            listOf(row(0).copy(sessionId = " ")), listOf(row(0).copy(packageName = "=cmd")))) {
+            assertThrows(IllegalArgumentException::class.java) { HistoryPolicy.appUsage(bad) }
+        }
+    }
+    @Test fun retentionKeepsTheCutoffsWholeLocalDay() {
+        assertEquals(0L, HistoryPolicy.retentionCutoffDay(0, ZoneOffset.UTC))
+        assertEquals(-1L, HistoryPolicy.retentionCutoffDay(0, ZoneId.of("America/Los_Angeles")))
+        // 04:30 local on the spring-forward day.
+        assertEquals(LocalDate.of(2024, 3, 10).toEpochDay(),
+            HistoryPolicy.retentionCutoffDay(Instant.parse("2024-03-10T08:30:00Z").toEpochMilli(), ZoneId.of("America/New_York")))
     }
 }

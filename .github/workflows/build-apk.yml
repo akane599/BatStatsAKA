@@ -73,7 +73,7 @@ jobs:
           python3 scripts/check_history_queries.py
           python3 scripts/check_resources.py
           python3 -B -m unittest discover -s scripts -p 'test_*.py'
-          ./gradlew :app:testDebugUnitTest :app:testPreviewUnitTest :app:lintDebug :app:lintPreview :app:assembleDebug :app:assemblePreview :app:assembleDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process -Dorg.gradle.jvmargs=-Xmx3g
+          ./gradlew :app:testDebugUnitTest :app:testPreviewUnitTest :app:testDebugScreenshotTestDefaultTestSuite :app:lintDebug :app:lintPreview :app:assembleDebug :app:assemblePreview :app:assembleDebugAndroidTest --no-daemon --no-configuration-cache --stacktrace --max-workers=1 -Pkotlin.compiler.execution.strategy=in-process -Dorg.gradle.jvmargs=-Xmx3g
       - name: Enable KVM for the disposable emulator
         if: inputs.run_android_tests
         run: |
@@ -100,7 +100,9 @@ jobs:
           arch: x86_64
           avd-name: batstats16k
           profile: pixel_2
-          ram-size: 2048M
+          # 16 KB pages cost memory: at 2 GB the low-memory killer took the app under test during
+          # first-boot Play services work ("min watermark is breached even after kill").
+          ram-size: 4096M
           disable-animations: true
           script: BATSTATS_REPORT_GROUP=16k BATSTATS_EXPECTED_PAGE_SIZE=16384 bash scripts/check_android_device.sh --prebuilt
       - name: Record APK checksums and certificates
@@ -128,6 +130,7 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            app/build/intermediates/debug/testDebugScreenshotTestDefaultTestSuite/results/
             app/build/outputs/androidTest-results/
             app/build/outputs/connected_android_test_additional_output/
           if-no-files-found: warn

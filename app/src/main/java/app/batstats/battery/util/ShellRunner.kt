@@ -26,11 +26,6 @@ class ShellRunner(
 
     enum class Mode { ROOT, SHIZUKU, ADB, NONE }
 
-    data class ShellResult(
-        val output: String,
-        val mode: Mode
-    )
-
     sealed class Outcome {
         data class Success(val output: String, val mode: Mode) : Outcome()
 
@@ -51,13 +46,12 @@ class ShellRunner(
     @Volatile
     private var cachedModeAt = 0L
 
-    suspend fun run(cmd: String): ShellResult? =
-        (exec(cmd) as? Outcome.Success)?.let { ShellResult(it.output, it.mode) }
-
     suspend fun exec(cmd: String, allowEmpty: Boolean = false): Outcome = commandLock.withLock {
         withContext(Dispatchers.IO) {
             // Select one backend for this read. A failure never falls through to another source.
-            val mode = detectMode(forceRefresh = true)
+            // Use the cached mode (detectMode() probes only when nothing is cached yet); callers
+            // that need a fresh probe use detectMode(forceRefresh = true) explicitly.
+            val mode = detectMode()
             val result = when (mode) {
                 Mode.SHIZUKU -> when (val result = shizuku.run(cmd, TimeUnit.SECONDS.toMillis(CMD_TIMEOUT_SEC))) {
                     is ShizukuBridge.RunResult.Success -> CommandOutput.Result(result.output)
@@ -78,18 +72,6 @@ class ShellRunner(
             if (error == null) Outcome.Success(result.output, mode) else Outcome.Failure(mode, error)
         }
     }
-
-    suspend fun runDirectOnly(cmd: String): String? = withContext(Dispatchers.IO) {
-        if (!PrivilegeChecker.hasAdvancedViaAdb(context)) return@withContext null
-        runDirect(cmd)?.takeIf { it.isNotBlank() && !isErrorOutput(it) }
-    }
-
-    private fun runDirect(cmd: String): String? {
-        val result = CommandOutput.run(cmd.split(' '), CMD_TIMEOUT_SEC * 1000)
-        return result.output.takeIf { result.successful }
-    }
-
-    private fun isErrorOutput(out: String): Boolean = DumpOutput.failure(out) != null
 
     suspend fun detectMode(forceRefresh: Boolean = false): Mode {
         if (!forceRefresh) {
@@ -127,6 +109,4 @@ class ShellRunner(
         cachedModeAt = 0L
         RootStatsCollector.invalidateRootCache()
     }
-
-    suspend fun hasAnyPrivilegedAccess(): Boolean = detectMode() != Mode.NONE
 }

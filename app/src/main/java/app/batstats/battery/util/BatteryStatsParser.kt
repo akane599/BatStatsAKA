@@ -239,17 +239,27 @@ object BatteryStatsParser {
     private fun List<String>.number(i: Int) = getOrNull(i)?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
     private fun sum(a: Long?, b: Long?): Long? = if (a == null || b == null || a > Long.MAX_VALUE - b) null else a + b
 
-    fun parseCheckin(raw: String): FullSnapshot {
+    /** Delegates to the single-pass [Sequence] overload; kept for existing callers. */
+    fun parseCheckin(raw: String): FullSnapshot = parseCheckin(raw.lineSequence())
+
+    fun parseCheckin(lines: Sequence<String>): FullSnapshot {
         val mappings = mutableMapOf<Int, LinkedHashSet<String>>()
         var rejected = 0
-        // Ignore included history without retaining it; mappings may follow usage records.
-        fun records() = raw.lineSequence().filter { it.startsWith("9,") && !it.startsWith("9,h,") }
-            .map(::splitCheckinLine).filter { it.size >= 4 }
-        records().filter { it[2] == "i" && it[3] == "uid" }.forEach { p ->
-            val uid = p.int(4)
-            if (uid != null && !p.getOrNull(5).isNullOrBlank()) mappings.getOrPut(uid) { linkedSetOf() }.add(p[5])
+        // One iteration over the lines: bucket "i,uid" mappings and "l" data rows as they are
+        // seen (mappings may follow the usage records that need them, so lookups happen after).
+        val rows = mutableListOf<List<String>>()
+        for (line in lines) {
+            if (!line.startsWith("9,") || line.startsWith("9,h,")) continue
+            val p = splitCheckinLine(line)
+            if (p.size < 4) continue
+            when {
+                p[2] == "i" && p[3] == "uid" -> {
+                    val uid = p.int(4)
+                    if (uid != null && !p.getOrNull(5).isNullOrBlank()) mappings.getOrPut(uid) { linkedSetOf() }.add(p[5])
+                }
+                p[2] == "l" -> rows += p
+            }
         }
-        val rows = records().filter { it[2] == "l" }.toList()
         val perUid = rows.groupBy { it.int(1) }
         val tags = mutableSetOf<String>()
         val apps = linkedMapOf<Int, AppPowerStats>()
@@ -321,9 +331,9 @@ object BatteryStatsParser {
                     else syncs += SyncStats(uid, label, pkgs, name, count, time, p.int(8), p.long(7))
                 }
                 "nt" -> {
-                    val bytes = (4..7).map { p.long(it) }
-                    if (bytes.any { it == null }) { rejected++; return@forEach }
-                    network += NetworkStats(uid, label, pkgs, bytes[0]!!, bytes[1]!!, bytes[2]!!, bytes[3]!!,
+                    val bytes = (4..7).mapNotNull { p.long(it) }
+                    if (bytes.size != 4) { rejected++; return@forEach }
+                    network += NetworkStats(uid, label, pkgs, bytes[0], bytes[1], bytes[2], bytes[3],
                         p.long(14), p.long(15), p.long(12)?.div(1000), p.int(13))
                 }
                 "sr" -> {
@@ -337,13 +347,13 @@ object BatteryStatsParser {
                         processes += ProcessStats(uid, label, pkgs, name, user, system, foreground, starts) else rejected++
                 }
                 "sgt", "wsgt" -> if (uid == 0) {
-                    val times = (4..8).map { p.long(it) }
-                    if (times.any { it == null }) { rejected++; return@forEach }
-                    val total = times.sumOf { it!!.toDouble() }
+                    val times = (4..8).mapNotNull { p.long(it) }
+                    if (times.size != 5) { rejected++; return@forEach }
+                    val total = times.sumOf { it.toDouble() }
                     times.forEachIndexed { level, time ->
-                        val fraction = if (total > 0) (time!! / total).toFloat() else 0f
-                        if (p[3] == "sgt") signals += SignalStrengthStats(level, time!!, fraction)
-                        else wifi += WifiSignalStats(level, time!!, fraction)
+                        val fraction = if (total > 0) (time / total).toFloat() else 0f
+                        if (p[3] == "sgt") signals += SignalStrengthStats(level, time, fraction)
+                        else wifi += WifiSignalStats(level, time, fraction)
                     }
                 }
                 "gble" -> if (uid == 0) {

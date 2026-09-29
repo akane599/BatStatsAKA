@@ -8,11 +8,15 @@ Continuous, user-visible battery monitoring uses `specialUse`, with its use case
 
 Android 16 enforces edge-to-edge layouts and enables predictive back. Screens must respect system insets and remain usable after rotation, at large font sizes and on larger windows.
 
+The manifest declares `QUERY_ALL_PACKAGES` so per-app battery use can name and draw the icon of any app batterystats reports, including ones with no launcher entry. This is a Play-review-gated permission: Play can reject a submission over its declared use even though the local build installs fine. GitHub and F-Droid distribution are not subject to that review and are unaffected.
+
 Sources: [foreground service types](https://developer.android.com/develop/background-work/services/fgs/service-types), [timeouts](https://developer.android.com/develop/background-work/services/fgs/timeout), [Android 16 changes](https://developer.android.com/about/versions/16/behavior-changes-16).
 
 ## Shizuku and other access modes
 
 Shizuku user services run as shell or root, depending on how Shizuku was started. Shell access does not grant every root-only capability. A running service and authorization are separate states. Reads must carry their actual source and failure state; incomplete output is not a successful sample. Reconnection starts a new baseline for cumulative differences. Root and ADB-granted modes remain supported, with their respective permission limits.
+
+Non-root Shizuku (started from the Shizuku app over ADB, without a root-based starter) does not survive a reboot on its own: the user has to start it again after every restart. In practice this means a meaningful share of sessions on non-rooted devices will show the per-app screen's NO_ACCESS state until Shizuku is restarted; this is expected Shizuku behavior, not a BatStats bug, and root or an ADB-granted DUMP/PACKAGE_USAGE_STATS grant are the reboot-persistent alternatives.
 
 For ADB-granted reads, Android16 `BatteryStatsService` checks DUMP plus PACKAGE_USAGE_STATS permission and an allowed/default usage app-op. BATTERY_STATS alone does not authorize dumps. `-c --charged` requests the current checkin-format window; `--checkin` can instead consume a saved completed report. Included history is discarded by the parser and output remains bounded; oversized or interrupted responses are failures.
 
@@ -22,11 +26,15 @@ Source: [Shizuku API and UserService lifecycle](https://github.com/RikkaApps/Shi
 
 ## Sensor contracts and screen state
 
-Android reports current in microamperes (positive into the battery), charge in microampere-hours and remaining energy in nanowatt-hours. Unsupported long properties return `Long.MIN_VALUE`. Average-current hardware windows vary. `computeChargeTimeRemaining()` is a system approximation, not a guaranteed completion time. Vendor violations cannot be corrected by assuming every small value uses different units.
+Android reports current in microamperes (positive into the battery), charge in microampere-hours and remaining energy in nanowatt-hours. Unsupported long properties return `Long.MIN_VALUE`. Average-current hardware windows vary. `computeChargeTimeRemaining()` (API 28+; gated behind `Build.VERSION_CODES.P`) is a system approximation, not a guaranteed completion time. `EXTRA_CYCLE_COUNT` is only read on API 34+ (`Build.VERSION_CODES.U`); on earlier versions cycle count is unavailable. Vendor unit/sign violations are corrected automatically, but only from evidence — comparing raw current against the charge counter's own change over matching windows — never by assuming every small value uses different units; a correction that changes the effective value is shown with an Undo, and the counter itself is sanity-checked but never rescaled. See [measurement guide](MEASUREMENTS.md#automatic-calibration) for the detection rule.
 
 `PowerManager.isInteractive()` reports readiness for interaction, not whether every display pixel is lit. Noninteractive ambient/Always On Display belongs to the screen-off category in this app's observation model. Screen-off, CPU suspend and Android Doze are distinct. Executing app code cannot establish that the CPU is asleep at that instant; elapsed/uptime differences describe past intervals.
 
 Sources: [BatteryManager](https://developer.android.com/reference/android/os/BatteryManager), [PowerManager](https://developer.android.com/reference/android/os/PowerManager#isInteractive()), [Android 16 checkin producer](https://github.com/aosp-mirror/platform_frameworks_base/blob/android16-release/core/java/android/os/BatteryStats.java).
+
+## Quick Settings tile and dynamic color gates
+
+The Quick Settings tile's `Tile.subtitle` only exists from API 29 (`Build.VERSION_CODES.Q`); below that the current/power text is shown as the tile's `label` instead. Long-press opening the app from the tile uses `startActivityAndCollapse(PendingIntent)` from API 34 (`Build.VERSION_CODES.UPSIDE_DOWN_CAKE`); below that it falls back to the deprecated `startActivityAndCollapse(Intent)` overload, which only exists pre-34. Dynamic (Material You) color is opt-in and only applied from API 31 (`Build.VERSION_CODES.S`); below that, or with the setting off, the app uses its fixed dark palette.
 
 ## Samsung verification boundary
 
@@ -51,6 +59,10 @@ Sources: [Linux power supply class](https://cdn.kernel.org/doc/html/latest/power
 Android backs up databases and app files by default. Both the pre-Android12 backup rules and Android12+ cloud/device-transfer rules explicitly include only the settings DataStore directory. Battery databases and diagnostic files are not included; future diagnostics belong in noBackupFilesDir. Explicit exports remain the user-controlled transfer path. See [Auto Backup rules](https://developer.android.com/identity/data/autobackup).
 
 Android notification-channel sound and vibration are controlled by the user after channel creation. A working settings screen must open the channel settings rather than imply that unrelated preference switches override Android. See [notification channels](https://developer.android.com/develop/ui/compose/notifications/channels).
+
+The monitoring notification's status-bar icon is a small rendered bitmap (a short number of glyphs); SystemUI tints it and uses only its alpha, so its own colour does not matter. Some OEM skins — MIUI in particular — ignore bitmap small icons in the status bar and show the launcher icon instead; on those skins the static `ic_stat_battery` icon is effectively always what's shown, not the live reading. This is OEM behavior BatStats cannot override.
+
+The high-discharge alert requires at least 3 qualifying readings spanning at least 1 minute before it fires, to avoid firing on a single noisy sample. With the screen off, the sampler only polls every 300 seconds (5 minutes; see [measurement guide](MEASUREMENTS.md)), so in the worst case the alert can lag the actual onset of high discharge by roughly 10–15 minutes (up to two or three poll intervals) rather than the ~1 minute a screen-on user would see.
 
 ## Local diagnostics and sharing
 

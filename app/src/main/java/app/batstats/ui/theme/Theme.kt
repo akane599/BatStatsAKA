@@ -1,95 +1,58 @@
 package app.batstats.ui.theme
 
-import android.app.Activity
-import android.content.Context
-import android.content.ContextWrapper
 import android.os.Build
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.SideEffect
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.unit.dp
-import androidx.core.view.WindowCompat
 
+private val LocalBatColors = staticCompositionLocalOf { BatColors.Default }
+private val LocalChartColors = staticCompositionLocalOf { chartColors(BatDarkColorScheme) }
+private val LocalSpacing = staticCompositionLocalOf { Spacing() }
+
+/** Semantic charge/drain/heat/info colors ([BatColors]). */
+val MaterialTheme.batColors: BatColors
+    @Composable @ReadOnlyComposable get() = LocalBatColors.current
+
+/** Chart line, fill, grid and axis colors ([ChartColors]); follows the OLED surfaces. */
+val MaterialTheme.chartColors: ChartColors
+    @Composable @ReadOnlyComposable get() = LocalChartColors.current
+
+/** Spacing scale 4/8/12/16/24/32/48 dp ([Spacing]). */
+val MaterialTheme.spacing: Spacing
+    @Composable @ReadOnlyComposable get() = LocalSpacing.current
+
+/**
+ * BatStats theme: always dark. [oled] swaps every surface for pure black ([oledSurfaces]); [dynamicColor]
+ * (Android 12+, opt-in) takes only the primary and secondary families from the wallpaper. Semantic and chart colors
+ * never change. Also provides `MaterialTheme.batColors`, `.chartColors`, `.spacing`, [BatTypography]
+ * (numbers: `MaterialTheme.typography.numeric*`) and [BatShapes]; durations/easings live in [BatMotion].
+ */
 @Composable
 fun MainTheme(
-    darkTheme: Boolean,
+    oled: Boolean = false,
     dynamicColor: Boolean = false,
-    useAuroraTheme: Boolean = true,
-    oledBlack: Boolean = false,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val baseScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        useAuroraTheme -> if (darkTheme) AurDarkTheme else AurLightTheme
-        darkTheme -> AurDarkTheme
-        else -> AurLightTheme
-    }
-
-    val colorScheme = if (darkTheme && oledBlack) {
-        baseScheme.copy(
-            background = Color.Black,
-            surface = Color.Black,
-            surfaceDim = Color.Black,
-            surfaceBright = Color(0xFF1A1A1A),
-            surfaceContainerLowest = Color.Black,
-            surfaceContainerLow = Color(0xFF0A0A0A),
-            surfaceContainer = Color(0xFF121212),
-            surfaceContainerHigh = Color(0xFF1A1A1A),
-            surfaceContainerHighest = Color(0xFF222222),
-            surfaceVariant = Color(0xFF121212),
-            outline = Color(0xFF707070),
-            outlineVariant = Color(0xFF1A1A1A),
-            scrim = Color.Black,
-            primaryContainer = Color(0xFF00251E),
-            secondaryContainer = Color(0xFF2A1A4A),
-            tertiaryContainer = Color(0xFF00211B),
-            errorContainer = Color(0xFF4A0000),
-        )
+    val accents = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        withDynamicAccents(BatDarkColorScheme, dynamicDarkColorScheme(LocalContext.current))
     } else {
-        baseScheme
+        BatDarkColorScheme
     }
-
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        SideEffect {
-            val window = view.context.findActivity()?.window ?: return@SideEffect
-            @Suppress("DEPRECATION")
-            window.statusBarColor = colorScheme.surface.toArgb()
-            @Suppress("DEPRECATION")
-            window.navigationBarColor = colorScheme.surface.toArgb()
-            val controller = WindowCompat.getInsetsController(window, view)
-            controller.isAppearanceLightStatusBars = !darkTheme
-            controller.isAppearanceLightNavigationBars = !darkTheme
-        }
+    val colorScheme = if (oled) oledSurfaces(accents) else accents
+    CompositionLocalProvider(
+        LocalBatColors provides BatColors.Default,
+        LocalChartColors provides chartColors(colorScheme),
+        LocalSpacing provides Spacing(),
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = BatTypography,
+            shapes = BatShapes,
+            content = content,
+        )
     }
-
-    val shapes = androidx.compose.material3.Shapes(
-        extraSmall = RoundedCornerShape(6.dp),
-        small = RoundedCornerShape(8.dp),
-        medium = RoundedCornerShape(12.dp),
-        large = RoundedCornerShape(20.dp),
-        extraLarge = RoundedCornerShape(28.dp)
-    )
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = MaterialTheme.typography,
-        shapes = shapes,
-        content = content
-    )
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> if (baseContext !== this) baseContext.findActivity() else null
-    else -> null
 }

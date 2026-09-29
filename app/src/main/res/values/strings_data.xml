@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings › Data (ui/screens/DataScreen.kt). "Readings" are battery samples. -->
+<resources>
+    <string name="data_title">Data</string>
+
+    <!-- Stored history -->
+    <string name="data_stored_title">Stored history</string>
+    <string name="data_stored_readings">Readings</string>
+    <string name="data_stored_sessions">Sessions</string>
+    <string name="data_stored_limit">of %1$s</string>
+    <string name="data_stored_info_title">About stored history</string>
+    <string name="data_stored_info_body">BatStats keeps at most 100,000 readings and 10,000 sessions on this phone; the oldest go first. The retention setting can remove them sooner.\n\nClearing deletes readings, sessions and app statistics. Your settings and the current calibration stay. Android\'s own battery statistics are not affected.</string>
+
+    <!-- Export -->
+    <string name="data_export_title">Export history</string>
+    <string name="data_export_period">Period</string>
+    <string name="data_range_all">All</string>
+    <string name="data_range_week">7 days</string>
+    <string name="data_range_month">30 days</string>
+    <string name="data_export_include">Include</string>
+    <string name="data_include_readings">Readings</string>
+    <string name="data_include_sessions">Sessions</string>
+    <string name="data_export_nothing">Choose readings, sessions or both.</string>
+    <string name="data_export_json">Save as JSON</string>
+    <string name="data_export_csv">Save as CSV</string>
+    <string name="data_export_info_title">About exports</string>
+    <string name="data_export_info_body">JSON keeps everything in one file, with units and UTC times spelled out. CSV writes one file per table into a folder you choose.\n\nThe period ends when the export starts. Sessions that overlap it are exported whole, not cut at its edges.\n\nExports show when and how you use your phone. Share them only with people you choose.</string>
+    <string name="data_exported_json">Saved as JSON.</string>
+    <string name="data_exported_csv">Saved as CSV files.</string>
+
+    <!-- Import -->
+    <string name="data_import_title">Import history</string>
+    <string name="data_import_json">Import JSON</string>
+    <string name="data_import_csv">Import CSV</string>
+    <string name="data_import_info_title">About imports</string>
+    <string name="data_import_info_body">Imports add to your history and never start monitoring. Identical records are skipped. A file that conflicts with what is stored, or has an invalid record, is refused as a whole, so nothing is half imported.\n\nA CSV file holds readings, sessions or app usage; import them one file at a time. Files up to 64 MiB are accepted.</string>
+    <string name="data_imported">Readings added: %1$s · sessions added: %2$s · extended: %3$s · unchanged: %4$s</string>
+
+    <!-- Settings backup -->
+    <string name="data_settings_title">Settings backup</string>
+    <string name="data_settings_save">Save settings</string>
+    <string name="data_settings_restore">Restore settings</string>
+    <string name="data_settings_info_title">About settings backups</string>
+    <string name="data_settings_info_body">The backup holds your settings, including the current unit and sign overrides. It never contains battery history or the calibration BatStats detected on this phone.\n\nA restore checks the whole file first. If anything in it is wrong, no setting changes.</string>
+    <string name="data_settings_saved">Settings saved.</string>
+    <string name="data_settings_restored">Settings restored · applied: %1$s · skipped: %2$s · not applied: %3$s</string>
+
+    <!-- Clear -->
+    <string name="data_clear_action">Clear all data</string>
+    <string name="data_clear_hint">Deletes readings, sessions and app statistics. Settings and calibration stay.</string>
+    <string name="data_clear_title">Clear all data?</string>
+    <string name="data_clear_body">This stops monitoring and permanently deletes every reading, session and app statistic. Your settings and the current calibration stay.\n\nSave an export first if you want a copy.</string>
+    <string name="data_clear_confirm">Delete everything</string>
+    <string name="data_clear_cancel">Cancel</string>
+    <string name="data_clear_failed">History could not be cleared. Try again.</string>
+    <string name="data_clear_done">All history deleted.</string>
+
+    <!-- Failures (one sentence each; nothing changed unless it says so) -->
+    <string name="data_failed_export">The export was not saved. %1$s</string>
+    <string name="data_failed_import">Nothing was imported. %1$s</string>
+    <string name="data_failed_not_export">Nothing was imported. This is not a BatStats history export.</string>
+    <string name="data_failed_read">That file could not be read. Nothing changed.</string>
+    <string name="data_failed_write">That location could not be written. Choose another one.</string>
+    <string name="data_failed_settings_invalid">This is not a valid settings backup. No setting changed.</string>
+    <string name="data_failed_settings_other_app">This backup belongs to another app. No setting changed.</string>
+    <string name="data_failed_settings_too_new">This backup is from a newer BatStats. No setting changed.</string>
+    <string name="data_failed_settings_damaged">This backup was edited or damaged. No setting changed.</string>
+    <string name="data_failed_no_picker">No app on this phone can pick files.</string>
+    <string name="data_failed_unexpected">Something went wrong. Try again.</string>
+    <string name="data_working">Working…</string>
+</resources>

@@ -1,93 +1,201 @@
 package app.batstats.viewmodel
 
-import app.batstats.R
-import app.batstats.settings.SettingsImportPolicy
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import android.content.Context
-import android.net.Uri
-import android.content.Intent
-import app.batstats.battery.data.BatteryRepository
-import app.batstats.battery.service.BatteryMonitorService
+import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.batstats.battery.data.CalibrationStore
+import app.batstats.battery.measurement.CalibrationState
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
+import app.batstats.settings.SettingsWrites
+import io.github.mlmgames.settings.core.SettingMeta
 import io.github.mlmgames.settings.core.SettingsRepository
-import io.github.mlmgames.settings.core.backup.ExportResult
-import io.github.mlmgames.settings.core.backup.ImportResult
-import io.github.mlmgames.settings.core.backup.SettingsBackupManager
-import io.github.mlmgames.settings.core.managers.ResetManager
-import kotlinx.coroutines.Dispatchers
+import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+/** What Settings reads and writes: [KmpSettingsStore] in the app, a fake in tests. */
+interface SettingsStore {
+    val settings: Flow<AppSettings>
+
+    /** Writes one [AppSettingsSchema] field by name; throws when storage fails. */
+    suspend fun set(fieldName: String, value: Any)
+}
+
+/** [SettingsStore] over the app's kmp-settings repository. */
+class KmpSettingsStore(private val repository: SettingsRepository<AppSettings>) : SettingsStore {
+    override val settings: Flow<AppSettings> get() = repository.flow
+
+    override suspend fun set(fieldName: String, value: Any) = repository.set(fieldName, value)
+}
+
+private fun schemaMeta(field: String): SettingMeta =
+    checkNotNull(AppSettingsSchema.fields.firstOrNull { it.name == field }?.meta) { "No @Setting field $field" }
+
+/** An on/off setting, by its [AppSettingsSchema] field name. */
+enum class SettingsSwitch(val fieldName: String) {
+    AUTO_START("autoStartOnBoot"),
+    LOW_BATTERY_ALERT("lowBatteryAlertEnabled"),
+    HIGH_BATTERY_ALERT("highBatteryAlertEnabled"),
+    TEMPERATURE_ALERT("temperatureWarningEnabled"),
+    DISCHARGE_ALERT("dischargeAlertEnabled"),
+    FULL_CHARGE_ALERT("chargingCompleteAlert"),
+    OLED_BLACK("oledBlack"),
+    DYNAMIC_COLORS("dynamicColors"),
+    ;
+
+    fun isOn(settings: AppSettings): Boolean = when (this) {
+        AUTO_START -> settings.autoStartOnBoot
+        LOW_BATTERY_ALERT -> settings.lowBatteryAlertEnabled
+        HIGH_BATTERY_ALERT -> settings.highBatteryAlertEnabled
+        TEMPERATURE_ALERT -> settings.temperatureWarningEnabled
+        DISCHARGE_ALERT -> settings.dischargeAlertEnabled
+        FULL_CHARGE_ALERT -> settings.chargingCompleteAlert
+        OLED_BLACK -> settings.oledBlack
+        DYNAMIC_COLORS -> settings.dynamicColors
+    }
+}
+
+/**
+ * A setting with a fixed list of options, chosen by index: the enum constant's position for enum settings, the
+ * stored index otherwise. The option count is the schema's; the labels are the screen's.
+ */
+enum class SettingsChoice(val fieldName: String) {
+    STATUS_ICON("statusIconValue"),
+    CURRENT_UNIT("currentUnitOverride"),
+    CURRENT_SIGN("currentSignOverride"),
+    TEMPERATURE_UNIT("temperatureUnitIndex"),
+    RETENTION("dataRetentionIndex"),
+    ;
+
+    val optionCount: Int get() = schemaMeta(fieldName).options.size
+
+    fun selectedIndex(settings: AppSettings): Int = when (this) {
+        STATUS_ICON -> settings.statusIconValue.ordinal
+        CURRENT_UNIT -> settings.currentUnitOverride.ordinal
+        CURRENT_SIGN -> settings.currentSignOverride.ordinal
+        TEMPERATURE_UNIT -> settings.temperatureUnitIndex
+        RETENTION -> settings.dataRetentionIndex
+    }
+}
+
+/**
+ * An alert threshold. Range and step come from the schema's slider metadata; [alert] is the switch that enables it.
+ * [wholeNumber] thresholds are stored as Int, the temperature (°C) as Float.
+ */
+enum class SettingsThreshold(val fieldName: String, val alert: SettingsSwitch, private val wholeNumber: Boolean) {
+    LOW_BATTERY("lowBatteryThreshold", SettingsSwitch.LOW_BATTERY_ALERT, wholeNumber = true),
+    HIGH_BATTERY("highBatteryThreshold", SettingsSwitch.HIGH_BATTERY_ALERT, wholeNumber = true),
+    TEMPERATURE("temperatureThreshold", SettingsSwitch.TEMPERATURE_ALERT, wholeNumber = false),
+    DISCHARGE_CURRENT("dischargeCurrentThreshold", SettingsSwitch.DISCHARGE_ALERT, wholeNumber = true),
+    ;
+
+    val range: ClosedFloatingPointRange<Float> get() = schemaMeta(fieldName).let { it.min..it.max }
+    val step: Float get() = schemaMeta(fieldName).step
+
+    fun value(settings: AppSettings): Float = when (this) {
+        LOW_BATTERY -> settings.lowBatteryThreshold.toFloat()
+        HIGH_BATTERY -> settings.highBatteryThreshold.toFloat()
+        TEMPERATURE -> settings.temperatureThreshold
+        DISCHARGE_CURRENT -> settings.dischargeCurrentThreshold.toFloat()
+    }
+
+    /** [raw] snapped to [step] from the range start, kept in [range], typed as the field stores it. */
+    fun stored(raw: Float): Any {
+        require(raw.isFinite()) { "Threshold must be finite" }
+        val start = range.start
+        val snapped = (start + ((raw - start) / step).roundToInt() * step).coerceIn(range)
+        return if (wholeNumber) snapped.roundToInt() else snapped
+    }
+}
+
+/** A write the screen reports inline, until dismissed or the next successful write. */
+enum class SettingsError { WRITE_FAILED, INVALID_DESIGN_CAPACITY }
+
+/** Plain values; the screen formats them for the viewer's locale. */
+@Immutable
+data class SettingsUiState(
+    val settings: AppSettings = AppSettingsSchema.default,
+    val calibration: CalibrationState = CalibrationState(),
+    val error: SettingsError? = null,
+)
+
+sealed interface SettingsEvent {
+    data class SetSwitch(val setting: SettingsSwitch, val on: Boolean) : SettingsEvent
+    data class SetChoice(val setting: SettingsChoice, val index: Int) : SettingsEvent
+    data class SetThreshold(val setting: SettingsThreshold, val value: Float) : SettingsEvent
+
+    /** 0 = automatic; anything else must be in 1,000..30,000 mAh. */
+    data class SetDesignCapacity(val mAh: Int) : SettingsEvent
+    data object ResetCalibration : SettingsEvent
+    data object DismissError : SettingsEvent
+
+    /** Handled by the screen: Android's settings for the alert channel. */
+    data object OpenAlertSound : SettingsEvent
+
+    /** Handled by the screen: Settings › Data. */
+    data object OpenData : SettingsEvent
+
+    /** Handled by the screen: Settings › Status. */
+    data object OpenStatus : SettingsEvent
+}
+
+/**
+ * Settings v3: every write goes through [SettingsWrites.normalize] (dropdown index → enum, design-capacity range) to
+ * the kmp-settings store. The detected calibration is [CalibrationStore]'s, never a setting: Reset calibration
+ * forgets it and leaves the settings (and their unit/sign overrides) alone.
+ */
 class SettingsViewModel(
-    private val context: Context,
-    private val repository: SettingsRepository<AppSettings>,
-    private val resetManager: ResetManager<AppSettings>,
-    private val backupManager: SettingsBackupManager<AppSettings>,
-    private val batteryRepository: BatteryRepository
+    private val store: SettingsStore,
+    private val calibration: CalibrationStore,
 ) : ViewModel() {
+    private val error = MutableStateFlow<SettingsError?>(null)
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error = _error.asStateFlow()
+    val state: StateFlow<SettingsUiState> = combine(store.settings, calibration.state, error, ::SettingsUiState)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
-    val settings: StateFlow<AppSettings> = repository.flow
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = AppSettingsSchema.default
-        )
-
-    val dynamicColors: Flow<Boolean> = settings.map { it.dynamicColors }
-    val themeIndex: Flow<Int> = settings.map { it.themeIndex }
-
-    fun updateSetting(name: String, value: Any) {
-        viewModelScope.launch {
-            attempt { repository.set(name, value) }
-        }
-    }
-
-    fun <V> observeField(fieldName: String): Flow<V> = repository.observeField(fieldName)
-
-    suspend fun clearHistory() {
-        batteryRepository.clearHistory {
-            context.stopService(Intent(context, BatteryMonitorService::class.java))
-        }
-    }
-
-    suspend fun resetUISettings(): Boolean = attempt { resetManager.resetUISettings() }
-    suspend fun resetAll(): Boolean = attempt { resetManager.resetAll() }
-
-    private suspend fun attempt(block: suspend () -> Unit): Boolean = try {
-        block(); _error.value = null; true
-    } catch (e: CancellationException) { throw e }
-    catch (_: Exception) { _error.value = context.getString(R.string.settings_write_failed); false }
-
-    suspend fun exportToFile(uri: Uri): String = withContext(Dispatchers.IO) {
-        try {
-            when (val result = backupManager.export()) {
-                is ExportResult.Success -> {
-                    (context.contentResolver.openOutputStream(uri, "wt") ?: error("Cannot open settings destination")).use { output ->
-                        output.write(result.json.toByteArray(Charsets.UTF_8))
-                    }
-                    context.getString(R.string.settings_saved)
-                }
-                is ExportResult.Error -> context.getString(R.string.settings_export_failed)
+    fun onEvent(event: SettingsEvent) {
+        when (event) {
+            is SettingsEvent.SetSwitch -> write(event.setting.fieldName) { event.on }
+            is SettingsEvent.SetChoice -> write(event.setting.fieldName) {
+                require(event.index in 0 until event.setting.optionCount) { "Option ${event.index} out of range" }
+                event.index
             }
-        } catch (e: CancellationException) { throw e }
-        catch (_: Exception) { context.getString(R.string.settings_export_failed) }
+            is SettingsEvent.SetThreshold -> write(event.setting.fieldName) { event.setting.stored(event.value) }
+            is SettingsEvent.SetDesignCapacity -> write(DESIGN_CAPACITY_FIELD) { event.mAh }
+            SettingsEvent.ResetCalibration -> calibration.reset()
+            SettingsEvent.DismissError -> error.value = null
+            SettingsEvent.OpenAlertSound, SettingsEvent.OpenData, SettingsEvent.OpenStatus -> Unit
+        }
     }
 
-    suspend fun import(json: String): ImportResult = withContext(Dispatchers.IO) {
-        SettingsImportPolicy.validate(json)
-        backupManager.import(json)
+    private fun write(field: String, value: () -> Any) {
+        val stored = try {
+            SettingsWrites.normalize(field, value())
+        } catch (_: IllegalArgumentException) {
+            error.value = if (field == DESIGN_CAPACITY_FIELD) SettingsError.INVALID_DESIGN_CAPACITY else SettingsError.WRITE_FAILED
+            return
+        }
+        viewModelScope.launch {
+            try {
+                store.set(field, stored)
+                error.value = null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                error.value = SettingsError.WRITE_FAILED
+            }
+        }
+    }
+
+    private companion object {
+        const val STOP_TIMEOUT_MS = 5_000L
+        const val DESIGN_CAPACITY_FIELD = "designCapacityMah"
     }
 }

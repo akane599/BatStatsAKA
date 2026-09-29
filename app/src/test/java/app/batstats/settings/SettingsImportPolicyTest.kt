@@ -12,13 +12,28 @@ class SettingsImportPolicyTest {
         return buildJsonObject { putJsonObject("settings") { put(field.keyName, field.encodeValue(value)) } }.toString()
     }
     @Test fun rejectsOutOfRangeOptionsAndThresholdsBeforeImport() {
-        listOf("monitoringIntervalIndex" to 99,
-            "temperatureThreshold" to 100f, "lowBatteryThreshold" to -1, "totalSamplesCollected" to -4L).forEach { (name, value) ->
+        listOf("temperatureUnitIndex" to 99, "dataRetentionIndex" to 6,
+            "temperatureThreshold" to 100f, "lowBatteryThreshold" to -1).forEach { (name, value) ->
             assertThrows(IllegalArgumentException::class.java) { SettingsImportPolicy.validate(backup(name, value)) }
         }
-        SettingsImportPolicy.validate(backup("monitoringIntervalIndex", 2))
+        SettingsImportPolicy.validate(backup("dataRetentionIndex", RETENTION_FOREVER_INDEX))
         SettingsImportPolicy.validate(backup("temperatureThreshold", 45f))
         SettingsImportPolicy.validate(backup("lowBatteryAlertEnabled", false))
+    }
+    @Test fun designCapacityIsAutoOrWithinTheMilliampHourRange() {
+        listOf(-4, 1, 999, 30_001).forEach { value ->
+            assertThrows(IllegalArgumentException::class.java) { SettingsImportPolicy.validate(backup("designCapacityMah", value)) }
+        }
+        listOf(0, 1_000, 4_500, 30_000).forEach { SettingsImportPolicy.validate(backup("designCapacityMah", it)) }
+    }
+    @Test fun enumSettingsAcceptOnlyTheirConstantNames() {
+        SettingsImportPolicy.validate(backup("statusIconValue", StatusIconValue.POWER_W))
+        SettingsImportPolicy.validate(backup("currentUnitOverride", CurrentUnitOverride.MILLIAMPS))
+        SettingsImportPolicy.validate(backup("currentSignOverride", CurrentSignOverride.INVERTED))
+        listOf("status_icon_value" to "s:VOLTS", "current_unit_override" to "s:milliamps", "current_sign_override" to "i:1").forEach { (key, payload) ->
+            val input = buildJsonObject { putJsonObject("settings") { put(key, payload) } }.toString()
+            assertThrows(IllegalArgumentException::class.java) { SettingsImportPolicy.validate(input) }
+        }
     }
     @Test fun invalidScalarAndNestedEncodedPayloadsCannotBypassValidation() {
         listOf("temperature_threshold" to "NaN", "low_battery_alert_enabled" to "not-a-boolean",

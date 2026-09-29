@@ -4,18 +4,22 @@ import android.content.Context
 import androidx.room.*
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import app.batstats.battery.apps.AppUsageBasis
+import app.batstats.battery.apps.AppUsageStatus
 
 @TypeConverters(EnumConverters::class)
 @Database(
-    entities = [BatterySample::class, ChargeSession::class, AlarmRule::class, AppEnergyStat::class],
-    version = 4,
+    entities = [BatterySample::class, ChargeSession::class, DailySummary::class,
+        AppSnapshot::class, AppSnapshotUid::class, SessionAppUsage::class],
+    version = 5,
     exportSchema = true
 )
 abstract class BatteryDatabase : RoomDatabase() {
     abstract fun batteryDao(): BatteryDao
     abstract fun sessionDao(): SessionDao
-    abstract fun alarmDao(): AlarmDao
-    abstract fun appEnergyDao(): AppEnergyDao
+    abstract fun persistDao(): PersistDao
+    abstract fun dailySummaryDao(): DailySummaryDao
+    abstract fun appUsageDao(): AppUsageDao
 
     companion object {
         @Volatile private var INSTANCE: BatteryDatabase? = null
@@ -49,6 +53,33 @@ abstract class BatteryDatabase : RoomDatabase() {
                 db.execSQL("CREATE UNIQUE INDEX index_charge_sessions_activeKey ON charge_sessions(activeKey)")
             }
         }
+        /**
+         * DDL only; every CREATE is the `createSql` from schemas/…/5.json. Irreversible: it drops alarm_rules and
+         * app_energy_stats (their rows are lost) and there is no 5→4 path — after a rollback, clear app data.
+         */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("DROP TABLE IF EXISTS `alarm_rules`")
+                db.execSQL("DROP TABLE IF EXISTS `app_energy_stats`")
+                db.execSQL("DROP INDEX IF EXISTS `index_battery_samples_status`")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `chargerType` TEXT")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `energyNwh` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `peakPowerMw` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `peakTemperatureDeciC` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `screenOffSuspendMs` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `capacityEstimateMah` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `capacityConfidence` TEXT")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `capacityBasis` TEXT")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `appUsageStatus` TEXT")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `appUsageBasis` TEXT")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `daily_summaries` (`epochDay` INTEGER NOT NULL, `screenOnMs` INTEGER NOT NULL, `screenOffMs` INTEGER NOT NULL, `screenOnDischargeUah` INTEGER NOT NULL, `screenOffDischargeUah` INTEGER NOT NULL, `chargedUah` INTEGER NOT NULL, `cpuSuspendMs` INTEGER, `minLevel` INTEGER, `maxLevel` INTEGER, `peakTemperatureDeciC` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`epochDay`))")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshots` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` TEXT, `kind` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `windowStartedAt` INTEGER, `windowStartCount` INTEGER)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_app_snapshots_sessionId` ON `app_snapshots` (`sessionId`)")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshot_uids` (`snapshotId` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, PRIMARY KEY(`snapshotId`, `uid`), FOREIGN KEY(`snapshotId`) REFERENCES `app_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE TABLE IF NOT EXISTS `session_app_usage` (`sessionId` TEXT NOT NULL, `rank` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, `isOthers` INTEGER NOT NULL, `basis` TEXT NOT NULL, PRIMARY KEY(`sessionId`, `rank`), FOREIGN KEY(`sessionId`) REFERENCES `charge_sessions`(`sessionId`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_session_app_usage_sessionId` ON `session_app_usage` (`sessionId`)")
+            }
+        }
 
         fun get(context: Context): BatteryDatabase =
             INSTANCE ?: synchronized(this) {
@@ -57,16 +88,28 @@ abstract class BatteryDatabase : RoomDatabase() {
                     BatteryDatabase::class.java,
                     "battery.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build().also { INSTANCE = it }
             }
     }
 }
 
+/**
+ * Enum columns can hold any text (older builds, imports, hand edits), so reads never use `valueOf`: an unknown
+ * name reads as null in the nullable columns, and as a documented fallback in the two NOT NULL ones.
+ */
 class EnumConverters {
     @TypeConverter fun fromSessionType(t: SessionType?): String? = t?.name
-    @TypeConverter fun toSessionType(s: String?): SessionType? = s?.let { enumValueOf<SessionType>(it) }
+    /** NOT NULL column: an unknown type reads as UNKNOWN, which gets no type-specific stats or breakdown. */
+    @TypeConverter fun toSessionType(s: String?): SessionType? = s?.let { name -> SessionType.entries.firstOrNull { it.name == name } ?: SessionType.UNKNOWN }
 
-    @TypeConverter fun fromAlarmType(t: AlarmType?): String? = t?.name
-    @TypeConverter fun toAlarmType(s: String?): AlarmType? = s?.let { enumValueOf<AlarmType>(it) }
+    @TypeConverter fun fromSnapshotKind(k: AppSnapshotKind?): String? = k?.name
+    /** NOT NULL column: an unknown kind reads as END, so it is never used as (or protected like) a baseline. */
+    @TypeConverter fun toSnapshotKind(s: String?): AppSnapshotKind? = s?.let { name -> AppSnapshotKind.entries.firstOrNull { it.name == name } ?: AppSnapshotKind.END }
+
+    @TypeConverter fun fromAppUsageStatus(t: AppUsageStatus?): String? = t?.name
+    @TypeConverter fun toAppUsageStatus(s: String?): AppUsageStatus? = s?.let { name -> AppUsageStatus.entries.firstOrNull { it.name == name } }
+
+    @TypeConverter fun fromAppUsageBasis(t: AppUsageBasis?): String? = t?.name
+    @TypeConverter fun toAppUsageBasis(s: String?): AppUsageBasis? = s?.let { name -> AppUsageBasis.entries.firstOrNull { it.name == name } }
 }

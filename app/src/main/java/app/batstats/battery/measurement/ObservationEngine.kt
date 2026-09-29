@@ -59,6 +59,28 @@ data class ObservationSummary(
     val observedMs: Long get() = discharge.durationMs + chargingMs + pluggedMs + unknownMs
 }
 
+/**
+ * Why the interval from [before] to [point] was not observed reliably, or null when it was. Delays
+ * due to CPU suspend are expected; a long *awake* gap is not. Shared by the trend estimators.
+ */
+internal fun observationGap(before: Observation, point: Observation): String? {
+    val elapsed = point.elapsedMs - before.elapsedMs
+    val awake = point.uptimeMs - before.uptimeMs
+    val clockShift = abs((point.wallMs - before.wallMs) - elapsed) > 5_000
+    val missingTransition = (before.interactive != point.interactive && point.boundary != Boundary.SCREEN) ||
+        (before.power != point.power && point.boundary != Boundary.POWER) ||
+        (before.dozing != point.dozing && point.boundary != Boundary.DOZE)
+    return when {
+        point.generation != before.generation -> "Monitoring restarted"
+        elapsed < 0 || awake < 0 || awake > elapsed + 100 -> "Monotonic clock discontinuity"
+        point.boundary == Boundary.GAP -> "Collection interrupted"
+        clockShift -> "Wall clock changed; new interval baseline"
+        missingTransition -> "State changed between observations"
+        awake > maxOf(before.expectedIntervalMs * 3, 120_000L) -> "Gap in observation"
+        else -> null
+    }
+}
+
 /** Single-owner interval accounting. A new engine/reset never inherits pre-observation counters. */
 class ObservationEngine {
     private var previous: Observation? = null
@@ -84,20 +106,7 @@ class ObservationEngine {
         }
         val elapsed = point.elapsedMs - before.elapsedMs
         val awake = point.uptimeMs - before.uptimeMs
-        val clockShift = abs((point.wallMs - before.wallMs) - elapsed) > 5_000
-        val missingTransition = (before.interactive != point.interactive && point.boundary != Boundary.SCREEN) ||
-            (before.power != point.power && point.boundary != Boundary.POWER) ||
-            (before.dozing != point.dozing && point.boundary != Boundary.DOZE)
-        // Delays due to CPU suspend are expected. A long *awake* gap is not observed reliably.
-        val gap = when {
-            point.generation != before.generation -> "Monitoring restarted"
-            elapsed < 0 || awake < 0 || awake > elapsed + 100 -> "Monotonic clock discontinuity"
-            point.boundary == Boundary.GAP -> "Collection interrupted"
-            clockShift -> "Wall clock changed; new interval baseline"
-            missingTransition -> "State changed between observations"
-            awake > maxOf(before.expectedIntervalMs * 3, 120_000L) -> "Gap in observation"
-            else -> null
-        }
+        val gap = observationGap(before, point)
         if (gap != null) {
             summary = summary.copy(latest = point, gaps = summary.gaps + 1, lastIssue = gap, stopped = false)
             return summary

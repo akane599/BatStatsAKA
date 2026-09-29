@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/root"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="10dp"
-    android:background="@drawable/widget_background_gradient"
+    android:padding="@dimen/widget_padding"
+    android:background="@drawable/widget_background"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -15,47 +15,50 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content">
 
+        <!-- RemoteViews inflate without AppCompat, so app:tint wouldn't apply; WidgetUpdater re-tints per direction. -->
         <ImageView
             android:id="@+id/icon"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="@dimen/widget_icon_size"
+            android:layout_height="@dimen/widget_icon_size"
             android:importantForAccessibility="no"
             android:src="@drawable/ic_battery"
-            android:layout_marginEnd="8dp"
-            app:tint="#00D9B5" />
+            android:layout_marginEnd="@dimen/widget_icon_margin_end"
+            android:tint="@color/widget_on_surface_variant"
+            tools:ignore="UseAppTint" />
 
         <TextView
             android:id="@+id/title"
-            android:textColor="#C4C7CE"
-            android:textSize="11sp"
+            android:textColor="@color/widget_on_surface_variant"
+            android:textSize="@dimen/widget_title_text_size"
             android:textAllCaps="true"
             android:letterSpacing="0.05"
-            android:fontFamily="sans-serif-medium"
+            android:fontFamily="@font/space_grotesk"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"/>
     </LinearLayout>
 
     <TextView
         android:id="@+id/value"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/widget_on_surface"
         android:textStyle="bold"
-        android:textSize="24sp"
+        android:textSize="@dimen/widget_value_text_size_max"
         android:maxLines="2"
         android:autoSizeTextType="uniform"
-        android:autoSizeMinTextSize="12sp"
-        android:autoSizeMaxTextSize="24sp"
+        android:autoSizeMinTextSize="@dimen/widget_value_text_size_min"
+        android:autoSizeMaxTextSize="@dimen/widget_value_text_size_max"
         android:autoSizeStepGranularity="1sp"
-        android:fontFamily="sans-serif-black"
-        android:layout_marginTop="8dp"
+        android:fontFamily="@font/space_grotesk"
+        android:fontFeatureSettings="tnum"
+        android:layout_marginTop="@dimen/widget_value_margin_top"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>
 
     <TextView
         android:id="@+id/subtitle"
-        android:textColor="#8B9AAF"
-        android:textSize="11sp"
+        android:textColor="@color/widget_on_surface_variant"
+        android:textSize="@dimen/widget_subtitle_text_size"
         android:fontFamily="sans-serif-medium"
-        android:layout_marginTop="4dp"
+        android:layout_marginTop="@dimen/widget_subtitle_margin_top"
         android:visibility="gone"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"/>

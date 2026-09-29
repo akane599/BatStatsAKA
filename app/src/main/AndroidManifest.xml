@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23"/>
+    <!-- Per-app battery use names and draws every app batterystats reports, including ones with no launcher entry. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:name=".battery.BatteryApp"
@@ -20,7 +22,7 @@
         android:supportsRtl="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.BatStats">
 
         <activity
             android:name=".battery.BatteryMainActivity"
@@ -28,6 +30,10 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Lets the QS tile shade reserve long-press on the tile to open this activity. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES"/>
             </intent-filter>
         </activity>
 
@@ -38,6 +44,17 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-started continuous battery monitoring with a persistent live notification; sampling stops when the user stops monitoring." />
+        </service>
+
+        <service
+            android:name=".battery.tile.MonitorTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_battery"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
         </service>
 
         <receiver
@@ -96,6 +113,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="app.batstats.battery.drain.ACTION_RESET" />
+                <action android:name="app.batstats.battery.drain.ACTION_STOP" />
             </intent-filter>
         </receiver>
     </application>

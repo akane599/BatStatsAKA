@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ongoing monitoring notification (battery/drain/**). Values carry their units from the drain formatters.
+     Several slots have shorter forms (…_short, …_minimal): the notification shows the longest one that fits unclipped
+     at the current font size and shade width, so keep each shorter form really shorter. -->
+<resources>
+    <!-- First lines: "−612 mA · 2.4 W" with "78%" trailing; the plain-text title "78% · On battery" -->
+    <string name="notification_headline">%1$s · %2$s</string>
+    <string name="notification_title">%1$s · %2$s</string>
+    <string name="notification_waiting">Waiting for a battery reading</string>
+    <string name="notification_state_charging">Charging</string>
+    <string name="notification_state_discharging">On battery</string>
+    <string name="notification_state_plugged">Plugged in, not charging</string>
+    <string name="notification_state_plugged_short">Not charging</string>
+    <string name="notification_state_full">Fully charged</string>
+    <string name="notification_state_unknown">State unknown</string>
+    <string name="notification_state_with_charger">%1$s · %2$s</string>
+    <string name="notification_charger_ac">AC charger</string>
+    <string name="notification_charger_usb">USB</string>
+    <string name="notification_charger_wireless">Wireless</string>
+    <string name="notification_charger_dock">Dock</string>
+
+    <!-- Collapsed line 2: screen on/off drain (+ time left) on battery; time to full · temperature otherwise -->
+    <string name="notification_summary_drain">On %1$s · Off %2$s</string>
+    <string name="notification_summary_drain_short">On %1$s · Off %2$s</string>
+    <string name="notification_summary_drain_left">On %1$s · Off %2$s · %3$s left</string>
+    <string name="notification_summary_drain_left_short">On %1$s · Off %2$s · %3$s left</string>
+    <string name="notification_summary_left">%1$s left</string>
+    <string name="notification_summary_to_full">%1$s to full · %2$s</string>
+    <string name="notification_summary_state">%1$s · %2$s</string>
+
+    <!-- Expanded grid labels: at most about 10 characters, so they fit a third of a narrow shade at 1.3x font -->
+    <string name="notification_label_current">Current</string>
+    <string name="notification_label_power">Power</string>
+    <string name="notification_label_temperature">Temp</string>
+    <string name="notification_label_voltage">Voltage</string>
+    <string name="notification_label_screen_on">Screen on</string>
+    <string name="notification_label_screen_off">Screen off</string>
+    <string name="notification_label_deep_sleep">Deep sleep</string>
+    <string name="notification_label_session">Session</string>
+    <string name="notification_label_time_left">Time left</string>
+    <string name="notification_label_time_to_full">To full</string>
+
+    <!-- Durations; a grid cell shows "5:10" with the hours unit or "45" with the minutes unit -->
+    <string name="notification_duration_days_hours">%1$s d %2$s h</string>
+    <string name="notification_duration_hours_minutes">%1$s h %2$s min</string>
+    <string name="notification_duration_minutes">%1$s min</string>
+    <string name="notification_duration_under_minute">&lt;1 min</string>
+    <string name="notification_unit_hours">h</string>
+    <string name="notification_unit_minutes">min</string>
+
+    <!-- Footer ("Since 9:12 AM · updated 10:31 AM"), its shorter forms, and the issue line -->
+    <string name="notification_footer">Since %1$s · updated %2$s</string>
+    <string name="notification_footer_range">%1$s–%2$s</string>
+    <string name="notification_footer_since">Since %1$s</string>
+    <string name="notification_footer_updated">Updated %1$s</string>
+    <string name="notification_issue_collection">Some readings could not be collected. Open the app for details.</string>
+    <string name="notification_issue_collection_short">Collection issue · open the app</string>
+    <string name="notification_issue_collection_minimal">Collection issue</string>
+    <string name="notification_issue_advanced">Advanced access is unavailable. Open the app for details.</string>
+    <string name="notification_issue_advanced_short">No advanced access · open the app</string>
+    <string name="notification_issue_advanced_minimal">No advanced access</string>
+
+    <!-- Actions -->
+    <string name="notification_action_stop">Stop</string>
+    <string name="notification_action_reset">Reset</string>
+</resources>

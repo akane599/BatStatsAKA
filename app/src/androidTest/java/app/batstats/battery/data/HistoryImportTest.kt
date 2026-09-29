@@ -5,6 +5,9 @@ import android.net.Uri
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.batstats.battery.apps.AppUsageBasis
+import app.batstats.battery.apps.AppUsageRow
+import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -117,6 +120,84 @@ class HistoryImportTest {
             assertEquals(listOf(1500L), chart.map { it.timestamp })
             assertEquals(3, db.batteryDao().samplesBetween(0, 3000).first().size)
         }
+    }
+    private fun closedSession() = session().copy(endTime = 2000, activeKey = null, energyNwh = 3_900_000, peakTemperatureDeciC = 310,
+        screenOffSuspendMs = 0, capacityEstimateMah = 4800, capacityConfidence = "LOW", capacityBasis = "COUNTER_SPAN",
+        appUsageStatus = AppUsageStatus.READY, appUsageBasis = AppUsageBasis.DELTA)
+    private val appRows = listOf(AppUsageRow(10_123, "com.example.video", 12.5, cpuTimeMs = 60_000, foregroundTimeMs = 900_000, wifiBytes = 4096),
+        AppUsageRow(1000, "android", 3.25), AppUsageRow(-1, "", 0.75, isOthers = true))
+
+    @Test fun formatTwoFileWithoutV5FieldsImportsWithThemEmpty() = runBlocking {
+        val file = File.createTempFile("history-test", ".json", context.cacheDir)
+        try {
+            file.writeText("""{"sessions":[{"sessionId":"old","type":"DISCHARGE","startTime":1000,"endTime":2000,"startLevel":60,"endLevel":59,""" +
+                """"deltaUah":null,"avgCurrentUa":null,"estCapacityMah":3000,"activeKey":null,"observationId":null,"lastSampleTime":null,""" +
+                """"observedMs":0,"counterCoveredMs":0,"screenOnMs":0,"screenOffMs":0,"screenOnUah":null,"screenOffUah":null,""" +
+                """"cpuSuspendMs":null,"closeReason":"Power state changed","source":"BatteryManager observed interval"}],"formatVersion":2}""")
+            database().useDatabase { db ->
+                assertEquals(HistoryImportResult(0, 1, 0, 0), ExportImportManager(context, db, HistoryMaintenance()).importJson(Uri.fromFile(file)))
+                val imported = db.sessionDao().byId("import:old")!!
+                assertEquals(3000, imported.estCapacityMah)
+                assertTrue(listOf(imported.chargerType, imported.energyNwh, imported.peakPowerMw, imported.peakTemperatureDeciC,
+                    imported.screenOffSuspendMs, imported.capacityEstimateMah, imported.capacityConfidence, imported.capacityBasis,
+                    imported.appUsageStatus, imported.appUsageBasis).all { it == null })
+                assertEquals(emptyList<SessionAppUsage>(), db.appUsageDao().sessionUsageRows("import:old"))
+            }
+        } finally { file.delete() }
+    }
+    @Test fun appUsageTravelsWithImportedSessionsAndLocalBreakdownsWin() = runBlocking {
+        database().useDatabase { source ->
+            source.sessionDao().insert(closedSession())
+            source.appUsageDao().replaceSessionUsage("session", AppUsageBasis.DELTA, appRows)
+            val payload = ExportImportManager(context, source, HistoryMaintenance()).snapshot(0, 3000, false, true)
+            assertEquals(HISTORY_FORMAT_VERSION, payload.formatVersion)
+            assertEquals(appRows, payload.appUsage.map { it.toRow() })
+            database().useDatabase { dest ->
+                val manager = ExportImportManager(context, dest, HistoryMaintenance())
+                assertEquals(HistoryImportResult(0, 1, 0, 0), manager.importPayload(payload))
+                val imported = dest.sessionDao().byId("import:session")!!
+                assertEquals(closedSession().copy(sessionId = "import:session", observationId = "import:observation", source = "import:BatteryManager observed interval"), imported)
+                assertEquals(appRows, dest.appUsageDao().sessionUsage("import:session").first().map { it.toRow() })
+                assertEquals(HistoryImportResult(0, 0, 0, 1), manager.importPayload(payload))
+                assertEquals(3, dest.appUsageDao().sessionUsageRows("import:session").size)
+                // An export made before the breakdown existed neither erases it nor counts as a change.
+                val earlier = payload.copy(sessions = payload.sessions.map { it.copy(appUsageStatus = AppUsageStatus.PENDING, appUsageBasis = null) }, appUsage = emptyList())
+                assertEquals(HistoryImportResult(0, 0, 0, 1), manager.importPayload(earlier))
+                assertEquals(AppUsageStatus.READY, dest.sessionDao().byId("import:session")?.appUsageStatus)
+                assertEquals(3, dest.appUsageDao().sessionUsageRows("import:session").size)
+            }
+            // Re-importing its own export leaves the device's local session and breakdown alone.
+            val foreign = payload.copy(appUsage = payload.appUsage.map { it.copy(powerMah = 99.0) })
+            assertEquals(HistoryImportResult(0, 0, 0, 1), ExportImportManager(context, source, HistoryMaintenance()).importPayload(foreign))
+            assertEquals(appRows, source.appUsageDao().sessionUsageRows("session").map { it.toRow() })
+        }
+    }
+    @Test fun appUsageWithoutItsSessionOrWithDuplicateRanksRollsBackTheImport() = runBlocking {
+        database().useDatabase { db ->
+            val manager = ExportImportManager(context, db, HistoryMaintenance())
+            val rows = appRows.mapIndexed { rank, row -> row.toSessionUsage("session", rank, AppUsageBasis.ABSOLUTE) }
+            for (bad in listOf(BatteryExport(sessions = listOf(closedSession()), appUsage = rows.map { it.copy(sessionId = "ghost") }),
+                BatteryExport(sessions = listOf(closedSession()), appUsage = rows.map { it.copy(rank = 0) }),
+                BatteryExport(sessions = listOf(closedSession()), appUsage = rows.map { it.copy(powerMah = Double.NaN) }))) {
+                try { manager.importPayload(bad); fail("Invalid app usage must fail") } catch (_: IllegalArgumentException) { }
+                assertEquals(0, db.sessionDao().count())
+            }
+        }
+    }
+    @Test fun appUsageCsvAttachesToAnImportedSession() = runBlocking {
+        val file = File.createTempFile("history-test", ".csv", context.cacheDir)
+        try {
+            database().useDatabase { db ->
+                val manager = ExportImportManager(context, db, HistoryMaintenance())
+                manager.importPayload(BatteryExport(sessions = listOf(closedSession())))
+                file.writeText("sessionId,rank,uid,packageName,powerMah,cpuTimeMs,foregroundTimeMs,backgroundTimeMs,wakelockTimeMs,mobileBytes,wifiBytes,isOthers,basis,exportedAtEpochMs\n" +
+                    "session,0,10123,com.example.video,12.5,60000,900000,,,,4096,false,DELTA,1\n" +
+                    "session,1,1000,android,3.25,,,,,,,false,DELTA,1\n" +
+                    "session,2,-1,,0.75,,,,,,,true,DELTA,1\n")
+                assertEquals(HistoryImportResult(0, 0, 0, 0), manager.importCsv(Uri.fromFile(file)))
+                assertEquals(appRows, db.appUsageDao().sessionUsageRows("import:session").map { it.toRow() })
+            }
+        } finally { file.delete() }
     }
     @Test fun legacyCsvIsAcceptedAndMalformedLaterRowsLeaveNoHistory() = runBlocking {
         val file = File.createTempFile("history-test", ".csv", context.cacheDir)

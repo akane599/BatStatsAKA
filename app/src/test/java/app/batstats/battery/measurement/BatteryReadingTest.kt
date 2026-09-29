@@ -47,9 +47,27 @@ class BatteryReadingTest {
         assertEquals(PowerState.UNKNOWN, BatteryReading.powerState(1, null))
     }
     @Test fun counterResetsAndJumpsAreMissingNotZeroConsumption() {
-        assertNull(BatteryReading.dischargedUah(100, 200, 1000))
+        assertNull(BatteryReading.dischargedUah(100, 3_101, 1000))
         assertNull(BatteryReading.dischargedUah(1_000_000, 0, 1000))
         assertNull(BatteryReading.dischargedUah(null, 0, 1000))
         assertEquals(0L, BatteryReading.dischargedUah(100, 100, 1000))
+    }
+    @Test fun counterRiseOfUpToThreeMahDuringDischargeIsABlipCountedAsZero() {
+        assertEquals(0L, BatteryReading.dischargedUah(4_000_000, 4_000_001, 30_000))
+        assertEquals(0L, BatteryReading.dischargedUah(4_000_000, 4_003_000, 30_000))
+        assertNull(BatteryReading.dischargedUah(4_000_000, 4_003_001, 30_000))
+        assertEquals(2_500L, BatteryReading.dischargedUah(4_000_000, 3_997_500, 30_000))
+    }
+    @Test fun calibratedCurrentChecksTheRawValueThenAppliesUnitAndSign() {
+        val milliamps = CurrentCalibration(CurrentUnit.MILLIAMPS)
+        val inverted = CurrentCalibration(sign = CurrentSign.INVERTED)
+        assertNull(BatteryReading.calibratedUa(null, CurrentCalibration.IDENTITY))
+        assertNull(BatteryReading.calibratedUa(Long.MIN_VALUE, milliamps))
+        assertNull(BatteryReading.calibratedUa(100_000_001, CurrentCalibration.IDENTITY))
+        assertEquals(-450_000L, BatteryReading.calibratedUa(-450_000, CurrentCalibration.IDENTITY))
+        assertEquals(-450_000L, BatteryReading.calibratedUa(-450, milliamps))
+        assertEquals(-450_000L, BatteryReading.calibratedUa(450_000, inverted))
+        assertEquals(-450_000L, BatteryReading.calibratedUa(450, CurrentCalibration(CurrentUnit.MILLIAMPS, CurrentSign.INVERTED)))
+        assertEquals(0L, BatteryReading.calibratedUa(0, inverted))
     }
 }

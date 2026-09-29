@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="settings_dismiss">Cerrar</string>
+    <string name="settings_save">Guardar</string>
+    <string name="settings_cancel">Cancelar</string>
+
+    <string name="settings_monitoring_title">Monitorización</string>
+    <string name="settings_auto_start">Iniciar tras reiniciar</string>
+    <string name="settings_status_link">Estado</string>
+    <string name="settings_status_link_summary">Modo de acceso, calibración y problemas recientes</string>
+    <string name="settings_monitoring_info_title">Acerca de la monitorización</string>
+    <string name="settings_monitoring_info_body">Iniciar tras reiniciar: BatStats reanuda la monitorización cuando el teléfono se reinicia, si Android lo permite. Si no, una notificación te deja iniciarla. Puede que Shizuku tenga que reiniciarse por separado.\n\nIcono de la barra de estado: lo que la notificación de monitorización muestra en la barra de estado.</string>
+
+    <string name="settings_alerts_title">Alertas</string>
+    <string name="settings_alert_low">Batería baja</string>
+    <string name="settings_alert_high">Límite de carga</string>
+    <string name="settings_alert_temperature">Temperatura alta</string>
+    <string name="settings_alert_discharge">Consumo alto</string>
+    <string name="settings_alert_full">Carga completa</string>
+    <string name="settings_alert_sound">Sonido y vibración de alertas</string>
+    <string name="settings_alert_sound_summary">En los ajustes de notificaciones de Android</string>
+    <string name="settings_threshold_description">Umbral de %1$s, %2$s</string>
+    <string name="settings_threshold_low_hint">Avisa cuando el nivel baje hasta aquí.</string>
+    <string name="settings_threshold_high_hint">Avisa cuando la carga llegue a este nivel.</string>
+    <string name="settings_threshold_temperature_hint">Avisa cuando la batería alcance esta temperatura.</string>
+    <string name="settings_threshold_discharge_hint">Avisa cuando el consumo se mantenga por encima.</string>
+    <string name="settings_alerts_info_title">Acerca de las alertas</string>
+    <string name="settings_alerts_info_body">Las alertas solo funcionan con la monitorización activa.\n\nBatería baja avisa cuando el nivel baja a tu umbral. Límite de carga avisa cuando la carga llega al tuyo.\n\nConsumo alto necesita al menos 3 lecturas por encima del umbral durante al menos 1 minuto. No indica qué app usó la energía.\n\nEl umbral de temperatura se guarda en °C, sea cual sea la unidad que muestres.\n\nEl sonido y la vibración se ajustan en la configuración de Android de las notificaciones de alerta.</string>
+
+    <string name="settings_measurement_title">Medición</string>
+    <string name="settings_detected_unit">Unidad detectada</string>
+    <string name="settings_detected_sign">Signo detectado</string>
+    <string name="settings_evidence_windows">A partir de %1$d ventanas coincidentes del contador de carga.</string>
+    <string name="settings_evidence_sign_only">A partir de lecturas positivas con batería (solo el signo).</string>
+    <string name="settings_evidence_none">Aún no detectado. Necesita monitorización mientras usas o cargas el teléfono.</string>
+    <string name="settings_override_note">Tu ajuste de unidad o signo de abajo anula la detección.</string>
+    <string name="settings_reset_calibration">Restablecer calibración</string>
+    <string name="settings_design_capacity_hint">Vacío para auto, o %1$s–%2$s mAh</string>
+    <string name="settings_design_capacity_error">Introduce %1$s–%2$s mAh o déjalo vacío.</string>
+    <string name="settings_measurement_info_title">Acerca de la medición</string>
+    <string name="settings_measurement_info_body">Android informa de la corriente de la batería en µA, pero algunos teléfonos usan mA o invierten el signo. BatStats compara las lecturas con el contador de carga y las corrige.\n\nLa unidad y el signo de corriente anulan la detección; Auto la usa.\n\nRestablecer calibración olvida la detección y empieza de nuevo. Borrar todos los datos la conserva.\n\nUna exportación de ajustes incluye tus ajustes de unidad y signo, nunca la calibración detectada.\n\nLa capacidad de diseño se usa para la salud de la batería. Déjala en Auto para usar la capacidad que informa Android, si lo hace.</string>
+    <string name="settings_reset_calibration_title">¿Restablecer calibración?</string>
+    <string name="settings_reset_calibration_body">BatStats olvida la unidad y el signo detectados y los vuelve a detectar con lecturas nuevas. Tu historial y tus ajustes se conservan.</string>
+    <string name="settings_reset_calibration_confirm">Restablecer</string>
+    <string name="settings_calibration_reset_done">Calibración restablecida</string>
+
+    <string name="settings_appearance_title">Apariencia</string>
+    <string name="settings_pure_black">Negro puro</string>
+    <string name="settings_pure_black_summary">Para pantallas OLED</string>
+    <string name="settings_material_you">Material You</string>
+    <string name="settings_material_you_summary">Colores de acento de tu fondo de pantalla</string>
+    <string name="settings_temperature_unit">Unidad de temperatura</string>
+
+    <string name="settings_data_title">Datos</string>
+    <string name="settings_retention">Conservar historial</string>
+    <string name="settings_data_link">Exportar, importar y borrar</string>
+    <string name="settings_data_info_title">Acerca de los datos</string>
+    <string name="settings_data_info_body">El historial anterior a este plazo se elimina, también el importado.\n\nEl almacenamiento también se limita a 100.000 muestras y 10.000 sesiones, incluso con «Para siempre».</string>
+</resources>

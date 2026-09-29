@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Only preferences may be transferred automatically. History requires deliberate export. -->
+    <!-- Only preferences may be transferred automatically. History requires deliberate export.
+         Include-only: shared_prefs/ (calibration.xml, sampler_state.xml, alert episodes) is never
+         backed up, so a detected current calibration never reaches another device. -->
     <include domain="file" path="datastore/" />
 </full-backup-content>

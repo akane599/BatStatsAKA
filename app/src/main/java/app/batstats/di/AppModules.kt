@@ -1,41 +1,72 @@
 package app.batstats.di
 
+import android.content.Context
 import android.os.Build
+import app.batstats.battery.apps.AppInfoRepository
+import app.batstats.battery.apps.AppInfoSource
+import app.batstats.battery.apps.AppStatsRepository
+import app.batstats.battery.apps.AppStatsSource
+import app.batstats.battery.apps.RoomSessionSnapshotStore
+import app.batstats.battery.apps.SessionSnapshotCollector
+import app.batstats.battery.apps.SessionSnapshotStore
+import app.batstats.battery.apps.ShellRunnerStatsShell
+import app.batstats.battery.data.DesignCapacitySource
 import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.data.CalibrationOverrides
+import app.batstats.battery.data.CalibrationStore
 import app.batstats.battery.data.ExportImportManager
 import app.batstats.battery.data.HistoryMaintenance
+import app.batstats.battery.data.HistoryRetention
 import app.batstats.battery.data.db.BatteryDatabase
-import app.batstats.battery.drain.AdvancedDrainTracker
+import app.batstats.battery.data.sampling.SamplerState
+import app.batstats.battery.data.sampling.SamplingController
+import app.batstats.battery.data.sampling.SharedPreferencesStore
 import app.batstats.battery.drain.DrainNotificationManager
+import app.batstats.battery.service.MonitoringControl
+import app.batstats.battery.service.MonitoringController
+import app.batstats.battery.service.SamplingDemand
 import app.batstats.battery.shizuku.ShizukuBridge
-import app.batstats.battery.util.DetailedStatsCollector
 import app.batstats.battery.util.ShellRunner
 import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
-import app.batstats.viewmodel.DashboardViewModel
+import app.batstats.settings.SettingsMigrations
+import app.batstats.settings.SettingsMigrator
+import app.batstats.viewmodel.AppDetailsViewModel
+import app.batstats.viewmodel.AppsViewModel
 import app.batstats.viewmodel.DataViewModel
-import app.batstats.viewmodel.DetailedStatsViewModel
-import app.batstats.viewmodel.DrainStatsViewModel
+import app.batstats.viewmodel.DefaultAppDetailsRepository
+import app.batstats.viewmodel.DefaultAppsRepository
+import app.batstats.viewmodel.DefaultDataRepository
+import app.batstats.viewmodel.DefaultHealthRepository
+import app.batstats.viewmodel.DefaultHistoryRepository
+import app.batstats.viewmodel.DefaultNowRepository
+import app.batstats.viewmodel.DefaultSessionDetailsRepository
+import app.batstats.viewmodel.DefaultStatusRepository
+import app.batstats.viewmodel.HealthViewModel
 import app.batstats.viewmodel.HistoryViewModel
+import app.batstats.viewmodel.KmpSettingsStore
+import app.batstats.viewmodel.NowViewModel
 import app.batstats.viewmodel.SessionDetailsViewModel
 import app.batstats.viewmodel.SettingsViewModel
+import app.batstats.viewmodel.StatusViewModel
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
 import io.github.mlmgames.settings.core.backup.SettingsBackupManager
 import io.github.mlmgames.settings.core.datastore.createSettingsDataStore
-import io.github.mlmgames.settings.core.managers.MigrationManager
 import io.github.mlmgames.settings.core.managers.ResetManager
 import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
-private const val SCHEMA_VERSION = 2
+private const val SCHEMA_VERSION = SettingsMigrations.CURRENT_VERSION
 private const val DATASTORE_NAME = "batstats_settings"
 
 val appModule = module {
@@ -46,7 +77,12 @@ val appModule = module {
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
     single { DiagnosticStore(androidContext(), get()) }
-    single { DetailedStatsCollector(get(), get()) }
+    // The one batterystats reader (on demand only; concurrent callers share a dump) and installed-app info.
+    single { AppStatsRepository(ShellRunnerStatsShell(get()), get(), get<DiagnosticStore>()::record) } bind AppStatsSource::class
+    single { AppInfoRepository(androidContext()) } bind AppInfoSource::class
+    single<SessionSnapshotStore> { RoomSessionSnapshotStore(get()) }
+    // Started and stopped by BatteryMonitorService.
+    single { SessionSnapshotCollector(get(), get(), get<BatteryRepository>().powerTransitions) }
 
     single<SettingsRepository<AppSettings>> {
         SettingsRepository(dataStore = get(), schema = AppSettingsSchema)
@@ -54,17 +90,8 @@ val appModule = module {
 
     single<StringResourceProvider> { AndroidStringResourceProvider(androidContext()) }
     single { ResetManager(get(), AppSettingsSchema) }
-    single {
-        MigrationManager(dataStore = get(), currentVersion = SCHEMA_VERSION).apply {
-            addMigration(object : io.github.mlmgames.settings.core.managers.Migration {
-                override val fromVersion = 1
-                override val toVersion = 2
-                override suspend fun migrate(prefs: androidx.datastore.preferences.core.MutablePreferences) {
-                    prefs[androidx.datastore.preferences.core.booleanPreferencesKey("dynamic_colors")] = false
-                }
-            })
-        }
-    }
+    // BatteryApp runs it at start; history retention waits for it (HistoryRetention).
+    single { SettingsMigrator(get()) }
 
     single {
         val app = androidApplication()
@@ -81,19 +108,45 @@ val appModule = module {
         )
     }
 
-    single { HistoryMaintenance() }
-    single { ExportImportManager(androidContext(), get(), get()) }
-    single { BatteryRepository(androidContext(), get(), get(), get(), get(), get()) }
+    // One design capacity for Now's Health card and the Health screen: sysfs is read once (root), then cached.
+    single {
+        DesignCapacitySource(get<SettingsRepository<AppSettings>>().flow, DesignCapacitySource::readRootChargeFullDesignUah, get())
+    }
 
-    single { AdvancedDrainTracker(androidContext(), get()) }
+    single { HistoryMaintenance() }
+    single { HistoryRetention(get(), get<SettingsRepository<AppSettings>>().flow) }
+    single { ExportImportManager(androidContext(), get(), get()) }
+    // One sampler thread per process; screens, the tile and details hold it as SamplingDemand.
+    single { SamplingController(androidContext(), get()) } bind SamplingDemand::class
+    single {
+        val preferences = androidContext().getSharedPreferences(CalibrationStore.PREFS_NAME, Context.MODE_PRIVATE)
+        val overrides = get<SettingsRepository<AppSettings>>().flow.map { settings ->
+            CalibrationOverrides(settings.currentUnitOverride.unit, settings.currentSignOverride.sign)
+        }
+        CalibrationStore(SharedPreferencesStore(preferences), overrides, get())
+    }
+    single {
+        val samplerPreferences = androidContext().getSharedPreferences(SamplerState.PREFS_NAME, Context.MODE_PRIVATE)
+        BatteryRepository(get(), get(), get(), get(), get(), get(), get(), get(), SharedPreferencesStore(samplerPreferences))
+    }
+    single<MonitoringControl> { MonitoringController(androidContext(), get()) }
+
     single { DrainNotificationManager(androidContext(), get()) }
 
-    viewModel { DashboardViewModel(androidApplication(), get(), get()) }
-    viewModel { SettingsViewModel(androidContext(), get(), get(), get(), get()) }
-    viewModel { DetailedStatsViewModel(get(), get(), get(), androidContext()) }
-    viewModel { HistoryViewModel(get()) }
-    viewModel { DataViewModel(get(), androidContext()) }
-    viewModel { DrainStatsViewModel(get()) }
+    viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get()) }
+    viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
+    // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
+    viewModel { HistoryViewModel(DefaultHistoryRepository(get(), get()), get()) }
+    viewModel { DataViewModel(DefaultDataRepository(androidContext(), get(), get(), get(), get())) }
+    viewModel { StatusViewModel(DefaultStatusRepository(androidContext(), get(), get(), get(), get(), get(), get())) }
+    viewModel { HealthViewModel(DefaultHealthRepository(androidContext(), get(), get(), KmpSettingsStore(get()))) }
+    // Apps' second get() is the nav entry's SavedStateHandle (sort, query and "show system" survive process death).
+    viewModel { AppsViewModel(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()) }
+    viewModel { (uid: Int, packageName: String) ->
+        AppDetailsViewModel(DefaultAppDetailsRepository(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()), uid, packageName)
+    }
 
-    viewModel { (sessionId: String) -> SessionDetailsViewModel(get(), get(), sessionId) }
+    viewModel { (sessionId: String) ->
+        SessionDetailsViewModel(DefaultSessionDetailsRepository(get(), get(), get(), get(), get(), get(), get()), get(), sessionId)
+    }
 }

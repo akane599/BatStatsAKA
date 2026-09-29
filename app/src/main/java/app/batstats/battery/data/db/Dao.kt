@@ -1,6 +1,10 @@
 package app.batstats.battery.data.db
 
 import androidx.room.*
+import app.batstats.battery.apps.AppUsageBasis
+import app.batstats.battery.apps.AppUsageRow
+import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.SessionEvidence
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -35,7 +39,12 @@ interface BatteryDao {
     @Query("WITH buckets AS (SELECT MAX(id) AS representativeId, MAX(CASE WHEN observationId IS NULL OR boundaryReason IS NOT NULL OR currentNowUa IS NULL OR voltageMv IS NULL OR temperatureDeciC IS NULL THEN 1 ELSE 0 END) OR COUNT(DISTINCT observationId) > 1 AS discontinuity FROM battery_samples WHERE sessionId = :sessionId AND timestamp BETWEEN :from AND :to GROUP BY (timestamp - :from) / :bucketMs) SELECT s.timestamp, s.currentNowUa, s.voltageMv, s.temperatureDeciC, s.observationId, s.source, b.discontinuity FROM battery_samples s JOIN buckets b ON s.id = b.representativeId ORDER BY s.timestamp, s.id")
     suspend fun sessionChartSamples(sessionId: String, from: Long, to: Long, bucketMs: Long): List<SessionChartReading>
 
-    @Query("DELETE FROM battery_samples WHERE id NOT IN (SELECT id FROM battery_samples ORDER BY timestamp DESC LIMIT :limit)")
+    /**
+     * Keeps the newest [limit] samples by timestamp: one seek on the timestamp index finds the
+     * (limit + 1)-th newest timestamp and everything at or before it goes. Nothing is deleted while
+     * fewer rows exist (the subquery is NULL).
+     */
+    @Query("DELETE FROM battery_samples WHERE timestamp <= (SELECT timestamp FROM battery_samples ORDER BY timestamp DESC LIMIT 1 OFFSET :limit)")
     suspend fun boundStorage(limit: Int = 100_000)
 
     @Query("DELETE FROM battery_samples")
@@ -85,69 +94,174 @@ interface SessionDao {
     @Query("DELETE FROM charge_sessions")
     suspend fun clearAll()
 
-    @Query("SELECT * FROM charge_sessions ORDER BY startTime DESC LIMIT :limit OFFSET :offset")
-    fun sessionsPaged(limit: Int, offset: Int): Flow<List<ChargeSession>>
-
     @Query("SELECT * FROM charge_sessions WHERE (:type IS NULL OR type = :type) AND (:query = '' OR instr(lower(sessionId), lower(:query)) > 0 OR instr(lower(source), lower(:query)) > 0) ORDER BY startTime DESC, sessionId LIMIT :limit")
     fun filteredSessions(type: SessionType?, query: String, limit: Int): Flow<List<ChargeSession>>
 
     @Query("SELECT * FROM charge_sessions WHERE sessionId = :id")
     fun session(id: String): Flow<ChargeSession?>
 
+    /** The newest [limit] sessions that stored a capacity estimate, newest first (the Health trend). */
+    @Query("SELECT sessionId, type, startTime, endTime, lastSampleTime, startLevel, endLevel, capacityEstimateMah, capacityConfidence, capacityBasis FROM charge_sessions WHERE capacityEstimateMah IS NOT NULL ORDER BY startTime DESC, sessionId LIMIT :limit")
+    fun capacityEstimates(limit: Int): Flow<List<CapacityEstimateRow>>
+
+    @Query("DELETE FROM battery_samples WHERE sessionId = :id")
+    suspend fun deleteSessionSamples(id: String): Int
+
+    @Query("DELETE FROM app_snapshots WHERE sessionId = :id")
+    suspend fun deleteSessionSnapshots(id: String): Int
+
+    @Query("DELETE FROM charge_sessions WHERE sessionId = :id")
+    suspend fun deleteSessionRow(id: String): Int
+
+    /**
+     * Deletes one session with its readings and app snapshots, all or nothing; the snapshots' uids and the session's
+     * `session_app_usage` rows cascade. Refuses (false) a missing row and the session the writer is recording
+     * ([recordingGeneration], null while monitoring is off; [SessionEvidence.isRecording]): it rewrites that row at
+     * every save, so the session would come straight back. Daily totals are kept.
+     */
+    @Transaction
+    suspend fun deleteSession(id: String, recordingGeneration: String?): Boolean {
+        val row = byId(id) ?: return false
+        if (SessionEvidence.isRecording(row, recordingGeneration)) return false
+        deleteSessionSnapshots(id)
+        deleteSessionSamples(id)
+        return deleteSessionRow(id) > 0
+    }
+
     @Query("UPDATE charge_sessions SET endTime=:end, activeKey=NULL, endLevel=:endLevel, deltaUah=:delta, avgCurrentUa=:avg, estCapacityMah=:cap WHERE sessionId=:id")
     suspend fun complete(id: String, end: Long, endLevel: Int?, delta: Long?, avg: Long?, cap: Int?)
 }
 
+/** PersistPolicy's write path: each saved sample commits together with its session row and day rows. */
 @Dao
-interface AlarmDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun upsert(rule: AlarmRule)
+interface PersistDao {
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertSample(sample: BatterySample): Long
 
-    @Query("SELECT * FROM alarm_rules")
-    fun rules(): Flow<List<AlarmRule>>
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSession(session: ChargeSession)
 
-    @Query("DELETE FROM alarm_rules WHERE id=:id")
-    suspend fun delete(id: Long)
+    @Update
+    suspend fun updateSession(session: ChargeSession): Int
+
+    @Upsert
+    suspend fun upsertDays(days: List<DailySummary>)
+
+    /**
+     * Upserts [days] (the local days the sample's interval touched: today, plus yesterday across midnight),
+     * updates or inserts [session] (never REPLACE: that would cascade-delete its app usage) and inserts [sample],
+     * all or nothing. Returns the sample row id, or -1 when that observed point already exists (session and days
+     * still commit).
+     */
+    @Transaction
+    suspend fun persistSample(sample: BatterySample, session: ChargeSession, days: List<DailySummary>): Long {
+        upsertDays(days)
+        if (updateSession(session) == 0) insertSession(session)
+        return insertSample(sample)
+    }
 }
 
-/**
- * App energy aggregation DAO (heuristic mode).
- */
 @Dao
-interface AppEnergyDao {
-    @Transaction
-    suspend fun incrementHour(packageName: String, atMillis: Long, deltaMah: Double, addSamples: Int, mode: String = "HEURISTIC") {
-        val bucket = hourBucketStart(atMillis)
-        val changed = updateIncrement(bucket, packageName, mode, deltaMah, addSamples)
-        if (changed == 0) {
-            insert(AppEnergyStat(bucketStart = bucket, packageName = packageName, mode = mode, energyMah = deltaMah, samples = addSamples))
-        }
-    }
+interface DailySummaryDao {
+    @Upsert
+    suspend fun upsert(summary: DailySummary)
 
-    @Query("UPDATE app_energy_stats SET energyMah = energyMah + :deltaMah, samples = samples + :addSamples WHERE bucketStart = :bucket AND packageName = :pkg AND mode = :mode")
-    suspend fun updateIncrement(bucket: Long, pkg: String, mode: String, deltaMah: Double, addSamples: Int): Int
+    @Upsert
+    suspend fun upsertAll(summaries: List<DailySummary>)
 
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(stat: AppEnergyStat)
+    @Query("SELECT * FROM daily_summaries WHERE epochDay = :epochDay")
+    suspend fun byDay(epochDay: Long): DailySummary?
 
-    @Query("""
-        SELECT packageName AS packageName, SUM(energyMah) AS energyMah, SUM(samples) AS samples
-        FROM app_energy_stats
-        WHERE bucketStart BETWEEN :from AND :to AND mode = :mode
-        GROUP BY packageName
-        ORDER BY energyMah DESC
-        LIMIT :limit
-    """)
-    fun topDrainers(from: Long, to: Long, mode: String = "HEURISTIC", limit: Int = 10): Flow<List<AppDrainAggregate>>
+    @Query("SELECT * FROM daily_summaries WHERE epochDay = :epochDay")
+    fun day(epochDay: Long): Flow<DailySummary?>
 
-    @Query("DELETE FROM app_energy_stats WHERE bucketStart < :olderThan")
-    suspend fun purgeOlderThan(olderThan: Long)
+    @Query("SELECT * FROM daily_summaries WHERE epochDay BETWEEN :fromDay AND :toDay ORDER BY epochDay")
+    fun between(fromDay: Long, toDay: Long): Flow<List<DailySummary>>
 
-    @Query("DELETE FROM app_energy_stats")
+    @Query("SELECT COUNT(*) FROM daily_summaries")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM daily_summaries WHERE epochDay < :epochDay")
+    suspend fun purgeBefore(epochDay: Long): Int
+
+    @Query("DELETE FROM daily_summaries")
     suspend fun clearAll()
 }
 
-private fun hourBucketStart(ms: Long): Long {
-    val hourMs = 60 * 60 * 1000L
-    return (ms / hourMs) * hourMs
+/** Per-app snapshots (transient, bounded) and each discharge session's stored breakdown. */
+@Dao
+interface AppUsageDao {
+    @Insert
+    suspend fun insertSnapshotHeader(snapshot: AppSnapshot): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSnapshotUids(rows: List<AppSnapshotUid>)
+
+    /** Stores a snapshot and its per-uid rows, then prunes to the open session's baseline plus the last [SNAPSHOTS_KEPT]. */
+    @Transaction
+    suspend fun insertSnapshot(snapshot: AppSnapshot, rows: List<AppUsageRow>): Long {
+        val id = insertSnapshotHeader(snapshot.copy(id = 0))
+        insertSnapshotUids(rows.map { it.toSnapshotUid(id) })
+        pruneSnapshots(SNAPSHOTS_KEPT)
+        return id
+    }
+
+    /** Keeps the [keepLatest] newest snapshots and every BASELINE of the open (activeKey = 1) session; uids cascade. */
+    @Query("DELETE FROM app_snapshots WHERE id NOT IN (SELECT id FROM app_snapshots ORDER BY capturedAt DESC, id DESC LIMIT :keepLatest) AND id NOT IN (SELECT a.id FROM app_snapshots a JOIN charge_sessions s ON s.sessionId = a.sessionId WHERE s.activeKey = 1 AND a.kind = 'BASELINE')")
+    suspend fun pruneSnapshots(keepLatest: Int = SNAPSHOTS_KEPT): Int
+
+    @Query("DELETE FROM app_snapshots WHERE sessionId IS NOT NULL AND sessionId NOT IN (SELECT sessionId FROM charge_sessions)")
+    suspend fun pruneOrphanSnapshots(): Int
+
+    @Query("SELECT * FROM app_snapshots WHERE sessionId = :sessionId AND kind = :kind ORDER BY capturedAt DESC, id DESC LIMIT 1")
+    suspend fun latestSnapshot(sessionId: String, kind: AppSnapshotKind): AppSnapshot?
+
+    @Query("SELECT * FROM app_snapshots ORDER BY capturedAt DESC, id DESC")
+    suspend fun snapshots(): List<AppSnapshot>
+
+    @Query("SELECT * FROM app_snapshot_uids WHERE snapshotId = :snapshotId ORDER BY uid")
+    suspend fun snapshotUids(snapshotId: Long): List<AppSnapshotUid>
+
+    @Query("DELETE FROM app_snapshots")
+    suspend fun clearSnapshots()
+
+    @Query("SELECT * FROM session_app_usage WHERE sessionId = :sessionId ORDER BY rank")
+    fun sessionUsage(sessionId: String): Flow<List<SessionAppUsage>>
+
+    @Query("SELECT * FROM session_app_usage WHERE sessionId = :sessionId ORDER BY rank")
+    suspend fun sessionUsageRows(sessionId: String): List<SessionAppUsage>
+
+    /** Same session predicate as [SessionDao.sessionsBetween], for export. */
+    @Query("SELECT u.* FROM session_app_usage u JOIN charge_sessions s ON s.sessionId = u.sessionId WHERE s.startTime <= :to AND COALESCE(s.endTime, s.lastSampleTime, s.startTime) >= :from ORDER BY s.startTime, u.sessionId, u.rank")
+    suspend fun usageForSessionsBetween(from: Long, to: Long): List<SessionAppUsage>
+
+    @Query("DELETE FROM session_app_usage WHERE sessionId = :sessionId")
+    suspend fun deleteSessionUsage(sessionId: String)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSessionUsage(rows: List<SessionAppUsage>)
+
+    @Transaction
+    suspend fun replaceSessionUsageRows(sessionId: String, rows: List<SessionAppUsage>) {
+        require(rows.size <= SessionAppUsage.MAX_ROWS && rows.all { it.sessionId == sessionId }) { "Invalid app usage rows" }
+        deleteSessionUsage(sessionId)
+        insertSessionUsage(rows)
+    }
+
+    @Query("UPDATE charge_sessions SET appUsageStatus = :status, appUsageBasis = :basis WHERE sessionId = :sessionId")
+    suspend fun setAppUsageStatus(sessionId: String, status: AppUsageStatus, basis: AppUsageBasis?): Int
+
+    /**
+     * Replaces the session's breakdown with [rows] in the given order (rank = index: top 30, then "others") and
+     * marks the session READY with [basis], atomically. The session row must exist (FK).
+     */
+    @Transaction
+    suspend fun replaceSessionUsage(sessionId: String, basis: AppUsageBasis, rows: List<AppUsageRow>) {
+        replaceSessionUsageRows(sessionId, rows.mapIndexed { rank, row -> row.toSessionUsage(sessionId, rank, basis) })
+        setAppUsageStatus(sessionId, AppUsageStatus.READY, basis)
+    }
+
+    companion object {
+        const val SNAPSHOTS_KEPT = 3
+    }
 }

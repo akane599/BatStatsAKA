@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Top bar and delete -->
+    <string name="sessiondetails_title">Sesión</string>
+    <string name="sessiondetails_delete">Eliminar sesión</string>
+    <string name="sessiondetails_delete_title">¿Eliminar esta sesión?</string>
+    <string name="sessiondetails_delete_body">Sus lecturas y el uso por app se eliminan con ella. Los totales diarios no cambian.</string>
+    <string name="sessiondetails_delete_confirm">Eliminar</string>
+    <string name="sessiondetails_cancel">Cancelar</string>
+    <string name="sessiondetails_delete_failed">No se pudo eliminar esta sesión</string>
+
+    <!-- Session types (top bar title) -->
+    <string name="sessiondetails_type_discharge">Con batería</string>
+    <string name="sessiondetails_type_charge">Cargando</string>
+    <string name="sessiondetails_type_plugged">Conectado, sin cargar</string>
+    <string name="sessiondetails_type_unknown">Estado de carga desconocido</string>
+
+    <!-- Missing -->
+    <string name="sessiondetails_missing_title">Sesión no encontrada</string>
+    <string name="sessiondetails_missing_body">Se eliminó, o la retención del historial la quitó.</string>
+    <string name="sessiondetails_missing_action">Volver al historial</string>
+
+    <!-- Header -->
+    <string name="sessiondetails_span">%1$s – %2$s</string>
+    <string name="sessiondetails_recording_since">Grabando desde %1$s</string>
+    <string name="sessiondetails_levels">%1$s %% → %2$s %%</string>
+    <string name="sessiondetails_levels_spoken">Nivel del %1$s %% al %2$s %%</string>
+    <string name="sessiondetails_used">Usado</string>
+    <string name="sessiondetails_charged">Cargado</string>
+    <string name="sessiondetails_average">Media</string>
+    <string name="sessiondetails_capacity">Capacidad</string>
+    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_confidence_low">Confianza baja</string>
+    <string name="sessiondetails_confidence_medium">Confianza media</string>
+    <string name="sessiondetails_confidence_high">Confianza alta</string>
+    <string name="sessiondetails_coverage">El contador de carga cubrió el %1$s %% de esta sesión.</string>
+    <string name="sessiondetails_legacy">Registrada por una versión anterior, así que el consumo no se midió.</string>
+    <string name="sessiondetails_info_title">Acerca de esta sesión</string>
+    <string name="sessiondetails_info_body">Una sesión es un tramo con el mismo estado de carga: con batería, cargando o conectado. Termina cuando eso cambia, cuando la supervisión se detiene o pierde lecturas, o cuando reinicias los números en Ahora.\n\nUsado y Cargado vienen del contador de carga de la batería, durante el tiempo que informó. La media es esa carga repartida en el mismo tiempo.\n\nCapacidad es la capacidad total que indica la carga de esta sesión. Salud la combina con otras sesiones.</string>
+
+    <!-- Charts -->
+    <string name="sessiondetails_chart_title">Nivel y corriente</string>
+    <string name="sessiondetails_series_current">Corriente</string>
+    <string name="sessiondetails_series_level">Nivel</string>
+    <string name="sessiondetails_temperature_title">Temperatura</string>
+    <string name="sessiondetails_readings_title">Lecturas</string>
+    <string name="sessiondetails_no_readings">No hay lecturas vinculadas a esta sesión.</string>
+    <string name="sessiondetails_chart_empty">No hay lecturas en esta sesión</string>
+
+    <!-- Drain (on battery) -->
+    <string name="sessiondetails_drain_title">Consumo</string>
+    <string name="sessiondetails_screen_on">Pantalla encendida</string>
+    <string name="sessiondetails_screen_off">Pantalla apagada</string>
+    <string name="sessiondetails_deep_sleep">Suspensión profunda</string>
+    <string name="sessiondetails_deep_sleep_screen_off">Con la pantalla apagada</string>
+    <string name="sessiondetails_drain_info_title">Acerca del consumo</string>
+    <string name="sessiondetails_drain_info_body">Pantalla encendida y apagada cuentan solo el tiempo con batería. El primer número es el consumo medio por hora como parte de la capacidad total de la batería; mA es el mismo consumo como corriente.\n\nSuspensión profunda es cuánto tiempo el procesador estuvo totalmente dormido. Con la pantalla apagada debería ser alta: si es baja, algo mantuvo el teléfono despierto.</string>
+
+    <!-- Charging insights -->
+    <string name="sessiondetails_charging_title">Velocidad y temperatura</string>
+    <string name="sessiondetails_charger">Cargador</string>
+    <string name="sessiondetails_charger_ac">CA</string>
+    <string name="sessiondetails_charger_usb">USB</string>
+    <string name="sessiondetails_charger_wireless">Inalámbrico</string>
+    <string name="sessiondetails_charger_dock">Base</string>
+    <string name="sessiondetails_average_power">Potencia media</string>
+    <string name="sessiondetails_peak_power">Pico %1$s W</string>
+    <string name="sessiondetails_peak_temperature">Temperatura máxima</string>
+    <string name="sessiondetails_twenty_to_eighty" formatted="false">20 → 80 %</string>
+    <string name="sessiondetails_not_covered">No cubierto</string>
+    <string name="sessiondetails_charging_info_title">Acerca de la carga</string>
+    <string name="sessiondetails_charging_info_body">La potencia media es la energía añadida dividida por el tiempo que informó el contador de carga; el pico es la lectura más alta durante la supervisión.\n\nEl tiempo de 20 a 80 es cuánto tardó el nivel en subir del 20 al 80 por ciento. Aparece cuando la sesión cubrió ambos.</string>
+
+    <!-- Per-app usage (on battery) -->
+    <string name="sessiondetails_apps_title">Apps</string>
+    <string name="sessiondetails_apps_basis_delta">Desde que se desconectó hasta que se conectó</string>
+    <string name="sessiondetails_apps_basis_reset">Desde que Android reinició sus estadísticas, durante esta sesión</string>
+    <string name="sessiondetails_apps_basis_absolute">Desde la última carga completa (sin lectura al desconectar)</string>
+    <string name="sessiondetails_apps_so_far">Hasta ahora · actualizado %1$s</string>
+    <string name="sessiondetails_apps_others">Otras apps</string>
+    <string name="sessiondetails_apps_show_all">Mostrar todas</string>
+    <string name="sessiondetails_apps_show_fewer">Mostrar menos</string>
+    <string name="sessiondetails_apps_pending">El uso por app se lee cuando conectas el teléfono.</string>
+    <string name="sessiondetails_apps_collecting">Leyendo el uso por app…</string>
+    <string name="sessiondetails_apps_no_access">Sin uso por app: BatStats no tenía acceso de Shizuku, root ni ADB cuando se conectó el teléfono. Shizuku sin root se detiene al reiniciar el teléfono; abre Shizuku para iniciarlo de nuevo.</string>
+    <string name="sessiondetails_apps_failed">Sin uso por app: la supervisión se detuvo antes de conectar el teléfono, o no se pudieron leer las estadísticas de Android.</string>
+    <string name="sessiondetails_apps_not_recorded">No se registró uso por app en esta sesión.</string>
+    <string name="sessiondetails_apps_empty">Ninguna app usó una cantidad medible de energía en esta sesión.</string>
+    <string name="sessiondetails_apps_info_title">Acerca del uso por app</string>
+    <string name="sessiondetails_apps_info_body">BatStats lee las estadísticas de batería por app de Android al desconectar y de nuevo al conectar; el número de cada app es la diferencia. Si Android reinició sus estadísticas entremedias, se muestran los totales desde el reinicio. Sin una lectura al desconectar, se muestran los totales desde la última carga completa.\n\nLeer estas estadísticas requiere acceso de Shizuku, root o ADB. Shizuku sin root se detiene al reiniciar el teléfono: abre Shizuku para iniciarlo de nuevo.\n\nLos valores son estimaciones de Android. Una entrada puede incluir varias apps que comparten un ID.</string>
+</resources>

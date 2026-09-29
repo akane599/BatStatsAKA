@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="component_chart_empty">Aún no hay lecturas</string>
+    <string name="component_chart_summary_range">De %1$s a %2$s.</string>
+    <string name="component_chart_summary_series">%1$s: último %2$s, mínimo %3$s, máximo %4$s.</string>
+    <string name="component_bar_summary">Máximo: %1$s, %2$s. Último: %3$s, %4$s.</string>
+    <string name="component_bar_select">Seleccionar %1$s</string>
+    <string name="component_bar_clear">Borrar selección</string>
+    <string name="component_bar_selected">Seleccionado: %1$s, %2$s</string>
+    <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_app_system_process">Proceso del sistema</string>
+    <string name="component_app_unknown">App desconocida</string>
+    <string name="component_info_open">Acerca de %1$s</string>
+    <string name="calibration_notice_title">Lecturas de corriente corregidas</string>
+    <string name="calibration_notice_unit">Este teléfono informa la corriente en miliamperios. Ahora los valores se convierten.</string>
+    <string name="calibration_notice_sign">Este teléfono informa el consumo como positivo. Ahora el signo se invierte.</string>
+    <string name="calibration_notice_both">Este teléfono informa la corriente en miliamperios y el consumo como positivo. Ahora los valores se convierten e invierten.</string>
+    <string name="calibration_notice_same">La lectura de corriente se comprobó con el contador de carga y se ajustó.</string>
+    <string name="calibration_notice_undo">Deshacer</string>
+    <string name="calibration_notice_keep">Mantener</string>
+    <string name="percent_value">%1$s %%</string>
+</resources>

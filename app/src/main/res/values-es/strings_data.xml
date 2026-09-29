@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ajustes › Datos (ui/screens/DataScreen.kt). "Lecturas" son las muestras de batería. -->
+<resources>
+    <string name="data_title">Datos</string>
+
+    <!-- Historial guardado -->
+    <string name="data_stored_title">Historial guardado</string>
+    <string name="data_stored_readings">Lecturas</string>
+    <string name="data_stored_sessions">Sesiones</string>
+    <string name="data_stored_limit">de %1$s</string>
+    <string name="data_stored_info_title">Acerca del historial guardado</string>
+    <string name="data_stored_info_body">BatStats guarda como máximo 100.000 lecturas y 10.000 sesiones en este teléfono; las más antiguas se eliminan primero. El ajuste de retención puede eliminarlas antes.\n\nBorrar elimina lecturas, sesiones y estadísticas de apps. Tus ajustes y la calibración actual se conservan. Las estadísticas de batería de Android no se ven afectadas.</string>
+
+    <!-- Exportar -->
+    <string name="data_export_title">Exportar historial</string>
+    <string name="data_export_period">Periodo</string>
+    <string name="data_range_all">Todo</string>
+    <string name="data_range_week">7 días</string>
+    <string name="data_range_month">30 días</string>
+    <string name="data_export_include">Incluir</string>
+    <string name="data_include_readings">Lecturas</string>
+    <string name="data_include_sessions">Sesiones</string>
+    <string name="data_export_nothing">Elige lecturas, sesiones o ambas.</string>
+    <string name="data_export_json">Guardar como JSON</string>
+    <string name="data_export_csv">Guardar como CSV</string>
+    <string name="data_export_info_title">Acerca de las exportaciones</string>
+    <string name="data_export_info_body">JSON guarda todo en un archivo, con unidades y horas UTC explícitas. CSV escribe un archivo por tabla en la carpeta que elijas.\n\nEl periodo termina cuando empieza la exportación. Las sesiones que se solapan con él se exportan completas, sin recortar.\n\nLas exportaciones muestran cuándo y cómo usas el teléfono. Compártelas solo con quien elijas.</string>
+    <string name="data_exported_json">Guardado como JSON.</string>
+    <string name="data_exported_csv">Guardado como archivos CSV.</string>
+
+    <!-- Importar -->
+    <string name="data_import_title">Importar historial</string>
+    <string name="data_import_json">Importar JSON</string>
+    <string name="data_import_csv">Importar CSV</string>
+    <string name="data_import_info_title">Acerca de las importaciones</string>
+    <string name="data_import_info_body">Las importaciones se añaden a tu historial y nunca inician la monitorización. Los registros idénticos se omiten. Un archivo que entra en conflicto con lo guardado, o que tiene un registro no válido, se rechaza entero, así que nada se importa a medias.\n\nUn archivo CSV contiene lecturas, sesiones o uso de apps; impórtalos de uno en uno. Se aceptan archivos de hasta 64 MiB.</string>
+    <string name="data_imported">Lecturas añadidas: %1$s · sesiones añadidas: %2$s · ampliadas: %3$s · sin cambios: %4$s</string>
+
+    <!-- Copia de ajustes -->
+    <string name="data_settings_title">Copia de ajustes</string>
+    <string name="data_settings_save">Guardar ajustes</string>
+    <string name="data_settings_restore">Restaurar ajustes</string>
+    <string name="data_settings_info_title">Acerca de las copias de ajustes</string>
+    <string name="data_settings_info_body">La copia contiene tus ajustes, incluidas las correcciones de unidad y signo. Nunca contiene el historial de batería ni la calibración que BatStats detectó en este teléfono.\n\nAl restaurar se comprueba primero el archivo entero. Si algo no es correcto, ningún ajuste cambia.</string>
+    <string name="data_settings_saved">Ajustes guardados.</string>
+    <string name="data_settings_restored">Ajustes restaurados · aplicados: %1$s · omitidos: %2$s · no aplicados: %3$s</string>
+
+    <!-- Borrar -->
+    <string name="data_clear_action">Borrar todos los datos</string>
+    <string name="data_clear_hint">Elimina lecturas, sesiones y estadísticas de apps. Los ajustes y la calibración se conservan.</string>
+    <string name="data_clear_title">¿Borrar todos los datos?</string>
+    <string name="data_clear_body">Esto detiene la monitorización y elimina para siempre todas las lecturas, sesiones y estadísticas de apps. Tus ajustes y la calibración actual se conservan.\n\nGuarda antes una exportación si quieres una copia.</string>
+    <string name="data_clear_confirm">Eliminar todo</string>
+    <string name="data_clear_cancel">Cancelar</string>
+    <string name="data_clear_failed">No se pudo borrar el historial. Inténtalo de nuevo.</string>
+    <string name="data_clear_done">Todo el historial se ha eliminado.</string>
+
+    <!-- Errores -->
+    <string name="data_failed_export">La exportación no se guardó. %1$s</string>
+    <string name="data_failed_import">No se importó nada. %1$s</string>
+    <string name="data_failed_not_export">No se importó nada. No es una exportación de historial de BatStats.</string>
+    <string name="data_failed_read">No se pudo leer ese archivo. Nada cambió.</string>
+    <string name="data_failed_write">No se pudo escribir en esa ubicación. Elige otra.</string>
+    <string name="data_failed_settings_invalid">No es una copia de ajustes válida. Ningún ajuste cambió.</string>
+    <string name="data_failed_settings_other_app">Esta copia pertenece a otra app. Ningún ajuste cambió.</string>
+    <string name="data_failed_settings_too_new">Esta copia es de una versión más nueva de BatStats. Ningún ajuste cambió.</string>
+    <string name="data_failed_settings_damaged">Esta copia se editó o está dañada. Ningún ajuste cambió.</string>
+    <string name="data_failed_no_picker">Ninguna app de este teléfono puede elegir archivos.</string>
+    <string name="data_failed_unexpected">Algo salió mal. Inténtalo de nuevo.</string>
+    <string name="data_working">Procesando…</string>
+</resources>

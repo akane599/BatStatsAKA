@@ -120,11 +120,31 @@ android {
 
     namespace = "app.batstats"
 
+    testOptions {
+        // Required by the screenshot suite: layoutlib resolves themes/layouts from compiled resources.
+        unitTests.isIncludeAndroidResources = true
+        // Compose Preview Screenshot Testing as an AGP test suite: @PreviewTest previews live in src/screenshotTest.
+        screenshotTests.create("screenshotTest") {
+            engineVersion = libs.versions.screenshot.get()
+            targetVariants.add("debug")
+            dependencies {
+                implementation(libs.androidx.ui.tooling)
+                // @Preview for the @PreviewTest functions; main has no previews.
+                implementation(libs.androidx.ui.tooling.preview)
+                implementation(libs.screenshot.validation.api)
+            }
+        }
+    }
 
     dependenciesInfo {
         includeInApk = false
         includeInBundle = false
     }
+}
+
+// The screenshot suite renders and diffs ~200 previews in one test JVM; the default heap runs out.
+tasks.withType<Test>().configureEach {
+    if (name.endsWith("ScreenshotTestDefaultTestSuite")) maxHeapSize = "2g"
 }
 
 apkDist {
@@ -140,6 +160,15 @@ androidComponents {
     }
 }
 
+// Screenshot suites render in the host test JVM: pin timezone/locale so formatted dates match on every machine.
+tasks.withType<Test>().configureEach {
+    if (name.contains("ScreenshotTest")) {
+        systemProperty("user.timezone", "UTC")
+        systemProperty("user.language", "en")
+        systemProperty("user.country", "US")
+    }
+}
+
 // Configure all tasks that are instances of AbstractArchiveTask
 tasks.withType<AbstractArchiveTask>().configureEach {
     isPreserveFileTimestamps = false
@@ -149,17 +178,11 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 dependencies {
 
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.animation)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.documentfile)
     ksp(libs.androidx.room.compiler)
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    implementation(libs.kotlin.stdlib)
     implementation(libs.core.ktx)
-
-    // Android lifecycle
-    implementation(libs.lifecycle.viewmodel.ktx)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
@@ -171,8 +194,7 @@ dependencies {
     implementation(libs.kmp.settings.ui.compose)
     ksp(libs.kmp.settings.ksp)
 
-    //Material dependencies
-    implementation(libs.material)
+    // Material 3 (Compose); the XML theme parent is the platform's Theme.Material, so no MDC library.
     implementation(libs.material3.android)
 
     // Compose dependencies
@@ -181,10 +203,8 @@ dependencies {
     val composeBom = enforcedPlatform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.viewmodel.compose)
-    implementation(libs.androidx.datastore.preferences.core)
 
     // Shizuku
     implementation(libs.api)
@@ -206,8 +226,6 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.androidx.ui.tooling)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
-
-    implementation(libs.androidx.lifecycle.runtime.ktx)
 
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.android)

@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Apps -->
+    <string name="apps_unit_seconds">s</string>
+    <string name="apps_title">Apps</string>
+    <string name="apps_refresh">Actualizar estadísticas de apps</string>
+    <string name="apps_loading">Leyendo las estadísticas de batería de Android…</string>
+    <string name="apps_loading_description">Cargando apps</string>
+    <string name="apps_updated">Actualizado %1$s</string>
+
+    <string name="apps_access_title">Las estadísticas por app necesitan acceso</string>
+    <string name="apps_access_not_set_up">Android protege las estadísticas de batería por app tras el acceso de Shizuku, root o ADB. Aún no hay ninguno configurado.</string>
+    <string name="apps_access_shizuku">Shizuku está en ejecución, pero todavía no ha permitido a BatStats.</string>
+    <string name="apps_access_adb">En esta versión de Android, el acceso concedido por ADB no cubre las estadísticas por app. Usa Shizuku o root.</string>
+    <string name="apps_access_refused">Android rechazó las estadísticas por app con el acceso actual.</string>
+    <string name="apps_access_set_up">Configurar acceso</string>
+    <string name="apps_access_allow">Permitir en Shizuku</string>
+
+    <string name="apps_failed_title">No se pudieron leer las estadísticas de Android</string>
+    <string name="apps_failed_format">Android respondió en un formato que BatStats no puede leer.</string>
+    <string name="apps_failed_shizuku">La lectura con Shizuku falló. Inténtalo de nuevo o reinicia Shizuku.</string>
+    <string name="apps_failed_other">La lectura falló. Inténtalo de nuevo en un momento.</string>
+    <string name="apps_retry">Reintentar</string>
+
+    <string name="apps_summary_title">Estadísticas de Android</string>
+    <string name="apps_summary_title_since">Estadísticas de Android desde %1$s</string>
+    <string name="apps_summary_on_battery">Con batería</string>
+    <string name="apps_summary_screen_on">Pantalla encendida</string>
+    <string name="apps_summary_screen_off">Pantalla apagada</string>
+    <string name="apps_summary_used">%1$s %% usado</string>
+    <string name="apps_summary_deep_doze">Doze profundo</string>
+    <string name="apps_summary_light_doze">Doze ligero</string>
+    <string name="apps_summary_capacity">Capacidad</string>
+    <string name="apps_summary_info_title">Acerca de las estadísticas de Android</string>
+    <string name="apps_summary_info_body">Estos números vienen de las estadísticas de batería del propio Android. Android empieza a contar cuando el teléfono se desconecta tras una carga completa y vuelve a empezar en la siguiente carga completa.\n\nLos mAh por app son estimaciones del modelo de energía de Android, no mediciones. Pantalla encendida y apagada muestran el tiempo y la parte de la batería usada en cada estado. Doze es el tiempo que el teléfono pasó inactivo con la pantalla apagada: el doze profundo es el que más ahorra.\n\nLa capacidad es la estimación de Android de la carga completa de la batería.</string>
+
+    <string name="apps_no_access_title">Las apps aparecen aquí</string>
+    <string name="apps_no_access_body">Cuando el acceso esté configurado, el uso de batería de cada app aparecerá aquí, de mayor a menor.</string>
+
+    <string name="apps_search">Buscar apps</string>
+    <string name="apps_search_clear">Borrar búsqueda</string>
+    <string name="apps_sort_label">Ordenar por</string>
+    <string name="apps_sort_battery">Batería</string>
+    <string name="apps_sort_cpu">CPU</string>
+    <string name="apps_sort_foreground">Primer plano</string>
+    <string name="apps_sort_background">Segundo plano</string>
+    <string name="apps_sort_network">Red</string>
+    <string name="apps_system_toggle">Apps del sistema</string>
+    <plurals name="apps_count">
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+
+    <string name="apps_empty_search_title">Ninguna app coincide con «%1$s»</string>
+    <string name="apps_empty_search_body">Revisa la ortografía o busca por nombre de paquete.</string>
+    <plurals name="apps_empty_search_system">
+        <item quantity="one">Coincide %d app del sistema.</item>
+        <item quantity="other">Coinciden %d apps del sistema.</item>
+    </plurals>
+    <string name="apps_show_system">Mostrar apps del sistema</string>
+    <string name="apps_empty_only_system_title">Solo las apps del sistema usaron la batería</string>
+    <string name="apps_empty_title">Aún no hay uso de apps contado</string>
+    <string name="apps_empty_body">Android no ha contado uso de ninguna app desde que sus estadísticas volvieron a empezar.</string>
+
+    <!-- AppDetails -->
+    <string name="apps_details_app_info">Info. de la app</string>
+    <string name="apps_details_caption_since">Desde %1$s · actualizado %2$s</string>
+    <string name="apps_details_battery">Batería usada</string>
+    <string name="apps_details_share">Parte del total de apps</string>
+    <string name="apps_details_not_counted">Android no ha contado uso de esta app desde que sus estadísticas volvieron a empezar.</string>
+
+    <string name="apps_details_time_title">Tiempo por estado</string>
+    <string name="apps_details_time_foreground">Primer plano</string>
+    <string name="apps_details_time_fgs">Servicio en primer plano</string>
+    <string name="apps_details_time_background">Segundo plano</string>
+    <string name="apps_details_time_cached">En caché</string>
+    <string name="apps_details_time_info_title">Acerca del tiempo por estado</string>
+    <string name="apps_details_time_info_body">Primer plano es el tiempo con la app abierta en pantalla. Un servicio en primer plano sigue trabajando con una notificación visible, como la música o la navegación.\n\nSegundo plano es el tiempo en ejecución sin ninguno de los dos. En caché significa que Android mantuvo la app en memoria, en pausa, para que abra más rápido; gasta poca batería.</string>
+
+    <string name="apps_details_cpu_title">CPU</string>
+    <string name="apps_details_cpu_time">Tiempo de CPU</string>
+    <string name="apps_details_kept_awake">Mantuvo activo</string>
+    <string name="apps_details_no_background_work">Sin wakelocks, alarmas, trabajos ni sincronizaciones desde que las estadísticas de Android volvieron a empezar.</string>
+
+    <string name="apps_details_wakelocks_title">Wakelocks</string>
+    <string name="apps_details_wakelocks_info_title">Acerca de los wakelocks</string>
+    <string name="apps_details_wakelocks_info_body">Un wakelock impide que el teléfono duerma mientras una app trabaja. Cada uno lleva el nombre que le da la app. Los wakelocks de CPU largos con la pantalla apagada son una causa habitual de consumo.\n\nLos tiempos son compartidos: cuando varias apps mantienen wakelocks a la vez, Android reparte el tiempo entre ellas.</string>
+    <string name="apps_details_wakelock_cpu">mantiene la CPU activa</string>
+    <string name="apps_details_wakelock_screen">mantiene la pantalla encendida</string>
+    <plurals name="apps_details_times">
+        <item quantity="one">%d vez</item>
+        <item quantity="other">%d veces</item>
+    </plurals>
+    <string name="apps_details_show_all">Mostrar las %1$d</string>
+    <string name="apps_details_show_fewer">Mostrar menos</string>
+
+    <string name="apps_details_alarms_title">Alarmas</string>
+    <plurals name="apps_details_wakeups">
+        <item quantity="one">%d activación</item>
+        <item quantity="other">%d activaciones</item>
+    </plurals>
+    <string name="apps_details_jobs_title">Trabajos</string>
+    <plurals name="apps_details_runs">
+        <item quantity="one">%d ejecución</item>
+        <item quantity="other">%d ejecuciones</item>
+    </plurals>
+    <string name="apps_details_syncs_title">Sincronizaciones</string>
+    <plurals name="apps_details_syncs">
+        <item quantity="one">%d sincronización</item>
+        <item quantity="other">%d sincronizaciones</item>
+    </plurals>
+
+    <string name="apps_details_network_title">Red</string>
+    <string name="apps_details_mobile">Datos móviles</string>
+    <string name="apps_details_wifi">Wi-Fi</string>
+    <string name="apps_details_radio">Radio móvil activa</string>
+
+    <string name="apps_details_hardware_title">Sensores y hardware</string>
+    <string name="apps_details_gps">GPS</string>
+    <string name="apps_details_sensors">Sensores</string>
+    <string name="apps_details_camera">Cámara</string>
+    <string name="apps_details_flashlight">Linterna</string>
+    <string name="apps_details_audio">Audio</string>
+    <string name="apps_details_video">Vídeo</string>
+    <string name="apps_details_bluetooth_scan">Búsqueda Bluetooth</string>
+
+    <string name="apps_details_history_title">Sesiones con batería</string>
+    <string name="apps_details_history_caption">Entre las 30 primeras en %1$d de %2$d sesiones</string>
+    <string name="apps_details_history_empty">No hay sesiones con datos por app en los últimos 30 días.</string>
+    <string name="apps_details_history_series">Batería usada</string>
+    <string name="apps_details_history_info_title">Acerca de las sesiones con batería</string>
+    <string name="apps_details_history_info_body">Cada barra es un periodo con batería de los últimos 30 días (hasta 14), desde que se desconecta hasta que se conecta. BatStats lee las estadísticas de Android en ambos extremos cuando tiene acceso y guarda las 30 primeras apps de cada uno.\n\nUna sesión en la que esta app no estuvo entre las 30 primeras aparece como 0.</string>
+    <string name="apps_details_nothing_else">No hay nada más registrado para esta app.</string>
+    <string name="apps_summary_capacity_source">Estimación de Android</string>
+</resources>

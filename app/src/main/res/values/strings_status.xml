@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Settings › Status (ui/screens/StatusScreen.kt). Unit symbols never change: translatable="false" (base only). -->
+<resources>
+    <string name="status_unit_ua" translatable="false">µA</string>
+    <string name="status_unit_ma" translatable="false">mA</string>
+
+    <string name="status_title">Status</string>
+
+    <!-- Calibration correction notice (same as on Now) -->
+
+    <!-- Advanced access -->
+    <string name="status_access_title">Advanced access</string>
+    <string name="status_access_shizuku">Shizuku</string>
+    <string name="status_access_root">Root</string>
+    <string name="status_access_adb">ADB grants</string>
+    <string name="status_access_none">None</string>
+    <string name="status_access_checking">Checking access…</string>
+    <string name="status_access_on">Per-app statistics are available.</string>
+    <string name="status_access_off">Per-app statistics need Shizuku, root or ADB grants.</string>
+    <string name="status_access_adb_limited">Battery details only. On this Android version, per-app statistics need Shizuku or root.</string>
+    <string name="status_access_authorize_hint">Shizuku is running. Authorize BatStats to use it.</string>
+    <string name="status_access_authorize">Authorize Shizuku</string>
+    <string name="status_access_check">Check again</string>
+    <string name="status_access_checking_short">Checking…</string>
+    <string name="status_access_info_title">About advanced access</string>
+    <string name="status_access_info_body">Ordinary battery readings need no special access. Per-app statistics come from Android\'s own battery report, which needs Shizuku, root or ADB-granted permissions.\n\nAndroid counts those statistics since its own last reset, which can differ from BatStats sessions.</string>
+
+    <!-- Setup -->
+    <string name="status_setup_show">Show setup steps</string>
+    <string name="status_setup_hide">Hide setup steps</string>
+    <string name="status_setup_intro">Use any one of these:</string>
+    <string name="status_setup_shizuku_title">Shizuku</string>
+    <string name="status_setup_shizuku_body">Install and start Shizuku, then authorize BatStats.</string>
+    <string name="status_setup_root_title">Root</string>
+    <string name="status_setup_root_body">Allow BatStats when your root manager asks, then check again.</string>
+    <string name="status_setup_adb_title">ADB</string>
+    <string name="status_setup_adb_body">From a computer with ADB, run these commands, then check again.</string>
+    <string name="status_setup_adb_limited">On Android 16 and later, these grants cover battery details but not per-app statistics.</string>
+    <string name="status_setup_copy">Copy commands</string>
+    <string name="status_setup_copied">Copied</string>
+    <string name="status_setup_commands">ADB commands</string>
+
+    <!-- Calibration -->
+    <string name="status_calibration_title">Current calibration</string>
+    <string name="status_calibration_unit">Unit</string>
+    <string name="status_calibration_unit_ua">Microamps</string>
+    <string name="status_calibration_unit_ma">Milliamps</string>
+    <string name="status_calibration_sign">Drain reads as</string>
+    <string name="status_calibration_negative">Negative</string>
+    <string name="status_calibration_positive">Positive</string>
+    <string name="status_calibration_standard">Android standard</string>
+    <string name="status_calibration_flipped">Flipped for display</string>
+    <string name="status_calibration_detected">Detected by checking the charge counter.</string>
+    <string name="status_calibration_override">Set in Settings.</string>
+    <string name="status_calibration_default">Not checked yet. The Android standard is used until enough readings are in.</string>
+    <string name="status_calibration_info_title">About calibration</string>
+    <string name="status_calibration_info_body">Phones report battery current in different ways: some in milliamps instead of microamps, some with drain as a positive number. BatStats checks the reported current against the charge counter while it monitors, and corrects the display.\n\nYou can set the unit and sign yourself in Settings, and reset the detection there.</string>
+
+    <!-- Recent issues -->
+    <string name="status_issues_title">Recent issues</string>
+    <string name="status_issues_none">No issues recorded.</string>
+    <string name="status_issues_show_all">Show all (%1$s)</string>
+    <string name="status_issues_show_fewer">Show fewer</string>
+    <string name="status_issues_repeated">%1$s · %2$s times</string>
+    <string name="status_issues_log_unavailable">The issue log cannot be saved right now. Recent entries may be lost.</string>
+    <string name="status_issues_info_title">About recent issues</string>
+    <string name="status_issues_info_body">BatStats keeps up to 60 events on this phone and groups repeats. They never include app lists, raw system reports or device IDs, and they leave the phone only in a report you share.</string>
+    <string name="status_issue_start_failed">Monitoring could not start</string>
+    <string name="status_issue_battery_unavailable">Android gave no battery reading</string>
+    <string name="status_issue_battery_failed">A battery reading failed</string>
+    <string name="status_issue_state_events">Screen and charger events were not received</string>
+    <string name="status_issue_history_failed">History could not be saved</string>
+    <string name="status_issue_gap">Monitoring paused; the gap is left out</string>
+    <string name="status_issue_charge_counter">The charge counter was missing or reset</string>
+    <string name="status_issue_advanced_failed">Per-app statistics could not be read</string>
+    <string name="status_issue_format_invalid">Android\'s battery report was not understood</string>
+    <string name="status_issue_interrupted">Reading per-app statistics was interrupted</string>
+    <string name="status_issue_alert_failed">A battery alert could not be shown</string>
+    <string name="status_issue_notification_failed">The notification or a widget could not update</string>
+    <string name="status_issue_log_failed">Saved issues could not be read</string>
+
+    <!-- Report -->
+    <string name="status_report_title">Report</string>
+    <string name="status_report_body">A plain-text summary for troubleshooting: readings, access, calibration and recent events. No app lists, raw system reports or device IDs.</string>
+    <string name="status_report_share">Share report</string>
+    <string name="status_report_subject">BatStats status report</string>
+    <string name="status_report_unavailable">No app on this phone can share the report.</string>
+</resources>

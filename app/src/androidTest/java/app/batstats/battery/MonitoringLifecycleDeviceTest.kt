@@ -13,16 +13,20 @@ import androidx.test.uiautomator.By
 import androidx.test.uiautomator.Until
 import app.batstats.R
 import app.batstats.battery.drain.DrainNotificationManager
-import app.batstats.battery.drain.MonitoringText
+import app.batstats.battery.drain.NO_VALUE
 import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.service.BatteryMonitorService
+import app.batstats.battery.service.SamplingDemand
 import app.batstats.test.DeviceEnvironment
+import app.batstats.ui.TestTags
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.koin.core.context.GlobalContext
+import java.util.regex.Pattern
 
 @RunWith(AndroidJUnit4::class)
 class MonitoringLifecycleDeviceTest {
@@ -36,8 +40,9 @@ class MonitoringLifecycleDeviceTest {
 
     @Test fun injectedBatteryTransitionsAndRealScreenEventsDoNotInventOffTimeOrKeepRecordingAfterStop() = runBlocking {
         DeviceEnvironment.requireDisposableEmulator()
-        val settings = BatteryGraph.settings.flow.first()
         val service = Intent(context, BatteryMonitorService::class.java)
+        // Held like the Now screen holds it: 2 s polls, so each step needs no 30 s/300 s wait.
+        val demand = GlobalContext.get().get<SamplingDemand>().acquire("MonitoringLifecycleDeviceTest")
         val scenario = ActivityScenario.launch(BatteryMainActivity::class.java)
         lateinit var ownActivity: BatteryMainActivity
         lateinit var launchIntent: Intent
@@ -51,15 +56,17 @@ class MonitoringLifecycleDeviceTest {
             device.executeShellCommand("dumpsys battery unplug")
             device.executeShellCommand("dumpsys battery set status 3")
             device.executeShellCommand("dumpsys battery set level 80")
-            BatteryGraph.settings.update { it.copy(monitoringIntervalIndex = 0) }
             scenario.onActivity { it.startForegroundService(service) }
             phase = "first screen-on observation and notification"
             withTimeout(120_000) { repo.observation.first { it.screenOn.durationMs > 0 } }
             assertEquals(PowerState.DISCHARGING, repo.realtimeFlow.value.powerState)
             assertEquals(0L, repo.observation.value.screenOff.durationMs)
             assertNull(repo.observation.value.screenOff.chargeMah)
-            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)
-                ?.contains(context.getString(R.string.monitor_screen_off, MonitoringText(context).bucket(repo.observation.value.screenOff)) + "\n" + context.getString(R.string.monitor_no_period)) == true }
+            // Line 2 ("On … · Off …"): no screen-off time yet, so no screen-off drain is invented.
+            val noOffDrain = context.getString(R.string.notification_summary_drain, "\u0000", NO_VALUE).substringAfter("\u0000")
+            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.contains(noOffDrain) == true &&
+                notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)
+                    ?.contains(context.getString(R.string.notification_state_discharging)) == true }
             assertEquals(0L, notification()!!.notification.`when`)
             assertTrue(notification()!!.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
             val notificationKey = notification()!!.key
@@ -77,26 +84,30 @@ class MonitoringLifecycleDeviceTest {
             device.executeShellCommand("dumpsys battery set status 2")
             withTimeout(120_000) { repo.observation.first { it.chargingMs > 0 } }
             assertEquals(screenOff, repo.observation.value.screenOff.durationMs)
-            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)
-                ?.contains(MonitoringText(context).state(PowerState.CHARGING)) == true }
+            val charging = context.getString(R.string.notification_state_charging)
+            await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.contains(charging) == true }
             assertEquals(notificationKey, notification()!!.key)
             assertEquals(0L, notification()!!.notification.`when`)
-            phase = "notification tap opens observation"
-            val title = notification()!!.notification.extras.getCharSequence(Notification.EXTRA_TITLE).toString()
+            phase = "notification tap opens Now"
             assertTrue("Notification shade did not open", device.openNotification())
-            val row = device.wait(Until.findObject(By.text(title)), 120_000)
+            // The custom views show the headline ("+1,240 mA · 5.2 W", collapsed) or the state ("Charging · AC charger", expanded).
+            val shown = Pattern.compile(".+ m?A · .+ W|" + Pattern.quote(charging) + "( · .+)?")
+            val row = device.wait(Until.findObject(By.pkg("com.android.systemui").text(shown)), 120_000)
             DeviceEnvironment.screenshot("notification-charging-simulated-battery")
             assertNotNull("Monitoring notification is missing from SystemUI", row)
             row!!.click()
-            val opened = device.wait(Until.hasObject(By.text(context.getString(R.string.monitor_drain_title))), 120_000)
-            DeviceEnvironment.screenshot("notification-opens-observation")
-            assertTrue("Tapping the monitoring notification must open observed drain", opened)
+            // Since P3a the tap sends destination=now: the Now tab, no longer the drain details.
+            val opened = device.wait(Until.hasObject(By.pkg(context.packageName).res(TestTags.TAB_NOW).selected(true)), 120_000)
+            DeviceEnvironment.screenshot("notification-opens-now")
+            assertTrue("Tapping the monitoring notification must open Now", opened)
             phase = "stop monitoring"
             context.stopService(service)
             withTimeout(120_000) { repo.observation.first { it.stopped } }
             await { notification() == null }
             val count = BatteryGraph.db.batteryDao().count()
+            val polled = repo.realtimeFlow.value.sample?.elapsedMs ?: 0
             delay(6_500)
+            assertTrue("Demand keeps realtime polls running after stop", (repo.realtimeFlow.value.sample?.elapsedMs ?: 0) > polled)
             assertEquals("Stopped monitoring must not write another periodic sample", count, BatteryGraph.db.batteryDao().count())
             phase = "restart monitoring with a new window"
             device.executeShellCommand("dumpsys battery unplug")
@@ -112,7 +123,7 @@ class MonitoringLifecycleDeviceTest {
                 "live=${repo.realtimeFlow.value}; errors=${repo.error.first()}", failure)
         } finally {
             context.stopService(service); repo.stopSampling()
-            BatteryGraph.settings.update { settings }
+            demand.close()
             device.executeShellCommand("dumpsys battery reset")
             device.wakeUp()
             // onNewIntent retains OPEN_DRAIN in production. ActivityScenario matches

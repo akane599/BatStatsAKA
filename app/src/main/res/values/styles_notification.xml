@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ongoing notification's RemoteViews layouts. Text uses the system notification appearances only, so SystemUI's
+     light/dark notification colours apply; numbers use tabular figures so live values don't jitter. -->
+<resources>
+    <style name="BatStatsNotification" />
+
+    <style name="BatStatsNotification.Row">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">horizontal</item>
+    </style>
+
+    <style name="BatStatsNotification.GridRow" parent="BatStatsNotification.Row">
+        <item name="android:layout_marginTop">@dimen/notification_row_gap</item>
+    </style>
+
+    <style name="BatStatsNotification.Cell">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:paddingEnd">@dimen/notification_cell_gap</item>
+    </style>
+
+    <style name="BatStatsNotification.Label">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textAppearance">@style/TextAppearance.Compat.Notification.Info</item>
+    </style>
+
+    <style name="BatStatsNotification.Value">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:textAppearance">@style/TextAppearance.Compat.Notification.Title</item>
+    </style>
+
+    <!-- A first line: fills the row, the level trails it -->
+    <style name="BatStatsNotification.Lead" parent="BatStatsNotification.Value">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_weight">1</item>
+    </style>
+
+    <style name="BatStatsNotification.Level" parent="BatStatsNotification.Value">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_marginStart">@dimen/notification_level_gap</item>
+    </style>
+
+    <style name="BatStatsNotification.Line2">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:fontFeatureSettings">tnum</item>
+        <item name="android:textAppearance">@style/TextAppearance.Compat.Notification.Line2</item>
+    </style>
+</resources>

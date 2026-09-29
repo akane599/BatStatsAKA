@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="component_chart_empty">Henüz ölçüm yok</string>
+    <string name="component_chart_summary_range">%1$s ile %2$s arası.</string>
+    <string name="component_chart_summary_series">%1$s: son %2$s, en düşük %3$s, en yüksek %4$s.</string>
+    <string name="component_bar_summary">En yüksek: %1$s, %2$s. Son: %3$s, %4$s.</string>
+    <string name="component_bar_select">%1$s seç</string>
+    <string name="component_bar_clear">Seçimi temizle</string>
+    <string name="component_bar_selected">Seçili: %1$s, %2$s</string>
+    <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_app_system_process">Sistem işlemi</string>
+    <string name="component_app_unknown">Bilinmeyen uygulama</string>
+    <string name="component_info_open">%1$s hakkında</string>
+    <string name="calibration_notice_title">Akım okumaları düzeltildi</string>
+    <string name="calibration_notice_unit">Bu telefon akımı miliamper olarak bildiriyor. Değerler artık dönüştürülüyor.</string>
+    <string name="calibration_notice_sign">Bu telefon tüketimi pozitif olarak bildiriyor. İşaret artık çevriliyor.</string>
+    <string name="calibration_notice_both">Bu telefon akımı miliamper, tüketimi pozitif olarak bildiriyor. Değerler artık dönüştürülüp çevriliyor.</string>
+    <string name="calibration_notice_same">Akım okuması şarj sayacıyla karşılaştırıldı ve ayarlandı.</string>
+    <string name="calibration_notice_undo">Geri al</string>
+    <string name="calibration_notice_keep">Koru</string>
+    <string name="percent_value">%%%1$s</string>
+</resources>
