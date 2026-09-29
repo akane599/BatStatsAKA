@@ -4,6 +4,9 @@ import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
 import android.app.Service
 import android.app.NotificationManager
+import android.app.Notification
+import androidx.core.app.NotificationCompat
+import app.batstats.R
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
@@ -37,32 +40,52 @@ class BatteryMonitorService : Service() {
     private var started = false
     private var monitoringStartedElapsed = 0L
 
-    private fun startMonitoringForeground() {
-        val notification = notifications.getNotification()
+    private fun startForegroundWith(notification: Notification) {
         if (Build.VERSION.SDK_INT >= 34) startForeground(DrainNotificationManager.NOTIFICATION_ID,
             notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         else startForeground(DrainNotificationManager.NOTIFICATION_ID, notification)
     }
 
+    /** A minimal notification that is cheap to build; the full one replaces it right after [startForegroundWith]. */
+    private fun placeholder(): Notification {
+        DrainNotificationManager.ensureChannel(this)
+        return NotificationCompat.Builder(this, DrainNotificationManager.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_battery)
+            .setContentTitle(getString(R.string.monitor_channel))
+            .setOngoing(true).setSilent(true).setShowWhen(false)
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build()
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // After startForegroundService(), Android crashes the app unless startForeground() comes promptly and before
+        // any stopSelf() (ForegroundServiceDidNotStartInTimeException). So promote first, with a cheap notification
+        // when not yet running: building the full one can be slow while the main thread is busy.
+        val promoted = try {
+            startForegroundWith(if (started) notifications.getNotification() else placeholder())
+            true
+        } catch (e: RuntimeException) {
+            Log.e("BatteryMonitorService", "Could not enter the foreground", e)
+            false
+        }
         if (repository.isClearingHistory) {
-            // The service may have been started with startForegroundService(); Android requires
-            // startForeground() to be called regardless, or it throws ForegroundServiceDidNotStartInTimeException.
-            try { startMonitoringForeground() }
-            catch (e: RuntimeException) { Log.e("BatteryMonitorService", "Could not start monitoring while clearing", e) }
             stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        if (!promoted) {
+            diagnostics.record(DiagnosticCode.START_FAILED)
+            runCatching { Notifier.promptStartOnBoot(this) }
             stopSelf()
             return START_NOT_STICKY
         }
         if (started) return START_STICKY
         try {
-            startMonitoringForeground()
+            getSystemService(NotificationManager::class.java)
+                .notify(DrainNotificationManager.NOTIFICATION_ID, notifications.getNotification())
         } catch (e: RuntimeException) {
-            diagnostics.record(DiagnosticCode.START_FAILED)
-            Log.e("BatteryMonitorService", "Could not start monitoring", e)
-            runCatching { Notifier.promptStartOnBoot(this) }
-            stopSelf()
-            return START_NOT_STICKY
+            // Monitoring continues; the update loop below replaces the placeholder on its next push.
+            Log.w("BatteryMonitorService", "Could not show the full notification", e)
         }
         started = true
         monitoringStartedElapsed = SystemClock.elapsedRealtime()

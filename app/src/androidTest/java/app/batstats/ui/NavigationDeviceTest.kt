@@ -131,7 +131,21 @@ class NavigationDeviceTest {
             compose.onNodeWithTag(TestTags.TAB_HISTORY).assertIsSelected()
             capture("session-details")
             DeviceEnvironment.device.pressBack()
-            compose.waitUntil(120_000) { showing(R.string.history_filter_all) }
+            // History comes back at its restored scroll position (the inserted row), so the mode and
+            // filter headers may be scrolled out of the lazy list: wait for the row, then scroll up.
+            try {
+                compose.waitUntil(120_000) {
+                    compose.onAllNodesWithContentDescription(label(R.string.sessiondetails_delete)).fetchSemanticsNodes().isEmpty() &&
+                        compose.onAllNodesWithText(row).fetchSemanticsNodes().isNotEmpty()
+                }
+            } catch (failure: Throwable) {
+                runCatching { DeviceEnvironment.screenshot("session-details-back-failure") }
+                    .exceptionOrNull()?.let(failure::addSuppressed)
+                throw failure
+            }
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(R.string.history_filter_all)))
+            compose.onNodeWithText(label(R.string.history_filter_all)).assertIsDisplayed()
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText(label(R.string.history_mode_sessions)))
             compose.onNodeWithText(label(R.string.history_mode_sessions)).assertIsSelected()
             // History is a tab root: Back returns to Now.
             backToNow()

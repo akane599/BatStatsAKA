@@ -47,6 +47,13 @@ collect_screenshots() {
   fi
 }
 trap collect_screenshots EXIT
+# CI keeps no emulator logs: save the crash buffer and a bounded tail of the main log for a failed phase.
+collect_logcat() {
+  adb logcat -d -b crash > "${batstats_report_dir}/${batstats_phase}-crash-logcat.txt" 2>/dev/null || true
+  adb logcat -d -v threadtime -t 4000 > "${batstats_report_dir}/${batstats_phase}-logcat-tail.txt" 2>/dev/null || true
+}
+adb logcat -c 2>/dev/null || true
+adb logcat -b crash -c 2>/dev/null || true
 run_prebuilt_phase() {
   local phase="$1"
   shift
@@ -85,6 +92,9 @@ else
   run_gradle_phase -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku || batstats_ordinary_result=$?
 fi
 collect_screenshots
+[[ "$batstats_ordinary_result" == 0 ]] || collect_logcat
+adb logcat -c 2>/dev/null || true
+adb logcat -b crash -c 2>/dev/null || true
 # Collect independent Shizuku evidence even if ordinary assertions failed. Both remain required.
 rm -rf app/build/outputs/connected_android_test_additional_output
 adb shell rm -rf /sdcard/Download/batstats-validation-screenshots
@@ -99,6 +109,7 @@ else
   batstats_shizuku_result=1
   echo 'Shizuku setup failed; integration assertions could not run.' >&2
 fi
+[[ "$batstats_shizuku_result" == 0 ]] || collect_logcat
 printf 'ordinary_exit=%s\nshizuku_exit=%s\n' "$batstats_ordinary_result" "$batstats_shizuku_result" \
   | tee ${batstats_report_dir}/phase-status.txt
 [[ "$batstats_ordinary_result" == 0 && "$batstats_shizuku_result" == 0 ]]
