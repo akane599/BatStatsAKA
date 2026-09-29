@@ -142,6 +142,11 @@ android {
     }
 }
 
+// The screenshot suite renders and diffs ~200 previews in one test JVM; the default heap runs out.
+tasks.withType<Test>().configureEach {
+    if (name.endsWith("ScreenshotTestDefaultTestSuite")) maxHeapSize = "2g"
+}
+
 apkDist {
     artifactNamePrefix = "batstats"
     // Keep distribution copies separate from AGP artifacts consumed by device tests/install tasks.
