@@ -4,7 +4,7 @@ _Last updated: 2026-09-28 by claude_
 _Claude: read this first every session. Update it before ending. Keep each section under ~15 lines; archive old entries at the bottom._
 
 ## Now (this session / this week)
-Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Run ledger (rulings, deferred minors, per-task state): `.superpowers/sdd/adaptive-wibbling-twilight/progress.md` — read it before resuming. Before-refs in `design/before/`, Wave A renders in `design/after-waveA/`.
+Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Executed, reviewed and verified; PR #1 open with green checks (the run ledger was deleted after CI passed). Old before/after renders in `design/` (gitignored).
 - [x] P0a bug fixes · P0b dead code/resources · Contracts
 - [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
 - [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
