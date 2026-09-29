@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.R
 import app.batstats.battery.apps.AppLabel
@@ -92,8 +93,8 @@ class SessionDetailsContentDeviceTest {
         )
         setContent(dischargeState(apps))
         compose.onNodeWithText(label(R.string.sessiondetails_type_discharge)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_apps_basis_delta)).assertIsDisplayed()
-        compose.onNodeWithText("Chrome").performClick()
+        compose.onNodeWithText(label(R.string.sessiondetails_apps_basis_delta)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Chrome").performScrollTo().performClick()
         assertEquals(listOf(SessionDetailsEvent.OpenApp(10_123, "com.android.chrome")), events)
 
         // No raw enum names or uids anywhere on screen: every value is resolved through its own string resource.
@@ -104,17 +105,17 @@ class SessionDetailsContentDeviceTest {
 
     @Test fun dischargeWithNoAccessAppsShowsTheExplanation() {
         setContent(dischargeState(SessionApps.NoAccess))
-        compose.onNodeWithText(label(R.string.sessiondetails_apps_no_access)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_apps_no_access)).performScrollTo().assertIsDisplayed()
     }
 
     @Test fun chargeShowsTheChargingInsightsPanel() {
         setContent(chargeState())
         compose.onNodeWithText(label(R.string.sessiondetails_type_charge)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_charging_title)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_charger)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_charger_ac)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_average_power)).assertIsDisplayed()
-        compose.onNodeWithText(label(R.string.sessiondetails_peak_temperature)).assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_charging_title)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_charger)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_charger_ac)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_average_power)).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(label(R.string.sessiondetails_peak_temperature)).performScrollTo().assertIsDisplayed()
         // The Drain panel (discharge-only) must not appear on a charge session.
         compose.onAllNodesWithText(label(R.string.sessiondetails_drain_title)).assertCountEquals(0)
     }
