@@ -15,7 +15,8 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - [x] P6: tests, docs, final reviews → fix wave (990d8a3), verification PASS, screenshots rebaselined (e667cf9, 201/201), /device-check PASS (ordinary 70/70, Shizuku 1/1)
 
 ## Next (ordered)
-1. superpowers:finishing-a-development-branch for `feat/overhaul` (pushed; base `codex/android16-reliability`, origin GitHub) — merge or PR per the user's choice; then delete `.superpowers/sdd/adaptive-wibbling-twilight/`, the `worktree-agent-*` branches and `.claude/worktrees/*`.
+1. PR #1 (https://github.com/akane599/BatStatsAKA/pull/1, feat/overhaul → codex/android16-reliability): address review feedback on `feat/overhaul`; watch CI (`test_if_it_builds.yml`).
+2. After it merges: delete `.superpowers/sdd/adaptive-wibbling-twilight/`, the `worktree-agent-*` branches and `.claude/worktrees/*`.
 
 ## Blockers / open questions
 
