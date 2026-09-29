@@ -362,7 +362,7 @@ class FakeAppStats : AppsRepository, AppDetailsRepository {
 
     override suspend fun launchablePackages() = launchable
 
-    override suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage> {
+    override suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage> {
         historyCalls += Triple(uid, fromMs, toMs)
         return sessions
     }

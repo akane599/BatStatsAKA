@@ -9,6 +9,7 @@ import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionAppUsage
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.util.BatteryStatsParser
 import kotlinx.coroutines.CancellationException
@@ -30,10 +31,10 @@ data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMa
 /** [AppStatsReader] plus this app's history across stored sessions. */
 interface AppDetailsRepository : AppStatsReader {
     /**
-     * The sessions overlapping [fromMs]..[toMs] that [inAppHistory] keeps, oldest first, each with [uid]'s row when
-     * the session listed it.
+     * The sessions overlapping [fromMs]..[toMs] that [inAppHistory] keeps, oldest first, each with this app's row
+     * ([isSameApp]) when the session listed it.
      */
-    suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage>
+    suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage>
 }
 
 /**
@@ -44,17 +45,29 @@ interface AppDetailsRepository : AppStatsReader {
 internal fun ChargeSession.inAppHistory(): Boolean =
     type == SessionType.DISCHARGE && appUsageStatus == AppUsageStatus.READY && appUsageBasis == AppUsageBasis.DELTA
 
+/**
+ * Whether a stored row is this app's. Android can give an uninstalled app's uid to a newly installed one, so app
+ * uids must also match the package the row was stored with; system uids (below [FIRST_APPLICATION_UID]) are shared
+ * by several packages and never reassigned, so the uid alone identifies them. A blank package matches any.
+ */
+internal fun SessionAppUsage.isSameApp(uid: Int, packageName: String): Boolean =
+    this.uid == uid && !isOthers &&
+        (uid < FIRST_APPLICATION_UID || packageName.isBlank() || this.packageName.isBlank() || this.packageName == packageName)
+
+/** `android.os.Process.FIRST_APPLICATION_UID`. */
+private const val FIRST_APPLICATION_UID = 10_000
+
 /** [AppDetailsRepository] over the shared reader and the `session_app_usage` rows (A3's DAOs, read on IO). */
 class DefaultAppDetailsRepository(
     reader: AppStatsReader,
     private val database: BatteryDatabase,
 ) : AppDetailsRepository, AppStatsReader by reader {
-    override suspend fun history(uid: Int, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
+    override suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
         val sessions = database.sessionDao().sessionsBetween(fromMs, toMs)
             .filter { it.inAppHistory() }
         if (sessions.isEmpty()) return@withContext emptyList()
         val rows = database.appUsageDao().usageForSessionsBetween(sessions.first().startTime, toMs)
-            .filter { it.uid == uid && !it.isOthers }
+            .filter { it.isSameApp(uid, packageName) }
             .associateBy { it.sessionId }
         sessions.map { AppSessionUsage(it.sessionId, it.startTime, rows[it.sessionId]?.powerMah) }
     }
@@ -220,7 +233,7 @@ class AppDetailsViewModel(
         viewModelScope.launch {
             val now = clock()
             val sessions = try {
-                source.history(uid, now - HISTORY_WINDOW_MS, now)
+                source.history(uid, packageName, now - HISTORY_WINDOW_MS, now)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

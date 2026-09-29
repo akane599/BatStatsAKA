@@ -3,11 +3,12 @@ package app.batstats.viewmodel
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionAppUsage
 import app.batstats.battery.data.db.SessionType
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** [inAppHistory]: AppDetails' history bars are all "from unplug to plug-in", as its ⓘ says. */
+/** [inAppHistory] and [isSameApp]: AppDetails' history bars are this app's, all "from unplug to plug-in". */
 class AppDetailsHistoryRuleTest {
     private fun session(type: SessionType, status: AppUsageStatus?, basis: AppUsageBasis?) = ChargeSession(
         sessionId = "$type-$status-$basis", type = type, startTime = 0, endTime = 1, startLevel = 90, endLevel = 80,
@@ -26,5 +27,25 @@ class AppDetailsHistoryRuleTest {
         ).filter { it.inAppHistory() }
 
         assertEquals(listOf("DISCHARGE-READY-DELTA"), kept.map { it.sessionId })
+    }
+
+    private fun row(uid: Int, packageName: String, others: Boolean = false) = SessionAppUsage(
+        sessionId = "s", rank = 1, uid = uid, packageName = packageName, powerMah = 1.0, isOthers = others,
+        basis = AppUsageBasis.DELTA,
+    )
+
+    @Test fun anAppUidReusedByAnotherPackageIsNotThisAppsHistory() {
+        // Android can hand an uninstalled app's uid to the next install.
+        assertEquals(true, row(10_123, "com.example.old").isSameApp(10_123, "com.example.old"))
+        assertEquals(false, row(10_123, "com.example.old").isSameApp(10_123, "com.example.new"))
+        assertEquals(false, row(10_124, "com.example.old").isSameApp(10_123, "com.example.old"))
+    }
+
+    @Test fun systemUidsMatchByUidAloneAndBlankPackagesMatchAny() {
+        // Uid 1000 is shared by many system packages and never reassigned.
+        assertEquals(true, row(1_000, "android").isSameApp(1_000, "com.android.settings"))
+        assertEquals(true, row(10_123, "").isSameApp(10_123, "com.example.app"))
+        assertEquals(true, row(10_123, "com.example.app").isSameApp(10_123, ""))
+        assertEquals(false, row(10_123, "com.example.app", others = true).isSameApp(10_123, "com.example.app"))
     }
 }
