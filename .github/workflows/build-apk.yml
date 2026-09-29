@@ -100,7 +100,9 @@ jobs:
           arch: x86_64
           avd-name: batstats16k
           profile: pixel_2
-          ram-size: 2048M
+          # 16 KB pages cost memory: at 2 GB the low-memory killer took the app under test during
+          # first-boot Play services work ("min watermark is breached even after kill").
+          ram-size: 4096M
           disable-animations: true
           script: BATSTATS_REPORT_GROUP=16k BATSTATS_EXPECTED_PAGE_SIZE=16384 bash scripts/check_android_device.sh --prebuilt
       - name: Record APK checksums and certificates
