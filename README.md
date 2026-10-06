@@ -2,13 +2,13 @@
 
 ![Banner](fastlane/metadata/android/en-US/images/banner.svg)
 
-BatStats monitors battery readings and observed charging/discharging sessions. Ordinary readings use Android BatteryManager. Advanced statistics use Shizuku, Root, or explicitly granted ADB permissions. Availability depends on the device; missing data is not zero consumption.
+BatStats monitors battery readings and observed charging/discharging sessions. Ordinary readings use Android BatteryManager. Advanced statistics use Shizuku when running and authorized, otherwise root, then ADB where supported; on Android 16/API 36, per-app batterystats access needs Shizuku or root. Availability depends on the device; missing data is not zero consumption.
 
 This development branch targets Android 16/API36. See the [step-by-step baseline-to-current changelog](docs/BASELINE_TO_CURRENT.md) for added behavior, fixes and remaining work. Implementation and actual validation status are recorded in [PROGRESS.md](PROGRESS.md) and [AUDIT_REPORT.md](AUDIT_REPORT.md). Physical Samsung behavior remains unverified.
 
 ## What's in the app
 
-Four tabs: **Now** (live readings, a Health card, a daily summary of today's charge/discharge, and today's top-draining apps), **History** (past charging/discharging sessions), **Apps** (per-app battery/CPU/network breakdown from Android's own statistics), and **Settings**. Now's Health card and the dedicated Health screen show a full-charge capacity estimate and, against a design capacity, a health percentage, built from observed charge/discharge sessions (root can also read the fuel gauge's own value). A charging estimate to full uses Android's own estimate where the device supports it, otherwise the app's own charger-taper model. Each finished discharge session records its own per-app breakdown, from a privileged dump taken automatically at unplug and again at the next plug-in — no periodic per-app polling happens otherwise. A Quick Settings tile shows live current/power while the shade is open and toggles monitoring.
+Four tabs: **Now** (live readings, a Health card, a daily summary of today's charge/discharge, and today's top-draining apps), **History** (past charging/discharging sessions), **Apps** (per-app battery/CPU/network breakdown from Android's own statistics), and **Settings**. Now's Health card and the dedicated Health screen show a full-charge capacity estimate, based on observed charge/discharge sessions, and a health percentage against design capacity; an existing sysfs `charge_full` estimator is not currently used in production. A charging estimate to full uses Android's own estimate where the device supports it, otherwise the app's own charger-taper model. Each finished discharge session records its own per-app breakdown, from a privileged dump taken automatically at unplug and again at the next plug-in — no periodic per-app polling happens otherwise. A Quick Settings tile shows live current/power while the shade is open and toggles monitoring.
 
 The UI is dark-only, with an OLED (pure black) toggle and opt-in dynamic (Material You) color on Android 12+. On devices that report `CURRENT_NOW` in the wrong unit or with an inverted sign, BatStats can detect and correct this automatically from observed evidence, with a dismissible, undoable notice when a correction changes what's shown; Settings can also set the unit/sign by hand. See [the measurement guide](docs/MEASUREMENTS.md) for how the detection works and where it stops.
 
@@ -18,7 +18,7 @@ Removed since the previous stable release: the old Kernel/System detail tabs, th
 
 Start Shizuku and authorize BatStats from the app. Shizuku is the preferred source when running and authorized. Its shell mode does not grant every root-only capability. On connection loss, ordinary readings remain available; a failed privileged read is not silently replaced by another source.
 
-For ADB mode, use the installed package (`org.mlm.batstats.debug` for debug builds). Android16 requires both permissions below and usage-stat app-op access:
+For ADB mode, use the installed package (`org.mlm.batstats.debug` for debug builds). Android 16/API 36 requires both permissions below and usage-stat app-op access for the ADB grant, but cross-user refusal still prevents ADB-only access to per-app batterystats; that capability requires Shizuku or root. The grant itself may persist across reboot, but a persistent grant does not restore that capability. For API 36 per-app stats, select Shizuku (when running and authorized) or root; otherwise the ADB path remains available only where platform access permits it.
 
 ```sh
 adb shell pm grant org.mlm.batstats.debug android.permission.DUMP
@@ -26,7 +26,7 @@ adb shell pm grant org.mlm.batstats.debug android.permission.PACKAGE_USAGE_STATS
 adb shell appops set org.mlm.batstats.debug GET_USAGE_STATS allow
 ```
 
-Return to Advanced statistics and refresh. Grants may be refused by a device policy or build; collection errors remain visible. BATTERY_STATS and cross-user permissions are not substitutes for these dump permissions. Root mode requires an installed, authorized `su` implementation.
+Return to Advanced statistics and refresh. Grants may be refused by a device policy or build; collection errors remain visible. BATTERY_STATS and cross-user permissions are not substitutes for these dump permissions. Backend selection uses Shizuku when running and authorized, otherwise root, then ADB. Root mode requires an installed, authorized `su` implementation.
 
 Per-app breakdowns need `QUERY_ALL_PACKAGES` to name and draw the icon of any app batterystats reports, including ones with no launcher entry. This permission is subject to Google Play review and a submission can be rejected over it even though a local build installs fine; GitHub and F-Droid distribution are not affected. Non-root Shizuku also does not survive a reboot on its own — expect the Apps screen to show "no access" after a restart until it's started again, which is normal Shizuku behavior, not a BatStats failure.
 

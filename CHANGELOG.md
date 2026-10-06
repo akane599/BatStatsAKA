@@ -2,7 +2,7 @@
 
 ### Added
 - Four-tab navigation: Now, History, Apps, Settings, replacing the previous screen layout.
-- Health card (Now) and a dedicated Health screen: full-charge capacity and a health percentage estimated from observed charge/discharge sessions, or read from the fuel gauge directly with root.
+- Health card (Now) and a dedicated Health screen: full-charge capacity and a health percentage estimated from observed charge/discharge sessions; sysfs `charge_full` estimation is not currently used by production code.
 - A daily summary of today's charge and discharge, and today's top-draining apps, on Now.
 - Automatic per-device detection of `CURRENT_NOW` readings reported in the wrong unit or with an inverted sign, applied only once the evidence is consistent, with a dismissible, undoable notice when it changes a reading; Settings can still set the unit/sign by hand.
 - A per-app battery breakdown recorded automatically for every finished discharge session, in addition to the existing on-demand Apps tab.
