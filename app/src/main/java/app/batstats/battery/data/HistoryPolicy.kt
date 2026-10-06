@@ -13,6 +13,16 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.time.ZoneId
 
+internal enum class ImportSessionDisposition(val added: Int = 0, val updated: Int = 0, val unchanged: Int = 0) {
+    ADDED(added = 1),
+    UPDATED(updated = 1),
+    UNCHANGED(unchanged = 1),
+    STALE(unchanged = 1),
+}
+
+internal data class SessionImportPlan(val session: ChargeSession, val disposition: ImportSessionDisposition)
+internal data class UsageImportPlan(val rows: List<SessionAppUsage>, val updated: Int, val unchanged: Int)
+
 /** Imported records are historical evidence, never a resumed live observation. */
 object HistoryPolicy {
     private val canonicalJson = Json { encodeDefaults = true }
@@ -105,6 +115,38 @@ object HistoryPolicy {
         return incoming.copy(appUsageStatus = usage.appUsageStatus, appUsageBasis = usage.appUsageBasis,
             capacityEstimateMah = capacity.capacityEstimateMah, capacityConfidence = capacity.capacityConfidence, capacityBasis = capacity.capacityBasis)
     }
+    /** Plans the parent write and keeps a stale skip distinct from same-window enrichment. */
+    internal fun planSessionImport(previous: ChargeSession?, incoming: ChargeSession): SessionImportPlan {
+        if (previous == null) return SessionImportPlan(incoming, ImportSessionDisposition.ADDED)
+        val merged = mergeDerived(previous, incoming)
+        if (previous == merged) return SessionImportPlan(previous, ImportSessionDisposition.UNCHANGED)
+        if (sameMeasurement(previous, incoming)) return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
+        require(previous.source.startsWith("import:") && sameOrigin(previous, incoming)) { "Conflicting imported session" }
+        require(incoming.endTime != previous.endTime) { "Conflicting values for one imported session window" }
+        // Imported and stored rows always carry an end (session sets one).
+        val incomingEnd = checkNotNull(incoming.endTime) { "Imported session without an end" }
+        val storedEnd = checkNotNull(previous.endTime) { "Imported session without an end" }
+        if (incomingEnd < storedEnd) return SessionImportPlan(previous, ImportSessionDisposition.STALE)
+        require(incoming.observedMs >= previous.observedMs && incoming.counterCoveredMs >= previous.counterCoveredMs) { "Incompatible imported session coverage" }
+        return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
+    }
+
+    /** A usage-only write counts once, promoting an unchanged parent rather than counting it twice. */
+    internal fun planUsageImport(
+        parent: ImportSessionDisposition?,
+        localSource: String?,
+        parentExists: Boolean,
+        previous: List<SessionAppUsage>,
+        incoming: List<SessionAppUsage>,
+    ): UsageImportPlan? {
+        if (parent == ImportSessionDisposition.STALE || localSource != null && !localSource.startsWith("import:")) return null
+        require(parentExists) { "App usage belongs to a session that is not in history" }
+        val ordered = incoming.sortedBy { it.rank }
+        if (previous == ordered) return null
+        val updated = if (parent == ImportSessionDisposition.ADDED || parent == ImportSessionDisposition.UPDATED) 0 else 1
+        return UsageImportPlan(ordered, updated, if (parent == ImportSessionDisposition.UNCHANGED) -1 else 0)
+    }
+
     /** Validates a file's per-app rows as whole per-session breakdowns: unique ranks 0..30, at most one "others" row. */
     fun appUsage(input: List<SessionAppUsage>): List<SessionAppUsage> {
         val rows = input.map { row ->
