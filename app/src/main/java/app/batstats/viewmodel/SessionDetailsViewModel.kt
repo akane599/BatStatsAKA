@@ -59,7 +59,6 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 // ---- UI state ----
@@ -229,8 +228,8 @@ interface SessionDetailsRepository {
 }
 
 /**
- * [SessionDetailsRepository] over the app's repositories. [deleteSession] is [app.batstats.battery.data.db.SessionDao.deleteSession],
- * serialized with imports and clears.
+ * [SessionDetailsRepository] over the app's repositories. [deleteSession] goes through
+ * [BatteryRepository.deleteSession], serialized with the writer, imports and clears.
  */
 class DefaultSessionDetailsRepository(
     private val repository: BatteryRepository,
@@ -254,15 +253,7 @@ class DefaultSessionDetailsRepository(
     override val cachedAppUsage = appStats.cached.map { it?.toAppUsageSnapshot() }
     override suspend fun baseline(sessionId: String) = snapshots.baseline(sessionId)
 
-    override suspend fun deleteSession(id: String): Boolean {
-        if (repository.isClearingHistory) return false
-        return maintenance.mutations.withLock { database.sessionDao().deleteSession(id, currentGeneration()) }
-    }
-
-    private fun currentGeneration(): String? {
-        val observation = repository.observation.value
-        return if (repository.isMonitoringFlow.value && !observation.stopped) observation.latest?.generation else null
-    }
+    override suspend fun deleteSession(id: String): Boolean = repository.deleteSession(id)
 }
 
 // ---- Mapping ----
