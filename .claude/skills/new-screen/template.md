@@ -1,9 +1,7 @@
 # new-screen templates
 
 Replace `Xxx`/`xxx`. Imports shown are the non-obvious ones; let the compiler tell you the rest.
-State lives in the ViewModel as a nested `Ui` class (the `HistoryViewModel.Ui` pattern), so `viewmodel/` never
-imports from `ui/`. If the wrapper instead combines several flows, declare an
-`@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
+State is named `XxxUiState`, usually declared at package level in the ViewModel file (for example, `app.batstats.viewmodel.HistoryUiState`); expose it as `StateFlow<XxxUiState>` named `state`. If the wrapper combines several flows, declare an `@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
 
 ## `ui/screens/XxxScreen.kt`
 
@@ -14,14 +12,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
+import androidx.compose.material3.MaterialTheme
+import app.batstats.ui.theme.spacing
+import app.batstats.viewmodel.XxxUiState
 import app.batstats.viewmodel.XxxViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
 fun XxxScreen(onBack: () -> Unit, vm: XxxViewModel = koinViewModel()) {
-    val ui by vm.ui.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
     XxxContent(
-        ui = ui,
+        state = state,
         onBack = onBack,
         onRefresh = vm::refresh,
     )
@@ -30,7 +31,7 @@ fun XxxScreen(onBack: () -> Unit, vm: XxxViewModel = koinViewModel()) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun XxxContent(
-    ui: XxxViewModel.Ui,
+    state: XxxUiState,
     onBack: () -> Unit,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
@@ -48,8 +49,8 @@ fun XxxContent(
     ) { padding ->
         LazyColumn(
             Modifier.fillMaxSize().padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(MaterialTheme.spacing.md),
+            verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
         ) {
             // Stateless UI only: no koin, Intents, system services, clocks.
         }
@@ -62,20 +63,20 @@ fun XxxContent(
 ```kotlin
 package app.batstats.viewmodel
 
+@Immutable
+data class XxxUiState(
+    val loading: Boolean = false,
+    val items: List<String> = emptyList(),
+    val error: String? = null,
+)
+
 class XxxViewModel(private val source: XxxSource) : ViewModel() {
     /** Everything [app.batstats.ui.screens.XxxContent] renders; plain values, so screenshot tests can build it. */
-    @Immutable
-    data class Ui(
-        val loading: Boolean = false,
-        val items: List<String> = emptyList(),
-        val error: String? = null,
-    )
-
-    private val _ui = MutableStateFlow(Ui(loading = true))
-    val ui: StateFlow<Ui> = _ui.asStateFlow()
+    private val _state = MutableStateFlow(XxxUiState(loading = true))
+    val state: StateFlow<XxxUiState> = _state.asStateFlow()
 
     fun refresh() {
-        viewModelScope.launch { /* load via source, then _ui.update { … } */ }
+        viewModelScope.launch { /* load via source, then _state.update { … } */ }
     }
 }
 ```
@@ -95,7 +96,7 @@ class XxxViewModelTest {
         val vm = XxxViewModel(FakeXxxSource(listOf("a", "b")))
         vm.refresh()
         advanceUntilIdle()
-        assertEquals(listOf("a", "b"), vm.ui.value.items)
+        assertEquals(listOf("a", "b"), vm.state.value.items)
     }
 }
 ```
@@ -103,17 +104,17 @@ class XxxViewModelTest {
 ## `ui/NavGraph.kt`
 
 ```kotlin
-// in sealed interface Screen
+// in sealed interface Routes (app/src/main/java/app/batstats/ui/navigation/Routes.kt)
 @Serializable
-data object Xxx : Screen
+data object Xxx : Routes
 
-// in entryProvider { … }
-entry<Screen.Xxx> {
+// in entryProvider { … } (app/src/main/java/app/batstats/ui/NavGraph.kt)
+entry<Routes.Xxx> {
     XxxScreen(onBack = popBack)
 }
 
 // in the caller's entry
-onOpenXxx = { backStack.add(Screen.Xxx) },
+onOpenXxx = { topLevelBackStack.navigate(Routes.Xxx) },
 ```
 
 ## `src/screenshotTest/kotlin/app/batstats/ui/screens/XxxScreenshotTest.kt`
@@ -125,15 +126,17 @@ import androidx.compose.runtime.Composable
 import app.batstats.ui.PhonePreview
 import app.batstats.ui.ScreenPreviews
 import app.batstats.ui.ScreenshotTheme
-import app.batstats.viewmodel.XxxViewModel
+import androidx.compose.material3.MaterialTheme
+import app.batstats.ui.theme.spacing
+import app.batstats.viewmodel.XxxUiState
 import com.android.tools.screenshot.PreviewTest
 
 // Any timestamps: FIXED_TIME_MS ± offsets (import app.batstats.ui.FIXED_TIME_MS), never the real clock.
-private val populated = XxxViewModel.Ui(items = listOf("First", "Second", "Third"))
+private val populated = XxxUiState(items = listOf("First", "Second", "Third"))
 
 @Composable
-private fun XxxPreviewContent(ui: XxxViewModel.Ui) {
-    XxxContent(ui = ui, onBack = {}, onRefresh = {})
+private fun XxxPreviewContent(state: XxxUiState) {
+    XxxContent(state = state, onBack = {}, onRefresh = {})
 }
 
 @PreviewTest
@@ -154,7 +157,7 @@ fun XxxScreenOledPreview() {
 @PhonePreview
 @Composable
 fun XxxScreenEmptyPreview() {
-    ScreenshotTheme { XxxPreviewContent(XxxViewModel.Ui()) }
+    ScreenshotTheme { XxxPreviewContent(XxxUiState()) }
 }
 ```
 Use `@TallPhonePreview` instead of `@PhonePreview` when the distinguishing content of a secondary state sits below 500 dp.
