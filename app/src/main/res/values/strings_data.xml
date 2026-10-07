@@ -68,4 +68,5 @@
     <string name="data_failed_no_picker">No app on this phone can pick files.</string>
     <string name="data_failed_unexpected">Something went wrong. Try again.</string>
     <string name="data_working">Working…</string>
+    <string name="data_back_busy">Wait for this to finish before leaving.</string>
 </resources>

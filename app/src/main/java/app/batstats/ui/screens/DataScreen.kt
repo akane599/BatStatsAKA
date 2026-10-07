@@ -1,6 +1,7 @@
 package app.batstats.ui.screens
 
 import android.content.ActivityNotFoundException
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +27,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -57,6 +62,7 @@ import app.batstats.viewmodel.DataTask
 import app.batstats.viewmodel.DataUiState
 import app.batstats.viewmodel.DataViewModel
 import app.batstats.viewmodel.HistoryRange
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
@@ -74,11 +80,23 @@ private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text
  * Settings › Data, wired: the Koin [DataViewModel] and the Storage Access Framework pickers. [DataEvent.Pick]
  * goes to the ViewModel first (an export saves its launch-time request there), then opens the picker for its task;
  * the chosen document goes to [DataViewModel.onFileChosen] (a cancelled picker does nothing). Every event reaches
- * the ViewModel.
+ * the ViewModel. While a task runs, Back (system, predictive and the top bar) stays on this screen and says why:
+ * leaving would clear the ViewModel and cancel the task before it reports an outcome.
  */
 @Composable
 fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewModel = koinViewModel()) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val busy = stringResource(R.string.data_back_busy)
+    val back: () -> Unit = {
+        if (state.idle) {
+            onBack()
+        } else if (snackbarHostState.currentSnackbarData == null) {
+            scope.launch { snackbarHostState.showSnackbar(busy) }
+        }
+    }
+    BackHandler(enabled = !state.idle, onBack = back)
     fun chosen(task: DataTask): (android.net.Uri?) -> Unit = { uri -> uri?.let { vm.onFileChosen(task, it.toString()) } }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME), chosen(DataTask.EXPORT_JSON))
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree(), chosen(DataTask.EXPORT_CSV))
@@ -106,8 +124,9 @@ fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewMo
                 }
             }
         },
-        onBack = onBack,
+        onBack = back,
         modifier = modifier,
+        snackbarHostState = snackbarHostState,
     )
 }
 
@@ -126,6 +145,7 @@ fun DataContent(
     onEvent: (DataEvent) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    snackbarHostState: SnackbarHostState = remember { SnackbarHostState() },
 ) {
     val spacing = MaterialTheme.spacing
     val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
@@ -135,6 +155,7 @@ fun DataContent(
         topBar = {
             DetailTopBar(stringResource(R.string.data_title), onBack)
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         val history: @Composable () -> Unit = {
             StoredPanel(state, Modifier.fillMaxWidth())

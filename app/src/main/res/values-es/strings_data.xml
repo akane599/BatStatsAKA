@@ -68,4 +68,5 @@
     <string name="data_failed_no_picker">Ninguna app de este teléfono puede elegir archivos.</string>
     <string name="data_failed_unexpected">Algo salió mal. Inténtalo de nuevo.</string>
     <string name="data_working">Procesando…</string>
+    <string name="data_back_busy">Espera a que termine antes de salir.</string>
 </resources>
