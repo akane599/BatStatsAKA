@@ -31,7 +31,10 @@
     <string name="settings_measurement_title">Medición</string>
     <string name="settings_detected_unit">Unidad detectada</string>
     <string name="settings_detected_sign">Signo detectado</string>
-    <string name="settings_evidence_windows">A partir de %1$d ventanas coincidentes del contador de carga.</string>
+    <plurals name="settings_evidence_windows">
+        <item quantity="one">A partir de %1$d ventana coincidente del contador de carga.</item>
+        <item quantity="other">A partir de %1$d ventanas coincidentes del contador de carga.</item>
+    </plurals>
     <string name="settings_evidence_sign_only">A partir de lecturas positivas con batería (solo el signo).</string>
     <string name="settings_evidence_none">Aún no detectado. Necesita monitorización mientras usas o cargas el teléfono.</string>
     <string name="settings_override_note">Tu ajuste de unidad o signo de abajo anula la detección.</string>

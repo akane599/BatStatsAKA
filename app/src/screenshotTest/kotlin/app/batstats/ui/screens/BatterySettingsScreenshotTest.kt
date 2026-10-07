@@ -3,6 +3,7 @@ package app.batstats.ui.screens
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.batstats.battery.measurement.CalibrationSource
@@ -73,6 +74,32 @@ fun BatterySettingsScreenCalibrationPreview() {
                 ),
             ),
             scrollTo = MeasurementScrollOffset,
+        )
+    }
+}
+
+/** Scrolls the 2x Spanish phone to the Measurement panel's two option rows. */
+private val MeasurementLargeFontScrollOffset = 1_360.dp
+
+/**
+ * Spanish at 2x font on a 360 dp phone: the unit and sign options ("Automático", "Microamperios") no longer fit a
+ * third of the row each, so they stack instead of cutting to "Autom…".
+ */
+@PreviewTest
+@Preview(name = "W360H1000Font2Es", widthDp = 360, heightDp = 1000, fontScale = 2f, locale = "es")
+@Composable
+fun BatterySettingsScreenLargeFontOptionsPreview() {
+    ScreenshotTheme {
+        SettingsFixture(
+            SettingsUiState(
+                calibration = CalibrationState(
+                    effective = detected,
+                    detected = detected,
+                    source = CalibrationSource.DETECTED,
+                    agreeingWindows = 1,
+                ),
+            ),
+            scrollTo = MeasurementLargeFontScrollOffset,
         )
     }
 }

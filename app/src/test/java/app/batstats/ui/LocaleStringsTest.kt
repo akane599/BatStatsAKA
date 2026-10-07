@@ -48,4 +48,16 @@ class LocaleStringsTest {
         assertEquals("Among the top 30 in 1 of 1 session", String.format(Locale.US, en.getValue("one"), 1, 1))
         assertEquals("Among the top 30 in 2 of 5 sessions", String.format(Locale.US, en.getValue("other"), 2, 5))
     }
+
+    @Test fun calibrationEvidenceIsAPluralInEveryLocale() {
+        for (dir in locales) {
+            assertNull("$dir still has a plain settings_evidence_windows", string(dir, "settings_evidence_windows"))
+            val items = plural(dir, "settings_evidence_windows")
+            assertTrue("$dir settings_evidence_windows needs one and other: $items", items.keys.containsAll(listOf("one", "other")))
+            items.forEach { (quantity, text) -> assertTrue("$dir $quantity: $text", "%1\$d" in text) }
+        }
+        val en = plural("values", "settings_evidence_windows")
+        assertEquals("From 1 matching charge-counter window.", String.format(Locale.US, en.getValue("one"), 1))
+        assertEquals("From 4 matching charge-counter windows.", String.format(Locale.US, en.getValue("other"), 4))
+    }
 }

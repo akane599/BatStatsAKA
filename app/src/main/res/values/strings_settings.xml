@@ -44,7 +44,10 @@
     <string name="settings_detected_unit">Detected unit</string>
     <string name="settings_detected_sign">Detected sign</string>
     <!-- %1$d = number of agreeing charge-counter windows (3 or more) -->
-    <string name="settings_evidence_windows">From %1$d matching charge-counter windows.</string>
+    <plurals name="settings_evidence_windows">
+        <item quantity="one">From %1$d matching charge-counter window.</item>
+        <item quantity="other">From %1$d matching charge-counter windows.</item>
+    </plurals>
     <string name="settings_evidence_sign_only">From positive readings while on battery (sign only).</string>
     <string name="settings_evidence_none">Not detected yet. Needs monitoring while the phone is in use or charging.</string>
     <string name="settings_override_note">Your unit or sign setting below overrides the detection.</string>

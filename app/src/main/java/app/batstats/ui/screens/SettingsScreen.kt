@@ -9,6 +9,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -56,12 +57,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.R
 import app.batstats.battery.measurement.CalibrationState
@@ -92,6 +95,8 @@ import app.batstats.viewmodel.SettingsUiState
 import app.batstats.viewmodel.SettingsViewModel
 import java.text.NumberFormat
 import java.util.Locale
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlinx.coroutines.launch
@@ -408,7 +413,8 @@ private fun MeasurementPanel(
             QuietText(
                 when {
                     detected == null -> stringResource(R.string.settings_evidence_none)
-                    calibration.agreeingWindows > 0 -> stringResource(R.string.settings_evidence_windows, calibration.agreeingWindows)
+                    calibration.agreeingWindows > 0 ->
+                        pluralStringResource(R.plurals.settings_evidence_windows, calibration.agreeingWindows, calibration.agreeingWindows)
                     else -> stringResource(R.string.settings_evidence_sign_only)
                 },
             )
@@ -590,18 +596,52 @@ private fun ChoiceRow(setting: SettingsChoice, settings: AppSettings, onClick: (
     )
 }
 
-/** Two or three short options, chosen in place. */
+/**
+ * Two or three short options, chosen in place. When a label is wider than its equal share of the row (large font,
+ * longer translations) the options stack as radio rows instead, so none is cut to "Autom…".
+ */
 @Composable
 private fun SegmentedRow(setting: SettingsChoice, settings: AppSettings, onEvent: (SettingsEvent) -> Unit) {
     val spacing = MaterialTheme.spacing
     val title = stringResource(setting.titleRes())
+    val labels = setting.optionLabels()
+    val selectedIndex = setting.selectedIndex(settings)
+    val onSelect = { index: Int -> onEvent(SettingsEvent.SetChoice(setting, index)) }
     Column(Modifier.fillMaxWidth().padding(horizontal = spacing.md, vertical = spacing.xxs)) {
         Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
-        SegmentedTabs(
-            labels = setting.optionLabels(),
-            selectedIndex = setting.selectedIndex(settings),
-            onSelect = { onEvent(SettingsEvent.SetChoice(setting, it)) },
-        )
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val measurer = rememberTextMeasurer()
+            val style = MaterialTheme.typography.labelLarge
+            // SegmentedTabs insets each equal share by xxs, then its label by xs, on both sides.
+            val inset = with(LocalDensity.current) { ((spacing.xxs + spacing.xs) * 2).roundToPx() }
+            val share = constraints.maxWidth / labels.size - inset
+            val fits = labels.all { measurer.measure(it, style, maxLines = 1).size.width <= share }
+            if (fits) {
+                SegmentedTabs(labels = labels, selectedIndex = selectedIndex, onSelect = onSelect)
+            } else {
+                RadioOptions(labels, selectedIndex, onSelect)
+            }
+        }
+    }
+}
+
+/** One 48 dp radio row per option, as a selectable group (the picker dialog and stacked segmented options). */
+@Composable
+private fun RadioOptions(options: List<String>, selectedIndex: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.selectableGroup()) {
+        options.forEachIndexed { index, option ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = MaterialTheme.spacing.xxl)
+                    .selectable(selected = index == selectedIndex, role = Role.RadioButton, onClick = { onSelect(index) }),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
+            ) {
+                RadioButton(selected = index == selectedIndex, onClick = null)
+                Text(option, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
     }
 }
 
@@ -671,28 +711,15 @@ private fun ChoiceDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
-        text = {
-            Column(Modifier.selectableGroup().verticalScroll(rememberScrollState())) {
-                options.forEachIndexed { index, option ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = MaterialTheme.spacing.xxl)
-                            .selectable(selected = index == selectedIndex, role = Role.RadioButton, onClick = { onSelect(index) }),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.sm),
-                    ) {
-                        RadioButton(selected = index == selectedIndex, onClick = null)
-                        Text(option, style = MaterialTheme.typography.bodyLarge)
-                    }
-                }
-            }
-        },
+        text = { RadioOptions(options, selectedIndex, onSelect, Modifier.verticalScroll(rememberScrollState())) },
         confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
     )
 }
 
-/** The threshold as a large number over a stepped slider (range and step from the schema). */
+/**
+ * The threshold as a large number over a stepped slider (range and step from the schema). In Fahrenheit the
+ * temperature slider steps in whole °F across the °C range and saves the matching °C.
+ */
 @Composable
 private fun ThresholdDialog(
     setting: SettingsThreshold,
@@ -701,9 +728,15 @@ private fun ThresholdDialog(
     onSave: (Float) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var value by rememberSaveable(setting) { mutableFloatStateOf(initial.coerceIn(setting.range)) }
+    val inFahrenheit = fahrenheit && setting == SettingsThreshold.TEMPERATURE
+    val range = if (inFahrenheit) wholeFahrenheitRange(setting.range) else setting.range
+    val step = if (inFahrenheit) 1f else setting.step
+    var position by rememberSaveable(setting, inFahrenheit) {
+        val start = if (inFahrenheit) celsiusToFahrenheit(initial).roundToInt().toFloat() else initial
+        mutableFloatStateOf(start.coerceIn(range))
+    }
+    val value = if (inFahrenheit) fahrenheitToCelsius(position) else position
     val display = thresholdText(setting, value, fahrenheit)
-    val range = setting.range
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(setting.titleRes())) },
@@ -712,10 +745,10 @@ private fun ThresholdDialog(
                 Text(display, style = MaterialTheme.typography.numericHeadline, color = MaterialTheme.colorScheme.onSurface)
                 QuietText(stringResource(setting.hintRes()))
                 Slider(
-                    value = value,
-                    onValueChange = { value = it },
+                    value = position,
+                    onValueChange = { position = it },
                     valueRange = range,
-                    steps = ((range.endInclusive - range.start) / setting.step).roundToInt() - 1,
+                    steps = sliderSteps(range, step),
                     modifier = Modifier.semantics { stateDescription = display },
                 )
             }
@@ -791,7 +824,7 @@ private fun thresholdText(setting: SettingsThreshold, value: Float, fahrenheit: 
             stringResource(R.string.percent_value, formatWhole(value, locale))
         SettingsThreshold.TEMPERATURE ->
             if (fahrenheit) {
-                stringResource(R.string.settings_value_fahrenheit, formatWhole(value * 9 / 5 + 32, locale))
+                stringResource(R.string.settings_value_fahrenheit, formatWhole(celsiusToFahrenheit(value), locale))
             } else {
                 stringResource(R.string.settings_value_celsius, formatWhole(value, locale))
             }
@@ -800,3 +833,15 @@ private fun thresholdText(setting: SettingsThreshold, value: Float, fahrenheit: 
 }
 
 private fun formatWhole(value: Float, locale: Locale): String = NumberFormat.getIntegerInstance(locale).format(value.roundToLong())
+
+internal fun celsiusToFahrenheit(celsius: Float): Float = celsius * 9 / 5 + 32
+
+internal fun fahrenheitToCelsius(fahrenheit: Float): Float = (fahrenheit - 32) * 5 / 9
+
+/** The whole °F that lie inside a °C [range] (35..55 °C → 95..131 °F). */
+internal fun wholeFahrenheitRange(range: ClosedFloatingPointRange<Float>): ClosedFloatingPointRange<Float> =
+    ceil(celsiusToFahrenheit(range.start))..floor(celsiusToFahrenheit(range.endInclusive))
+
+/** Slider `steps` (the stops between the ends) for [step]-wide stops across [range]. */
+internal fun sliderSteps(range: ClosedFloatingPointRange<Float>, step: Float): Int =
+    ((range.endInclusive - range.start) / step).roundToInt() - 1

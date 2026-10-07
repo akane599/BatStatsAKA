@@ -106,12 +106,15 @@ enum class SettingsThreshold(val fieldName: String, val alert: SettingsSwitch, p
         DISCHARGE_CURRENT -> settings.dischargeCurrentThreshold.toFloat()
     }
 
-    /** [raw] snapped to [step] from the range start, kept in [range], typed as the field stores it. */
+    /**
+     * [raw] snapped to [step] from the range start, kept in [range], typed as the field stores it. The temperature (°C)
+     * is only kept in range: the °F slider sends whole °F as °C, which a 1 °C snap would move to another °F value.
+     */
     fun stored(raw: Float): Any {
         require(raw.isFinite()) { "Threshold must be finite" }
+        if (!wholeNumber) return raw.coerceIn(range)
         val start = range.start
-        val snapped = (start + ((raw - start) / step).roundToInt() * step).coerceIn(range)
-        return if (wholeNumber) snapped.roundToInt() else snapped
+        return (start + ((raw - start) / step).roundToInt() * step).coerceIn(range).roundToInt()
     }
 }
 

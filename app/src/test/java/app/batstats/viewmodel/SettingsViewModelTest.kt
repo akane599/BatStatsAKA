@@ -19,6 +19,7 @@ import io.github.mlmgames.settings.core.types.Slider
 import io.github.mlmgames.settings.core.types.TextInput
 import io.github.mlmgames.settings.core.types.Toggle
 import java.io.IOException
+import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -91,7 +92,7 @@ class SettingsViewModelTest {
             SettingsEvent.SetChoice(SettingsChoice.CURRENT_SIGN, 2),
             SettingsEvent.SetChoice(SettingsChoice.TEMPERATURE_UNIT, 1),
             SettingsEvent.SetChoice(SettingsChoice.RETENTION, RETENTION_FOREVER_INDEX),
-            // Snapped to the schema's step from the range start, clamped to the range.
+            // Snapped to the schema's step from the range start, clamped to the range (the temperature only clamped).
             SettingsEvent.SetThreshold(SettingsThreshold.LOW_BATTERY, 22.4f),
             SettingsEvent.SetThreshold(SettingsThreshold.HIGH_BATTERY, 10f),
             SettingsEvent.SetThreshold(SettingsThreshold.TEMPERATURE, 47.6f),
@@ -109,7 +110,7 @@ class SettingsViewModelTest {
                 "dataRetentionIndex" to RETENTION_FOREVER_INDEX,
                 "lowBatteryThreshold" to 20,
                 "highBatteryThreshold" to 50,
-                "temperatureThreshold" to 48f,
+                "temperatureThreshold" to 47.6f,
                 "dischargeCurrentThreshold" to 2_000,
             ),
             store.writes,
@@ -125,7 +126,7 @@ class SettingsViewModelTest {
                 dataRetentionIndex = RETENTION_FOREVER_INDEX,
                 lowBatteryThreshold = 20,
                 highBatteryThreshold = 50,
-                temperatureThreshold = 48f,
+                temperatureThreshold = 47.6f,
                 dischargeCurrentThreshold = 2_000,
             ),
             state().settings,
@@ -178,6 +179,19 @@ class SettingsViewModelTest {
         send(vm, SettingsEvent.SetSwitch(SettingsSwitch.OLED_BLACK, true))
         assertNull(state().error)
         assertTrue(state().settings.oledBlack)
+    }
+
+    @Test fun aWholeFahrenheitTemperatureRoundTripsThroughTheStoredCelsius() = runTest(dispatcher) {
+        val (vm, state) = start()
+
+        // The °F slider sends 101 °F as °C; the store keeps °C, read back it is 101 °F again (not 38 °C = 100 °F).
+        send(vm, SettingsEvent.SetThreshold(SettingsThreshold.TEMPERATURE, (101 - 32) * 5f / 9))
+        assertEquals(101, (state().settings.temperatureThreshold * 9 / 5 + 32).roundToInt())
+        // Clamped to the schema's °C range, never snapped to its 1 °C step.
+        send(vm, SettingsEvent.SetThreshold(SettingsThreshold.TEMPERATURE, 70f))
+        assertEquals(55f, state().settings.temperatureThreshold)
+        send(vm, SettingsEvent.SetThreshold(SettingsThreshold.TEMPERATURE, 12f))
+        assertEquals(35f, state().settings.temperatureThreshold)
     }
 
     @Test fun resetCalibrationForgetsTheDetectionAndKeepsTheSettings() = runTest(dispatcher) {
