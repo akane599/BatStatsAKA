@@ -60,6 +60,119 @@ class SessionReportTest {
         assertEquals("USB", report.chargerType)
     }
 
+    private fun reportSamples(power: PowerState, vararg samples: BatterySample) =
+        SessionReport.open(samples.first().point(power), samples.first()).let { session ->
+            samples.forEachIndexed { index, sample ->
+                engine.accept(sample.point(power, uptime = index * 30_000L))
+            }
+            SessionReport.report(session, samples.last(), engine.summary, SessionExtremes())
+        }
+
+    @Test fun chargeTrickleAt100DoesNotInflateCapacity() {
+        val report = reportSamples(
+            PowerState.CHARGING,
+            sample(20, 800_000, 1, 2, 0),
+            sample(100, 4_000_000, 1, 2, 7_200_000),
+            sample(100, 4_250_000, 1, 2, 9_000_000),
+        )
+        assertEquals(4_000, report.capacityEstimateMah)
+        assertEquals(CapacityConfidence.HIGH.name, report.capacityConfidence)
+        assertEquals(3_450_000L, report.deltaUah)
+        assertEquals(1_380_000L, report.avgCurrentUa)
+        assertEquals(13_800_000_000L, report.energyNwh)
+    }
+
+    @Test fun dischargeStartingWithA100HoldDoesNotInflate() {
+        val report = reportSamples(
+            PowerState.DISCHARGING,
+            sample(100, 4_250_000, 0, 3, 0),
+            sample(100, 4_000_000, 0, 3, 1_800_000),
+            sample(99, 3_960_000, 0, 3, 1_890_000),
+            sample(59, 2_360_000, 0, 3, 9_090_000),
+        )
+        assertEquals(4_000, report.capacityEstimateMah)
+        assertEquals(CapacityConfidence.HIGH.name, report.capacityConfidence)
+        assertEquals(1_890_000L, report.deltaUah)
+        assertEquals(-748_514L, report.avgCurrentUa)
+        assertEquals(7_560_000_000L, report.energyNwh)
+    }
+
+    @Test fun normal20To90ChargeIsUnchanged() {
+        val report = reportSamples(
+            PowerState.CHARGING,
+            sample(20, 800_000, 1, 2, 0),
+            sample(90, 3_600_000, 1, 2, 7_200_000),
+        )
+        assertEquals(4_000, report.capacityEstimateMah)
+        assertEquals(CapacityConfidence.HIGH.name, report.capacityConfidence)
+        assertEquals(2_800_000L, report.deltaUah)
+    }
+
+    @Test fun missingCounterAfterChargingReaches100DoesNotInvalidateCapacity() {
+        val report = reportSamples(
+            PowerState.CHARGING,
+            sample(20, 800_000, 1, 2, 0),
+            sample(100, 4_000_000, 1, 2, 7_200_000),
+            sample(100, 4_250_000, 1, 2, 9_000_000).copy(chargeCounterUah = null),
+        )
+        assertEquals(4_000, report.capacityEstimateMah)
+        assertTrue(report.counterCoveredMs < report.observedMs)
+    }
+
+    @Test fun missingCounterDuring100HoldDoesNotInvalidateDischargeCapacity() {
+        val report = reportSamples(
+            PowerState.DISCHARGING,
+            sample(100, 4_250_000, 0, 3, 0).copy(chargeCounterUah = null),
+            sample(99, 3_960_000, 0, 3, 1_890_000),
+            sample(59, 2_360_000, 0, 3, 9_090_000),
+        )
+        assertEquals(4_000, report.capacityEstimateMah)
+        assertTrue(report.counterCoveredMs < report.observedMs)
+    }
+
+    @Test fun missingCounterAtFirstStepBelow100WithholdsDischargeCapacity() {
+        val report = reportSamples(
+            PowerState.DISCHARGING,
+            sample(100, 4_250_000, 0, 3, 0),
+            sample(99, 3_960_000, 0, 3, 1_890_000).copy(chargeCounterUah = null),
+            sample(79, 3_160_000, 0, 3, 5_490_000),
+            sample(59, 2_360_000, 0, 3, 9_090_000),
+        )
+        assertNotNull(report.deltaUah)
+        assertNull(report.capacityEstimateMah)
+        assertNull(report.capacityConfidence)
+        assertNull(report.capacityBasis)
+    }
+
+    @Test fun missingCounterAtFirst100ReadingWithholdsChargeCapacity() {
+        val report = reportSamples(
+            PowerState.CHARGING,
+            sample(20, 800_000, 1, 2, 0),
+            sample(60, 2_400_000, 1, 2, 3_600_000),
+            sample(100, 4_000_000, 1, 2, 7_200_000).copy(chargeCounterUah = null),
+            sample(100, 4_250_000, 1, 2, 9_000_000),
+        )
+        assertNotNull(report.deltaUah)
+        assertNull(report.capacityEstimateMah)
+        assertNull(report.capacityConfidence)
+        assertNull(report.capacityBasis)
+    }
+
+    @Test fun sessionsEntirelyAt100HaveNoCapacityEstimate() {
+        for (power in listOf(PowerState.CHARGING, PowerState.DISCHARGING)) {
+            engine.reset()
+            val charging = power == PowerState.CHARGING
+            val report = reportSamples(
+                power,
+                sample(100, 4_000_000, if (charging) 1 else 0, if (charging) 2 else 3, 0),
+                sample(100, if (charging) 4_250_000 else 3_750_000,
+                    if (charging) 1 else 0, if (charging) 2 else 3, 1_800_000),
+            )
+            assertEquals(250_000L, report.deltaUah)
+            assertNull(report.capacityEstimateMah)
+        }
+    }
+
     @Test fun dischargeSessionKeepsInMemoryFieldsAndCountsScreenOffSuspend() {
         val first = sample(level = 90, charge = 4_000_000, plugged = 0, status = 3, elapsed = 0)
         val session = SessionReport.open(first.point(PowerState.DISCHARGING), first).copy(appUsageStatus = AppUsageStatus.PENDING)

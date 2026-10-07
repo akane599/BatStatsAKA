@@ -98,8 +98,12 @@ object SessionReport {
         val charging = current.type == SessionType.CHARGE
         val bucket = if (charging) summary.charging else summary.discharge
         val deltaUah = bucket.chargeChangeUah.takeIf { bucket.chargeCoveredMs > 0 }
+        val span = summary.capacity
         val capacity = if (charging || current.type == SessionType.DISCHARGE) {
-            CapacityEstimator.fromSession(deltaUah, current.startLevel, sample.levelPercent, summary.observedMs, bucket.chargeCoveredMs)
+            CapacityEstimator.fromSession(
+                span.bucket.chargeChangeUah, span.startLevel, span.endLevel,
+                span.bucket.durationMs, span.bucket.chargeCoveredMs,
+            )
         } else null
         return current.copy(
             lastSampleTime = sample.timestamp, endLevel = sample.levelPercent,

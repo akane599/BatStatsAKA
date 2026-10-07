@@ -52,7 +52,8 @@ data class ObservationSummary(
     val gaps: Int = 0,
     val counterGaps: Int = 0,
     val lastIssue: String? = null,
-    val stopped: Boolean = true
+    val stopped: Boolean = true,
+    val capacity: CapacitySpan = CapacitySpan(),
 ) {
     val chargingMs: Long get() = charging.durationMs
     val discharge: ObservedBucket get() = screenOn + screenOff
@@ -101,7 +102,10 @@ class ObservationEngine {
         val before = previous
         previous = point
         if (before == null) {
-            summary = summary.copy(startedAt = summary.startedAt ?: point.wallMs, latest = point, stopped = false)
+            summary = summary.copy(
+                startedAt = summary.startedAt ?: point.wallMs, latest = point, stopped = false,
+                capacity = CapacitySpan(point.level, point.level),
+            )
             return summary
         }
         val elapsed = point.elapsedMs - before.elapsedMs
@@ -145,7 +149,8 @@ class ObservationEngine {
             dozeMs = summary.dozeMs + if (before.dozing) elapsed else 0,
             counterGaps = summary.counterGaps + if (counterGap) 1 else 0,
             lastIssue = if (counterGap) "Charge counter missing, reset or inconsistent; interval charge unavailable" else summary.lastIssue,
-            stopped = false
+            stopped = false,
+            capacity = if (before.power == point.power) summary.capacity.plus(point, bucket) else summary.capacity,
         )
         return summary
     }
