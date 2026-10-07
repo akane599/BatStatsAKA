@@ -47,15 +47,12 @@ internal fun ChargeSession.inAppHistory(): Boolean =
 
 /**
  * Whether a stored row is this app's. Android can give an uninstalled app's uid to a newly installed one, so app
- * uids must also match the package the row was stored with; system uids (below [FIRST_APPLICATION_UID]) are shared
- * by several packages and never reassigned, so the uid alone identifies them. A blank package matches any.
+ * uids must also match the package the row was stored with; system appIds (see [BatteryStatsParser.isSystemUid]) are
+ * shared by several packages and never reassigned, so the uid alone identifies them. A blank package matches any.
  */
 internal fun SessionAppUsage.isSameApp(uid: Int, packageName: String): Boolean =
     this.uid == uid && !isOthers &&
-        (uid < FIRST_APPLICATION_UID || packageName.isBlank() || this.packageName.isBlank() || this.packageName == packageName)
-
-/** `android.os.Process.FIRST_APPLICATION_UID`. */
-private const val FIRST_APPLICATION_UID = 10_000
+        (BatteryStatsParser.isSystemUid(uid) || packageName.isBlank() || this.packageName.isBlank() || this.packageName == packageName)
 
 /** [AppDetailsRepository] over the shared reader and the `session_app_usage` rows (A3's DAOs, read on IO). */
 class DefaultAppDetailsRepository(
@@ -205,7 +202,7 @@ class AppDetailsViewModel(
             problem = problem,
             capturedAtMs = snapshot?.capturedAt,
             startedAtMs = snapshot?.startedAt,
-            usage = snapshot?.let { details(it, uid) },
+            usage = snapshot?.let { details(it, uid, packageName) },
             history = history,
         )
     }.flowOn(computeDispatcher).stateIn(
@@ -249,9 +246,10 @@ class AppDetailsViewModel(
         const val HISTORY_SESSIONS = 14
         private const val STOP_TIMEOUT_MS = 5_000L
 
-        /** [uid]'s details in [snapshot], or null when the dump has no row for it. */
-        fun details(snapshot: BatteryStatsParser.FullSnapshot, uid: Int): AppUsageDetails? {
+        /** Details for this identity, or null when its row or application package membership is unavailable. */
+        fun details(snapshot: BatteryStatsParser.FullSnapshot, uid: Int, packageName: String): AppUsageDetails? {
             val app = snapshot.apps.firstOrNull { it.uid == uid } ?: return null
+            if (!BatteryStatsParser.isSystemUid(uid) && packageName !in app.packages) return null
             val total = snapshot.apps.sumOf { it.powerMah.coerceAtLeast(0.0) }
             val network = snapshot.network.firstOrNull { it.uid == uid }
             return AppUsageDetails(

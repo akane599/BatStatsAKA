@@ -41,6 +41,20 @@ class AppDetailsHistoryRuleTest {
         assertEquals(false, row(10_124, "com.example.old").isSameApp(10_123, "com.example.old"))
     }
 
+    @Test fun secondaryUserSystemUidMatchesDespiteFirstPackageOrderingChanges() {
+        val uid = 1_001_000 // User 10, system appId 1000.
+        assertEquals(true, row(uid, "android").isSameApp(uid, "com.android.settings"))
+        assertEquals(true, row(uid, "com.android.settings").isSameApp(uid, "android"))
+        assertEquals(false, row(uid, "android").isSameApp(1_000, "android"))
+        assertEquals(false, row(uid, "android", others = true).isSameApp(uid, "com.android.settings"))
+    }
+
+    @Test fun secondaryUserApplicationUidStillRequiresTheStoredPackage() {
+        val uid = 1_010_123
+        assertEquals(true, row(uid, "com.example.old").isSameApp(uid, "com.example.old"))
+        assertEquals(false, row(uid, "com.example.old").isSameApp(uid, "com.example.new"))
+    }
+
     @Test fun systemUidsMatchByUidAloneAndBlankPackagesMatchAny() {
         // Uid 1000 is shared by many system packages and never reassigned.
         assertEquals(true, row(1_000, "android").isSameApp(1_000, "com.android.settings"))
