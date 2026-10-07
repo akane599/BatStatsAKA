@@ -38,14 +38,35 @@ class AppUsageSnapshotTest {
         assertEquals(4200L, full.toAppUsageSnapshot().rows.single().wakelockTimeMs)
     }
 
-    @Test fun packageNamePrefersTheFirstRealPackageOverTheDisplayLabel() {
-        val shared = app(1, packageName = "Shared UID 1", packages = listOf("com.a", "com.b"))
-        val full = BatteryStatsParser.FullSnapshot(apps = listOf(shared))
+    @Test fun aSinglePackageUidIsThatApp() {
+        val single = app(10_123, packageName = "com.a", packages = listOf("com.a"))
+        assertEquals(UidIdentity.App("com.a"), single.identity())
+        val full = BatteryStatsParser.FullSnapshot(apps = listOf(single))
         assertEquals("com.a", full.toAppUsageSnapshot().rows.single().packageName)
+    }
+
+    @Test fun aMultiPackageUidIsSharedWithItsMemberCountWhateverTheDumpOrder() {
+        val forward = app(10_050, packageName = "Shared UID 10050", packages = listOf("com.b", "com.a", "com.c"))
+        val reversed = forward.copy(packages = listOf("com.c", "com.a", "com.b"))
+        val identity = forward.identity()
+        assertEquals(UidIdentity.Shared(listOf("com.a", "com.b", "com.c")), identity)
+        assertEquals(3, (identity as UidIdentity.Shared).memberCount)
+        assertEquals("the dump's package order never changes the identity", identity, reversed.identity())
+        // Power stays the uid's: one row, the whole uid's mAh, under the stable representative.
+        val rows = BatteryStatsParser.FullSnapshot(apps = listOf(forward.copy(powerMah = 42.0))).toAppUsageSnapshot().rows
+        assertEquals(10_050, rows.single().uid)
+        assertEquals(42.0, rows.single().powerMah, 1e-9)
+        assertEquals("com.a", rows.single().packageName)
+        assertEquals("com.a", BatteryStatsParser.FullSnapshot(apps = listOf(reversed)).toAppUsageSnapshot().rows.single().packageName)
+    }
+
+    @Test fun aRepeatedPackageIsOneMember() {
+        assertEquals(UidIdentity.App("com.a"), app(10_001, packages = listOf("com.a", "com.a")).identity())
     }
 
     @Test fun packageNameFallsBackToTheDisplayLabelWhenThereIsNoRealPackage() {
         val system = app(1000, packageName = "System UID 1000", packages = emptyList())
+        assertEquals(UidIdentity.NoPackage("System UID 1000"), system.identity())
         val full = BatteryStatsParser.FullSnapshot(apps = listOf(system))
         assertEquals("System UID 1000", full.toAppUsageSnapshot().rows.single().packageName)
     }

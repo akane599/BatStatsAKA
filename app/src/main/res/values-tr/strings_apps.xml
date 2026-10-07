@@ -50,6 +50,10 @@
         <item quantity="one">%d uygulama</item>
         <item quantity="other">%d uygulama</item>
     </plurals>
+    <plurals name="apps_shared_uid">
+        <item quantity="one">Paylaşılan UID · %d uygulama</item>
+        <item quantity="other">Paylaşılan UID · %d uygulama</item>
+    </plurals>
 
     <string name="apps_empty_search_title">“%1$s” ile eşleşen uygulama yok</string>
     <string name="apps_empty_search_body">Yazımı kontrol edin veya paket adıyla arayın.</string>

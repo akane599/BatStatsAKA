@@ -16,6 +16,8 @@ import app.batstats.battery.apps.AppInfoSource
 import app.batstats.battery.apps.AppLabel
 import app.batstats.battery.apps.AppStatsRepository
 import app.batstats.battery.apps.AppStatsResult
+import app.batstats.battery.apps.UidIdentity
+import app.batstats.battery.apps.identity
 import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.BatteryStatsParser
 import app.batstats.battery.util.DumpOutput
@@ -268,7 +270,9 @@ data class StatsSummary(
 
 /**
  * One app in the list: [value] is the current sort's metric (mAh, ms, or bytes; null when Android gave none) and
- * [share] its part of every app's total for that metric (0..1, hidden system apps included).
+ * [share] its part of every app's total for that metric (0..1, hidden system apps included). [sharedBy] is the number
+ * of packages sharing the uid when there are several (0 otherwise): the row's figures are theirs together, and
+ * [packageName]/[label] are only its stable representative.
  */
 @Immutable
 data class AppListRow(
@@ -277,6 +281,7 @@ data class AppListRow(
     val label: AppLabel,
     val value: Double?,
     val share: Float,
+    val sharedBy: Int = 0,
 )
 
 /**
@@ -334,7 +339,10 @@ class AppsViewModel(
         .map { name -> AppSort.entries.firstOrNull { it.name == name } ?: AppSort.BATTERY }
     private val showSystem = savedState.getStateFlow(KEY_SHOW_SYSTEM, false)
 
-    private class Entry(val stats: BatteryStatsParser.AppPowerStats, val packageName: String, val label: AppLabel, val system: Boolean)
+    private class Entry(val stats: BatteryStatsParser.AppPowerStats, val identity: UidIdentity, val label: AppLabel, val system: Boolean) {
+        val packageName: String get() = identity.packageName
+        val sharedBy: Int get() = (identity as? UidIdentity.Shared)?.memberCount ?: 0
+    }
     private class Catalog(val summary: StatsSummary, val entries: List<Entry>)
     private data class Controls(val sort: AppSort, val query: String, val showSystem: Boolean)
 
@@ -382,10 +390,12 @@ class AppsViewModel(
         }
         val entries = snapshot.apps.map { app ->
             // A2's rows name uid-only apps by their uid ("UID 10123"); the label rule turns those into words.
-            val packageName = app.packages.firstOrNull() ?: app.packageName
+            // A shared uid is labelled by its stable representative; the row also says it's shared.
+            val identity = app.identity()
+            val packageName = identity.packageName
             val info = source.infoOrNull(packageName)
             val system = BatteryStatsParser.isSystemUid(app.uid) || (info?.isSystem == true && packageName !in launchable)
-            Entry(app, packageName, AppLabel.of(app.uid, packageName, info), system)
+            Entry(app, identity, AppLabel.of(app.uid, packageName, info), system)
         }
         return Catalog(StatsSummary.of(snapshot), entries)
     }
@@ -399,7 +409,7 @@ class AppsViewModel(
             .map { entry ->
                 val value = metric(entry.stats, controls.sort)
                 val share = if (value != null && total > 0) (value.coerceAtLeast(0.0) / total).toFloat() else 0f
-                AppListRow(entry.stats.uid, entry.packageName, entry.label, value, share)
+                AppListRow(entry.stats.uid, entry.packageName, entry.label, value, share, entry.sharedBy)
             }
             .sortedWith(
                 compareByDescending<AppListRow, Double?>(nullsFirst<Double>()) { it.value }

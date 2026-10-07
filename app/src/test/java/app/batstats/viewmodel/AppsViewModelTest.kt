@@ -263,6 +263,30 @@ class AppsViewModelTest {
         assertNotNull(state().summary)
     }
 
+    @Test fun aSharedUidRowSaysSoWithItsMemberCountWhateverTheDumpOrder() = runTest {
+        val gsf = "com.google.android.gsf"
+        source.infos[gsf] = AppInfo(gsf, "Google Services Framework", isSystem = true, installed = true)
+        val sharedFirst = AppPowerStats(GMS_UID, "Shared UID $GMS_UID", 30.0, listOf(gsf, GMS))
+        source.cached.value = dump().copy(apps = dump().apps.map { if (it.uid == GMS_UID) sharedFirst else it })
+        val (vm, state) = start()
+        vm.onEvent(AppsEvent.SetShowSystem(true))
+        runCurrent()
+
+        val shared = state().rows.single { it.uid == GMS_UID }
+        assertEquals("the whole uid's power, not split", 30.0, shared.value!!, 1e-9)
+        assertEquals(2, shared.sharedBy)
+        // The representative is the sorted first member, not the dump's first package.
+        assertEquals(GMS, shared.packageName)
+        assertEquals(AppLabel.Named("Google Play services"), shared.label)
+        assertEquals("single-package uids aren't shared", 0, state().rows.single { it.uid == CHROME_UID }.sharedBy)
+
+        source.cached.value = dump().copy(
+            apps = dump().apps.map { if (it.uid == GMS_UID) sharedFirst.copy(packages = listOf(GMS, gsf)) else it },
+        )
+        runCurrent()
+        assertEquals("package order doesn't change the row", shared, state().rows.single { it.uid == GMS_UID })
+    }
+
     @Test fun aReadThatFinishesLateNeverOverwritesANewerOne() = runTest {
         val first = CompletableDeferred<Unit>()
         source.gate = first

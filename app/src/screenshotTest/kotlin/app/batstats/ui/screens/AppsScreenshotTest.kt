@@ -35,8 +35,8 @@ private val summary = StatsSummary(
 
 private const val TOTAL_MAH = 612.0
 
-private fun row(uid: Int, packageName: String, label: AppLabel, mah: Double) =
-    AppListRow(uid, packageName, label, mah, (mah / TOTAL_MAH).toFloat())
+private fun row(uid: Int, packageName: String, label: AppLabel, mah: Double, sharedBy: Int = 0) =
+    AppListRow(uid, packageName, label, mah, (mah / TOTAL_MAH).toFloat(), sharedBy)
 
 private val apps = listOf(
     row(10_123, "com.android.chrome", AppLabel.Named("Chrome"), 124.0),
@@ -132,6 +132,29 @@ fun AppsSystemShownPreview() {
                 rows = labelled.zip(minutes) { app, min ->
                     app.copy(value = min * MINUTE, share = (min / total).toFloat())
                 },
+            ),
+        )
+    }
+}
+
+/** System apps shown by battery: uids several packages share say so under their representative's name. */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun AppsSharedUidPreview() {
+    ScreenshotTheme {
+        AppsPreviewContent(
+            loaded().copy(
+                showSystem = true,
+                hiddenSystem = 0,
+                rows = listOf(
+                    apps[0],
+                    row(10_050, "com.google.android.gms", AppLabel.Named("Google Play services"), 96.5, sharedBy = 2),
+                    row(1_000, "android", AppLabel.Named("Android System"), 71.2, sharedBy = 31),
+                    apps[1],
+                    apps[2],
+                    row(1_041, "System UID 1041", AppLabel.SystemProcess, 12.8),
+                ),
             ),
         )
     }
