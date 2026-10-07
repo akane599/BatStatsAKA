@@ -107,6 +107,23 @@ fun StatusScreenAuthorizePreview() {
     )
 }
 
+/** Shizuku running with BatStats blocked there ("Deny and don't ask again"): the way back instead of Authorize. */
+@PreviewTest
+@PhonePreview
+@Composable
+fun StatusScreenShizukuBlockedPreview() {
+    Status(
+        StatusUiState(
+            access = AccessState(
+                AccessMode.NONE,
+                shizuku = ShizukuState(running = true, granted = false, blocked = true),
+                adbCommands = commands,
+            ),
+            nowMs = FIXED_TIME_MS,
+        ),
+    )
+}
+
 /** ADB grants in use on Android 16, many issues (folded to five), the log unsaved and sharing unavailable. */
 @PreviewTest
 @TallPhonePreview

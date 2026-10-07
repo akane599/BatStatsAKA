@@ -15,6 +15,8 @@
     <string name="apps_access_refused">Android, mevcut erişimle uygulama başına istatistikleri reddetti.</string>
     <string name="apps_access_set_up">Erişimi kur</string>
     <string name="apps_access_allow">Shizuku\'da izin ver</string>
+    <string name="apps_access_shizuku_blocked">BatStats Shizuku\'da engellendi (“Reddet ve bir daha sorma”), bu yüzden Shizuku bir daha sormayacak. Shizuku\'yu açın, yetkili uygulamalarına gidin ve BatStats\'i açın.</string>
+    <string name="apps_access_open_shizuku">Shizuku\'yu aç</string>
 
     <string name="apps_failed_title">Android istatistikleri okunamadı</string>
     <string name="apps_failed_format">Android, BatStats\'in okuyamadığı bir biçimde yanıt verdi.</string>

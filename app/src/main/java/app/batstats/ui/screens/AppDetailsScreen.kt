@@ -120,7 +120,7 @@ fun AppDetailsScreen(
             when (event) {
                 AppDetailsEvent.Back -> onBack()
                 AppDetailsEvent.OpenAccessSetup -> onOpenAccessSetup()
-                AppDetailsEvent.AllowShizuku -> shizuku.requestPermission()
+                AppDetailsEvent.AllowShizuku -> allowShizuku(context, state.problem, shizuku)
                 AppDetailsEvent.OpenAppInfo -> openAppInfo(context, state.packageName)
                 else -> vm.onEvent(event)
             }

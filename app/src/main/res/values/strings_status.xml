@@ -20,6 +20,8 @@
     <string name="status_access_adb_limited">Battery details only. On this Android version, per-app statistics need Shizuku or root.</string>
     <string name="status_access_authorize_hint">Shizuku is running. Authorize BatStats to use it.</string>
     <string name="status_access_authorize">Authorize Shizuku</string>
+    <string name="status_access_blocked_hint">BatStats is blocked in Shizuku (“Deny and don\'t ask again”). Open Shizuku, go to its authorized apps and switch BatStats on.</string>
+    <string name="status_access_open_shizuku">Open Shizuku</string>
     <string name="status_access_check">Check again</string>
     <string name="status_access_checking_short">Checking…</string>
     <string name="status_access_info_title">About advanced access</string>

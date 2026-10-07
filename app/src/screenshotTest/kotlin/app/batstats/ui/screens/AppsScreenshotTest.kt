@@ -96,6 +96,21 @@ fun AppsShizukuPreview() {
     }
 }
 
+/** BatStats is blocked in Shizuku ("Deny and don't ask again"): no dead Allow, the way back through the Shizuku app. */
+@PreviewTest
+@PhonePreview
+@Composable
+fun AppsShizukuBlockedPreview() {
+    ScreenshotTheme {
+        AppsPreviewContent(
+            AppsUiState(
+                nowMs = FIXED_TIME_MS,
+                problem = StatsProblem.NoAccess(AccessProblem.SHIZUKU_NOT_ALLOWED, blocked = true),
+            ),
+        )
+    }
+}
+
 /** The first read is running: the refresh indicator, the summary's shape and placeholder rows. */
 @PreviewTest
 @PhonePreview

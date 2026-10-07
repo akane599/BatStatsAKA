@@ -80,8 +80,9 @@ private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 private const val ISSUES_COLLAPSED = 5
 
 /**
- * Settings › Status, wired: the Koin [StatusViewModel]; copying the ADB commands (clipboard) and sharing the
- * report (`ACTION_SEND`) happen here. Every other event goes to the ViewModel.
+ * Settings › Status, wired: the Koin [StatusViewModel]; copying the ADB commands (clipboard), sharing the
+ * report (`ACTION_SEND`) and opening the Shizuku app while BatStats is blocked there happen here. Every other event
+ * goes to the ViewModel.
  */
 @Composable
 fun StatusScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: StatusViewModel = koinViewModel()) {
@@ -96,6 +97,8 @@ fun StatusScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: StatusVi
             when (event) {
                 StatusEvent.CopyCommands -> copy(context, commandsLabel, state.access.adbCommands.joinToString("\n"))
                 StatusEvent.ShareReport -> vm.onShareResult(share(context, vm.report(), subject, chooserTitle))
+                StatusEvent.AuthorizeShizuku ->
+                    if (state.access.shizukuBlocked) openShizuku(context) else vm.onEvent(event)
                 else -> vm.onEvent(event)
             }
         },
@@ -222,6 +225,12 @@ private fun AccessPanel(access: AccessState, onEvent: (StatusEvent) -> Unit, mod
             FilledTonalButton(onClick = { onEvent(StatusEvent.AuthorizeShizuku) }) {
                 Text(stringResource(R.string.status_access_authorize))
             }
+        } else if (access.shizukuBlocked && access.mode != AccessMode.SHIZUKU) {
+            // Blocked in Shizuku: no dialog to ask for, so the wrapper opens the Shizuku app instead.
+            QuietText(stringResource(R.string.status_access_blocked_hint))
+            FilledTonalButton(onClick = { onEvent(StatusEvent.AuthorizeShizuku) }) {
+                Text(stringResource(R.string.status_access_open_shizuku))
+            }
         }
         val check: @Composable () -> Unit = {
             FilledTonalButton(onClick = { onEvent(StatusEvent.RecheckAccess) }, enabled = !access.checking) {
@@ -247,6 +256,9 @@ private fun AccessPanel(access: AccessState, onEvent: (StatusEvent) -> Unit, mod
         }
     }
 }
+
+/** Shizuku runs but BatStats got "Deny and don't ask again" there, so only the Shizuku app can allow it now. */
+private val AccessState.shizukuBlocked: Boolean get() = shizuku.running && !shizuku.granted && shizuku.blocked
 
 @Composable
 private fun modeName(mode: AccessMode): String = stringResource(
