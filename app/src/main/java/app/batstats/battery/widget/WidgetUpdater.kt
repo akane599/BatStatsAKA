@@ -6,14 +6,13 @@ import android.appwidget.AppWidgetProvider
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.util.Log
 import android.view.View
 import android.widget.RemoteViews
 import androidx.core.content.ContextCompat
 import app.batstats.R
 import app.batstats.battery.BatteryGraph
-import app.batstats.battery.BatteryMainActivity
+import app.batstats.battery.mainActivityIntent
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.measurement.BatteryReading
@@ -167,7 +166,7 @@ object WidgetUpdater {
                 setTextViewText(R.id.subtitle, content.caption)
                 setContentDescription(R.id.root, "${context.getString(title)}: $value. ${content.caption}")
                 setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(context, 0,
-                    Intent(context, BatteryMainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
+                    mainActivityIntent(context), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             }
             manager.updateAppWidget(ids, views)
         }

@@ -1,6 +1,7 @@
 package app.batstats.battery
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.flow.MutableStateFlow
 import android.content.pm.PackageManager
@@ -17,10 +18,18 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.batstats.settings.AppSettings
 import app.batstats.ui.navigation.Destinations
+import app.batstats.ui.navigation.mainActivityLaunchFlags
 import app.batstats.ui.screens.MainScreen
 import app.batstats.ui.theme.MainTheme
 import io.github.mlmgames.settings.core.SettingsRepository
 import org.koin.compose.koinInject
+
+internal fun mainActivityIntent(context: Context, destination: String? = null): Intent =
+    Intent(context, BatteryMainActivity::class.java)
+        .addFlags(mainActivityLaunchFlags())
+        .apply {
+            if (destination != null) putExtra(Destinations.EXTRA_DESTINATION, destination)
+        }
 
 class BatteryMainActivity : ComponentActivity() {
     private val destination = MutableStateFlow<String?>(null)

@@ -1,5 +1,11 @@
 package app.batstats.ui.navigation
 
+import android.content.Intent
+
+// CLEAR_TOP finds the existing activity; SINGLE_TOP keeps it alive to receive onNewIntent.
+internal fun mainActivityLaunchFlags(): Int =
+    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+
 /**
  * String values for the `destination` intent extra used by deep links: notification tap today;
  * the QS tile long-press and widgets follow in P5. [app.batstats.battery.BatteryMainActivity]
