@@ -56,7 +56,7 @@ internal class HistoryWriter<E>(
                 if (message is Message.Delete) message.result.completeExceptionally(e)
                 // A storage call can be cancelled independently of the writer's owning scope.
                 currentCoroutineContext().ensureActive()
-                onFailure(e)
+                if (message is Message.Event) onFailure(e)
             }
         }
     }.also { writer -> writer.invokeOnCompletion { queue.close(it) } }
