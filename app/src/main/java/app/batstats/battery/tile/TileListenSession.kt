@@ -2,10 +2,12 @@ package app.batstats.battery.tile
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 /**
- * Holds the listening [CoroutineScope] and `SamplingDemand` token [MonitorTileService] owns while
- * a session is active, so they can be released exactly once no matter which lifecycle callback
+ * Holds the listening [CoroutineScope] and, only while monitoring is on, the `SamplingDemand`
+ * token [MonitorTileService] owns, so they can be released exactly once no matter which callback
  * fires first — `onStopListening` in the ordinary case, or `onTileRemoved`/`onDestroy` when the
  * tile is removed or the process is torn down without a clean stop. Without this, either path
  * leaks the token and leaves the sampler stuck at the 2 s demand cadence for the rest of the
@@ -16,10 +18,19 @@ internal class TileListenSession {
     private var token: AutoCloseable? = null
 
     /** Starts a new session, releasing any previous one first (defensive: a start always follows a stop). */
-    fun start(scope: CoroutineScope, token: AutoCloseable) {
+    fun start(
+        scope: CoroutineScope,
+        isMonitoring: StateFlow<Boolean>,
+        acquireDemand: () -> AutoCloseable,
+    ) {
         stop()
         this.scope = scope
-        this.token = token
+        scope.launch {
+            isMonitoring.collect { on ->
+                token?.close()
+                token = if (on) acquireDemand() else null
+            }
+        }
     }
 
     /** Idempotent: safe to call from more than one lifecycle callback, or with no session active. */
