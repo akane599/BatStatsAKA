@@ -40,6 +40,8 @@ private const val MAX_APP_USAGE_ROWS = HistoryLimits.MAX_SESSIONS * SessionAppUs
 internal const val CURRENT_NOW_UA_EXPORT_DESCRIPTION =
     "Raw BatteryManager current as reported by the device; unit and sign are device-dependent, and detected calibration is not applied"
 
+data class HistoryImportResult(val samplesAdded: Int, val sessionsAdded: Int, val sessionsUpdated: Int, val unchanged: Int)
+
 internal fun exportUnits(): Map<String, String> = mapOf(
     "timestamps" to "Unix epoch milliseconds UTC", "durations" to "milliseconds", "currentNowUa" to CURRENT_NOW_UA_EXPORT_DESCRIPTION,
     "chargeCounterUah" to "µAh", "deltaUah" to "µAh, positive gained for CHARGE or consumed for DISCHARGE",
