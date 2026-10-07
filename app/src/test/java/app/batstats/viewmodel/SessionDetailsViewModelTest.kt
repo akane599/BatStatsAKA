@@ -170,6 +170,51 @@ class SessionDetailsViewModelTest {
         assertNull((state.ready().insights as SessionInsights.Charging).twentyToEightyMs)
     }
 
+    @Test fun peakPowerRecalibratesRawReadingsAndIgnoresTheStoredPeak() = runTest {
+        repo.row.value = charge().copy(peakPowerMw = 8, energyNwh = null)
+        repo.rows.value = listOf(
+            sample(T0, level = 20, raw = 1_000, status = 2, plugged = 1),
+            sample(T0 + MINUTE, level = 21, raw = 2_000, status = 2, plugged = 1),
+        )
+        val (_, state) = start()
+        assertEquals(0.0078, (state.ready().insights as SessionInsights.Charging).peakPowerW!!, 1e-9)
+
+        repo.calibration.value = CurrentCalibration(CurrentUnit.MILLIAMPS)
+        runCurrent()
+        with(state.ready().insights as SessionInsights.Charging) {
+            assertEquals("Current calibration replaces the IDENTITY-era stored peak", 7.8, peakPowerW!!, 1e-9)
+            assertEquals(5.85, averagePowerW!!, 1e-9)
+            assertTrue("Peak is at least the calibrated readings' mean", peakPowerW!! >= averagePowerW!!)
+        }
+        assertEquals(listOf(1_000.0, 2_000.0), state.ready().charts.currentMa.map { it.value })
+    }
+
+    @Test fun peakPowerFallsBackToStoredWattsOnlyWithoutUsablePowerReadings() {
+        val calibration = CurrentCalibration(CurrentUnit.MILLIAMPS)
+        val session = charge()
+        assertEquals(18.2, SessionDetailsMapping.charging(session, emptyList(), calibration, false).peakPowerW!!, 1e-9)
+        val incomplete = listOf(
+            sample(T0, level = 20, raw = null),
+            sample(T0 + MINUTE, level = 21, raw = 2_000).copy(voltageMv = null),
+        )
+        assertEquals(18.2, SessionDetailsMapping.charging(session, incomplete, calibration, false).peakPowerW!!, 1e-9)
+        assertNull(SessionDetailsMapping.charging(session.copy(peakPowerMw = null), incomplete, calibration, false).peakPowerW)
+    }
+
+    @Test fun peakPowerUsesTheLargestMagnitudeIncludingZeroAndSingleReadings() {
+        val calibration = CurrentCalibration(CurrentUnit.MILLIAMPS)
+        val readings = listOf(
+            sample(T0, level = 20, raw = 1_000),
+            sample(T0 + MINUTE, level = 21, raw = -2_000),
+        )
+        val session = charge().copy(energyNwh = null)
+        val charging = SessionDetailsMapping.charging(session, readings, calibration, false)
+        assertEquals("Stored peaks use a positive magnitude even for negative current", 7.8, charging.peakPowerW!!, 1e-9)
+        assertTrue(charging.peakPowerW!! >= kotlin.math.abs(charging.averagePowerW!!))
+        val zero = listOf(sample(T0, level = 20, raw = 0))
+        assertEquals("A measured zero must not fall back to the stored peak", 0.0, SessionDetailsMapping.charging(session, zero, calibration, false).peakPowerW!!, 1e-9)
+    }
+
     @Test fun appsFollowTheStoredStatusRowsAndBasis() = runTest {
         repo.row.value = discharge().copy(appUsageStatus = AppUsageStatus.READY, appUsageBasis = AppUsageBasis.WINDOW_RESET)
         repo.usage.value = listOf(
