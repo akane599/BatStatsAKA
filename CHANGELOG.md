@@ -28,7 +28,7 @@
 - Now's Health card and the Health screen always show the same health percentage: both read one app-wide design-capacity value, checked once instead of per screen, so reopening Health no longer re-prompts for root or flashes a "Checking" state.
 - A discharge session's per-app breakdown is no longer captured from a plug/unplug that immediately reverses: the start and end dumps are debounced, so a quick plug cycle doesn't waste a privileged dump or record a misleading breakdown.
 
-Final reset-dialog/notification changes remain unverified; saved APKs predate those changes. See the [ordered baseline-to-current changelog and remaining tasks](docs/BASELINE_TO_CURRENT.md) for details and actual validation limits.
+Historical validation note for this 2026-09-27 checkpoint: reset-dialog/notification changes were then unverified and saved APKs predated them. This is not a statement of current validation; see the [historical validation record](docs/VALIDATION.md) and current guidance in [README](README.md).
 
 ## v6.2.6
 

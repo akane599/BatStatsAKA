@@ -1,5 +1,7 @@
 # From BatStats 6.2.6 to the current development snapshot
 
+> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README](../README.md).**
+
 This is an ordered implementation checklist for reproducing the changes beyond the original app. The baseline is source revision `76bc831328572c81717b97ffb0e280b10b14b8ad` and the supplied 6.2.6 APK. The development version is 6.2.7-dev.
 
 The original dashboard, advanced statistics, history, notification, and widgets already existed. Much of this work repairs their calculations and reliability; the entire app should not be described as newly added functionality.

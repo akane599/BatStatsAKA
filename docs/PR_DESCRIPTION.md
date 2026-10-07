@@ -1,5 +1,7 @@
 # Android16 battery monitoring: accurate observations, resilient Shizuku and clear reporting
 
+> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README](../README.md).**
+
 Prepared description only: the 2026-09-27 publication request creates a branch in the newly recreated repository, not a new PR. Earlier PR/CI references describe the previous environment. The [baseline-to-current changelog](BASELINE_TO_CURRENT.md) records the imported snapshot and remaining work.
 
 The baseline could display unsupported readings as zero, label accumulated uptime differences as current deep sleep, attribute earlier consumption to newly observed apps, and mix unrelated reporting periods. Privileged reads could silently change backend or accept partial output. History imports and destructive migration fallback could lose or duplicate records.
