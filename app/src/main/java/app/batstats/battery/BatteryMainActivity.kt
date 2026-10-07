@@ -39,6 +39,13 @@ internal fun shouldRequestNotificationPermission(
     rationale: Boolean,
 ): Boolean = sdkInt >= 33 && !granted && !restored && !askedBefore && !rationale
 
+/**
+ * Theme settings before the settings store first emits. Null, so the activity renders no themed content and the
+ * dark XML window background shows instead of default colours that would flash to an OLED or dynamic-colour
+ * user's stored theme a few frames later.
+ */
+internal val themeSettingsBeforeFirstEmission: AppSettings? = null
+
 class BatteryMainActivity : ComponentActivity() {
     private val destination = MutableStateFlow<String?>(null)
     private val notifPerm = registerForActivityResult(
@@ -79,8 +86,11 @@ class BatteryMainActivity : ComponentActivity() {
 
         setContent {
             val settingsRepository: SettingsRepository<AppSettings> = koinInject()
-            val settings by settingsRepository.flow.collectAsStateWithLifecycle(initialValue = AppSettings())
-            MainTheme(oled = settings.oledBlack, dynamicColor = settings.dynamicColors) {
+            val settings by settingsRepository.flow.collectAsStateWithLifecycle(
+                initialValue = themeSettingsBeforeFirstEmission,
+            )
+            val loaded = settings ?: return@setContent
+            MainTheme(oled = loaded.oledBlack, dynamicColor = loaded.dynamicColors) {
                 val requested by destination.collectAsStateWithLifecycle()
                 MainScreen(destination = requested, onDestinationHandled = {
                     destination.value = null
