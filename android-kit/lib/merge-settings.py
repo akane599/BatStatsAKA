@@ -135,6 +135,14 @@ def merge(src, dst):
     # Unchanged handlers retain their position; only obsolete exact handlers are replaced.
     remove_hooks(retired, kit)
     remove_hooks(cur, retired)
+    # An allow rule an earlier kit granted and this one no longer does is withdrawn (deny rules never are).
+    allow = cur.get('permissions', {}).get('allow')
+    if isinstance(allow, list):
+        dropped = [v for v in allow if v in retired.get('permissions', {}).get('allow', [])
+                   and v not in kit.get('permissions', {}).get('allow', [])]
+        if dropped:
+            cur['permissions']['allow'] = [v for v in allow if v not in dropped]
+            print(f"ok withdrew retired kit allow rules: {', '.join(dropped)}")
     save(dst, combine(kit, cur))
 
 

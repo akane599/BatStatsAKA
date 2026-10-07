@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/kit/compact-checkpoint.py\" --restore"
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/kit/compact-checkpoint.py\" --restore"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/kit/compact-checkpoint.py",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR\"/.claude/kit/compact-checkpoint.py",
             "timeout": 20
           }
         ]
@@ -52,7 +52,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/ui-guard.py\"; [ -f \"$f\" ] || exit 0; python3 \"$f\" || true",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/ui-guard.py\"; [ -f \"$f\" ] || exit 0; python3 -I \"$f\" || true",
             "timeout": 10
           }
         ]
@@ -62,7 +62,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/map-guard.py\"; [ -f \"$f\" ] || exit 0; python3 \"$f\" || true",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/map-guard.py\"; [ -f \"$f\" ] || exit 0; python3 -I \"$f\" || true",
             "timeout": 10
           }
         ]
@@ -74,7 +74,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/kit/format-edit.py\"",
+            "command": "python3 -I \"$CLAUDE_PROJECT_DIR/.claude/kit/format-edit.py\"",
             "timeout": 20
           }
         ]

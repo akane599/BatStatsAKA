@@ -36,9 +36,27 @@
             "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/compact-checkpoint.md\"; [ -f \"$f\" ] && cat \"$f\" || true"
           }
         ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/kit/compact-checkpoint.py\" --restore"
+          }
+        ]
       }
     ],
     "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/kit/compact-checkpoint.py",
+            "timeout": 20
+          }
+        ]
+      },
       {
         "hooks": [
           {
@@ -69,6 +87,26 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/ui-guard.py\"; [ -f \"$f\" ] || exit 0; python3 \"$f\" || true",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/kit/map-guard.py\"; [ -f \"$f\" ] || exit 0; python3 \"$f\" || true",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -78,6 +116,16 @@
           {
             "type": "command",
             "command": "[ -f \"$CLAUDE_PROJECT_DIR/.claude/kit/format-on-edit\" ] || exit 0; f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in *.kt|*.kts) command -v ktlint >/dev/null && ktlint -F \"$f\" >/dev/null 2>&1 || true;; esac"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/kit/format-edit.py\"",
+            "timeout": 20
           }
         ]
       }

@@ -161,6 +161,34 @@ class KitTests(unittest.TestCase):
         for name in ('compact-checkpoint.py','ui-guard.py','map-guard.py'):
             self.assertIn(name,hooks)
 
+    def test_settings_hook_ignores_planted_module(self):
+        tpl=KIT/'template'; kit_dir=self.project/'.claude/kit'; kit_dir.mkdir(parents=True)
+        for name in ('compact-checkpoint.py','ui-guard.py','map-guard.py','format-edit.py'):
+            shutil.copy2(tpl/'.claude/kit'/name,kit_dir/name)
+        marker=self.root/'planted-ran'
+        (kit_dir/'json.py').write_text(f'open({str(marker)!r},"w").close()\nfrom json import *\n')
+        old=merge.load(KIT/'lib/legacy-settings-v1.json')['hooks']['PreToolUse']
+        local=self.project/'.claude/settings.local.json'; local.write_text(json.dumps({'hooks':{'PreToolUse':old}}))
+        with contextlib.redirect_stdout(io.StringIO()):
+            merge.merge(tpl/'.claude/settings.json',local)
+        commands=[h['command'] for es in merge.load(local)['hooks'].values() for e in es for h in e['hooks']]
+        self.assertEqual(len(commands),5)
+        self.assertTrue(all('python3 -I ' in c for c in commands),commands)
+        guard=next(c for c in commands if 'map-guard.py' in c)
+        subprocess.run(['bash','-c',guard],input='{}',text=True,capture_output=True,timeout=20,
+                       env=dict(self.env,CLAUDE_PROJECT_DIR=str(self.project)),cwd=kit_dir)
+        self.assertFalse(marker.exists())
+
+    def test_settings_retired_allow_rules_withdrawn(self):
+        local=self.project/'local.json'
+        local.write_text(json.dumps({'permissions':{'allow':['Bash(rg:*)','Bash(git log:*)','Bash(./gradlew:*)','Bash(echo:*)']}}))
+        with contextlib.redirect_stdout(io.StringIO()):
+            merge.merge(KIT/'template/.claude/settings.json',local)
+        allow=merge.load(local)['permissions']['allow']
+        self.assertNotIn('Bash(rg:*)',allow); self.assertNotIn('Bash(git log:*)',allow)
+        self.assertIn('Bash(./gradlew:*)',allow); self.assertIn('Bash(echo:*)',allow)
+        self.assertIn('Read(./.env*)',merge.load(local)['permissions']['deny'])
+
     def test_detection_empty(self):
         r=self.run_cmd(['bash',SCRIPTS/'detect-stack.sh']); values=dict(x.split('=',1) for x in r.stdout.splitlines())
         for key in ('di','db','network','async','screenshot_testing'): self.assertEqual(values[key],'none')
