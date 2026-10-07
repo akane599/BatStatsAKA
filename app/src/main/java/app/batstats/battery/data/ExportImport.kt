@@ -203,7 +203,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                     }
                     skipped++; continue
                 }
-                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId), session)
+                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId)?.let(HistoryPolicy::session), session)
                 when (plan.disposition) {
                     ImportSessionDisposition.ADDED -> db.sessionDao().insert(plan.session)
                     ImportSessionDisposition.UPDATED -> db.sessionDao().update(plan.session)
@@ -229,13 +229,14 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                 val nativeSession = original.sessionId?.let { db.sessionDao().byId(HistoryPolicy.originalId(it)) }
                 val stored = if (nativeSession != null && !nativeSession.source.startsWith("import:")) {
                     require(nativeSession.observationId?.let(HistoryPolicy::originalId) == original.observationId?.let(HistoryPolicy::originalId) &&
-                        sample.timestamp in nativeSession.startTime..(nativeSession.lastSampleTime ?: nativeSession.endTime ?: nativeSession.startTime)) {
+                        HistoryPolicy.sampleInSessionWindow(sample.timestamp, nativeSession,
+                            nativeSession.lastSampleTime ?: nativeSession.endTime ?: nativeSession.startTime)) {
                         "Imported sample is outside the local session window"
                     }
                     sample.copy(sessionId = nativeSession.sessionId)
                 } else sample
                 val importedSession = stored.sessionId?.let { db.sessionDao().byId(it) }
-                require(importedSession == null || stored.timestamp in importedSession.startTime..(importedSession.endTime ?: importedSession.lastSampleTime ?: importedSession.startTime)) {
+                require(importedSession == null || HistoryPolicy.sampleInSessionWindow(stored.timestamp, importedSession)) {
                     "Sample is outside its session window"
                 }
                 val point = if (sample.observationId != null && sample.elapsedMs != null) db.batteryDao().observedPoint(sample.observationId, sample.elapsedMs) else null

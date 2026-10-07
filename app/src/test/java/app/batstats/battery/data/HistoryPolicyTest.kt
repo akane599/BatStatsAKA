@@ -3,6 +3,11 @@ package app.batstats.battery.data
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.db.*
+import app.batstats.battery.data.sampling.SessionExtremes
+import app.batstats.battery.data.sampling.SessionReport
+import app.batstats.battery.measurement.Observation
+import app.batstats.battery.measurement.ObservationEngine
+import app.batstats.battery.measurement.PowerState
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Instant
@@ -47,6 +52,96 @@ class HistoryPolicyTest {
         assertEquals(imported, HistoryPolicy.session(imported))
         assertEquals(1000L, HistoryPolicy.session(session().copy(lastSampleTime = null, observedMs = 0,
             counterCoveredMs = 0, deltaUah = null, screenOnMs = 0, screenOnUah = null)).endTime)
+    }
+    @Test fun accumulatedBackwardClockCorrectionsClampCoverageToTheWallSpan() {
+        val original = session().copy(endTime = 101_000, lastSampleTime = 101_000,
+            observedMs = 108_000, counterCoveredMs = 108_000,
+            screenOnMs = 60_000, screenOffMs = 48_000, screenOnUah = 600, screenOffUah = 400,
+            cpuSuspendMs = 106_000, screenOffSuspendMs = 48_000)
+        val result = runCatching { HistoryPolicy.session(original) }
+        assertTrue("App-written span + 8 s must import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        val imported = result.getOrThrow()
+        assertEquals(100_000L, imported.observedMs)
+        assertEquals(100_000L, imported.counterCoveredMs)
+        assertEquals(55_555L, imported.screenOnMs)
+        assertEquals(44_444L, imported.screenOffMs)
+        assertTrue(imported.screenOnMs + imported.screenOffMs <= imported.observedMs)
+        assertEquals(98_148L, imported.cpuSuspendMs)
+        assertEquals(44_444L, imported.screenOffSuspendMs)
+        assertEquals(original.deltaUah, imported.deltaUah)
+        assertEquals(original.screenOnUah, imported.screenOnUah)
+        assertEquals(original.screenOffUah, imported.screenOffUah)
+        assertEquals(imported, HistoryPolicy.session(imported))
+    }
+    @Test fun twoSmallWriterClockStepsRemainImportableWithoutAnObservationGap() {
+        val engine = ObservationEngine()
+        val points = (0..2).map { index ->
+            Observation(wallMs = 1_000 + index * 27_000L, elapsedMs = index * 30_000L,
+                uptimeMs = index * 30_000L, level = 60, chargeUah = 1_000_000 - index * 1_000L,
+                currentUa = -100_000, voltageMv = 4000, power = PowerState.DISCHARGING,
+                interactive = true, dozing = false, generation = "observation")
+        }
+        val firstSample = sample().copy(timestamp = points.first().wallMs)
+        val open = SessionReport.open(points.first(), firstSample)
+        points.forEach { engine.accept(it) }
+        val written = SessionReport.report(open, firstSample.copy(timestamp = points.last().wallMs),
+            engine.summary, SessionExtremes())
+        assertEquals(0, engine.summary.gaps)
+        assertEquals(60_000L, written.observedMs)
+        assertEquals(54_000L, checkNotNull(written.lastSampleTime) - written.startTime)
+        val imported = HistoryPolicy.session(written)
+        assertEquals(54_000L, imported.observedMs)
+        assertEquals(imported.observedMs, imported.counterCoveredMs)
+        assertEquals(imported, HistoryPolicy.session(imported))
+    }
+    @Test fun clockCorrectedSampleWindowsAcceptSmallExcessButNotCorruption() {
+        val original = session().copy(endTime = 101_000, lastSampleTime = 109_000)
+        val imported = HistoryPolicy.session(original)
+        assertEquals(101_000L, imported.lastSampleTime)
+        assertTrue(HistoryPolicy.sampleInSessionWindow(109_000, imported))
+        assertTrue(HistoryPolicy.sampleInSessionWindow(116_000, imported))
+        assertFalse(HistoryPolicy.sampleInSessionWindow(116_001, imported))
+        assertFalse(HistoryPolicy.sampleInSessionWindow(1_000_000, imported))
+        assertFalse(HistoryPolicy.sampleInSessionWindow(999, imported))
+        assertTrue(HistoryPolicy.sampleInSessionWindow(109_000, original.copy(endTime = null), 101_000))
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.session(original.copy(lastSampleTime = 1_000_000))
+        }
+    }
+    @Test fun zeroWallSpanNormalizationKeepsChargeCoverageInvariants() {
+        val imported = HistoryPolicy.session(session().copy(endTime = 1000, lastSampleTime = 1000,
+            cpuSuspendMs = 1000, screenOffSuspendMs = 1000))
+        assertEquals(0L, imported.observedMs)
+        assertEquals(0L, imported.counterCoveredMs)
+        assertEquals(0L, imported.screenOnMs)
+        assertEquals(0L, imported.cpuSuspendMs)
+        assertEquals(0L, imported.screenOffSuspendMs)
+        assertNull(imported.deltaUah)
+        assertNull(imported.screenOnUah)
+        assertEquals(imported, HistoryPolicy.session(imported))
+    }
+    @Test fun formerlyImportedClockSlackStillMergesAfterNormalization() {
+        val stored = HistoryPolicy.session(session()).copy(observedMs = 4000,
+            counterCoveredMs = 4000, screenOnMs = 4000)
+        val incoming = HistoryPolicy.session(stored)
+        val plan = HistoryPolicy.planSessionImport(HistoryPolicy.session(stored), incoming)
+        assertEquals(ImportSessionDisposition.UNCHANGED, plan.disposition)
+    }
+    @Test fun invalidCoverageIsNotHiddenByClockCorrectionNormalization() {
+        val original = session().copy(endTime = 101_000, lastSampleTime = 101_000, observedMs = 108_000)
+        for (bad in listOf(original.copy(counterCoveredMs = 108_001),
+            original.copy(screenOnMs = 108_000, screenOffMs = 1),
+            original.copy(cpuSuspendMs = 108_001), original.copy(screenOffSuspendMs = -1))) {
+            assertThrows(IllegalArgumentException::class.java) { HistoryPolicy.session(bad) }
+        }
+    }
+    @Test fun negativeAndWildlyInflatedObservedIntervalsAreRejected() {
+        val original = session().copy(endTime = 101_000, lastSampleTime = 101_000)
+        for (observed in listOf(-1L, 1_000_000L, Long.MAX_VALUE)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                HistoryPolicy.session(original.copy(observedMs = observed))
+            }
+        }
     }
     @Test fun fictionalScreenOffAndIncompatibleCoverageAreRejected() {
         for (bad in listOf(session().copy(screenOffUah = 10), session().copy(screenOffMs = 1),
