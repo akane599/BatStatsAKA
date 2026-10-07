@@ -63,17 +63,19 @@ class SessionCloseSuspendTest {
         return closing
     }
 
-    @Test fun screenOffPowerBoundaryCountsClosingSuspendWithoutChangingCpuSuspend() {
+    @Test fun screenOffPowerBoundaryExcludesClosingSuspendWithoutChangingCpuSuspend() {
         val closing = closeAtPowerBoundary(screenOn = false)
-        assertEquals(3_600_000L, closing.screenOffMs)
+        assertEquals(3_600_000L, closing.observedMs)
+        assertEquals(0L, closing.screenOffMs)
         assertEquals(0L, closing.screenOnMs)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
-        assertEquals(3_599_000L, closing.screenOffSuspendMs)
+        assertEquals(0L, closing.screenOffSuspendMs)
     }
 
     @Test fun screenOnPowerBoundaryDoesNotAddScreenOffSuspend() {
         val closing = closeAtPowerBoundary(screenOn = true)
-        assertEquals(3_600_000L, closing.screenOnMs)
+        assertEquals(3_600_000L, closing.observedMs)
+        assertEquals(0L, closing.screenOnMs)
         assertEquals(0L, closing.screenOffMs)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
         assertEquals(0L, closing.screenOffSuspendMs)
@@ -86,7 +88,7 @@ class SessionCloseSuspendTest {
         assertEquals(300, closing.peakTemperatureDeciC)
     }
 
-    @Test fun closingSuspendAddsOnlyTheNewIntervalToExistingScreenOffSuspend() {
+    @Test fun powerBoundaryKeepsExistingScreenOffSuspendWithoutClosingInterval() {
         val engine = ObservationEngine()
         val first = point(0, 0, screenOn = false)
         val current = SessionReport.open(first, sample(first))
@@ -97,7 +99,8 @@ class SessionCloseSuspendTest {
         val boundary = point(3_600_000, 1_000, false, PowerState.CHARGING, Boundary.POWER)
         val closing = SessionReport.reportPowerBoundary(current, sample(boundary), boundary, engine, extremes)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
-        assertEquals(3_599_000L, closing.screenOffSuspendMs)
+        assertEquals(1_799_500L, closing.screenOffSuspendMs)
+        assertEquals(1_800_000L, closing.screenOffMs)
         assertEquals(1_799_500L, extremes.screenOffSuspendMs)
     }
 }

@@ -80,11 +80,13 @@ object SessionReport {
     ): ChargeSession {
         val before = engine.summary
         val summary = engine.accept(point)
-        val closingExtremes = extremes.plus(null, null, summary.cpuSuspendMs - before.cpuSuspendMs,
-            screenOffBefore = before.latest?.interactive == false)
-        // The cross-power interval has no counter charge. Keep the estimate whose charge and level
-        // span both end at the last same-state sample, rather than recomputing at the new state.
-        return report(current, sample, summary, closingExtremes).copy(
+        // The cross-power interval has no counter charge. Keep the screen buckets, screen-off
+        // suspend and estimate whose charge and level span end at the last same-state sample.
+        return report(current, sample, summary, extremes).copy(
+            screenOnMs = before.screenOn.durationMs,
+            screenOffMs = before.screenOff.durationMs,
+            screenOnUah = before.screenOn.chargeChangeUah.takeIf { before.screenOn.chargeCoveredMs > 0 },
+            screenOffUah = before.screenOff.chargeChangeUah.takeIf { before.screenOff.chargeCoveredMs > 0 },
             capacityEstimateMah = current.capacityEstimateMah,
             capacityConfidence = current.capacityConfidence,
             capacityBasis = current.capacityBasis,

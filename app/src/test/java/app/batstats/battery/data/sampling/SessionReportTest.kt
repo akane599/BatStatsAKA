@@ -1,6 +1,7 @@
 package app.batstats.battery.data.sampling
 
 import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.SessionDrain
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.Boundary
@@ -115,6 +116,49 @@ class SessionReportTest {
         assertEquals("Power boundary must keep the last same-state capacity", current.capacityEstimateMah, closed.capacityEstimateMah)
         assertEquals(current.capacityConfidence, closed.capacityConfidence)
         assertEquals(current.capacityBasis, closed.capacityBasis)
+    }
+
+    @Test fun fullyCoveredDischargeKeepsDrainRatesWhenClosedByChargingBoundary() {
+        val first = sample(level = 90, charge = 4_000_000, plugged = 0, status = 3, elapsed = 0)
+        val session = SessionReport.open(first.point(PowerState.DISCHARGING), first)
+        engine.accept(first.point(PowerState.DISCHARGING))
+        val screenOff = sample(level = 70, charge = 3_200_000, plugged = 0, status = 3,
+            elapsed = 3_600_000, screenOn = false)
+        engine.accept(screenOff.point(PowerState.DISCHARGING, Boundary.SCREEN, uptime = 30_000))
+        val last = sample(level = 50, charge = 2_400_000, plugged = 0, status = 3,
+            elapsed = 7_200_000, screenOn = false)
+        val summary = engine.accept(last.point(PowerState.DISCHARGING, uptime = 60_000))
+        val extremes = SessionExtremes(screenOffSuspendMs = 3_570_000)
+        val current = SessionReport.report(session, last, summary, extremes)
+        assertEquals(current.observedMs, current.counterCoveredMs)
+
+        val boundary = sample(level = 49, charge = 2_390_000, plugged = 1, status = 2,
+            elapsed = 7_230_000, screenOn = false)
+        val closed = SessionReport.reportPowerBoundary(
+            current, boundary, boundary.point(PowerState.CHARGING, Boundary.POWER, uptime = 61_000),
+            engine, extremes,
+        )
+        val drain = SessionDrain.of(closed, null)
+        assertNotNull("Screen-on current must survive the charging boundary", drain.screenOn.currentMa)
+        assertNotNull("Screen-off current must survive the charging boundary", drain.screenOff.currentMa)
+        assertEquals(800.0, drain.screenOn.currentMa!!, 0.0)
+        assertEquals(800.0, drain.screenOff.currentMa!!, 0.0)
+        assertTrue("Screen durations must not exceed counter coverage",
+            closed.screenOnMs + closed.screenOffMs <= closed.counterCoveredMs)
+        assertEquals(current.screenOnMs, closed.screenOnMs)
+        assertEquals(current.screenOffMs, closed.screenOffMs)
+        assertTrue("Screen-off suspend must not exceed its screen duration",
+            closed.screenOffSuspendMs!! <= closed.screenOffMs)
+        assertEquals("Screen-off suspend must exclude the charging boundary",
+            current.screenOffSuspendMs, closed.screenOffSuspendMs)
+        assertEquals(current.cpuSuspendMs!! + 29_000, closed.cpuSuspendMs)
+        assertEquals(current.screenOnUah, closed.screenOnUah)
+        assertEquals(current.screenOffUah, closed.screenOffUah)
+        assertEquals(7_230_000L, closed.observedMs)
+        assertEquals(7_200_000L, closed.counterCoveredMs)
+        val capacityDrain = SessionDrain.of(closed, 4_000_000)
+        assertEquals(20.0, capacityDrain.screenOn.percentPerHour!!, 0.0)
+        assertEquals(20.0, capacityDrain.screenOff.percentPerHour!!, 0.0)
     }
 
     @Test fun partialCounterCoverageKeepsMeasuredChargeButWithholdsCapacityFields() {
