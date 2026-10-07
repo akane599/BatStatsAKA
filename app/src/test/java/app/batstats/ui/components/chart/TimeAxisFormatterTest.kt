@@ -39,6 +39,40 @@ class TimeAxisFormatterTest {
     }
 
     @Test
+    fun flexibleDayPeriodsFormatAsAmPmForEveryTimeLabel() {
+        val flexiblePatterns = patterns + mapOf(
+            "hms" to "Bh:mm:ss",
+            "hm" to "Bh:mm",
+            "ha" to "Bh時",
+            "MMMdhm" to "MMMd Bh:mm",
+        )
+        val formatter = TimeAxisFormatter.create(Locale.US, TimeZone.getTimeZone("UTC"), false) { _, skeleton ->
+            flexiblePatterns.getValue(skeleton)
+        }
+
+        assertEquals("AM9:20:00", formatter.format(nineTwentyUtc, TimeGranularity.SECONDS))
+        assertEquals("AM9:20", formatter.format(nineTwentyUtc, TimeGranularity.MINUTES))
+        assertEquals("AM9時", formatter.format(nineTwentyUtc, TimeGranularity.HOURS))
+        assertEquals("Oct9 AM9:20", formatter.format(nineTwentyUtc, TimeGranularity.DATE_TIME))
+        assertEquals("9:20", formatter.axisLabel(nineTwentyUtc, TimeGranularity.MINUTES))
+        assertEquals("AM9時", formatter.axisLabel(nineTwentyUtc, TimeGranularity.HOURS))
+    }
+
+    @Test
+    fun flexibleDayPeriodRunsPreserveQuotedLiteralsAndEscapedQuotes() {
+        for (dayPeriod in listOf("b", "bb", "B", "BBBB")) {
+            val formatter = TimeAxisFormatter.create(Locale.US, TimeZone.getTimeZone("UTC"), false) { _, _ ->
+                "'B' 'b' '' $dayPeriod h:mm 'B''b'"
+            }
+
+            for (granularity in TimeGranularity.entries) {
+                assertEquals("B b ' AM 9:20 B'b", formatter.format(nineTwentyUtc, granularity))
+            }
+            assertEquals("B b '  9:20 B'b", formatter.axisLabel(nineTwentyUtc, TimeGranularity.MINUTES))
+        }
+    }
+
+    @Test
     fun theTimeZoneChangesTimesAndWhichTickIsMidnight() {
         val utc = formatter("UTC", use24Hour = true)
         val kolkata = formatter("Asia/Kolkata", use24Hour = true)
