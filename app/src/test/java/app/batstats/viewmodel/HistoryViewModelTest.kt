@@ -292,7 +292,8 @@ class HistoryViewModelTest {
             session("s$i", if (i % 2 == 0) SessionType.DISCHARGE else SessionType.CHARGE, start = T0 - i * HOUR, end = T0 - i * HOUR + MINUTE,
                 last = T0 - i * HOUR + MINUTE, observation = "obs", delta = 1_000, status = null)
         }
-        val (vm, state) = start()
+        val saved = SavedStateHandle()
+        val (vm, state) = start(saved)
         assertEquals(null to 51, repo.sessionQueries.last())
         assertEquals(50, state().sessions.rows.size)
         assertTrue(state().sessions.hasMore)
@@ -310,6 +311,12 @@ class HistoryViewModelTest {
         assertEquals(50, state().sessions.rows.size)
         assertTrue(state().sessions.rows.all { it.type == SessionType.DISCHARGE })
         assertTrue(state().sessions.hasMore)
+        assertEquals(50, saved.get<Int>(HistoryViewModel.KEY_PAGE_LIMIT))
+
+        val restored = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+        val (_, again) = start(restored)
+        assertEquals("The filter's first-page reset is saved", SessionType.DISCHARGE to 51, repo.sessionQueries.last())
+        assertEquals(50, again().sessions.rows.size)
 
         vm.onEvent(HistoryEvent.LoadMore)
         runCurrent()
@@ -321,6 +328,37 @@ class HistoryViewModelTest {
         vm.onEvent(HistoryEvent.OpenSession("s0"))
         runCurrent()
         assertEquals(queries, repo.sessionQueries.size)
+    }
+
+    @Test fun loadedPageLimitAndRowsAreRestoredAfterProcessDeath() = runTest {
+        repo.sessionRows.value = List(150) { i ->
+            session("s$i", SessionType.DISCHARGE, start = T0 - i * HOUR, end = T0 - i * HOUR + MINUTE,
+                last = T0 - i * HOUR + MINUTE, observation = "obs", delta = 1_000, status = null)
+        }
+        val saved = SavedStateHandle()
+        val (vm, state) = start(saved)
+        vm.onEvent(HistoryEvent.SelectMode(HistoryMode.SESSIONS))
+        vm.onEvent(HistoryEvent.LoadMore)
+        runCurrent()
+        vm.onEvent(HistoryEvent.LoadMore)
+        runCurrent()
+        assertEquals(150, state().sessions.rows.size)
+        assertEquals(null to 151, repo.sessionQueries.last())
+        assertEquals(150, saved.get<Int>(HistoryViewModel.KEY_PAGE_LIMIT))
+
+        val restored = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+        val (restoredVm, again) = start(restored)
+        assertEquals("The restored query retains the 150-row limit plus its lookahead", null to 151, repo.sessionQueries.last())
+        assertEquals("All loaded rows survive ViewModel recreation", 150, again().sessions.rows.size)
+        assertEquals(state().sessions.rows, again().sessions.rows)
+        assertFalse(again().sessions.hasMore)
+
+        val queries = repo.sessionQueries.size
+        restoredVm.onEvent(HistoryEvent.Retry)
+        runCurrent()
+        assertEquals("Retry re-queries without resetting the restored page limit", queries + 1, repo.sessionQueries.size)
+        assertEquals(null to 151, repo.sessionQueries.last())
+        assertEquals(150, again().sessions.rows.size)
     }
 
     @Test fun aFailedReadShowsAndRetryReadsAgain() = runTest {

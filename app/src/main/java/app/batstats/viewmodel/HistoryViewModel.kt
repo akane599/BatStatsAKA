@@ -169,7 +169,7 @@ class DefaultHistoryRepository(
 /**
  * History: Days (the last 7 / 14 / 30 days of `daily_summaries` as stacked screen-on / screen-off drain, a selected
  * day's figures, per-day rows) or Sessions (charge and discharge rows, filtered, 50 at a time). The mode, the range,
- * the chip and the selected day live in [savedState], so they survive rotation and process death.
+ * the chip, the selected day and the session page limit live in [savedState], so they survive rotation and process death.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class HistoryViewModel(
@@ -179,11 +179,13 @@ class HistoryViewModel(
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
-    private data class Page(val limit: Int = PAGE_SIZE, val revision: Int = 0)
+    private data class Page(val limit: Int, val revision: Int)
 
     private class Choices(val mode: HistoryMode, val range: DayRange, val filter: SessionFilter, val selectedDay: Long?)
 
-    private val page = MutableStateFlow(Page())
+    private val pageLimit = savedState.getStateFlow(KEY_PAGE_LIMIT, PAGE_SIZE)
+    private val revision = MutableStateFlow(0)
+    private val page = combine(pageLimit, revision, ::Page)
 
     private val mode = savedState.getStateFlow(KEY_MODE, HistoryMode.DAYS.name).map { name -> enumOr(name, HistoryMode.DAYS) }
     private val range = savedState.getStateFlow(KEY_RANGE, DayRange.WEEK.name).map { name -> enumOr(name, DayRange.WEEK) }
@@ -251,10 +253,10 @@ class HistoryViewModel(
             is HistoryEvent.SelectDay -> savedState[KEY_DAY] = event.epochDay
             is HistoryEvent.SelectFilter -> {
                 savedState[KEY_FILTER] = event.filter.name
-                page.update { it.copy(limit = PAGE_SIZE) }
+                savedState[KEY_PAGE_LIMIT] = PAGE_SIZE
             }
-            HistoryEvent.LoadMore -> page.update { it.copy(limit = it.limit + PAGE_SIZE) }
-            HistoryEvent.Retry -> page.update { it.copy(revision = it.revision + 1) }
+            HistoryEvent.LoadMore -> savedState[KEY_PAGE_LIMIT] = pageLimit.value + PAGE_SIZE
+            HistoryEvent.Retry -> revision.update { it + 1 }
             HistoryEvent.ShowToday -> {
                 savedState[KEY_MODE] = HistoryMode.DAYS.name
                 savedState[KEY_DAY] = DailySummaryAggregator.epochDay(clock(), zone())
@@ -269,6 +271,7 @@ class HistoryViewModel(
         internal const val KEY_RANGE = "history.range"
         internal const val KEY_FILTER = "history.filter"
         internal const val KEY_DAY = "history.selectedDay"
+        internal const val KEY_PAGE_LIMIT = "history.pageLimit"
         private const val STOP_TIMEOUT_MS = 5_000L
 
         /** A saved enum name back to its constant; a name this build doesn't know gives [default]. */
