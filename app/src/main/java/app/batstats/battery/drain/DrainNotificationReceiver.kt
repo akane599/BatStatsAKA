@@ -23,7 +23,7 @@ class DrainNotificationReceiver : BroadcastReceiver(), KoinComponent {
 
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            // Closes the open session and starts a new window, as Now's Reset does.
+            // The writer resets only an open discharge window, as Now's Reset does.
             ACTION_RESET -> repository.resetObservation()
             // Stopping the service removes the notification (onDestroy).
             ACTION_STOP -> monitoring.stop()
