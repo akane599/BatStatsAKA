@@ -1,11 +1,74 @@
 package app.batstats.battery.util
 
+import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.ShellRunner.Mode
+import app.batstats.battery.util.ShellRunner.Outcome
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ShellModeSelectionTest {
+    @Test fun typedAccessFailureInvalidatesCachedShizukuAndTheNextProbeUsesFallbackOrder() = runTest {
+        for (reason in listOf(ShizukuBridge.Failure.NOT_RUNNING, ShizukuBridge.Failure.NO_PERMISSION)) {
+            for (fallback in listOf(Mode.ROOT, Mode.ADB)) {
+                var running = true
+                var authorized = true
+                val probes = mutableListOf<String>()
+                val runner = ShellRunner(
+                    probeMode = {
+                        selectShellMode(
+                            shizukuRunning = { probes += "shizuku"; running },
+                            shizukuAuthorized = { authorized },
+                            rootAvailable = { probes += "root"; fallback == Mode.ROOT },
+                            adbAvailable = { probes += "adb"; true },
+                        )
+                    },
+                    runShizuku = { _, _ -> ShizukuBridge.RunResult.Error("original reason", reason) },
+                    shizukuRunning = { running },
+                    elapsedMs = { 0L },
+                )
+                assertEquals(Mode.SHIZUKU, runner.detectMode())
+                running = reason != ShizukuBridge.Failure.NOT_RUNNING
+                authorized = false
+                assertEquals(Outcome.NoAccess(Mode.SHIZUKU, "original reason"), runner.exec("dump"))
+                assertEquals("No same-command fallback", listOf("shizuku"), probes)
+                assertEquals("original reason", runner.lastError.value)
+                assertEquals(fallback, runner.detectMode())
+                val expected = if (fallback == Mode.ROOT) listOf("shizuku", "shizuku", "root")
+                    else listOf("shizuku", "shizuku", "root", "adb")
+                assertEquals(expected, probes)
+                assertEquals(fallback, runner.access.value)
+            }
+        }
+    }
+
+    @Test fun commandAndHelperFailuresKeepCachedShizukuEvenWithAccessLikeMessages() = runTest {
+        for (reason in listOf(
+            ShizukuBridge.Failure.COMMAND,
+            ShizukuBridge.Failure.BIND_FAILED,
+            ShizukuBridge.Failure.TRANSPORT,
+        )) {
+            var probes = 0
+            var commands = 0
+            val runner = ShellRunner(
+                probeMode = { probes++; Mode.SHIZUKU },
+                runShizuku = { _, _ ->
+                    commands++
+                    ShizukuBridge.RunResult.Error("not running / permission denied", reason)
+                },
+                shizukuRunning = { false },
+                elapsedMs = { 0L },
+            )
+            repeat(2) {
+                assertEquals(Outcome.Failure(Mode.SHIZUKU, "not running / permission denied"), runner.exec("dump"))
+            }
+            assertEquals(1, probes)
+            assertEquals(2, commands)
+            assertEquals(Mode.SHIZUKU, runner.access.value)
+            assertEquals("not running / permission denied", runner.lastError.value)
+        }
+    }
+
     @Test fun runningAuthorizedShizukuWinsWithoutProbingRootOrAdb() = runTest {
         assertEquals(
             Mode.SHIZUKU,

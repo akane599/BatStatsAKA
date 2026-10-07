@@ -1,7 +1,9 @@
 package app.batstats.battery.apps
 
 import app.batstats.battery.diagnostics.DiagnosticCode
+import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.battery.util.DumpOutput
+import app.batstats.battery.util.ShellRunner
 import app.batstats.battery.util.ShellRunner.Mode
 import app.batstats.battery.util.ShellRunner.Outcome
 import app.batstats.battery.util.selectShellMode
@@ -34,7 +36,7 @@ class AppStatsRepositoryTest {
 
     private val diagnostics = mutableListOf<DiagnosticCode>()
 
-    private fun TestScope.repository(shell: FakeShell) = AppStatsRepository(
+    private fun TestScope.repository(shell: StatsShell) = AppStatsRepository(
         shell = shell,
         scope = backgroundScope,
         onDiagnostic = { diagnostics += it },
@@ -139,6 +141,83 @@ class AppStatsRepositoryTest {
         shell.next = { Outcome.Failure(Mode.SHIZUKU, DumpOutput.REFUSED) }
         assertEquals(AppStatsResult.NoAccess, repository.snapshot())
         assertTrue("Not a read failure", diagnostics.isEmpty())
+    }
+
+    @Test fun cachedShizukuAccessFailuresAreNoAccessAndTheNextReadReselects() = runTest {
+        for ((reason, message) in listOf(
+            ShizukuBridge.Failure.NOT_RUNNING to "Shizuku is not running",
+            ShizukuBridge.Failure.NO_PERMISSION to "Shizuku permission denied",
+        )) {
+            var running = true
+            var authorized = true
+            val probes = mutableListOf<String>()
+            val commands = mutableListOf<String>()
+            val runner = ShellRunner(
+                probeMode = {
+                    selectShellMode(
+                        shizukuRunning = { probes += "shizuku"; running },
+                        shizukuAuthorized = { authorized },
+                        rootAvailable = { probes += "root"; false },
+                        adbAvailable = { probes += "adb"; false },
+                    )
+                },
+                runShizuku = { command, _ ->
+                    commands += command
+                    ShizukuBridge.RunResult.Error(message, reason)
+                },
+                shizukuRunning = { running },
+                elapsedMs = { 0L }, // The ten-second cache cannot expire during this regression.
+            )
+            assertEquals(Mode.SHIZUKU, runner.detectMode())
+            running = reason != ShizukuBridge.Failure.NOT_RUNNING
+            authorized = false
+            val repository = repository(ShellRunnerStatsShell(runner))
+
+            assertEquals(AppStatsResult.NoAccess, repository.snapshot())
+            assertEquals("The failing command must not fall back", listOf("shizuku"), probes)
+            assertEquals(message, runner.lastError.value)
+            assertEquals(Mode.NONE, runner.access.value)
+            assertNull(repository.cached.value)
+            assertTrue(diagnostics.isEmpty())
+
+            assertEquals(AppStatsResult.NoAccess, repository.snapshot())
+            assertEquals(listOf("shizuku", "shizuku", "root", "adb"), probes)
+            assertEquals("The next read no longer uses Shizuku", listOf(AppStatsRepository.COMMAND), commands)
+        }
+    }
+
+    @Test fun cachedShizukuCommandFailureStaysFailedAndKeepsTheMode() = runTest {
+        var authorized = true
+        var probes = 0
+        var commands = 0
+        val runner = ShellRunner(
+            probeMode = {
+                probes++
+                selectShellMode(
+                    shizukuRunning = { true },
+                    shizukuAuthorized = { authorized },
+                    rootAvailable = { error("A cached command failure must not probe root") },
+                    adbAvailable = { error("A cached command failure must not probe ADB") },
+                )
+            },
+            runShizuku = { _, _ ->
+                commands++
+                ShizukuBridge.RunResult.Error("command permission denied", ShizukuBridge.Failure.COMMAND)
+            },
+            shizukuRunning = { true },
+            elapsedMs = { 0L },
+        )
+        assertEquals(Mode.SHIZUKU, runner.detectMode())
+        authorized = false
+        val repository = repository(ShellRunnerStatsShell(runner))
+        repeat(2) {
+            val failed = repository.snapshot() as AppStatsResult.Failed
+            assertTrue(failed.message, failed.message.contains("command permission denied"))
+            assertEquals(Mode.SHIZUKU, runner.access.value)
+        }
+        assertEquals(1, probes)
+        assertEquals(2, commands)
+        assertEquals(List(2) { DiagnosticCode.ADVANCED_READ_FAILED }, diagnostics)
     }
 
     @Test fun commandFailuresAreResultsNotExceptionsAndAreNotCached() = runTest {
