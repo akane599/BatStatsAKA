@@ -1,5 +1,6 @@
 package app.batstats.viewmodel
 
+import android.util.Log
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -133,10 +134,18 @@ data class AppHistory(val sessions: List<AppSessionUsage>) {
     val listedIn: Int get() = sessions.count { it.powerMah != null }
 }
 
+/** The history read: [Loading] until it answers, then [Loaded] (possibly no sessions) or [Failed] (the read threw). */
+@Immutable
+sealed interface AppHistoryState {
+    data object Loading : AppHistoryState
+    data class Loaded(val history: AppHistory) : AppHistoryState
+    data object Failed : AppHistoryState
+}
+
 /**
  * AppDetails for one uid. [label] is null until the app lookup returns; [canOpenAppInfo] when the package is
  * installed. [capturedAtMs]/[startedAtMs] describe the dump shown (null before a good read); with a dump, a null
- * [usage] means Android counted nothing for this app. [history] is null while it loads.
+ * [usage] means Android counted nothing for this app.
  */
 @Immutable
 data class AppDetailsUiState(
@@ -150,7 +159,7 @@ data class AppDetailsUiState(
     val capturedAtMs: Long? = null,
     val startedAtMs: Long? = null,
     val usage: AppUsageDetails? = null,
-    val history: AppHistory? = null,
+    val history: AppHistoryState = AppHistoryState.Loading,
 )
 
 sealed interface AppDetailsEvent {
@@ -159,6 +168,8 @@ sealed interface AppDetailsEvent {
     data object OpenAppInfo : AppDetailsEvent
     data object OpenAccessSetup : AppDetailsEvent
     data object AllowShizuku : AppDetailsEvent
+    /** Reads the history again after [AppHistoryState.Failed]. */
+    data object RetryHistory : AppDetailsEvent
 }
 
 /**
@@ -171,11 +182,12 @@ class AppDetailsViewModel(
     private val packageName: String,
     private val clock: () -> Long = System::currentTimeMillis,
     computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val warn: (String) -> Unit = { Log.w(LOG_TAG, it) },
 ) : ViewModel() {
     private val loader = StatsLoader(viewModelScope, source)
     private val info = MutableStateFlow<AppInfo?>(null)
     private val infoLoaded = MutableStateFlow(false)
-    private val history = MutableStateFlow<AppHistory?>(null)
+    private val history = MutableStateFlow<AppHistoryState>(AppHistoryState.Loading)
 
     init {
         viewModelScope.launch {
@@ -221,22 +233,27 @@ class AppDetailsViewModel(
                 loader.load(force = true)
                 loadHistory()
             }
+            AppDetailsEvent.RetryHistory -> loadHistory()
             // Navigation, the App info intent and Shizuku's permission prompt are the screen wrapper's.
             AppDetailsEvent.Back, AppDetailsEvent.OpenAppInfo, AppDetailsEvent.OpenAccessSetup, AppDetailsEvent.AllowShizuku -> Unit
         }
     }
 
     private fun loadHistory() {
+        // A retry shows its read; a refresh keeps the bars shown until the new ones arrive.
+        if (history.value == AppHistoryState.Failed) history.value = AppHistoryState.Loading
         viewModelScope.launch {
             val now = clock()
-            val sessions = try {
-                source.history(uid, packageName, now - HISTORY_WINDOW_MS, now)
+            history.value = try {
+                val sessions = source.history(uid, packageName, now - HISTORY_WINDOW_MS, now)
+                AppHistoryState.Loaded(AppHistory(sessions.sortedBy { it.startMs }.takeLast(HISTORY_SESSIONS)))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                emptyList()
+                // The exception's type only: its message can carry the query or the package.
+                warn("History read failed (${e.javaClass.simpleName})")
+                AppHistoryState.Failed
             }
-            history.value = AppHistory(sessions.sortedBy { it.startMs }.takeLast(HISTORY_SESSIONS))
         }
     }
 
@@ -245,6 +262,7 @@ class AppDetailsViewModel(
         const val HISTORY_WINDOW_MS = 30L * 24 * 60 * 60 * 1000
         const val HISTORY_SESSIONS = 14
         private const val STOP_TIMEOUT_MS = 5_000L
+        private const val LOG_TAG = "AppDetails"
 
         /** Details for this identity, or null when its row or application package membership is unavailable. */
         fun details(snapshot: BatteryStatsParser.FullSnapshot, uid: Int, packageName: String): AppUsageDetails? {

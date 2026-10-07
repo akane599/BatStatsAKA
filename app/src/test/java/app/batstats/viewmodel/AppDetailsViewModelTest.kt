@@ -12,6 +12,7 @@ import app.batstats.viewmodel.AppsViewModelTest.Companion.NOW
 import app.batstats.viewmodel.AppsViewModelTest.Companion.YOUTUBE
 import app.batstats.viewmodel.AppsViewModelTest.Companion.YOUTUBE_UID
 import app.batstats.viewmodel.AppsViewModelTest.Companion.dump
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -34,13 +35,18 @@ import org.junit.Test
 class AppDetailsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val source = FakeAppStats()
+    private val warnings = mutableListOf<String>()
 
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun TestScope.start(uid: Int = CHROME_UID, packageName: String = CHROME): Pair<AppDetailsViewModel, () -> AppDetailsUiState> {
-        val vm = AppDetailsViewModel(source, uid, packageName, clock = { NOW }, computeDispatcher = dispatcher)
+    private fun TestScope.start(
+        uid: Int = CHROME_UID,
+        packageName: String = CHROME,
+        repository: AppDetailsRepository = source,
+    ): Pair<AppDetailsViewModel, () -> AppDetailsUiState> {
+        val vm = AppDetailsViewModel(repository, uid, packageName, clock = { NOW }, computeDispatcher = dispatcher, warn = { warnings += it })
         backgroundScope.launch { vm.state.collect { } }
         runCurrent()
         return vm to { vm.state.value }
@@ -198,10 +204,43 @@ class AppDetailsViewModelTest {
         val (_, state) = start(uid = YOUTUBE_UID, packageName = YOUTUBE)
 
         assertEquals(listOf(Triple(YOUTUBE_UID, NOW - AppDetailsViewModel.HISTORY_WINDOW_MS, NOW)), source.historyCalls)
-        val history = checkNotNull(state().history)
+        val history = (state().history as AppHistoryState.Loaded).history
         assertEquals((2 until 16).map { "s$it" }, history.sessions.map { it.sessionId })
         // Sessions 3, 6, 9, 12 and 15 didn't list the app.
         assertEquals(9, history.listedIn)
+    }
+
+    @Test fun aFailedHistoryReadIsAFailureNotAnEmptyHistoryAndRetryReadsAgain() = runTest {
+        val repository = HistorySource(source)
+        repository.answer = { throw IllegalStateException("SELECT * FROM session_app_usage WHERE packageName = 'com.android.chrome'") }
+        val (vm, state) = start(repository = repository)
+
+        assertEquals("a throwing read must not look like no sessions", AppHistoryState.Failed, state().history)
+        assertEquals("logged by type only, without the message", listOf("History read failed (IllegalStateException)"), warnings)
+
+        val sessions = listOf(AppSessionUsage("s1", NOW - DAY, 12.0))
+        repository.answer = { sessions }
+        vm.onEvent(AppDetailsEvent.RetryHistory)
+        runCurrent()
+
+        assertEquals(2, repository.reads)
+        assertEquals(AppHistoryState.Loaded(AppHistory(sessions)), state().history)
+    }
+
+    @Test fun anEmptyHistoryReadIsLoadedWithNoSessions() = runTest {
+        val (_, state) = start()
+        assertEquals(AppHistoryState.Loaded(AppHistory(emptyList())), state().history)
+        assertTrue(warnings.isEmpty())
+    }
+
+    @Test fun aCancelledHistoryReadIsNotReportedAsFailed() = runTest {
+        val repository = HistorySource(source)
+        repository.answer = { throw CancellationException("screen left") }
+        val (_, state) = start(repository = repository)
+
+        assertEquals(1, repository.reads)
+        assertEquals("cancellation propagates instead of becoming a failure", AppHistoryState.Loading, state().history)
+        assertTrue(warnings.isEmpty())
     }
 
     @Test fun refreshForcesAReadAndReloadsHistory() = runTest {
@@ -226,6 +265,17 @@ class AppDetailsViewModelTest {
             assertNull(capturedAtMs)
             assertNull(usage)
             assertEquals(AppLabel.Named("Chrome"), label)
+        }
+    }
+
+    /** [base] with a history read that answers through [answer] (which may throw). */
+    private class HistorySource(base: FakeAppStats) : AppDetailsRepository by base {
+        var answer: suspend () -> List<AppSessionUsage> = { emptyList() }
+        var reads = 0
+
+        override suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage> {
+            reads++
+            return answer()
         }
     }
 

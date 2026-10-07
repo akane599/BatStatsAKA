@@ -9,6 +9,7 @@ import app.batstats.ui.TallPhonePreview
 import app.batstats.viewmodel.AlarmItem
 import app.batstats.viewmodel.AppDetailsUiState
 import app.batstats.viewmodel.AppHistory
+import app.batstats.viewmodel.AppHistoryState
 import app.batstats.viewmodel.AppSessionUsage
 import app.batstats.viewmodel.AppUsageDetails
 import app.batstats.viewmodel.HardwareUsage
@@ -75,7 +76,7 @@ private fun full() = AppDetailsUiState(
         ),
         hardware = HardwareUsage(audioMs = HOUR + 40 * MINUTE, videoMs = HOUR + 2 * MINUTE, sensorsMs = 3 * MINUTE),
     ),
-    history = history,
+    history = AppHistoryState.Loaded(history),
 )
 
 /** A quiet app: a little battery and foreground time, nothing in the background, no hardware, no history yet. */
@@ -94,7 +95,7 @@ private fun sparse() = AppDetailsUiState(
         cachedMs = 50 * MINUTE,
         cpuTimeMs = 4 * SECOND,
     ),
-    history = AppHistory(emptyList()),
+    history = AppHistoryState.Loaded(AppHistory(emptyList())),
 )
 
 @Composable
@@ -114,6 +115,14 @@ fun AppDetailsScreenPreview() {
 @Composable
 fun AppDetailsSparsePreview() {
     ScreenshotTheme { AppDetailsPreviewContent(sparse()) }
+}
+
+/** The quiet app when its stored sessions couldn't be read: an error with Try again, not "no sessions". */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun AppDetailsHistoryFailedPreview() {
+    ScreenshotTheme { AppDetailsPreviewContent(sparse().copy(history = AppHistoryState.Failed)) }
 }
 
 /** The whole page of the full state on a tall phone (the lists, network, hardware and history below the fold). */

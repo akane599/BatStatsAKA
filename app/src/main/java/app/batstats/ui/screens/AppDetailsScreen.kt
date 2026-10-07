@@ -51,6 +51,7 @@ import app.batstats.battery.shizuku.ShizukuBridge
 import app.batstats.ui.components.DetailTopBar
 import app.batstats.ui.components.AppLabelIcon
 import app.batstats.ui.components.InfoSheet
+import app.batstats.ui.components.Notice
 import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.StatCell
@@ -76,6 +77,7 @@ import app.batstats.viewmodel.AppDetailsEvent
 import app.batstats.viewmodel.AppDetailsUiState
 import app.batstats.viewmodel.AppDetailsViewModel
 import app.batstats.viewmodel.AppHistory
+import app.batstats.viewmodel.AppHistoryState
 import app.batstats.viewmodel.AppUsageDetails
 import app.batstats.viewmodel.HardwareUsage
 import app.batstats.viewmodel.NetworkUsage
@@ -164,7 +166,11 @@ fun AppDetailsContent(
         DetailsHero(state, Modifier.fillMaxWidth())
         usage?.let { TimePanel(it, Modifier.fillMaxWidth()) }
         // Right after "how much now": is this app always a drainer?
-        state.history?.let { HistoryPanel(it, Modifier.fillMaxWidth()) }
+        when (val history = state.history) {
+            is AppHistoryState.Loaded -> HistoryPanel(history.history, Modifier.fillMaxWidth())
+            AppHistoryState.Failed -> HistoryFailedPanel(onRetry = { onEvent(AppDetailsEvent.RetryHistory) }, Modifier.fillMaxWidth())
+            AppHistoryState.Loading -> Unit
+        }
         if (usage != null) {
             CpuPanel(usage, Modifier.fillMaxWidth())
             usage.network?.let { NetworkPanel(it, Modifier.fillMaxWidth()) }
@@ -440,6 +446,16 @@ private fun HardwarePanel(hardware: HardwareUsage, modifier: Modifier = Modifier
                 // Keep the grid: a short last row leaves its columns empty instead of stretching.
                 repeat(HARDWARE_COLUMNS - row.size) { Spacer(Modifier.weight(1f)) }
             }
+        }
+    }
+}
+
+/** The history panel when its read failed: say so (not "no sessions") and offer to read it again. */
+@Composable
+private fun HistoryFailedPanel(onRetry: () -> Unit, modifier: Modifier = Modifier) {
+    Panel(modifier, title = stringResource(R.string.apps_details_history_title)) {
+        Notice(message = stringResource(R.string.apps_details_history_failed)) {
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.apps_retry)) }
         }
     }
 }
