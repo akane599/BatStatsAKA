@@ -1,6 +1,6 @@
 # Android16 battery monitoring: accurate observations, resilient Shizuku and clear reporting
 
-> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README](../README.md).**
+> **Historical checkpoint (marked superseded on 2026-10-07). Current guidance: [README](../README.md).**
 
 Prepared description only: the 2026-09-27 publication request creates a branch in the newly recreated repository, not a new PR. Earlier PR/CI references describe the previous environment. The [baseline-to-current changelog](BASELINE_TO_CURRENT.md) records the imported snapshot and remaining work.
 

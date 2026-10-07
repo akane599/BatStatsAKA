@@ -1,6 +1,6 @@
 # Validation record
 
-> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README](../README.md).**
+> **Historical checkpoint (marked superseded on 2026-10-07). Current guidance: [README](../README.md).**
 
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 

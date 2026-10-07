@@ -1,6 +1,6 @@
 # BatStats Audit Report
 
-> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README.md](README.md).**
+> **Historical checkpoint (marked superseded on 2026-10-07). Current guidance: [README.md](README.md).**
 
 Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-reliability`. Supplied APK6.2.6/code735 matches APK-dist's universal +1 offset for source734; that difference does not imply a different source revision. [PROGRESS.md](PROGRESS.md) is the execution handoff; [VALIDATION.md](docs/VALIDATION.md) retains actual checks, failures and commands.
 
