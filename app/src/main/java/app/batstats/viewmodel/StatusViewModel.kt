@@ -221,7 +221,7 @@ class StatusViewModel(
             DiagnosticCode.LOG_READ_FAILED -> StatusIssueKind.LOG_READ_FAILED
             DiagnosticCode.MONITORING_STARTED, DiagnosticCode.MONITORING_STOPPED,
             DiagnosticCode.ACCESS_NONE, DiagnosticCode.ACCESS_SHIZUKU, DiagnosticCode.ACCESS_ROOT, DiagnosticCode.ACCESS_ADB,
-            DiagnosticCode.ADVANCED_RECOVERED, DiagnosticCode.SYSTEM_STATS_RESET -> null
+            DiagnosticCode.ADVANCED_RECOVERED, DiagnosticCode.SYSTEM_STATS_RESET, DiagnosticCode.APP_SCOPE_FAILED -> null
         }
     }
 }
