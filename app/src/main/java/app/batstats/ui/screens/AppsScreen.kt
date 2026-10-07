@@ -287,6 +287,8 @@ private fun AppListItem(row: AppListRow, sort: AppSort, onClick: () -> Unit, mod
         onClick = onClick,
         // Energy in the drain color; activity metrics (time, traffic) in the neutral info color.
         shareColor = if (sort == AppSort.BATTERY) MaterialTheme.chartColors.drain else MaterialTheme.batColors.info,
+        // The figures are the whole uid's: the label is only a representative of the packages sharing it.
+        supportingText = if (row.sharedBy > 1) pluralStringResource(R.plurals.apps_shared_uid, row.sharedBy, row.sharedBy) else null,
     )
 }
 

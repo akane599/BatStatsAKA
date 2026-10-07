@@ -43,6 +43,7 @@ private val ShareBarHeight = 4.dp
  * @param shareColor drain by default (energy out); pass another chart color for non-energy lists.
  * @param contentPadding horizontal gutter + vertical rhythm; the default suits a list on the screen or a panel
  *   with no horizontal padding.
+ * @param supportingText an optional second line under the label (e.g. that the row's uid is shared); none by default.
  */
 @Composable
 fun AppRow(
@@ -54,6 +55,7 @@ fun AppRow(
     onClick: (() -> Unit)? = null,
     shareColor: Color = MaterialTheme.chartColors.drain,
     contentPadding: PaddingValues = PaddingValues(horizontal = MaterialTheme.spacing.md, vertical = MaterialTheme.spacing.xs),
+    supportingText: String? = null,
 ) {
     val clickable = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier
     Row(
@@ -83,6 +85,15 @@ fun AppRow(
                     style = MaterialTheme.typography.numericBody,
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
+                )
+            }
+            if (supportingText != null) {
+                Text(
+                    supportingText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             ShareBar(share, shareColor)

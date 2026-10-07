@@ -59,6 +59,11 @@
         <item quantity="one">%d app</item>
         <item quantity="other">%d apps</item>
     </plurals>
+    <!-- Under an Apps row whose uid several packages share: its figures are theirs together. -->
+    <plurals name="apps_shared_uid">
+        <item quantity="one">Shared UID · %d app</item>
+        <item quantity="other">Shared UID · %d apps</item>
+    </plurals>
 
     <string name="apps_empty_search_title">No apps match “%1$s”</string>
     <string name="apps_empty_search_body">Check the spelling, or search by package name.</string>

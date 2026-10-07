@@ -50,6 +50,10 @@
         <item quantity="one">%d app</item>
         <item quantity="other">%d apps</item>
     </plurals>
+    <plurals name="apps_shared_uid">
+        <item quantity="one">UID compartido · %d app</item>
+        <item quantity="other">UID compartido · %d apps</item>
+    </plurals>
 
     <string name="apps_empty_search_title">Ninguna app coincide con «%1$s»</string>
     <string name="apps_empty_search_body">Revisa la ortografía o busca por nombre de paquete.</string>
