@@ -244,9 +244,10 @@ object BatteryStatsParser {
     private fun sum(a: Long?, b: Long?): Long? = if (a == null || b == null || a > Long.MAX_VALUE - b) null else a + b
 
     /** Delegates to the single-pass [Sequence] overload; kept for existing callers. */
-    fun parseCheckin(raw: String): FullSnapshot = parseCheckin(raw.lineSequence())
+    fun parseCheckin(raw: String, sdkInt: Int = 28): FullSnapshot = parseCheckin(raw.lineSequence(), sdkInt)
 
-    fun parseCheckin(lines: Sequence<String>): FullSnapshot {
+    /** The caller supplies the SDK: checkin `vers` contains build IDs, not API levels. */
+    fun parseCheckin(lines: Sequence<String>, sdkInt: Int = 28): FullSnapshot {
         val mappings = mutableMapOf<Int, LinkedHashSet<String>>()
         var rejected = 0
         // One iteration over the lines: bucket "i,uid" mappings and "l" data rows as they are
@@ -372,6 +373,9 @@ object BatteryStatsParser {
                 "gcf" -> if (uid == 0) frequencies = p.drop(4).mapNotNull { it.toLongOrNull()?.takeIf { f -> f > 0 } }
             }
         }
+        // Oreo has six states; Pie reordered them and added HEAVY_WEIGHT before CACHED.
+        val backgroundStateField = if (sdkInt < 28) 8 else 7
+        val cachedStateField = if (sdkInt < 28) 9 else 10
         // Checkin gives per-UID activity, but only total/screen/proportional UID charge estimates.
         val enriched = apps.map { (uid, app) ->
             val uidRows = perUid[uid].orEmpty()
@@ -381,7 +385,7 @@ object BatteryStatsParser {
             val sensorTimes = sensors.filter { it.uid == uid && it.sensorHandle != -10000 }
             app.copy(cpuTimeMs = cpu?.let { sum(it.long(4), it.long(5)) }, wakeLockTimeMs = duration("awl"),
                 foregroundTimeMs = duration("fg"), foregroundServiceTimeMs = duration("fgs"),
-                topTimeMs = state?.long(4), backgroundTimeMs = state?.long(7), cachedTimeMs = state?.long(10),
+                topTimeMs = state?.long(4), backgroundTimeMs = state?.long(backgroundStateField), cachedTimeMs = state?.long(cachedStateField),
                 mobileRxBytes = net?.long(4), mobileTxBytes = net?.long(5), wifiRxBytes = net?.long(6), wifiTxBytes = net?.long(7),
                 mobileRxPackets = net?.long(8), mobileTxPackets = net?.long(9), wifiRxPackets = net?.long(10), wifiTxPackets = net?.long(11),
                 gpsTimeMs = sensors.firstOrNull { it.uid == uid && it.sensorHandle == -10000 }?.totalTimeMs,
