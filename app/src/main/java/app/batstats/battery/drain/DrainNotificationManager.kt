@@ -120,7 +120,10 @@ class DrainNotificationManager(private val context: Context, private val reposit
             }
     }
 
-    /** [fitter] picks each slot's longest form that fits this device's shade at its font scale (tests pass their own). */
+    /**
+     * [fitter] picks each slot's longest form that fits this device's shade at its font scale, and hides the rows a
+     * font above the layouts' design scale leaves no room for ([NotificationFitter.rows]); tests pass their own.
+     */
     fun build(content: NotificationContent, fitter: NotificationFitter = NotificationFitter(context)): Notification {
         val open = PendingIntent.getActivity(context, NOTIFICATION_ID,
             Intent(context, BatteryMainActivity::class.java).setAction("app.batstats.OPEN_DRAIN")
