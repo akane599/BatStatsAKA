@@ -112,8 +112,9 @@ fun NavGraph(
             )
         }
 
-        entry<Routes.SettingsData> {
-            DataScreen(onBack = popBack)
+        // A running task holds re-taps of Settings and links to its root off this entry too (Back is guarded inside).
+        entry<Routes.SettingsData> { key ->
+            DataScreen(onBack = popBack, blockLeaving = { onBlocked -> topLevelBackStack.blockLeaving(key, onBlocked) })
         }
 
         entry<Routes.SettingsStatus> {

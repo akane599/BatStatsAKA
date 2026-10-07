@@ -224,6 +224,83 @@ class TopLevelBackStackTest {
         assertEquals(listOf(Routes.Settings, Routes.SettingsStatus), backStacks.getValue(Routes.Settings).toList())
     }
 
+    // A busy Settings › Data blocks leaving: re-tapping its tab or a link to its root must not pop it (and so clear
+    // its ViewModel, cancelling the running export, import or clear).
+
+    @Test
+    fun `select on the current tab keeps a blocked entry and reports the refusal`() {
+        selected = Routes.Settings
+        backStacks.getValue(Routes.Settings).add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData) { refusals++ }
+
+        subject.select(Routes.Settings)
+
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), backStacks.getValue(Routes.Settings).toList())
+        assertEquals(1, refusals)
+    }
+
+    @Test
+    fun `openRoot of the current tab keeps a blocked entry and reports the refusal`() {
+        selected = Routes.Settings
+        backStacks.getValue(Routes.Settings).add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData) { refusals++ }
+
+        val atRoot = subject.openRoot(Routes.Settings)
+
+        assertFalse(atRoot)
+        assertEquals(Routes.Settings, subject.selectedTab)
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), backStacks.getValue(Routes.Settings).toList())
+        assertEquals(1, refusals)
+    }
+
+    @Test
+    fun `a status link does not push over a blocked entry`() {
+        selected = Routes.Settings
+        backStacks.getValue(Routes.Settings).add(Routes.SettingsData)
+        subject.blockLeaving(Routes.SettingsData) {}
+
+        subject.openDestination(Destinations.STATUS)
+
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), backStacks.getValue(Routes.Settings).toList())
+    }
+
+    @Test
+    fun `switching to another tab is not blocked and keeps the blocked entry`() {
+        selected = Routes.Settings
+        backStacks.getValue(Routes.Settings).add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData) { refusals++ }
+
+        subject.select(Routes.Now)
+
+        assertEquals(Routes.Now, subject.selectedTab)
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), backStacks.getValue(Routes.Settings).toList())
+        assertEquals(0, refusals)
+    }
+
+    @Test
+    fun `once unblocked, select and openRoot pop to the root again`() {
+        selected = Routes.Settings
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        var refusals = 0
+        val unblock = subject.blockLeaving(Routes.SettingsData) { refusals++ }
+
+        unblock()
+        subject.select(Routes.Settings)
+
+        assertEquals(listOf(Routes.Settings), settings.toList())
+
+        settings.add(Routes.SettingsData)
+        subject.blockLeaving(Routes.SettingsData) { refusals++ }()
+        assertTrue(subject.openRoot(Routes.Settings))
+
+        assertEquals(listOf(Routes.Settings), settings.toList())
+        assertEquals(0, refusals)
+    }
+
     @Test
     fun `plain tab select still restores retained details after an explicit link elsewhere`() {
         backStacks.getValue(Routes.Apps).add(Routes.AppDetails(3, "app.batstats"))

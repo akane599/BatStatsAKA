@@ -32,6 +32,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -81,22 +82,30 @@ private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text
  * goes to the ViewModel first (an export saves its launch-time request there), then opens the picker for its task;
  * the chosen document goes to [DataViewModel.onFileChosen] (a cancelled picker does nothing). Every event reaches
  * the ViewModel. While a task runs, Back (system, predictive and the top bar) stays on this screen and says why:
- * leaving would clear the ViewModel and cancel the task before it reports an outcome.
+ * leaving would clear the ViewModel and cancel the task before it reports an outcome. Popping to the tab's root
+ * (re-tapping Settings, a link) is held off the same way through [blockLeaving], which takes the refusal callback
+ * and returns the function that lifts the block.
  */
 @Composable
-fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewModel = koinViewModel()) {
+fun DataScreen(
+    onBack: () -> Unit,
+    blockLeaving: (onBlocked: () -> Unit) -> () -> Unit,
+    modifier: Modifier = Modifier,
+    vm: DataViewModel = koinViewModel(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val busy = stringResource(R.string.data_back_busy)
-    val back: () -> Unit = {
-        if (state.idle) {
-            onBack()
-        } else if (snackbarHostState.currentSnackbarData == null) {
-            scope.launch { snackbarHostState.showSnackbar(busy) }
-        }
+    val showBusy: () -> Unit = {
+        if (snackbarHostState.currentSnackbarData == null) scope.launch { snackbarHostState.showSnackbar(busy) }
     }
+    val back: () -> Unit = { if (state.idle) onBack() else showBusy() }
     BackHandler(enabled = !state.idle, onBack = back)
+    DisposableEffect(state.idle) {
+        val unblock = if (state.idle) null else blockLeaving(showBusy)
+        onDispose { unblock?.invoke() }
+    }
     fun chosen(task: DataTask): (android.net.Uri?) -> Unit = { uri -> uri?.let { vm.onFileChosen(task, it.toString()) } }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME), chosen(DataTask.EXPORT_JSON))
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree(), chosen(DataTask.EXPORT_CSV))
