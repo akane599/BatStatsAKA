@@ -14,10 +14,24 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runInterruptible
 import java.util.concurrent.TimeUnit
 
-class ShellRunner(
-    private val context: Context,
-    private val shizuku: ShizukuBridge
+class ShellRunner internal constructor(
+    private val probeMode: suspend () -> Mode,
+    private val runShizuku: suspend (String, Long) -> ShizukuBridge.RunResult,
+    private val shizukuRunning: () -> Boolean,
+    private val elapsedMs: () -> Long = SystemClock::elapsedRealtime,
 ) {
+    constructor(context: Context, shizuku: ShizukuBridge) : this(
+        probeMode = {
+            selectShellMode(
+                shizukuRunning = shizuku::ping,
+                shizukuAuthorized = shizuku::hasPermission,
+                rootAvailable = RootStatsCollector::isRootAvailable,
+                adbAvailable = { PrivilegeChecker.hasAdvancedViaAdb(context) },
+            )
+        },
+        runShizuku = shizuku::run,
+        shizukuRunning = shizuku::ping,
+    )
     companion object {
         private const val CMD_TIMEOUT_SEC = 25L
 
@@ -30,6 +44,8 @@ class ShellRunner(
         data class Success(val output: String, val mode: Mode) : Outcome()
 
         data class Failure(val mode: Mode, val message: String) : Outcome()
+
+        data class NoAccess(val mode: Mode, val message: String) : Outcome()
     }
 
     private val modeLock = Mutex()
@@ -53,13 +69,24 @@ class ShellRunner(
             // that need a fresh probe use detectMode(forceRefresh = true) explicitly.
             val mode = detectMode()
             val result = when (mode) {
-                Mode.SHIZUKU -> when (val result = shizuku.run(cmd, TimeUnit.SECONDS.toMillis(CMD_TIMEOUT_SEC))) {
+                Mode.SHIZUKU -> when (val result = runShizuku(cmd, TimeUnit.SECONDS.toMillis(CMD_TIMEOUT_SEC))) {
                     is ShizukuBridge.RunResult.Success -> CommandOutput.Result(result.output)
-                    is ShizukuBridge.RunResult.Error -> CommandOutput.Result(error = result.message)
+                    is ShizukuBridge.RunResult.Error -> {
+                        currentCoroutineContext().ensureActive()
+                        if (result.reason == ShizukuBridge.Failure.NOT_RUNNING ||
+                            result.reason == ShizukuBridge.Failure.NO_PERMISSION
+                        ) {
+                            invalidateMode()
+                            _access.value = Mode.NONE
+                            _lastError.value = result.message
+                            return@withContext Outcome.NoAccess(mode, result.message)
+                        }
+                        CommandOutput.Result(error = result.message)
+                    }
                 }
                 Mode.ROOT -> runInterruptible { CommandOutput.run(listOf("su", "-c", cmd), CMD_TIMEOUT_SEC * 1000) }
                 Mode.ADB -> runInterruptible { CommandOutput.run(cmd.split(' '), CMD_TIMEOUT_SEC * 1000) }
-                Mode.NONE -> CommandOutput.Result(error = if (shizuku.ping())
+                Mode.NONE -> CommandOutput.Result(error = if (shizukuRunning())
                     "Shizuku authorization required" else "Privileged access unavailable")
             }
             currentCoroutineContext().ensureActive()
@@ -76,32 +103,23 @@ class ShellRunner(
     suspend fun detectMode(forceRefresh: Boolean = false): Mode {
         if (!forceRefresh) {
             cachedMode?.let {
-                if (SystemClock.elapsedRealtime() - cachedModeAt < MODE_CACHE_MS) return it
+                if (elapsedMs() - cachedModeAt < MODE_CACHE_MS) return it
             }
         }
         return modeLock.withLock {
             if (!forceRefresh) {
                 cachedMode?.let {
-                    if (SystemClock.elapsedRealtime() - cachedModeAt < MODE_CACHE_MS) {
+                    if (elapsedMs() - cachedModeAt < MODE_CACHE_MS) {
                         return@withLock it
                     }
                 }
             }
-            val mode = probeMode()
+            val mode = withContext(Dispatchers.IO) { probeMode() }
             _access.value = mode
             cachedMode = mode
-            cachedModeAt = SystemClock.elapsedRealtime()
+            cachedModeAt = elapsedMs()
             mode
         }
-    }
-
-    private suspend fun probeMode(): Mode = withContext(Dispatchers.IO) {
-        selectShellMode(
-            shizukuRunning = shizuku::ping,
-            shizukuAuthorized = shizuku::hasPermission,
-            rootAvailable = RootStatsCollector::isRootAvailable,
-            adbAvailable = { PrivilegeChecker.hasAdvancedViaAdb(context) },
-        )
     }
 
     fun invalidateMode() {

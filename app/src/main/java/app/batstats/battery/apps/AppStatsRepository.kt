@@ -111,6 +111,7 @@ class AppStatsRepository(
         // A forced read (pull-to-refresh, plug/unplug) re-probes access; otherwise exec uses the cached mode.
         if (force && shell.detectMode(forceRefresh = true) == ShellRunner.Mode.NONE) return AppStatsResult.NoAccess to null
         return when (val outcome = shell.exec(COMMAND)) {
+            is ShellRunner.Outcome.NoAccess -> AppStatsResult.NoAccess to null
             is ShellRunner.Outcome.Failure -> {
                 // No mode at all, or a mode Android refuses this dump to (ADB grants on Android 16): no access.
                 // ShellRunner.lastError keeps the refusal text (DumpOutput.REFUSED_CROSS_USER) for the UI.
