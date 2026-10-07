@@ -13,7 +13,8 @@ class ShellUserService : Binder() {
     companion object {
         const val TRANSACTION_RUN_PIPE = 2
         const val TRANSACTION_CANCEL = 3
-        const val TRANSACTION_DESTROY = 16777114
+        // Shizuku 13.1.5 USER_SERVICE_TRANSACTION_destroy.
+        const val TRANSACTION_DESTROY = 16777115
         private val COMMANDS = setOf(
             "dumpsys batterystats -c --charged", "dumpsys battery"
         )
