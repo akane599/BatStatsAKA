@@ -2,12 +2,11 @@ package app.batstats.battery.tile
 
 import android.annotation.SuppressLint
 import android.app.PendingIntent
-import android.content.Intent
 import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import app.batstats.R
-import app.batstats.battery.BatteryMainActivity
+import app.batstats.battery.mainActivityIntent
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.service.MonitoringControl
 import app.batstats.battery.service.SamplingDemand
@@ -89,9 +88,7 @@ class MonitorTileService : TileService(), KoinComponent {
     // The deprecated Intent overload runs below API 34 only, where it is the one that exists.
     @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApp() {
-        val intent = Intent(this, BatteryMainActivity::class.java)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            .putExtra(Destinations.EXTRA_DESTINATION, Destinations.NOW)
+        val intent = mainActivityIntent(this, Destinations.NOW)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val pendingIntent = PendingIntent.getActivity(
                 this,
