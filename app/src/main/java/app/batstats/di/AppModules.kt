@@ -2,6 +2,7 @@ package app.batstats.di
 
 import android.content.Context
 import android.os.Build
+import androidx.datastore.preferences.preferencesDataStoreFile
 import app.batstats.battery.apps.AppInfoRepository
 import app.batstats.battery.apps.AppInfoSource
 import app.batstats.battery.apps.AppStatsRepository
@@ -11,6 +12,7 @@ import app.batstats.battery.apps.SessionSnapshotCollector
 import app.batstats.battery.apps.SessionSnapshotStore
 import app.batstats.battery.apps.ShellRunnerStatsShell
 import app.batstats.battery.data.DesignCapacitySource
+import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.CalibrationOverrides
@@ -32,6 +34,7 @@ import app.batstats.settings.AppSettings
 import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.SettingsMigrations
 import app.batstats.settings.SettingsMigrator
+import app.batstats.settings.createSettingsDataStore
 import app.batstats.viewmodel.AppDetailsViewModel
 import app.batstats.viewmodel.AppsViewModel
 import app.batstats.viewmodel.DataViewModel
@@ -53,10 +56,10 @@ import app.batstats.viewmodel.StatusViewModel
 import io.github.mlmgames.settings.core.SettingsRepository
 import io.github.mlmgames.settings.core.backup.DeviceInfo
 import io.github.mlmgames.settings.core.backup.SettingsBackupManager
-import io.github.mlmgames.settings.core.datastore.createSettingsDataStore
 import io.github.mlmgames.settings.core.managers.ResetManager
 import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.map
@@ -69,10 +72,15 @@ import org.koin.dsl.module
 private const val SCHEMA_VERSION = SettingsMigrations.CURRENT_VERSION
 private const val DATASTORE_NAME = "batstats_settings"
 
+internal fun createAppScope(record: (DiagnosticCode) -> Unit): CoroutineScope = CoroutineScope(
+    SupervisorJob() + CoroutineExceptionHandler { _, _ -> record(DiagnosticCode.APP_SCOPE_FAILED) },
+)
+
 val appModule = module {
-    single { CoroutineScope(SupervisorJob()) }
+    // Resolve diagnostics only on failure: DiagnosticStore itself depends on this scope.
+    single { createAppScope { code -> get<DiagnosticStore>().record(code) } }
     single { BatteryDatabase.get(androidContext()) }
-    single { createSettingsDataStore(androidContext(), DATASTORE_NAME) }
+    single { createSettingsDataStore(androidContext().preferencesDataStoreFile(DATASTORE_NAME)) }
 
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
