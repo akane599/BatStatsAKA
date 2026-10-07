@@ -21,7 +21,7 @@ import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.util.TimeEstimator
 import app.batstats.ui.format.percentText
 import app.batstats.settings.useFahrenheit
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.CancellationException
@@ -33,6 +33,14 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import android.text.format.DateFormat as AndroidDateFormat
+
+/** Keep the short date, but choose the clock fields from the system preference rather than the locale. */
+internal fun widgetFreshnessPattern(
+    is24h: Boolean,
+    locale: Locale,
+    bestPattern: (Locale, String) -> String,
+): String = bestPattern(locale, if (is24h) "yMdHm" else "yMdhm")
 
 /**
  * Widgets have no periodic alarm: the monitoring service pushes gated updates, and host requests
@@ -123,10 +131,15 @@ object WidgetUpdater {
     fun content(context: Context, reading: EtaHold.Reading, monitoring: Boolean, fahrenheit: Boolean): Content {
         lastFahrenheit = fahrenheit // For pushes that don't pass it, e.g. the service's final paused push.
         val sample = reading.reading.sample
-        val freshness = sample?.timestamp?.let {
-            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-        } ?: context.getString(R.string.widget_no_reading)
         val locale = context.resources.configuration.locales[0] ?: Locale.getDefault()
+        val freshness = sample?.timestamp?.let {
+            val pattern = widgetFreshnessPattern(
+                AndroidDateFormat.is24HourFormat(context),
+                locale,
+                AndroidDateFormat::getBestDateTimePattern,
+            )
+            SimpleDateFormat(pattern, locale).format(Date(it))
+        } ?: context.getString(R.string.widget_no_reading)
         return Content(
             level = sample?.levelPercent?.let { percentText(it.toDouble(), locale) { id, args -> context.getString(id, *args) } } ?: "—",
             temperature = sample?.temperatureDeciC?.let {
