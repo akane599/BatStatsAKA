@@ -21,9 +21,72 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.withLock
 import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+
+/** The repository's FIFO writer and acknowledged deletion seam, also runnable without Android. */
+internal class HistoryWriter<E>(
+    scope: CoroutineScope,
+    dispatcher: CoroutineDispatcher,
+    private val maintenance: HistoryMaintenance,
+    private val openSessionId: () -> String?,
+    private val deleteRow: suspend (String) -> Boolean,
+    private val handleEvent: suspend (E) -> Unit,
+    private val onFailure: (Exception) -> Unit,
+) {
+    private sealed interface Message<out E> {
+        data class Event<E>(val value: E) : Message<E>
+        data class Delete(val id: String, val result: CompletableDeferred<Boolean>) : Message<Nothing>
+    }
+
+    private val queue = Channel<Message<E>>(Channel.UNLIMITED)
+    private val job = scope.launch(dispatcher) {
+        for (message in queue) {
+            try {
+                when (message) {
+                    is Message.Event -> handleEvent(message.value)
+                    is Message.Delete -> message.result.complete(
+                        message.id != openSessionId() && deleteRow(message.id),
+                    )
+                }
+            } catch (e: Exception) {
+                if (message is Message.Delete) message.result.completeExceptionally(e)
+                // A storage call can be cancelled independently of the writer's owning scope.
+                currentCoroutineContext().ensureActive()
+                onFailure(e)
+            }
+        }
+    }.also { writer -> writer.invokeOnCompletion { queue.close(it) } }
+
+    fun trySend(event: E) = queue.trySend(Message.Event(event))
+    suspend fun send(event: E) = queue.send(Message.Event(event))
+
+    suspend fun deleteSession(id: String): Boolean {
+        if (maintenance.isClearing) return false
+        // Clear holds this same mutex while waiting for its queued event. Never take it on the writer.
+        return maintenance.mutations.withLock {
+            if (maintenance.isClearing) return@withLock false
+            // Once enqueued, retain the mutation lock until the write finishes, even if the caller leaves.
+            withContext(NonCancellable) { requestDeletion(id) }
+        }
+    }
+
+    private suspend fun requestDeletion(id: String): Boolean {
+        val result = CompletableDeferred<Boolean>()
+        // Covers queued requests, in-flight requests, and a writer that already terminated.
+        val completion = job.invokeOnCompletion { cause ->
+            result.completeExceptionally(cause ?: IllegalStateException("History writer stopped"))
+        }
+        try {
+            queue.send(Message.Delete(id, result))
+            return result.await()
+        } finally {
+            completion.dispose()
+        }
+    }
+}
 
 /**
  * History and the observation model. Captures arrive from [SamplingController]'s thread; one
@@ -49,7 +112,7 @@ class BatteryRepository(
     private val dailySummaryDao = db.dailySummaryDao()
     private val samplerState = SamplerState(samplerPreferences)
     // Lifecycle events are never dropped; samples are bounded by [queuedSamples] instead.
-    private val events = Channel<Event>(Channel.UNLIMITED)
+    private val events: HistoryWriter<Event>
     private val queuedSamples = AtomicInteger()
     private val lifecycle = Any()
     val isClearingHistory: Boolean get() = maintenance.isClearing
@@ -129,40 +192,40 @@ class BatteryRepository(
         scope.launch {
             calibration.state.collect { state -> _realtime.update { it.copy(calibration = state.effective) } }
         }
-        scope.launch(Dispatchers.IO) {
-            for (event in events) {
+        events = HistoryWriter(
+            scope = scope,
+            dispatcher = Dispatchers.IO,
+            maintenance = maintenance,
+            openSessionId = { session?.sessionId },
+            deleteRow = { sessionDao.deleteSession(it, generation) },
+            handleEvent = { event ->
                 if (event is Event.Sample) queuedSamples.decrementAndGet()
-                try {
-                    when (event) {
-                        is Event.Start -> start(event.generation)
-                        // A capture of a stopped generation may still be in flight; it is not observed.
-                        is Event.Sample -> if (event.capture.point.generation == generation) process(event.capture)
-                        Event.Stop -> {
-                            generation = null
-                            engine.stop()
-                            _observation.value = engine.summary
-                            finishSession("Monitoring stopped")
-                        }
-                        Event.Reset -> {
-                            resetObservationState()
-                            finishSession("Observation reset by user")
-                            seedDischargeEta()
-                        }
-                        // With monitoring on, its start already ran it, before this generation's first capture.
-                        Event.Backfill -> if (generation == null) backfillDailySummaries()
-                        is Event.Clear -> clear(event.result)
+                when (event) {
+                    is Event.Start -> start(event.generation)
+                    // A capture of a stopped generation may still be in flight; it is not observed.
+                    is Event.Sample -> if (event.capture.point.generation == generation) process(event.capture)
+                    Event.Stop -> {
+                        generation = null
+                        engine.stop()
+                        _observation.value = engine.summary
+                        finishSession("Monitoring stopped")
                     }
-                } catch (e: Exception) {
-                    // Room owns a separate query scope; closing it can cancel a database
-                    // call while this writer is still active. Preserve real owner cancellation,
-                    // but report an interrupted storage operation and keep accepting lifecycle events.
-                    currentCoroutineContext().ensureActive()
-                    diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
-                    failure(FailureSource.HISTORY, "History collection failed (${e.javaClass.simpleName}); live battery readings remain available")
-                    sampler.markGap()
+                    Event.Reset -> {
+                        resetObservationState()
+                        finishSession("Observation reset by user")
+                        seedDischargeEta()
+                    }
+                    // With monitoring on, its start already ran it, before this generation's first capture.
+                    Event.Backfill -> if (generation == null) backfillDailySummaries()
+                    is Event.Clear -> clear(event.result)
                 }
-            }
-        }
+            },
+            onFailure = { e ->
+                diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
+                failure(FailureSource.HISTORY, "History collection failed (${e.javaClass.simpleName}); live battery readings remain available")
+                sampler.markGap()
+            },
+        )
     }
 
     fun startSampling() {
@@ -225,6 +288,9 @@ class BatteryRepository(
     }
 
     suspend fun endCurrentSession() = resetObservation()
+
+    /** Decided against writer-owned state after every earlier sample/Stop, even with monitoring off. */
+    suspend fun deleteSession(id: String): Boolean = events.deleteSession(id)
 
     /** Serialized with imports and the sample writer; no queued sample can survive deletion. */
     suspend fun clearHistory(stopService: () -> Unit) = maintenance.clear(

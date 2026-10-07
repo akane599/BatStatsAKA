@@ -19,6 +19,7 @@ import app.batstats.battery.measurement.CurrentCalibration
 import app.batstats.battery.measurement.CurrentUnit
 import app.batstats.settings.AppSettings
 import app.batstats.ui.components.chart.TimeWindow
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -298,6 +299,28 @@ class SessionDetailsViewModelTest {
         assertEquals(SessionDetailsUiState.Deleted, state())
     }
 
+    @Test fun deletionWaitsForWriterAcknowledgmentAfterMonitoringStops() = runTest {
+        repo.row.value = discharge().copy(endTime = null, activeKey = 1)
+        repo.recordingGeneration.value = null // Stop published, but the writer has not drained yet.
+        val acknowledgment = CompletableDeferred<Unit>()
+        repo.deleteAcknowledgment = acknowledgment
+        val (vm, state) = start()
+        assertTrue(state.ready().canDelete)
+
+        vm.onEvent(SessionDetailsEvent.Delete)
+        runCurrent()
+        assertEquals(listOf(ID), repo.deletes)
+        assertFalse(state.ready().canDelete)
+        assertFalse(state.ready().deleteFailed)
+        vm.onEvent(SessionDetailsEvent.Delete)
+        runCurrent()
+        assertEquals("No duplicate request while the writer is pending", listOf(ID), repo.deletes)
+
+        acknowledgment.complete(Unit)
+        runCurrent()
+        assertEquals(SessionDetailsUiState.Deleted, state())
+    }
+
     @Test fun aSessionThatIsNotInHistoryIsMissing() = runTest {
         val (_, state) = start()
         assertEquals(SessionDetailsUiState.Missing, state())
@@ -337,6 +360,7 @@ class SessionDetailsViewModelTest {
         val baselines = mutableMapOf<String, AppUsageSnapshot>()
         val deletes = mutableListOf<String>()
         var deleteResult = true
+        var deleteAcknowledgment: CompletableDeferred<Unit>? = null
 
         override fun session(id: String): Flow<ChargeSession?> = row.map { it?.takeIf { session -> session.sessionId == id } }
         override fun samples(id: String): Flow<List<BatterySample>> = rows
@@ -351,6 +375,7 @@ class SessionDetailsViewModelTest {
 
         override suspend fun deleteSession(id: String): Boolean {
             deletes += id
+            deleteAcknowledgment?.await()
             if (deleteResult) row.value = null
             return deleteResult
         }
