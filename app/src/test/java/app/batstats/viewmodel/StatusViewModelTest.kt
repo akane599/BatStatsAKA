@@ -71,6 +71,19 @@ class StatusViewModelTest {
         assertFalse(state().access.canAuthorizeShizuku)
     }
 
+    @Test fun blockedShizukuIsExposedWithoutOfferingAnotherDialog() = runTest {
+        val (_, state) = start()
+        repo.shizuku.value = ShizukuState(running = true, granted = false, blocked = true)
+        runCurrent()
+        assertTrue(state().access.shizuku.blocked)
+        assertFalse(state().access.canAuthorizeShizuku)
+
+        repo.shizuku.value = repo.shizuku.value.copy(blocked = false)
+        runCurrent()
+        assertFalse(state().access.shizuku.blocked)
+        assertTrue(state().access.canAuthorizeShizuku)
+    }
+
     @Test fun checkAgainProbesAfreshShowsCheckingAndRunsOneProbeAtATime() = runTest {
         val (vm, state) = start()
         repo.probes.clear()

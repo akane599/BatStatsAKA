@@ -46,7 +46,7 @@ data class AccessState(
     /** False from Android 16: ADB grants still read the battery, but Android refuses the per-app dump. */
     val adbCoversAppStats: Boolean = true,
 ) {
-    val canAuthorizeShizuku: Boolean get() = shizuku.running && !shizuku.granted
+    val canAuthorizeShizuku: Boolean get() = shizuku.running && !shizuku.granted && !shizuku.blocked
 }
 
 /** The calibration in use and where it comes from; [notice] is the correction awaiting Undo/Keep. */
@@ -240,7 +240,7 @@ class DefaultStatusRepository(
     private val designCapacity: DesignCapacitySource,
 ) : StatusRepository {
     override val access: Flow<AccessMode> = shell.access.map { it.toAccessMode() }
-    override val shizuku: Flow<ShizukuState> = combine(bridge.running, bridge.granted) { running, granted -> ShizukuState(running, granted) }
+    override val shizuku: Flow<ShizukuState> = combine(bridge.running, bridge.granted, bridge.blocked, ::ShizukuState)
     override val calibration: Flow<CalibrationState> = calibrationStore.state
     override val events: Flow<List<DiagnosticEvent>> = diagnostics.events
     override val logUnavailable: Flow<Boolean> = diagnostics.storageUnavailable
