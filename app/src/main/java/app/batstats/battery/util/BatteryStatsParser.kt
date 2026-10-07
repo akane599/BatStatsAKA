@@ -51,10 +51,14 @@ object BatteryStatsParser {
         val bluetooth: BluetoothStats? = null,
         val doze: DozeStats? = null,
         val cpuFrequency: List<CpuFrequencyStats> = emptyList(),
-        val processStats: List<ProcessStats> = emptyList()
+        val processStats: List<ProcessStats> = emptyList(),
+        val appPowerRecords: Int = 0,
+        val rejectedAppPowerRecords: Int = 0,
     ) {
         val hasValidWindow: Boolean get() = startedAt != null && startCount != null &&
             batteryRealtimeMs != null && batteryUptimeMs != null && batteryUptimeMs <= batteryRealtimeMs
+        val hasOnlyRejectedAppPowerRecords: Boolean get() =
+            appPowerRecords > 0 && rejectedAppPowerRecords == appPowerRecords
     }
     data class AppPowerStats(
         val uid: Int,
@@ -260,6 +264,8 @@ object BatteryStatsParser {
                 p[2] == "l" -> rows += p
             }
         }
+        // Count before UID/value validation so malformed UID power rows cannot look genuinely empty.
+        val appPowerRecords = rows.count { it[3] == "pwi" && it.getOrNull(4) == "uid" }
         val perUid = rows.groupBy { it.int(1) }
         val tags = mutableSetOf<String>()
         val apps = linkedMapOf<Int, AppPowerStats>()
@@ -396,7 +402,8 @@ object BatteryStatsParser {
             frequencyTimes[i]?.let { CpuFrequencyStats(-1, frequencies[i], it, if (totalFrequency > 0) (it / totalFrequency).toFloat() else 0f) }
         }
         return snapshot.copy(apps = enriched.sortedByDescending { it.powerMah }, componentEstimatesMah = components,
-            reportedTags = tags, rejectedRecords = rejected, wakelocks = locks.sortedByDescending { it.totalTimeMs },
+            reportedTags = tags, rejectedRecords = rejected, appPowerRecords = appPowerRecords,
+            rejectedAppPowerRecords = appPowerRecords - apps.size, wakelocks = locks.sortedByDescending { it.totalTimeMs },
             kernelWakelocks = kernel.sortedByDescending { it.totalTimeMs }, alarms = alarms.sortedByDescending { it.count },
             jobs = jobs.sortedByDescending { it.totalTimeMs }, syncs = syncs.sortedByDescending { it.totalTimeMs },
             network = network.distinctBy { it.uid }.sortedByDescending { it.mobileRxBytes.toDouble() + it.mobileTxBytes + it.wifiRxBytes + it.wifiTxBytes },

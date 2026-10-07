@@ -125,7 +125,8 @@ class AppStatsRepository(
                 val parsed = withContext(parseDispatcher) {
                     BatteryStatsParser.parseCheckin(outcome.output.lineSequence())
                 }
-                if (!parsed.hasValidWindow) {
+                // Partial rejection stays READY with accepted rows; only total relevant rejection is a format failure.
+                if (!parsed.hasValidWindow || parsed.hasOnlyRejectedAppPowerRecords) {
                     onDiagnostic(DiagnosticCode.ADVANCED_FORMAT_INVALID)
                     AppStatsResult.Failed(FORMAT_UNAVAILABLE) to null
                 } else {
