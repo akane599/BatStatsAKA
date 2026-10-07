@@ -15,7 +15,7 @@
     <string name="high_discharge">Yüksek tüketim</string>
     <string name="alert_channel_name">Pil uyarıları</string>
     <string name="alert_channel_description">İzleme sırasında eşik uyarıları; ses ve titreşim Android tarafından yönetilir</string>
-    <string name="alert_level_reported">Android pil düzeyini %1$d%% olarak bildiriyor.</string>
+    <string name="alert_level_reported">Android pil düzeyini %%%1$d olarak bildiriyor.</string>
     <string name="alert_temperature_reported">Bildirilen pil sıcaklığı: %1$s.</string>
     <string name="alert_discharge_reported">En az 1 dakikaya yayılan birkaç deşarj akımı okuması eşiğinizi aştı. Son okuma: %1$s. Bu, nedenin hangi uygulama olduğunu belirlemez.</string>
     <string name="alert_full_reported">Android, bağlı pilin dolu olduğunu bildiriyor.</string>

@@ -40,6 +40,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -61,6 +62,7 @@ import app.batstats.ui.components.chart.BarSegment
 import app.batstats.ui.components.chart.BreakdownBar
 import app.batstats.ui.components.chart.BreakdownSegment
 import app.batstats.ui.components.chart.NumberFormatter
+import app.batstats.ui.components.chart.TimeAxisFormatter
 import app.batstats.ui.components.chart.TimeGranularity
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.displayName
@@ -78,6 +80,7 @@ import app.batstats.viewmodel.AppDetailsUiState
 import app.batstats.viewmodel.AppDetailsViewModel
 import app.batstats.viewmodel.AppHistory
 import app.batstats.viewmodel.AppHistoryState
+import app.batstats.viewmodel.AppSessionUsage
 import app.batstats.viewmodel.AppUsageDetails
 import app.batstats.viewmodel.HardwareUsage
 import app.batstats.viewmodel.NetworkUsage
@@ -244,11 +247,12 @@ private fun DetailsHero(state: AppDetailsUiState, modifier: Modifier = Modifier)
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.md), verticalAlignment = Alignment.CenterVertically) {
             AppLabelIcon(state.packageName, label, Modifier.size(spacing.xxl))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing.xxs)) {
+                // Before the lookup returns: a quiet dash, hidden from TalkBack, so no empty heading is announced.
                 Text(
-                    if (state.label == null) "" else label.displayName(),
-                    modifier = Modifier.semantics { heading() },
+                    if (state.label == null) stringResource(R.string.component_no_value) else label.displayName(),
+                    modifier = if (state.label == null) Modifier.clearAndSetSemantics {} else Modifier.semantics { heading() },
                     style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = if (state.label == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -472,13 +476,14 @@ private fun HistoryPanel(history: AppHistory, modifier: Modifier = Modifier) {
             QuietText(stringResource(R.string.apps_details_history_empty))
             return@Panel
         }
-        QuietText(stringResource(R.string.apps_details_history_caption, history.listedIn, history.sessions.size))
+        val total = history.sessions.size
+        QuietText(pluralStringResource(R.plurals.apps_details_history_caption, total, history.listedIn, total))
         val formatter = rememberTimeAxisFormatter()
         val mah = stringResource(R.string.now_unit_mah)
         // Saved by session, so a new session (or a refresh) never moves the selection to another bar.
         var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
         BarChart(
-            entries = history.sessions.map { BarEntry(formatter.format(it.startMs, TimeGranularity.DAYS), listOf(it.powerMah ?: 0.0)) },
+            entries = historyBarEntries(history.sessions, formatter),
             segments = listOf(BarSegment(stringResource(R.string.apps_details_history_series), MaterialTheme.chartColors.drain)),
             modifier = Modifier.fillMaxWidth(),
             unit = mah,
@@ -488,3 +493,16 @@ private fun HistoryPanel(history: AppHistory, modifier: Modifier = Modifier) {
         )
     }
 }
+
+/**
+ * One bar per session: its mAh (0 when outside the session's top 30). Spoken (and drawn when it fits) by its start
+ * day and time, so two sessions on one day get distinct TalkBack actions; the day alone under crowded bars.
+ */
+internal fun historyBarEntries(sessions: List<AppSessionUsage>, formatter: TimeAxisFormatter): List<BarEntry> =
+    sessions.map {
+        BarEntry(
+            label = formatter.format(it.startMs, TimeGranularity.DATE_TIME),
+            values = listOf(it.powerMah ?: 0.0),
+            shortLabel = formatter.format(it.startMs, TimeGranularity.DAYS),
+        )
+    }

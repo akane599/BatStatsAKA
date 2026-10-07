@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import java.util.Locale
@@ -72,14 +73,15 @@ fun AppIcon(packageName: String, label: String, modifier: Modifier = Modifier) {
 
 /**
  * A tonal circle with the first letter of [label], or [icon] (Rounded) when given — e.g. for the aggregated
- * "Other apps" row.
+ * "Other apps" row. Decorative like [AppIcon]: the monogram is never read out, since the row beside it names the app.
  */
 @Composable
 fun AppIconPlaceholder(label: String, modifier: Modifier = Modifier, icon: ImageVector? = null) {
     Box(
         modifier
             .size(AppIconDefaults.Size)
-            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape),
+            .background(MaterialTheme.colorScheme.surfaceContainerHighest, CircleShape)
+            .clearAndSetSemantics {},
         contentAlignment = Alignment.Center,
     ) {
         if (icon != null) {

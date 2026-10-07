@@ -38,16 +38,17 @@ fun NumberFormat.formatWithMinus(value: Double): String {
 
 /**
  * Default [ValueFormatter]: the default-locale number with at most [maxDecimals] fraction digits (grouped), then
- * [unit] after a space. Values ≥ 100 drop the decimals; negatives use [MINUS_SIGN]. A data class, so a series that
- * uses it stays comparable.
+ * [unit] after a space; a "%" unit is the locale's percent instead (en "94%", tr "%94"). Values ≥ 100 drop the
+ * decimals; negatives use [MINUS_SIGN]. A data class, so a series that uses it stays comparable.
  */
 @Immutable
 data class NumberFormatter(val unit: String = "", val maxDecimals: Int = 1) : ValueFormatter {
     override fun format(value: Double): String {
-        val number = NumberFormat.getNumberInstance().apply {
+        val percent = unit == "%"
+        val number = (if (percent) NumberFormat.getPercentInstance() else NumberFormat.getNumberInstance()).apply {
             maximumFractionDigits = if (abs(value) >= 100) 0 else maxDecimals
-        }.formatWithMinus(value)
-        return if (unit.isEmpty()) number else "$number $unit"
+        }.formatWithMinus(if (percent) value / 100 else value)
+        return if (unit.isEmpty() || percent) number else "$number $unit"
     }
 }
 

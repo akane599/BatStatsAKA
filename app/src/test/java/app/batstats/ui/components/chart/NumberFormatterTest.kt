@@ -21,6 +21,16 @@ class NumberFormatterTest {
         assertEquals("0", NumberFormatter(maxDecimals = 0).format(-0.2))
     }
 
+    @Test fun percentFollowsTheLocaleWithoutASpace() {
+        assertEquals("94%", NumberFormatter("%", maxDecimals = 0).format(94.0))
+        assertEquals("4.5%", NumberFormatter("%").format(4.48))
+        assertEquals("100%", NumberFormatter("%").format(100.0))
+        assertEquals("−3%", NumberFormatter("%", maxDecimals = 0).format(-3.0))
+        Locale.setDefault(Locale.forLanguageTag("tr-TR"))
+        assertEquals("%94", NumberFormatter("%", maxDecimals = 0).format(94.0))
+        assertEquals("%4,5", NumberFormatter("%").format(4.48))
+    }
+
     @Test fun tickFormatsUseTheSameSign() {
         val format = NumberFormat.getNumberInstance(Locale.US).apply { maximumFractionDigits = 1 }
         assertEquals("−500", format.formatWithMinus(-500.0))

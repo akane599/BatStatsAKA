@@ -131,7 +131,10 @@
     <string name="apps_details_bluetooth_scan">Búsqueda Bluetooth</string>
 
     <string name="apps_details_history_title">Sesiones con batería</string>
-    <string name="apps_details_history_caption">Entre las 30 primeras en %1$d de %2$d sesiones</string>
+    <plurals name="apps_details_history_caption">
+        <item quantity="one">Entre las 30 primeras en %1$d de %2$d sesión</item>
+        <item quantity="other">Entre las 30 primeras en %1$d de %2$d sesiones</item>
+    </plurals>
     <string name="apps_details_history_empty">No hay sesiones con datos por app en los últimos 30 días.</string>
     <string name="apps_details_history_failed">No se pudieron leer las sesiones guardadas.</string>
     <string name="apps_details_history_series">Batería usada</string>

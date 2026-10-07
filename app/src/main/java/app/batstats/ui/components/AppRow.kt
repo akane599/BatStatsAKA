@@ -17,12 +17,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -101,7 +103,7 @@ fun AppRow(
     }
 }
 
-/** Track + fill; a non-zero share never shrinks below a round dot. */
+/** Track + fill from the start edge (the right in RTL); a non-zero share never shrinks below a round dot. */
 @Composable
 private fun ShareBar(share: Float, color: Color) {
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -115,7 +117,9 @@ private fun ShareBar(share: Float, color: Color) {
                 val radius = CornerRadius(size.height / 2)
                 drawRoundRect(track, cornerRadius = radius)
                 if (fraction > 0f) {
-                    drawRoundRect(color, size = Size(max(size.width * fraction, size.height), size.height), cornerRadius = radius)
+                    val width = max(size.width * fraction, size.height)
+                    val left = if (layoutDirection == LayoutDirection.Rtl) size.width - width else 0f
+                    drawRoundRect(color, Offset(left, 0f), Size(width, size.height), radius)
                 }
             },
     )
