@@ -1,0 +1,15 @@
+{
+  "skills/code-audit/SKILL.md": "d27e35ba11402ec9506494a2ec7485d3b3997a46484bad90a97179e671977d1b",
+  "skills/code-audit/references/contract.md": "30259b61e73da29ed7b02ece49f773008d39ccf300f5d10f2ad682b4622f1d9e",
+  "skills/code-audit/references/roles.json": "f8cd4680b2e1c64557ca94a55ac402039df12668390bb0717441e439b5453b68",
+  "skills/code-audit/references/usage.md": "0472faac565514fcf1b4b168d2e693dfb9ebd035cbb268b14457f5a413cad542",
+  "skills/code-audit/scripts/agents.mjs": "09806c3c906756ceb9e21e2d95a3b46c06f95442a42deee534866a43d30ea64c",
+  "agents/code-audit-bugs.md": "5dc17e10294cd8090178a43b1ef79f9ae1207e38e70241e4be587fa508dc047f",
+  "agents/code-audit-comments.md": "0aed3da23c285e64a338cbcd48ab1fea35d4d31c0a011221a29129d3b24f77c8",
+  "agents/code-audit-errors.md": "6d8e2a616ab56d37089986d4ed69dc8a93bd6efa40c9efb260aa154adbb0e64b",
+  "agents/code-audit-quality.md": "40832b147d3df235230866a7b86bb96e4f87fd96f70d2074a5e6234134feb2b5",
+  "agents/code-audit-security.md": "8012be4384614d371091c4d882273456f96688723148735a45306189be3957a1",
+  "agents/code-audit-simplify.md": "447e55c5aac5ca3def9fd87cb73f3c2a28823811513b9e48f2f2522515752f14",
+  "agents/code-audit-tests.md": "58a119a4d501a6742c94f16f11ce0a5219c220d298c7acf7ca0136eca43f1685",
+  "agents/code-audit-types.md": "09f99844c5dd33e5d051926d25b0e64ee0f9452854f2a655dfdb46fcd08e56ad"
+}
