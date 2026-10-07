@@ -67,6 +67,10 @@ internal fun mahText(value: Double): String = valueWithUnit(formatMah(value, cur
 internal fun formatPercent(value: Double, decimals: Int = 0): String =
     stringResource(R.string.percent_value, formatNumber(value, decimals, currentLocale()))
 
+/** [formatPercent] without Compose, for the widgets: the same `percent_value` template, resolved through [resolve]. */
+internal fun percentText(value: Double, locale: Locale, resolve: (Int, Array<out Any>) -> String): String =
+    resolve(R.string.percent_value, arrayOf(formatNumber(value, 0, locale)))
+
 /** The "%" sign as a StatCell unit and whether this locale writes it first ([StatCellDefaults]; `unitFirst`). */
 internal class PercentUnit(val sign: String, val first: Boolean)
 
