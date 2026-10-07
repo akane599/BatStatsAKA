@@ -247,14 +247,12 @@ class ShizukuBridge(private val context: Context) {
             )
 
         val first = execute(binder, cmd, timeoutMs)
-        if (first !is RunResult.Error || first.reason != Failure.TRANSPORT) {
-            return first
+        return retryAfterTransportFailure(first) { failure ->
+            Log.d(TAG, "Retrying after transport failure: ${failure.message}")
+            binding.forget(binder)
+            val fresh = ensureBound() ?: return@retryAfterTransportFailure null
+            execute(fresh, cmd, timeoutMs)
         }
-
-        Log.d(TAG, "Retrying after transport failure: ${first.message}")
-        binding.forget(binder)
-        val fresh = ensureBound() ?: return first
-        return execute(fresh, cmd, timeoutMs)
     }
 
     suspend fun runOrNull(cmd: String): String? =
@@ -267,12 +265,8 @@ class ShizukuBridge(private val context: Context) {
         return try {
             val result = runViaPipe(binder, cmd, timeoutMs)
             currentCoroutineContext().ensureActive()
-            when {
-                !ping() || !hasPermission() -> RunResult.Error("Shizuku access lost during collection", Failure.TRANSPORT)
-                result == null -> RunResult.Error("Helper protocol unavailable", Failure.TRANSPORT)
-                result.error != null -> RunResult.Error(result.error, Failure.COMMAND)
-                else -> RunResult.Success(result.output)
-            }
+            val running = ping()
+            classifyAfterRead(running, running && hasPermission(), result)
         } catch (ce: CancellationException) {
             throw ce
         } catch (t: Throwable) {
@@ -369,6 +363,28 @@ class ShizukuBridge(private val context: Context) {
             Log.e(TAG, "unbind failed", t)
         }
     }
+}
+
+internal fun classifyAfterRead(
+    running: Boolean,
+    permitted: Boolean,
+    result: CommandOutput.Result?,
+): ShizukuBridge.RunResult = when {
+    !running -> ShizukuBridge.RunResult.Error("Shizuku is not running", ShizukuBridge.Failure.NOT_RUNNING)
+    !permitted -> ShizukuBridge.RunResult.Error("Shizuku permission not granted", ShizukuBridge.Failure.NO_PERMISSION)
+    result == null -> ShizukuBridge.RunResult.Error("Helper protocol unavailable", ShizukuBridge.Failure.TRANSPORT)
+    result.error != null -> ShizukuBridge.RunResult.Error(result.error, ShizukuBridge.Failure.COMMAND)
+    else -> ShizukuBridge.RunResult.Success(result.output)
+}
+
+internal suspend fun retryAfterTransportFailure(
+    first: ShizukuBridge.RunResult,
+    retry: suspend (ShizukuBridge.RunResult.Error) -> ShizukuBridge.RunResult?,
+): ShizukuBridge.RunResult {
+    if (first !is ShizukuBridge.RunResult.Error || first.reason != ShizukuBridge.Failure.TRANSPORT) {
+        return first
+    }
+    return retry(first) ?: first
 }
 
 /**
