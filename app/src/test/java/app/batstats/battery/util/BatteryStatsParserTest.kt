@@ -201,6 +201,7 @@ class BatteryStatsParserTest {
         val s = BatteryStatsParser.parseCheckin("8,10001,l,pwi,uid,10\n9,10001,u,pwi,uid,20\n9,10001,l,jb,\"unfinished,100,2")
         assertTrue(s.apps.isEmpty())
         assertTrue(s.jobs.isEmpty())
+        assertEquals(1, s.rejectedRecords)
         assertFalse(s.hasValidWindow)
     }
 

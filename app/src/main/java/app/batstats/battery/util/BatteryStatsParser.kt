@@ -256,7 +256,7 @@ object BatteryStatsParser {
         for (line in lines) {
             if (!line.startsWith("9,") || line.startsWith("9,h,")) continue
             val p = splitCheckinLine(line)
-            if (p.size < 4) continue
+            if (p.size < 4) { rejected++; continue }
             when {
                 p[2] == "i" && p[3] == "uid" -> {
                     val uid = p.int(4)
@@ -286,7 +286,7 @@ object BatteryStatsParser {
         var doze: DozeStats? = null
         var frequencies = emptyList<Long>()
         rows.forEach { p ->
-            val uid = p.int(1) ?: return@forEach
+            val uid = p.int(1) ?: run { rejected++; return@forEach }
             val pkgs = packagesFor(uid, mappings)
             val label = displayNameFor(uid, pkgs)
             tags += p[3]
@@ -312,16 +312,19 @@ object BatteryStatsParser {
                     } else if (uid == 0 && p.size > 4) components.putIfAbsent(p[4], energy)
                 }
                 "wl" -> {
-                    val name = p.getOrNull(4) ?: return@forEach
+                    val name = p.getOrNull(4) ?: run { rejected++; return@forEach }
                     val bg = (6 until p.size step 6).firstOrNull { p[it] == "bp" }
+                    var recognized = false
                     for (i in 6 until p.size step 6) {
                         val type = when (p[i]) { "f" -> WakelockType.FULL; "p" -> WakelockType.PARTIAL; "w" -> WakelockType.WINDOW; else -> continue }
+                        recognized = true
                         val time = p.long(i - 1); val count = p.int(i + 1)
                         if (time == null || count == null) { rejected++; continue }
                         locks += WakelockStats(uid, label, pkgs, name, type, count, time, p.long(i + 3),
                             if (type == WakelockType.PARTIAL && bg != null) p.long(bg - 1) else null,
                             if (type == WakelockType.PARTIAL && bg != null) p.int(bg + 1) else null)
                     }
+                    if (!recognized) rejected++
                 }
                 "kwl" -> {
                     val name = p.getOrNull(4); val time = p.long(5); val count = p.int(6)
@@ -415,25 +418,26 @@ object BatteryStatsParser {
             bluetooth = bluetooth, doze = doze, cpuFrequency = cpu, processStats = processes.sortedByDescending { it.userTimeMs.toDouble() + it.systemTimeMs })
     }
 
+    /**
+     * Checkin is not escaped CSV: android16 BatteryStats.java dumpLine prints args verbatim.
+     * `wl` sanitizes commas, not quotes (L4947); `sy`/`jb` wrap raw names in quotes
+     * (L4986/L5002), so frame their names between four header and four numeric tail fields.
+     * Process/kernel records retain their existing offsets; no quote state crosses fields or lines.
+     */
     internal fun splitCheckinLine(line: String): List<String> {
-        if ('"' !in line) return line.split(',')
-        val fields = ArrayList<String>(16)
-        val field = StringBuilder()
-        var quoted = false
-        var i = 0
-        while (i < line.length) {
-            val c = line[i]
-            when {
-                c == '"' && quoted && i + 1 < line.length && line[i + 1] == '"' -> { field.append('"'); i++ }
-                c == '"' -> quoted = !quoted
-                c == ',' && !quoted -> { fields.add(field.toString()); field.setLength(0) }
-                else -> field.append(c)
+        val fields = line.split(',')
+        return when (fields.getOrNull(3)) {
+            "sy", "jb" -> {
+                if (fields.size < 9) return emptyList()
+                val name = fields.subList(4, fields.size - 4).joinToString(",")
+                    .removePrefix("\"").removeSuffix("\"")
+                fields.take(4) + name + fields.takeLast(4)
             }
-            i++
+            "pr", "kwl" -> fields.mapIndexed { index, field ->
+                if (index == 4) field.removePrefix("\"").removeSuffix("\"") else field
+            }
+            else -> fields
         }
-        if (quoted) return emptyList()
-        fields.add(field.toString())
-        return fields
     }
 
     data class DeviceIdleInfo(
