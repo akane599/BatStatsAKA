@@ -1,5 +1,6 @@
 package app.batstats.battery.apps
 
+import android.os.Build
 import android.os.SystemClock
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.util.BatteryStatsParser
@@ -123,7 +124,7 @@ class AppStatsRepository(
             }
             is ShellRunner.Outcome.Success -> {
                 val parsed = withContext(parseDispatcher) {
-                    BatteryStatsParser.parseCheckin(outcome.output.lineSequence())
+                    BatteryStatsParser.parseCheckin(outcome.output.lineSequence(), sdkInt = Build.VERSION.SDK_INT)
                 }
                 // Partial rejection stays READY with accepted rows; only total relevant rejection is a format failure.
                 if (!parsed.hasValidWindow || parsed.hasOnlyRejectedAppPowerRecords) {

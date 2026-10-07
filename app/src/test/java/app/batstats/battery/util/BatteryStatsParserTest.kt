@@ -79,6 +79,49 @@ class BatteryStatsParserTest {
         assertEquals(2000L, snapshot.network.single().mobileActiveTimeMs)
         assertEquals(60L, snapshot.network.single().btRxBytes)
     }
+    @Test fun oreoProcessStatesUseBackgroundAndCachedInsteadOfForeground() {
+        // android-8.1.0_r1: TOP, FGS, TOP_SLEEPING, FOREGROUND, BACKGROUND, CACHED.
+        val raw = """
+            9,0,i,vers,16,167,OPM1.171019.011,OPM1.171019.011
+            9,10001,l,pwi,uid,1.5,0,0,0
+            9,10001,l,st,1000,2000,3000,4000,5000,6000
+        """.trimIndent()
+        for (sdkInt in listOf(27, 26)) {
+            val snapshot = BatteryStatsParser.parseCheckin(raw, sdkInt)
+            val app = snapshot.apps.single()
+            assertEquals(1000L, app.topTimeMs)
+            assertEquals("Oreo background is the fifth process state", 5000L, app.backgroundTimeMs)
+            assertEquals("Oreo cached is the sixth process state", 6000L, app.cachedTimeMs)
+            assertEquals(
+                snapshot.copy(capturedAt = 0),
+                BatteryStatsParser.parseCheckin(raw.lineSequence().constrainOnce(), sdkInt).copy(capturedAt = 0),
+            )
+        }
+    }
+    @Test fun pieAndLaterProcessStatesKeepModernOffsets() {
+        val raw = """
+            9,0,i,vers,16,177,PKQ1.180522.001,PKQ1.180522.001
+            9,10001,l,pwi,uid,1.5,0,0,0
+            9,10001,l,st,1000,2000,3000,4000,5000,6000,7000
+        """.trimIndent()
+        for (sdkInt in listOf(28, 36)) {
+            val app = BatteryStatsParser.parseCheckin(raw, sdkInt).apps.single()
+            assertEquals(1000L, app.topTimeMs)
+            assertEquals(4000L, app.backgroundTimeMs)
+            assertEquals(7000L, app.cachedTimeMs)
+        }
+    }
+    @Test fun sdkSelectsProcessStatesWithoutGuessingFromVersionMetadataOrRowLength() {
+        val states = "9,10001,l,pwi,uid,1.5,0,0,0\n9,10001,l,st,1000,2000,3000,4000,5000,6000"
+        for (metadata in listOf("", "9,0,i,vers,16,177,8.1.0,8.1.0\n", "9,0,i,vers\n")) {
+            val oreo = BatteryStatsParser.parseCheckin(metadata + states, sdkInt = 27).apps.single()
+            assertEquals(5000L, oreo.backgroundTimeMs)
+            assertEquals(6000L, oreo.cachedTimeMs)
+            val pie = BatteryStatsParser.parseCheckin(metadata + states, sdkInt = 28).apps.single()
+            assertEquals(4000L, pie.backgroundTimeMs)
+            assertNull("A truncated modern cached field stays unavailable", pie.cachedTimeMs)
+        }
+    }
     @Test fun mappingsCanFollowUsageAndPreserveSharedIdentities() {
         val snapshot = BatteryStatsParser.parseCheckin("""
             9,10001,l,pwi,uid,3.0,0,0,0
