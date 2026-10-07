@@ -2,6 +2,7 @@ package app.batstats.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
 import app.batstats.battery.data.HistoryImportResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -177,6 +178,49 @@ class DataViewModelTest {
         runCurrent()
         assertNull(vm.state.value.running)
         assertEquals(DataOutcome.HistoryImported(DataTask.IMPORT_JSON, IMPORTED), vm.state.value.outcome)
+    }
+
+    /** `running` gates Back on the Data screen: busy for the task's whole commit, idle again after any ending. */
+    @Test fun runningFlagThatLocksBackLastsExactlyAsLongAsTheTask() = runTest {
+        val vm = start()
+        assertTrue("Back is free before any task", vm.state.value.idle)
+
+        // Success.
+        repo.importGate = CompletableDeferred()
+        vm.onFileChosen(DataTask.IMPORT_CSV, "content://ok.csv")
+        runCurrent()
+        assertEquals(DataTask.IMPORT_CSV, vm.state.value.running)
+        repo.importGate?.complete(Unit)
+        runCurrent()
+        assertTrue(vm.state.value.idle)
+        assertEquals(DataOutcome.HistoryImported(DataTask.IMPORT_CSV, IMPORTED), vm.state.value.outcome)
+
+        // Failure.
+        repo.importGate = CompletableDeferred()
+        repo.importFailure = IOException("gone")
+        vm.onFileChosen(DataTask.IMPORT_JSON, "content://gone.json")
+        runCurrent()
+        assertEquals(DataTask.IMPORT_JSON, vm.state.value.running)
+        repo.importGate?.complete(Unit)
+        runCurrent()
+        assertTrue(vm.state.value.idle)
+        assertEquals(DataOutcome.Failed(DataTask.IMPORT_JSON, DataFailure.UNREADABLE), vm.state.value.outcome)
+
+        // Cancelled work while the ViewModel lives on: no outcome is invented, and Back is not locked forever.
+        repo.importGate = null
+        repo.importFailure = CancellationException("cancelled under the task")
+        vm.onFileChosen(DataTask.IMPORT_JSON, "content://cancelled.json")
+        runCurrent()
+        assertTrue(vm.state.value.idle)
+        assertNull(vm.state.value.outcome)
+
+        repo.clearFailure = CancellationException("cancelled under the clear")
+        vm.onEvent(DataEvent.RequestClear)
+        vm.onEvent(DataEvent.ConfirmClear)
+        runCurrent()
+        assertTrue(vm.state.value.idle)
+        assertEquals("the confirmation asks again instead of staying locked", ClearStep.CONFIRM, vm.state.value.clear)
+        assertNull(vm.state.value.outcome)
     }
 
     @Test fun historyFailuresBecomePlainReasons() = runTest {

@@ -236,6 +236,8 @@ class DataViewModel(
             val outcome = try {
                 block()
             } catch (e: CancellationException) {
+                // No outcome to publish, but a surviving ViewModel must not stay busy (that also locks Back).
+                _state.update { it.copy(running = null) }
                 throw e
             } catch (e: Exception) {
                 failure(task, e)
@@ -266,6 +268,7 @@ class DataViewModel(
                 repository.clearAll()
                 true
             } catch (e: CancellationException) {
+                _state.update { it.copy(clear = ClearStep.CONFIRM, running = null) }
                 throw e
             } catch (_: Exception) {
                 false

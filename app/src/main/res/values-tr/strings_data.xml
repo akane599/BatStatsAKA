@@ -68,4 +68,5 @@
     <string name="data_failed_no_picker">Bu telefonda dosya seçebilen bir uygulama yok.</string>
     <string name="data_failed_unexpected">Bir sorun oluştu. Yeniden deneyin.</string>
     <string name="data_working">İşleniyor…</string>
+    <string name="data_back_busy">Çıkmadan önce işlemin bitmesini bekleyin.</string>
 </resources>
