@@ -112,6 +112,15 @@ class NotificationContentTest {
         assertNull("STATIC is the default icon", content.statusIcon)
     }
 
+    @Test fun partialCoverageShowsUnavailableScreenRatesNotNumbers() {
+        val content = build(NotificationInput(reading(sample()), session(counterCoveredMs = 90 * 60_000L)))
+        assertEquals(listOf("On — · Off —"), content.summary)
+        assertEquals(listOf("—"), content.cell("Screen on"))
+        assertEquals(listOf("—"), content.cell("Screen off"))
+        assertEquals("496 mAh", content.value("Session"))
+        assertEquals("94%", content.value("Deep sleep"))
+    }
+
     @Test fun chargingShowsTimeToFullAndTemperatureOnlyAndIgnoresTheChargeSession() {
         val charging = sample(level = 64, status = 2, plugged = 1, currentUa = 1_240_000, voltageMv = 4_200,
             temperatureDeciC = 305, etaMs = 4_800_000)

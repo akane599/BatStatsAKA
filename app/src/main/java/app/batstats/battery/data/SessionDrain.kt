@@ -16,16 +16,15 @@ data class SessionDrain(val screenOn: DrainRate, val screenOff: DrainRate, val d
 
         /**
          * The row keeps each screen state's charge (`screenOnUah`/`screenOffUah`, null without counter data) and
-         * duration, but only the session's overall counter coverage (`counterCoveredMs` of the discharge time), so a
-         * rate divides the charge by the duration times that coverage. %/h needs [fullUah] (the counter's full charge,
-         * or the Health estimate). Deep sleep = `cpuSuspendMs` ÷ `observedMs`.
+         * duration, but only the session's overall counter coverage (`counterCoveredMs` of the discharge time), so
+         * per-screen rates require complete coverage and divide charge by the exact bucket duration. %/h needs
+         * [fullUah] (the counter's full charge, or the Health estimate). Deep sleep = `cpuSuspendMs` ÷ `observedMs`.
          */
         fun of(session: ChargeSession, fullUah: Long?): SessionDrain {
             val dischargeMs = session.screenOnMs + session.screenOffMs
-            val coverage = if (dischargeMs > 0) (session.counterCoveredMs.toDouble() / dischargeMs).coerceIn(0.0, 1.0) else 0.0
+            val completeCoverage = session.counterCoveredMs >= dischargeMs
             fun rate(durationMs: Long, uah: Long?): DrainRate {
-                val coveredMs = durationMs * coverage
-                val milliamps = if (uah != null && coveredMs >= MIN_RATE_MS) uah * 3_600.0 / coveredMs else null
+                val milliamps = if (completeCoverage && uah != null && durationMs >= MIN_RATE_MS) uah * 3_600.0 / durationMs else null
                 val perHour = if (milliamps != null && fullUah != null && fullUah > 0) milliamps * 100_000 / fullUah else null
                 return DrainRate(durationMs, milliamps, perHour)
             }
