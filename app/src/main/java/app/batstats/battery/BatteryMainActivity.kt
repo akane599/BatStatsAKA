@@ -35,7 +35,11 @@ class BatteryMainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
-        destination.value = intent.getStringExtra(Destinations.EXTRA_DESTINATION)
+        destination.value = Destinations.initialDestination(
+            extra = intent.getStringExtra(Destinations.EXTRA_DESTINATION),
+            restored = savedInstanceState != null,
+            launchedFromHistory = intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0,
+        )
 
         if (Build.VERSION.SDK_INT >= 33) {
             val granted = ContextCompat.checkSelfPermission(
