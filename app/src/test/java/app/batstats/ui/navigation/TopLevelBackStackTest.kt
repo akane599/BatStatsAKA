@@ -156,4 +156,85 @@ class TopLevelBackStackTest {
         assertEquals(Routes.Settings, subject.selectedTab)
         assertEquals(listOf(Routes.Settings, Routes.SettingsStatus), backStacks.getValue(Routes.Settings).toList())
     }
+
+    // C05: explicit links open the requested root, not a retained detail stack.
+
+    @Test
+    fun `See all link opens Apps at its root even when AppDetails is retained`() {
+        backStacks.getValue(Routes.Apps).add(Routes.AppDetails(3, "app.batstats"))
+
+        // What Now's "See all" (NavGraph onOpenApps) calls.
+        subject.openRoot(Routes.Apps)
+
+        assertEquals(Routes.Apps, subject.selectedTab)
+        assertEquals(listOf(Routes.Apps), backStacks.getValue(Routes.Apps).toList())
+    }
+
+    @Test
+    fun `openDestination for apps opens Apps at its root even when AppDetails is retained`() {
+        backStacks.getValue(Routes.Apps).add(Routes.AppDetails(3, "app.batstats"))
+
+        subject.openDestination(Destinations.APPS)
+
+        assertEquals(Routes.Apps, subject.selectedTab)
+        assertEquals(listOf(Routes.Apps), backStacks.getValue(Routes.Apps).toList())
+    }
+
+    @Test
+    fun `openDestination for now opens Now at its root even when Health is retained`() {
+        selected = Routes.History
+        backStacks.getValue(Routes.Now).add(Routes.Health)
+
+        subject.openDestination(Destinations.NOW)
+
+        assertEquals(Routes.Now, subject.selectedTab)
+        assertEquals(listOf(Routes.Now), backStacks.getValue(Routes.Now).toList())
+    }
+
+    @Test
+    fun `openDestination for now from Now itself still drops a retained Health`() {
+        backStacks.getValue(Routes.Now).add(Routes.Health)
+
+        subject.openDestination(Destinations.NOW)
+
+        assertEquals(Routes.Now, subject.selectedTab)
+        assertEquals(listOf(Routes.Now), backStacks.getValue(Routes.Now).toList())
+    }
+
+    @Test
+    fun `repeated detail links leave only the root and the latest detail`() {
+        // The user switches tabs between links, so each link arrives while its tab is retained but not visible.
+        repeat(3) {
+            subject.select(Routes.Apps)
+            subject.openDestination(Destinations.HEALTH)
+        }
+        assertEquals(listOf(Routes.Now, Routes.Health), backStacks.getValue(Routes.Now).toList())
+
+        listOf("1", "2", "3").forEach { id ->
+            subject.select(Routes.Apps)
+            subject.openDestination(Destinations.session(id))
+        }
+        assertEquals(Routes.History, subject.selectedTab)
+        assertEquals(listOf(Routes.History, Routes.SessionDetails("3")), backStacks.getValue(Routes.History).toList())
+
+        repeat(3) {
+            subject.select(Routes.Apps)
+            subject.openDestination(Destinations.STATUS)
+        }
+        assertEquals(listOf(Routes.Settings, Routes.SettingsStatus), backStacks.getValue(Routes.Settings).toList())
+    }
+
+    @Test
+    fun `plain tab select still restores retained details after an explicit link elsewhere`() {
+        backStacks.getValue(Routes.Apps).add(Routes.AppDetails(3, "app.batstats"))
+        subject.openDestination(Destinations.HISTORY)
+
+        subject.select(Routes.Apps)
+
+        assertEquals(Routes.Apps, subject.selectedTab)
+        assertEquals(
+            listOf(Routes.Apps, Routes.AppDetails(3, "app.batstats")),
+            backStacks.getValue(Routes.Apps).toList(),
+        )
+    }
 }
