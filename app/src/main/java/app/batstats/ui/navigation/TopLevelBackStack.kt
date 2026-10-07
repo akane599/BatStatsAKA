@@ -76,9 +76,19 @@ class TopLevelBackStack(
         return true
     }
 
-    /** Pushes [route] onto the currently visible tab's stack. */
+    /** Pushes [route] onto the currently visible tab's stack, unless it is already on top (a double tap). */
     fun navigate(route: NavKey) {
-        backStack.add(route)
+        if (backStack.lastOrNull() != route) backStack.add(route)
+    }
+
+    /**
+     * An entry's own up action: pops only while [entry] is still the visible stack's top, so a double tap on Back (or
+     * a late "leave" signal after the user already left) cannot pop the parent as well. Always returns `true`: a
+     * stale up is handled by doing nothing.
+     */
+    fun onBack(entry: NavKey): Boolean {
+        if (backStack.lastOrNull() == entry) onBack()
+        return true
     }
 
     /** @return `true` if the back press was handled; `false` if the caller should finish the activity. */
