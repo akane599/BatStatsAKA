@@ -85,6 +85,10 @@ interface SessionDao {
     @Query("SELECT * FROM charge_sessions WHERE startTime <= :to AND COALESCE(endTime, lastSampleTime, startTime) >= :from ORDER BY startTime")
     suspend fun sessionsBetween(from: Long, to: Long): List<ChargeSession>
 
+    /** Closed local discharge sessions whose endpoints fall in the ETA seed's seven-day window. */
+    @Query("SELECT * FROM charge_sessions WHERE type = 'DISCHARGE' AND endTime BETWEEN :from AND :to AND substr(source, 1, 7) != 'import:'")
+    suspend fun closedDischargeSessionsBetween(from: Long, to: Long): List<ChargeSession>
+
     @Query("UPDATE charge_sessions SET endTime=COALESCE(lastSampleTime, startTime), activeKey=NULL, closeReason=:reason WHERE activeKey=1")
     suspend fun closeInterrupted(reason: String)
 

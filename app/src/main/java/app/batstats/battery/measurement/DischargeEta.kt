@@ -1,6 +1,25 @@
 package app.batstats.battery.measurement
 
+import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.SessionType
 import kotlin.math.roundToLong
+
+/** The historical ETA seed uses only counters from closed local discharge sessions. */
+object TypicalDischargeSeed {
+    /**
+     * Discharge charge ÷ counter-covered time for sessions ending in the inclusive [from]..[to]
+     * wall-time window. Null below one covered hour or without positive discharge charge.
+     */
+    fun rateUa(sessions: List<ChargeSession>, from: Long, to: Long): Double? {
+        val eligible = sessions.filter {
+            it.type == SessionType.DISCHARGE && !it.source.startsWith("import:") &&
+                it.endTime?.let { end -> end in from..to } == true
+        }
+        val ms = eligible.sumOf { it.counterCoveredMs }
+        val uah = eligible.sumOf { (it.screenOnUah ?: 0L) + (it.screenOffUah ?: 0L) }
+        return if (ms >= 3_600_000 && uah > 0) uah * 3_600_000.0 / ms else null
+    }
+}
 
 /**
  * Time to empty: the charge counter ÷ a time-weighted EWMA (τ [ETA_TAU_MS]) of the counter-derived
@@ -16,7 +35,7 @@ class DischargeEta(tauMs: Long = ETA_TAU_MS) {
 
     /**
      * [typicalDischargeUa]: 7-day typical drain in µA (positive), e.g.
-     * [DailySummaryAggregator.typicalDischargeUa]; null or ≤ 0 is ignored. May be called before or
+     * [TypicalDischargeSeed.rateUa]; null or ≤ 0 is ignored. May be called before or
      * after the first [accept] (e.g. once an async load finishes): a late seed gets the weight it
      * would have kept had it come first, so the result is the same. A new seed replaces the old.
      */

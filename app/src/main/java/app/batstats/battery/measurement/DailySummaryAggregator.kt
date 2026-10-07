@@ -90,16 +90,6 @@ object DailySummaryAggregator {
         }
     }
 
-    /**
-     * Typical discharge rate in µA across [days] (e.g. the last 7): discharge ÷ discharging time.
-     * Null under one hour of discharging or without any discharge. Seeds [DischargeEta].
-     */
-    fun typicalDischargeUa(days: List<DailySummary>): Double? {
-        val ms = days.sumOf { it.screenOnMs + it.screenOffMs }
-        val uah = days.sumOf { it.screenOnDischargeUah + it.screenOffDischargeUah }
-        return if (ms >= 3_600_000 && uah > 0) uah * 3_600_000.0 / ms else null
-    }
-
     private fun DailySummary.withReading(level: Int?, temperatureDeciC: Int?) = copy(
         minLevel = listOfNotNull(minLevel, level).minOrNull(),
         maxLevel = listOfNotNull(maxLevel, level).maxOrNull(),
