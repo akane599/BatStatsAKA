@@ -113,9 +113,13 @@ fun NavGraph(
             )
         }
 
-        // A running task holds re-taps of Settings and links to its root off this entry too (Back is guarded inside).
+        // A running task holds re-taps of Settings and links to its root off this entry too, even while another tab is
+        // visible (Back is guarded inside).
         entry<Routes.SettingsData> { key ->
-            DataScreen(onBack = { popBack(key) }, blockLeaving = { onBlocked -> topLevelBackStack.blockLeaving(key, onBlocked) })
+            DataScreen(
+                onBack = { popBack(key) },
+                blockLeaving = { isBusy, onBlocked -> topLevelBackStack.blockLeaving(key, isBusy, onBlocked) },
+            )
         }
 
         entry<Routes.SettingsStatus> { key ->

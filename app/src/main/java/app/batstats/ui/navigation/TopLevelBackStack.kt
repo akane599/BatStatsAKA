@@ -6,9 +6,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.rememberNavBackStack
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
 
 /**
  * One [NavBackStack] per top-level tab (see [TOP_LEVEL_TABS]), plus which tab is currently
@@ -18,19 +22,21 @@ import androidx.navigation3.runtime.rememberNavBackStack
  * - [select] on the already-selected tab pops that tab's stack back to its root.
  * - [select] on a different tab switches the visible stack; no stack's contents change.
  * - [openRoot] shows a tab at its root, popping that tab's stack (only that one) whether or not it is visible.
- * - Neither pops a stack holding a [blockLeaving] entry: the stack stays as it is and the blocker is told.
+ * - Neither pops a stack holding a busy [blockLeaving] entry: the stack stays as it is and the blocker is told.
  * - [onBack] pops the visible tab's stack. Popping the last entry of a non-[Routes.Now] tab
  *   switches to [Routes.Now] instead of leaving that tab empty. Popping [Routes.Now]'s root
  *   returns `false` so the caller (the system back handler) can finish the activity.
  *
  * Holds no Compose state of its own — [getSelectedTab]/[setSelectedTab] are supplied by the
  * caller — so it can be constructed and exercised with plain JUnit (see `TopLevelBackStackTest`).
- * [rememberTopLevelBackStack] wires it to `rememberNavBackStack`/`rememberSaveable` for Compose.
+ * [rememberTopLevelBackStack] wires it to `rememberNavBackStack`/`rememberSaveable` for Compose, and keeps one
+ * [LeaveBlockers] across activity recreation.
  */
 class TopLevelBackStack(
     private val backStacks: Map<Routes, NavBackStack<NavKey>>,
     private val getSelectedTab: () -> Routes,
     private val setSelectedTab: (Routes) -> Unit,
+    private val leaveBlockers: LeaveBlockers = LeaveBlockers(),
 ) {
     val selectedTab: Routes get() = getSelectedTab()
 
@@ -40,16 +46,17 @@ class TopLevelBackStack(
     /** [tab]'s own stack: every tab's entries stay decorated (state, ViewModels) while another tab is visible. */
     fun stack(tab: Routes): NavBackStack<NavKey> = backStacks.getValue(tab)
 
-    private val leaveBlockers = mutableMapOf<NavKey, () -> Unit>()
-
     /**
      * Until the returned function is called, popping a tab to its root ([select] on the visible tab, [openRoot])
-     * leaves [entry]'s stack as it is and calls [onBlocked] instead. For a screen whose pop would cancel work in its
-     * ViewModel; Back is guarded on the screen itself. Registering [entry] again replaces its blocker.
+     * while [isBusy] is `true` leaves [entry]'s stack as it is and calls [onBlocked] instead. For a screen whose pop
+     * would cancel work in its ViewModel (see [blockLeavingWhileBusy]); Back is guarded on the screen itself.
+     * Registering [entry] again replaces its blocker, and the replaced registration's function then does nothing.
      */
-    fun blockLeaving(entry: NavKey, onBlocked: () -> Unit): () -> Unit {
-        leaveBlockers[entry] = onBlocked
-        return { leaveBlockers.remove(entry) }
+    fun blockLeaving(entry: NavKey, isBusy: () -> Boolean = { true }, onBlocked: () -> Unit): () -> Unit {
+        val blocker = LeaveBlockers.Blocker(isBusy, onBlocked)
+        val byEntry = leaveBlockers.byEntry
+        byEntry[entry] = blocker
+        return { byEntry.remove(entry, blocker) }
     }
 
     fun select(tab: Routes) {
@@ -67,9 +74,9 @@ class TopLevelBackStack(
     }
 
     private fun popToRoot(stack: NavBackStack<NavKey>): Boolean {
-        val onBlocked = stack.drop(1).firstNotNullOfOrNull { leaveBlockers[it] }
-        if (onBlocked != null) {
-            onBlocked()
+        val blocker = stack.drop(1).firstNotNullOfOrNull { entry -> leaveBlockers.byEntry[entry]?.takeIf { it.isBusy() } }
+        if (blocker != null) {
+            blocker.onBlocked()
             return false
         }
         while (stack.size > 1) stack.removeAt(stack.lastIndex)
@@ -108,6 +115,43 @@ class TopLevelBackStack(
     }
 }
 
+/**
+ * Which entries [TopLevelBackStack.blockLeaving] holds. A ViewModel only so [rememberTopLevelBackStack] can keep it
+ * across activity recreation: a block registered from an entry's ViewModel ([blockLeavingWhileBusy]) outlives the
+ * activity's composition, and the recreated [TopLevelBackStack] must still see it.
+ */
+class LeaveBlockers : ViewModel() {
+    internal class Blocker(val isBusy: () -> Boolean, val onBlocked: () -> Unit)
+
+    internal val byEntry = mutableMapOf<NavKey, Blocker>()
+}
+
+private const val LEAVE_HOLD_KEY = "app.batstats.ui.navigation.LeaveHold"
+
+private class LeaveHold(val refusals: Channel<Unit>, private val unblock: () -> Unit) : AutoCloseable {
+    override fun close() {
+        unblock()
+        refusals.close()
+    }
+}
+
+/**
+ * Blocks leaving this ViewModel's entry whenever [isBusy] says so, for the ViewModel's whole life rather than while its
+ * screen is composed: an entry on a tab that isn't visible isn't composed, yet a link to that tab's root would still
+ * pop it and clear this ViewModel, cancelling its work. [blockLeaving] is [TopLevelBackStack.blockLeaving] for the
+ * entry; only the first call registers, and clearing the ViewModel lifts the block. Every call returns the same
+ * channel of refusals, which the screen drains to say why it stayed, including a refusal made while it was off screen.
+ */
+fun ViewModel.blockLeavingWhileBusy(
+    blockLeaving: (isBusy: () -> Boolean, onBlocked: () -> Unit) -> () -> Unit,
+    isBusy: () -> Boolean,
+): ReceiveChannel<Unit> {
+    getCloseable<LeaveHold>(LEAVE_HOLD_KEY)?.let { return it.refusals }
+    val refusals = Channel<Unit>(Channel.CONFLATED)
+    addCloseable(LEAVE_HOLD_KEY, LeaveHold(refusals, blockLeaving(isBusy) { refusals.trySend(Unit) }))
+    return refusals
+}
+
 @Composable
 fun rememberTopLevelBackStack(): TopLevelBackStack {
     val nowStack = rememberNavBackStack(Routes.Now)
@@ -115,7 +159,8 @@ fun rememberTopLevelBackStack(): TopLevelBackStack {
     val appsStack = rememberNavBackStack(Routes.Apps)
     val settingsStack = rememberNavBackStack(Routes.Settings)
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
-    return remember(nowStack, historyStack, appsStack, settingsStack) {
+    val leaveBlockers = viewModel { LeaveBlockers() }
+    return remember(nowStack, historyStack, appsStack, settingsStack, leaveBlockers) {
         val backStacks: Map<Routes, NavBackStack<NavKey>> = mapOf(
             Routes.Now to nowStack,
             Routes.History to historyStack,
@@ -126,6 +171,7 @@ fun rememberTopLevelBackStack(): TopLevelBackStack {
             backStacks = backStacks,
             getSelectedTab = { TOP_LEVEL_TABS[selectedIndex] },
             setSelectedTab = { selectedIndex = TOP_LEVEL_TABS.indexOf(it) },
+            leaveBlockers = leaveBlockers,
         )
     }
 }

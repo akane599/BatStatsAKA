@@ -32,7 +32,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +54,7 @@ import app.batstats.ui.components.Panel
 import app.batstats.ui.components.QuietText
 import app.batstats.ui.components.SegmentedTabs
 import app.batstats.ui.components.StatCell
+import app.batstats.ui.navigation.blockLeavingWhileBusy
 import app.batstats.ui.theme.spacing
 import app.batstats.viewmodel.ClearStep
 import app.batstats.viewmodel.DataEvent
@@ -63,6 +64,7 @@ import app.batstats.viewmodel.DataTask
 import app.batstats.viewmodel.DataUiState
 import app.batstats.viewmodel.DataViewModel
 import app.batstats.viewmodel.HistoryRange
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 import java.text.NumberFormat
@@ -83,13 +85,15 @@ private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text
  * the chosen document goes to [DataViewModel.onFileChosen] (a cancelled picker does nothing). Every event reaches
  * the ViewModel. While a task runs, Back (system, predictive and the top bar) stays on this screen and says why:
  * leaving would clear the ViewModel and cancel the task before it reports an outcome. Popping to the tab's root
- * (re-tapping Settings, a link) is held off the same way through [blockLeaving], which takes the refusal callback
- * and returns the function that lifts the block.
+ * (re-tapping Settings, a link) is held off the same way through [blockLeaving], which takes the busy check and the
+ * refusal callback and returns the function that lifts the block. That block belongs to the ViewModel, not this
+ * composition ([blockLeavingWhileBusy]), so it still holds while another tab is visible; a refusal made then is said
+ * once this screen is back.
  */
 @Composable
 fun DataScreen(
     onBack: () -> Unit,
-    blockLeaving: (onBlocked: () -> Unit) -> () -> Unit,
+    blockLeaving: (isBusy: () -> Boolean, onBlocked: () -> Unit) -> () -> Unit,
     modifier: Modifier = Modifier,
     vm: DataViewModel = koinViewModel(),
 ) {
@@ -102,10 +106,8 @@ fun DataScreen(
     }
     val back: () -> Unit = { if (state.idle) onBack() else showBusy() }
     BackHandler(enabled = !state.idle, onBack = back)
-    DisposableEffect(state.idle) {
-        val unblock = if (state.idle) null else blockLeaving(showBusy)
-        onDispose { unblock?.invoke() }
-    }
+    val refusals = remember(vm) { vm.blockLeavingWhileBusy(blockLeaving) { !vm.state.value.idle } }
+    LaunchedEffect(refusals) { refusals.receiveAsFlow().collect { showBusy() } }
     fun chosen(task: DataTask): (android.net.Uri?) -> Unit = { uri -> uri?.let { vm.onFileChosen(task, it.toString()) } }
     val exportJson = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(JSON_MIME), chosen(DataTask.EXPORT_JSON))
     val exportCsv = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree(), chosen(DataTask.EXPORT_CSV))
