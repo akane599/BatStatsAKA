@@ -141,7 +141,12 @@ val appModule = module {
 
     single { DrainNotificationManager(androidContext(), get()) }
 
-    viewModel { NowViewModel(DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get()) }
+    viewModel {
+        NowViewModel(
+            DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get(),
+            savedStateHandle = get(),
+        )
+    }
     viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
     // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
     viewModel { HistoryViewModel(DefaultHistoryRepository(get(), get()), get()) }

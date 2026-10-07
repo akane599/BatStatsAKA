@@ -1,6 +1,7 @@
 package app.batstats.viewmodel
 
 import android.graphics.Bitmap
+import androidx.lifecycle.SavedStateHandle
 import app.batstats.battery.apps.AppInfo
 import app.batstats.battery.apps.AppInfoSource
 import app.batstats.battery.apps.AppLabel
@@ -58,8 +59,11 @@ class NowViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun TestScope.start(): Pair<NowViewModel, () -> NowUiState> {
-        val vm = NowViewModel(repo, monitoring, appInfo, clock = { now }, zone = { ZoneOffset.UTC }, computeDispatcher = dispatcher)
+    private fun TestScope.start(saved: SavedStateHandle = SavedStateHandle()): Pair<NowViewModel, () -> NowUiState> {
+        val vm = NowViewModel(
+            repo, monitoring, appInfo, clock = { now }, zone = { ZoneOffset.UTC },
+            computeDispatcher = dispatcher, savedStateHandle = saved,
+        )
         backgroundScope.launch { vm.state.collect { } }
         runCurrent()
         return vm to { vm.state.value }
@@ -188,6 +192,23 @@ class NowViewModelTest {
         repo.calibration.value = CalibrationState()
         runCurrent()
         assertEquals(-0.45, state().trace.points.last().value!!, 1e-9)
+    }
+
+    @Test fun selectedTraceRangeSurvivesViewModelAndSavedStateRecreation() = runTest {
+        val saved = SavedStateHandle()
+        val (vm, state) = start(saved)
+        vm.onEvent(NowEvent.SelectRange(TraceRange.DAY))
+        runCurrent()
+        assertEquals(TraceRange.DAY, state().trace.range)
+
+        val (_, recreated) = start(saved)
+        assertEquals("the shared saved handle restores the selected range", TraceRange.DAY, recreated().trace.range)
+
+        val restored = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+        val (_, afterDeath) = start(restored)
+        assertEquals("a restored saved handle retains the selected range", TraceRange.DAY, afterDeath().trace.range)
+        assertEquals(T0 - 24 * HOUR, repo.queries.last())
+        assertTrue("enum selections are saved by name", saved.keys().any { saved.get<Any?>(it) == TraceRange.DAY.name })
     }
 
     @Test fun historyRangesQueryStoredRowsForTheirSpanWithGapMarkers() = runTest {

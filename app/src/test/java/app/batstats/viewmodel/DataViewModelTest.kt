@@ -54,6 +54,39 @@ class DataViewModelTest {
         assertNull(vm.state.value.stored)
     }
 
+    @Test fun selectedRangeAndBothIncludesSurviveViewModelAndSavedStateRecreation() = runTest {
+        val saved = SavedStateHandle()
+        val vm = start(saved)
+        vm.onEvent(DataEvent.SelectRange(HistoryRange.MONTH))
+        vm.onEvent(DataEvent.ToggleSamples)
+        vm.onEvent(DataEvent.ToggleSessions)
+        assertEquals(HistoryRange.MONTH, vm.state.value.range)
+        assertEquals(false, vm.state.value.includeSamples)
+        assertEquals(false, vm.state.value.includeSessions)
+
+        val recreated = start(saved)
+        assertEquals("the shared saved handle restores the selected range", HistoryRange.MONTH, recreated.state.value.range)
+        assertEquals(false, recreated.state.value.includeSamples)
+        assertEquals(false, recreated.state.value.includeSessions)
+
+        val restored = restoreSavedState(saved)
+        val afterDeath = start(restored)
+        assertEquals("a restored saved handle retains the selected range", HistoryRange.MONTH, afterDeath.state.value.range)
+        assertEquals(false, afterDeath.state.value.includeSamples)
+        assertEquals(false, afterDeath.state.value.includeSessions)
+        assertEquals(false, afterDeath.state.value.canExport)
+        assertTrue("enum selections are saved by name", saved.keys().any { saved.get<Any?>(it) == HistoryRange.MONTH.name })
+
+        afterDeath.onEvent(DataEvent.ToggleSessions)
+        afterDeath.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
+        afterDeath.onFileChosen(DataTask.EXPORT_JSON, "content://restored-selections.json")
+        runCurrent()
+        assertEquals(
+            Export("json", "content://restored-selections.json", NOW - 30 * DAY, 0L, false, true),
+            repo.exports.single(),
+        )
+    }
+
     @Test fun exportUsesTheSelectedPeriodAndIncludesAndReportsItsFormat() = runTest {
         val vm = start()
         vm.onEvent(DataEvent.SelectRange(HistoryRange.WEEK))
@@ -98,6 +131,7 @@ class DataViewModelTest {
             val recreated = start(restored, now = NOW + DAY)
             assertEquals(HistoryRange.ALL, recreated.state.value.range)
             assertTrue(recreated.state.value.includeSamples)
+            assertEquals(false, recreated.state.value.includeSessions)
             recreated.onFileChosen(task, "content://restored")
             runCurrent()
             val format = if (task == DataTask.EXPORT_JSON) "json" else "csv"
@@ -106,7 +140,7 @@ class DataViewModelTest {
                 repo.exports.last(),
             )
             assertEquals(DataOutcome.Exported(task), recreated.state.value.outcome)
-            assertTrue("the launched request is cleared after completion", restored.keys().isEmpty())
+            assertNull("the launched request is cleared after completion", restored.get<Any?>("pendingExport.${task.name}"))
 
             val count = repo.exports.size
             recreated.onFileChosen(task, "content://duplicate")
@@ -132,7 +166,7 @@ class DataViewModelTest {
         vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
         vm.onPickerUnavailable(DataTask.EXPORT_JSON)
         assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.NO_PICKER), vm.state.value.outcome)
-        assertTrue(saved.keys().isEmpty())
+        assertNull("an unavailable picker discards only its launched request", saved.get<Any?>("pendingExport.EXPORT_JSON"))
         vm.onFileChosen(DataTask.EXPORT_JSON, "content://late")
         runCurrent()
         assertTrue(repo.exports.isEmpty())
