@@ -5,6 +5,7 @@ import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.CapacityEstimator
 import app.batstats.battery.measurement.Observation
+import app.batstats.battery.measurement.ObservationEngine
 import app.batstats.battery.measurement.ObservationSummary
 import app.batstats.battery.measurement.PowerState
 import java.util.UUID
@@ -67,6 +68,21 @@ object SessionReport {
             observationId = point.generation, source = SOURCE,
             chargerType = if (plugged) ChargerType.of(sample.plugged)?.name else null,
         )
+    }
+
+    /** Account the closing interval, but leave the new power state's endpoint peaks to its own session. */
+    fun reportPowerBoundary(
+        current: ChargeSession,
+        sample: BatterySample,
+        point: Observation,
+        engine: ObservationEngine,
+        extremes: SessionExtremes,
+    ): ChargeSession {
+        val before = engine.summary
+        val summary = engine.accept(point)
+        val closingExtremes = extremes.plus(null, null, summary.cpuSuspendMs - before.cpuSuspendMs,
+            screenOffBefore = before.latest?.interactive == false)
+        return report(current, sample, summary, closingExtremes)
     }
 
     /** [current] updated through [sample]; [summary] is the session engine's summary including it. */

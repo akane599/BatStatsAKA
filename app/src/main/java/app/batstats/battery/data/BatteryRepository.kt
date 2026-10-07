@@ -290,7 +290,7 @@ class BatteryRepository(
         val open = session
         val mismatch = open != null && open.type != SessionReport.sessionType(point.power)
         val ended = if (open != null && (changed || gap || mismatch)) {
-            val closing = if (changed && !gap) SessionReport.report(open, raw, sessionEngine.accept(point), sessionExtremes) else open
+            val closing = if (changed && !gap) SessionReport.reportPowerBoundary(open, raw, point, sessionEngine, sessionExtremes) else open
             closing.copy(endTime = closing.lastSampleTime ?: closing.startTime, activeKey = null,
                 closeReason = if (gap) summary.lastIssue ?: "Observation gap" else "Power state changed")
         } else null
