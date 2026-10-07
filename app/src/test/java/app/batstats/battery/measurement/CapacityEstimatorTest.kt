@@ -12,13 +12,33 @@ class CapacityEstimatorTest {
     private fun session(deltaUah: Long?, start: Int?, end: Int?, covered: Double = 1.0) =
         CapacityEstimator.fromSession(deltaUah, start, end, observedMs = 3_600_000, counterCoveredMs = (3_600_000 * covered).toLong())
 
-    @Test fun counterSpanScalesToAFullChargeWithConfidenceFromSpanAndCoverage() {
-        assertEquals(CapacityEstimate(5_000_000, HIGH, COUNTER_SPAN), session(2_000_000, 50, 90, covered = 0.95))
-        assertEquals(CapacityEstimate(5_000_000, HIGH, COUNTER_SPAN), session(2_000_000, 90, 50, covered = 0.9)) // discharge
-        assertEquals(MEDIUM, session(2_000_000, 50, 90, covered = 0.8)?.confidence)
+    @Test fun fullyCoveredCounterSpanScalesToAFullChargeWithUnchangedConfidenceTiers() {
+        assertEquals(CapacityEstimate(5_000_000, HIGH, COUNTER_SPAN), session(2_000_000, 50, 90))
+        assertEquals(CapacityEstimate(5_000_000, HIGH, COUNTER_SPAN), session(2_000_000, 90, 50)) // discharge
         assertEquals(CapacityEstimate(5_000_000, MEDIUM, COUNTER_SPAN), session(1_000_000, 60, 80))
         assertEquals(CapacityEstimate(5_000_000, LOW, COUNTER_SPAN), session(750_000, 70, 85))
         assertEquals(5_000, session(750_000, 70, 85)?.fullMah)
+    }
+
+    @Test fun partialCounterChargeCannotEstimateCapacityOverTheWholeLevelSpan() {
+        // A 4,000 mAh battery changing by 40 points: only the covered fraction of 1,600 mAh is known.
+        assertNull(session(1_200_000, 50, 90, covered = 0.75))
+        assertNull(session(1_440_000, 50, 90, covered = 0.9))
+        assertNull(session(1_200_000, 90, 50, covered = 0.75))
+        assertNull(session(1_440_000, 90, 50, covered = 0.9))
+        assertEquals(CapacityEstimate(4_000_000, HIGH, COUNTER_SPAN), session(1_600_000, 90, 50))
+    }
+
+    @Test fun fullCoverageBoundaryHasZeroMillisecondTolerance() {
+        assertNull(CapacityEstimator.fromSession(1_600_000, 90, 50, observedMs = 3_600_000, counterCoveredMs = 3_599_999))
+        assertEquals(
+            CapacityEstimate(4_000_000, HIGH, COUNTER_SPAN),
+            CapacityEstimator.fromSession(1_600_000, 90, 50, observedMs = 3_600_000, counterCoveredMs = 3_600_000),
+        )
+        assertEquals(
+            CapacityEstimate(4_000_000, HIGH, COUNTER_SPAN),
+            CapacityEstimator.fromSession(1_600_000, 90, 50, observedMs = 3_600_000, counterCoveredMs = 3_600_001),
+        )
     }
 
     @Test fun shortSpansPoorCoverageAndImplausibleValuesGiveNoEstimate() {

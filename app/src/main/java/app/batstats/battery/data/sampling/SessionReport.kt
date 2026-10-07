@@ -82,7 +82,13 @@ object SessionReport {
         val summary = engine.accept(point)
         val closingExtremes = extremes.plus(null, null, summary.cpuSuspendMs - before.cpuSuspendMs,
             screenOffBefore = before.latest?.interactive == false)
-        return report(current, sample, summary, closingExtremes)
+        // The cross-power interval has no counter charge. Keep the estimate whose charge and level
+        // span both end at the last same-state sample, rather than recomputing at the new state.
+        return report(current, sample, summary, closingExtremes).copy(
+            capacityEstimateMah = current.capacityEstimateMah,
+            capacityConfidence = current.capacityConfidence,
+            capacityBasis = current.capacityBasis,
+        )
     }
 
     /** [current] updated through [sample]; [summary] is the session engine's summary including it. */
