@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
@@ -26,6 +27,9 @@ import java.util.TimeZone
 import android.text.format.DateFormat as AndroidDateFormat
 
 internal fun <T> promotionNotification(lastPosted: T?, fallback: () -> T): T = lastPosted ?: fallback()
+
+/** Stop and Reset require unlock on API 31+; older Android versions have no equivalent action protection. */
+internal fun actionsRequireAuth(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.S
 
 /**
  * The ongoing monitoring notification: custom collapsed and expanded views in the system's decorated template,
@@ -133,8 +137,8 @@ class DrainNotificationManager(private val context: Context, private val reposit
             .setWhen(0L).setShowWhen(false).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             // Action icons are not drawn by the Android 7+ templates.
-            .addAction(0, context.getString(R.string.notification_action_stop), action(DrainNotificationReceiver.ACTION_STOP, REQUEST_STOP))
-            .addAction(0, context.getString(R.string.notification_action_reset), action(DrainNotificationReceiver.ACTION_RESET, REQUEST_RESET))
+            .addAction(action(context.getString(R.string.notification_action_stop), DrainNotificationReceiver.ACTION_STOP, REQUEST_STOP))
+            .addAction(action(context.getString(R.string.notification_action_reset), DrainNotificationReceiver.ACTION_RESET, REQUEST_RESET))
         val icon = content.statusIcon?.let { text ->
             try {
                 icons.icon(text)
@@ -147,9 +151,14 @@ class DrainNotificationManager(private val context: Context, private val reposit
         return builder.build()
     }
 
-    private fun action(action: String, requestCode: Int) = PendingIntent.getBroadcast(context, requestCode,
-        Intent(context, DrainNotificationReceiver::class.java).setAction(action),
-        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    private fun action(title: String, action: String, requestCode: Int): NotificationCompat.Action {
+        val intent = PendingIntent.getBroadcast(context, requestCode,
+            Intent(context, DrainNotificationReceiver::class.java).setAction(action),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        return NotificationCompat.Action.Builder(0, title, intent)
+            .setAuthenticationRequired(actionsRequireAuth(Build.VERSION.SDK_INT))
+            .build()
+    }
 
     private fun collapsed(content: NotificationContent, fitter: NotificationFitter) =
         RemoteViews(context.packageName, R.layout.notification_collapsed).apply {
