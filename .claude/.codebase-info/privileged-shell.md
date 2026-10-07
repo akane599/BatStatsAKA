@@ -22,7 +22,7 @@ BatteryStatsParser (util/BatteryStatsParser.kt) → FullSnapshot / AppPowerStats
 ## Pieces
 | File | Role |
 | --- | --- |
-| `shizuku/ShizukuBridge.kt` | Binds the Shizuku user service (`SERVICE_VERSION`, bind timeout), runs commands over a pipe (`runViaPipe`), retries ping, and unbinds after `IDLE_UNBIND_MS` (60 s) idle (`IdleCountdown`, `HelperBinding`). `RunResult.Success/Error(Failure)`. |
+| `shizuku/ShizukuBridge.kt` | Binds the Shizuku user service (`SERVICE_VERSION`, bind timeout), runs commands over a pipe (`runViaPipe`), retries ping, and unbinds after `IDLE_UNBIND_MS` (60 s) idle (`IdleCountdown`, `HelperBinding`). `RunResult.Success/Error(Failure)`; `classifyAfterRead` separates lost access (not running / no permission) from transport and command failures. Exposes a `blocked` flow when the user denied permission permanently (`shizukuPermissionBlocked`); `requestPermission` is then a no-op. |
 | `shizuku/ShellUserService.kt` | A `Binder` running in the Shizuku helper process. It allow-lists only `dumpsys batterystats -c --charged` and `dumpsys battery`. Transactions: `TRANSACTION_RUN_PIPE`, `TRANSACTION_CANCEL`, `TRANSACTION_DESTROY` (the literal 16777115, pinned against Shizuku's constant by `ShellUserServiceTest`). |
 | `util/CommandProtocol.kt`, `util/CommandOutput.kt` | Bounded process execution and the pipe framing between the helper and the app. |
 | `util/DumpOutput.kt` | Recognizes refusal/failure text in dump output. |
@@ -31,10 +31,12 @@ BatteryStatsParser (util/BatteryStatsParser.kt) → FullSnapshot / AppPowerStats
 | `apps/AppInfoRepository.kt`, `apps/AppInfoCache.kt` | Labels and icons for UIDs/packages (needs `QUERY_ALL_PACKAGES`); icons are dropped on trim memory. |
 | `apps/AppUsageSnapshot.kt`, `apps/AppUsageDelta.kt`, `apps/TopApps.kt` | Snapshot model, the BASELINE→END delta, and the top-N plus "others" ranking. Shared UIDs: `UidIdentity` / `AppPowerStats.identity()`. |
 | `apps/SessionSnapshotCollector.kt`, `apps/SessionSnapshotStore.kt` | Per-discharge-session breakdown (BASELINE on discharge open, END at plug-in, abandoned → FAILED), stored via `RoomSessionSnapshotStore` in `app_snapshots`, `app_snapshot_uids` and `session_app_usage`. |
-| `viewmodel/ShizukuState.kt` | UI-facing Shizuku state. |
+| `viewmodel/ShizukuState.kt` | UI-facing Shizuku state (`running`, `granted`, `blocked`). A blocked permission shows an Open Shizuku action instead of Allow (Apps, AppDetails, Status). |
 
 ## Gotchas
 - Never add a command to `ShellUserService.COMMANDS` casually: it is the privilege boundary.
+- `BatteryStatsParser.parseCheckin(..., sdkInt)` picks process-state columns by SDK (background/cached at 8/9
+  before API 28, 7/10 after); `AppStatsRepository` passes `Build.VERSION.SDK_INT`.
 - `ShellRunner.access` / `lastError` feed the notification issue line and the Status screen.
 - Instrumented Shizuku tests are annotated `app.batstats.test.RequiresShizuku` and run as a separate
   phase (see `scripts/prepare_shizuku.py`, `scripts/test_device_phases.py`).

@@ -53,4 +53,10 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
   state), both wrapped in `SharedPreferencesStore` / `KeyValueStore` (`data/sampling/KeyValueStore.kt`).
 - Export/import: `data/ExportImport.kt` (`BatteryExport` format 3; formats 1–2 still import) and
   `data/HistoryFiles.kt`. Backup rules: `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`.
-- Retention: `data/HistoryRetention.kt`, `data/HistoryPolicy.kt`; `boundStorage` caps rows.
+- Retention: `data/HistoryRetention.kt`, `data/HistoryPolicy.kt`; `boundStorage` trims to
+  `HistoryLimits.SAMPLE_TRIM_TARGET`/`SESSION_TRIM_TARGET` (cap − 200) every `CLEANUP_SAMPLE_INTERVAL` inserts
+  (`data/HistoryFiles.kt`), so tables may sit slightly over `MAX_SAMPLES`/`MAX_SESSIONS` between trims; import
+  refuses only its own growth past the cap (`importWithinLimit`).
+- Import validation (`HistoryPolicy.kt`): session coverage is clamped to the span within a clock-correction
+  allowance (5 s + span/10, capped at 15 min; `normalizeCoverage`, `sampleInSessionWindow`), and
+  `planSessionImport` decides ADDED/UPDATED/UNCHANGED/STALE from the raw stored and raw incoming rows.
