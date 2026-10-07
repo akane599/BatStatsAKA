@@ -20,8 +20,8 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
 /**
- * Quick Settings tile: live current/power while the shade is open (holds [SamplingDemand] so the
- * sampler runs at 2 s for as long as that is), tap toggles [MonitoringControl], long-press opens the
+ * Quick Settings tile: live current/power while monitoring is on and the shade is open (holds
+ * [SamplingDemand] so the sampler runs at 2 s), tap toggles [MonitoringControl], long-press opens the
  * app (Android reserves long-press for the activity named by the `QS_TILE_PREFERENCES` filter).
  */
 class MonitorTileService : TileService(), KoinComponent {
@@ -34,7 +34,7 @@ class MonitorTileService : TileService(), KoinComponent {
     override fun onStartListening() {
         super.onStartListening()
         val listenScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-        session.start(listenScope, demand.acquire(DEMAND_TAG))
+        session.start(listenScope, monitoring.isMonitoring) { demand.acquire(DEMAND_TAG) }
         combine(repository.realtimeFlow, monitoring.isMonitoring, ::render).launchIn(listenScope)
     }
 
