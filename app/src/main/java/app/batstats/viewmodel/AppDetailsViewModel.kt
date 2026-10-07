@@ -16,6 +16,7 @@ import app.batstats.battery.util.BatteryStatsParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -188,6 +189,7 @@ class AppDetailsViewModel(
     private val info = MutableStateFlow<AppInfo?>(null)
     private val infoLoaded = MutableStateFlow(false)
     private val history = MutableStateFlow<AppHistoryState>(AppHistoryState.Loading)
+    private var historyJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -242,7 +244,8 @@ class AppDetailsViewModel(
     private fun loadHistory() {
         // A retry shows its read; a refresh keeps the bars shown until the new ones arrive.
         if (history.value == AppHistoryState.Failed) history.value = AppHistoryState.Loading
-        viewModelScope.launch {
+        historyJob?.cancel()
+        historyJob = viewModelScope.launch {
             val now = clock()
             history.value = try {
                 val sessions = source.history(uid, packageName, now - HISTORY_WINDOW_MS, now)
