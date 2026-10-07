@@ -3,6 +3,7 @@ package app.batstats.ui.screens
 import androidx.compose.runtime.Composable
 import app.batstats.battery.apps.AppLabel
 import app.batstats.ui.FIXED_TIME_MS
+import app.batstats.ui.PhonePreview
 import app.batstats.ui.ScreenPreviews
 import app.batstats.ui.ScreenshotTheme
 import app.batstats.ui.TallPhonePreview
@@ -123,6 +124,16 @@ fun AppDetailsSparsePreview() {
 @Composable
 fun AppDetailsHistoryFailedPreview() {
     ScreenshotTheme { AppDetailsPreviewContent(sparse().copy(history = AppHistoryState.Failed)) }
+}
+
+/** Before the app lookup and the first read: a quiet dash where the name goes, never an empty heading. */
+@PreviewTest
+@PhonePreview
+@Composable
+fun AppDetailsLoadingPreview() {
+    ScreenshotTheme {
+        AppDetailsPreviewContent(AppDetailsUiState(uid = 10_201, packageName = "com.google.android.youtube", nowMs = FIXED_TIME_MS))
+    }
 }
 
 /** The whole page of the full state on a tall phone (the lists, network, hardware and history below the fold). */

@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import app.batstats.R
 import app.batstats.ui.theme.chartColors
@@ -410,7 +411,12 @@ fun BreakdownBar(
                     }
                     onDrawBehind {
                         if (drawn.isEmpty()) drawRect(track)
-                        for (i in drawn.indices) drawRect(drawn[i].color, Offset(lefts[i], 0f), Size(widths[i], size.height))
+                        // Parts run from the start edge, like the legend: mirrored in RTL.
+                        val rtl = layoutDirection == LayoutDirection.Rtl
+                        for (i in drawn.indices) {
+                            val left = if (rtl) size.width - lefts[i] - widths[i] else lefts[i]
+                            drawRect(drawn[i].color, Offset(left, 0f), Size(widths[i], size.height))
+                        }
                     }
                 },
         )

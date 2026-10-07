@@ -3,7 +3,11 @@ package app.batstats.ui.components.chart
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.LayoutDirection
 import app.batstats.ui.ComponentPreviews
 import app.batstats.ui.FIXED_TIME_MS
 import app.batstats.ui.ScreenshotTheme
@@ -241,5 +245,13 @@ fun BreakdownBarPreview() {
             )
         }
     }
+}
+
+/** Right to left: the parts run from the right edge, in the legend's order. */
+@PreviewTest
+@Preview(name = "Rtl")
+@Composable
+fun BreakdownBarRtlPreview() {
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { BreakdownBarPreview() }
 }
 

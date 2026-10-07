@@ -131,7 +131,10 @@
     <string name="apps_details_bluetooth_scan">Bluetooth taraması</string>
 
     <string name="apps_details_history_title">Pildeki oturumlar</string>
-    <string name="apps_details_history_caption">%2$d oturumun %1$d tanesinde ilk 30 içinde</string>
+    <plurals name="apps_details_history_caption">
+        <item quantity="one">%2$d oturumun %1$d tanesinde ilk 30 içinde</item>
+        <item quantity="other">%2$d oturumun %1$d tanesinde ilk 30 içinde</item>
+    </plurals>
     <string name="apps_details_history_empty">Son 30 günde uygulama başına veri içeren oturum yok.</string>
     <string name="apps_details_history_failed">Kaydedilen oturumlar okunamadı.</string>
     <string name="apps_details_history_series">Kullanılan pil</string>
