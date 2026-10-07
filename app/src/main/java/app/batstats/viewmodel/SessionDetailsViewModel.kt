@@ -381,18 +381,23 @@ internal object SessionDetailsMapping {
     /**
      * Charging insights: the charger (stored enum name, else the readings' plug), the average power (energy added over
      * counter-covered time, else the readings' time-weighted mean), peak power and temperature, and the 20 → 80 time.
+     * Peak power uses the current calibration on raw readings. Persisted readings are subsampled, so this may miss
+     * a spike between samples. Without usable power readings, the stored peak retains its capture-time calibration.
      */
     fun charging(session: ChargeSession, readings: List<BatterySample>, calibration: CurrentCalibration, fahrenheit: Boolean): SessionInsights.Charging {
         val measured = SessionEvidence.hasCoverage(session)
         val fromEnergy = session.energyNwh
             ?.takeIf { measured && session.counterCoveredMs >= MIN_COUNTER_MS }
             ?.let { it / NWH_PER_WH * MS_PER_HOUR / session.counterCoveredMs }
+        val peakPowerW = readings.mapNotNull { sample ->
+            BatteryReading.powerMw(BatteryReading.calibratedUa(sample.currentNowUa, calibration), sample.voltageMv)
+        }.maxOfOrNull { abs(it) }?.div(1_000.0)
         val peakC = session.peakTemperatureDeciC?.div(10.0) ?: readings.mapNotNull { it.temperatureDeciC }.maxOrNull()?.div(10.0)
         return SessionInsights.Charging(
             charger = ChargerType.entries.firstOrNull { it.name == session.chargerType }
                 ?: readings.firstNotNullOfOrNull { ChargerType.of(it.plugged) },
             averagePowerW = fromEnergy ?: meanPowerW(readings, calibration),
-            peakPowerW = session.peakPowerMw?.div(1_000.0),
+            peakPowerW = peakPowerW ?: session.peakPowerMw?.div(1_000.0),
             peakTemperature = peakC?.let { displayTemperature(it, fahrenheit) },
             twentyToEightyMs = levelSpanMs(readings, FROM_LEVEL, TO_LEVEL),
         )
