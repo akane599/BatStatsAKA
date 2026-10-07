@@ -172,6 +172,28 @@ class HistoryImportTest {
             assertEquals(appRows, source.appUsageDao().sessionUsageRows("session").map { it.toRow() })
         }
     }
+    @Test fun staleParentKeepsItsNewerBreakdownWhileSameWindowUsageCanUpdateIt() = runBlocking {
+        database().useDatabase { db ->
+            val manager = ExportImportManager(context, db, HistoryMaintenance())
+            val rowsA = appRows.mapIndexed { rank, row -> row.toSessionUsage("session", rank, AppUsageBasis.DELTA) }
+            val rowsB = rowsA.map { it.copy(powerMah = 99.0) }
+            val newer = BatteryExport(sessions = listOf(closedSession()), appUsage = rowsA)
+            val older = newer.copy(sessions = listOf(closedSession().copy(
+                endTime = 1500, lastSampleTime = 1500, observedMs = 500, counterCoveredMs = 500,
+                screenOnMs = 500, deltaUah = 500, screenOnUah = 500,
+            )), appUsage = rowsB)
+            assertEquals(HistoryImportResult(0, 1, 0, 0), manager.importPayload(newer))
+            val retained = db.sessionDao().byId("import:session")
+            val retainedRows = db.appUsageDao().sessionUsageRows("import:session")
+            assertEquals(HistoryImportResult(0, 0, 0, 1), manager.importPayload(older))
+            assertEquals(retained, db.sessionDao().byId("import:session"))
+            assertEquals(retainedRows, db.appUsageDao().sessionUsageRows("import:session"))
+            assertEquals(HistoryImportResult(0, 0, 1, 0), manager.importPayload(newer.copy(appUsage = rowsB)))
+            assertEquals(HistoryPolicy.appUsage(rowsB), db.appUsageDao().sessionUsageRows("import:session"))
+            assertEquals(HistoryImportResult(0, 0, 0, 1), manager.importPayload(newer.copy(appUsage = rowsB)))
+        }
+    }
+
     @Test fun appUsageWithoutItsSessionOrWithDuplicateRanksRollsBackTheImport() = runBlocking {
         database().useDatabase { db ->
             val manager = ExportImportManager(context, db, HistoryMaintenance())
@@ -194,8 +216,9 @@ class HistoryImportTest {
                     "session,0,10123,com.example.video,12.5,60000,900000,,,,4096,false,DELTA,1\n" +
                     "session,1,1000,android,3.25,,,,,,,false,DELTA,1\n" +
                     "session,2,-1,,0.75,,,,,,,true,DELTA,1\n")
-                assertEquals(HistoryImportResult(0, 0, 0, 0), manager.importCsv(Uri.fromFile(file)))
+                assertEquals(HistoryImportResult(0, 0, 1, 0), manager.importCsv(Uri.fromFile(file)))
                 assertEquals(appRows, db.appUsageDao().sessionUsageRows("import:session").map { it.toRow() })
+                assertEquals(HistoryImportResult(0, 0, 0, 0), manager.importCsv(Uri.fromFile(file)))
             }
         } finally { file.delete() }
     }

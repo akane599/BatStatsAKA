@@ -180,6 +180,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         require(sessions.map { it.sessionId }.toSet().size == sessions.size) { "Duplicate session identities in file" }
         var addedSamples = 0; var addedSessions = 0; var updated = 0; var skipped = 0
         return db.withTransaction {
+            val dispositions = mutableMapOf<String, ImportSessionDisposition>()
             for ((index, session) in sessions.withIndex()) {
                 currentCoroutineContext().ensureActive()
                 val original = payload.sessions[index]
@@ -192,23 +193,16 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                     }
                     skipped++; continue
                 }
-                val previous = db.sessionDao().byId(session.sessionId)
-                val merged = if (previous == null) session else HistoryPolicy.mergeDerived(previous, session)
-                when {
-                    previous == null -> { db.sessionDao().insert(session); addedSessions++ }
-                    previous == merged -> skipped++
-                    HistoryPolicy.sameMeasurement(previous, session) -> { db.sessionDao().update(merged); updated++ }
-                    else -> {
-                        require(previous.source.startsWith("import:") && HistoryPolicy.sameOrigin(previous, session)) { "Conflicting imported session" }
-                        require(session.endTime != previous.endTime) { "Conflicting values for one imported session window" }
-                        // Imported and stored rows always carry an end (HistoryPolicy.session sets one).
-                        val incomingEnd = checkNotNull(session.endTime) { "Imported session without an end" }
-                        val storedEnd = checkNotNull(previous.endTime) { "Imported session without an end" }
-                        if (incomingEnd < storedEnd) { skipped++; continue }
-                        require(session.observedMs >= previous.observedMs && session.counterCoveredMs >= previous.counterCoveredMs) { "Incompatible imported session coverage" }
-                        db.sessionDao().update(merged); updated++
-                    }
+                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId), session)
+                when (plan.disposition) {
+                    ImportSessionDisposition.ADDED -> db.sessionDao().insert(plan.session)
+                    ImportSessionDisposition.UPDATED -> db.sessionDao().update(plan.session)
+                    ImportSessionDisposition.UNCHANGED, ImportSessionDisposition.STALE -> Unit
                 }
+                dispositions[session.sessionId] = plan.disposition
+                addedSessions += plan.disposition.added
+                updated += plan.disposition.updated
+                skipped += plan.disposition.unchanged
             }
             for ((index, sample) in samples.withIndex()) {
                 currentCoroutineContext().ensureActive()
@@ -239,14 +233,17 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                 require(db.batteryDao().insertSample(stored) != -1L) { "Sample insert conflicted with existing history" }
                 addedSamples++
             }
-            // A breakdown travels with its session: imported sessions take the file's rows; local ones keep their own.
+            // A breakdown follows its parent's merge: stale imports and local sessions keep their own.
             for ((sessionId, rows) in usage.groupBy { it.sessionId }) {
                 currentCoroutineContext().ensureActive()
                 val local = db.sessionDao().byId(HistoryPolicy.originalId(sessionId))
-                if (local != null && !local.source.startsWith("import:")) continue
-                require(db.sessionDao().byId(sessionId) != null) { "App usage belongs to a session that is not in history" }
-                val ordered = rows.sortedBy { it.rank }
-                if (db.appUsageDao().sessionUsageRows(sessionId) != ordered) db.appUsageDao().replaceSessionUsageRows(sessionId, ordered)
+                val plan = HistoryPolicy.planUsageImport(
+                    dispositions[sessionId], local?.source, db.sessionDao().byId(sessionId) != null,
+                    db.appUsageDao().sessionUsageRows(sessionId), rows,
+                ) ?: continue
+                db.appUsageDao().replaceSessionUsageRows(sessionId, plan.rows)
+                updated += plan.updated
+                skipped += plan.unchanged
             }
             // Refuse rather than silently deleting existing history to make room for an import.
             require(db.batteryDao().count() <= HistoryLimits.MAX_SAMPLES && db.sessionDao().count() <= HistoryLimits.MAX_SESSIONS) { "History limit exceeded; clear or export older records first" }
