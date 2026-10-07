@@ -6,6 +6,8 @@
 - JDK 21: `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`. The SDK comes from `ANDROID_HOME`; never create
   or edit `local.properties`.
 - This dev host has no AVD or attached device and no KVM, so device/instrumented checks don't run locally.
+- New machine: run `android-kit/setup.sh` and `code-audit-claude/install.mjs` as in `docs/CLAUDE_SETUP.md`;
+  plugins, kit hooks and model env are per machine in `.claude/settings.local.json` (never committed).
 
 ## Commands
 | Task | Command |

@@ -39,7 +39,8 @@ BatStatsAKA/
 ├── .claude/                        # agent tooling: live-rules, kit, skills, agents, hooks, scripts, this map
 ├── CLAUDE.md, PROGRESS.md          # agent instructions; progress + decision log
 ├── README.md, CHANGELOG.md, AUDIT_REPORT.md, LICENSE
-└── code-audit-claude/              # untracked audit tooling output; not product code
+├── android-kit/                    # Claude Code installer (setup.sh: local-scope plugins, hooks, routing); see docs/CLAUDE_SETUP.md
+└── code-audit-claude/              # /code-audit reviewer agents installer (install.mjs); not product code
 ```
 
 Generated or ignored: `build/`, `app/build/`, `.gradle/`, `local.properties` (never read or edit it).
