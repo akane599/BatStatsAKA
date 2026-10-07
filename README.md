@@ -4,7 +4,7 @@
 
 BatStats monitors battery readings and observed charging/discharging sessions. Ordinary readings use Android BatteryManager. Advanced statistics use Shizuku when running and authorized, otherwise root, then ADB where supported; on Android 16/API 36, per-app batterystats access needs Shizuku or root. Availability depends on the device; missing data is not zero consumption.
 
-This development branch targets Android 16/API36. See the [step-by-step baseline-to-current changelog](docs/BASELINE_TO_CURRENT.md) for added behavior, fixes and remaining work. Implementation and actual validation status are recorded in [PROGRESS.md](PROGRESS.md) and [AUDIT_REPORT.md](AUDIT_REPORT.md). Physical Samsung behavior remains unverified.
+This development branch targets Android 16/API 36. The [step-by-step baseline-to-current changelog](docs/BASELINE_TO_CURRENT.md) is a historical implementation record; current project guidance is in this README and the [build guide](docs/BUILD_AND_INSTALL.md). Implementation and validation details in older checkpoint reports are historical; see the [validation record](docs/VALIDATION.md) for their scope. Device-specific behavior must be verified on the target device.
 
 ## What's in the app
 
@@ -26,7 +26,7 @@ adb shell pm grant org.mlm.batstats.debug android.permission.PACKAGE_USAGE_STATS
 adb shell appops set org.mlm.batstats.debug GET_USAGE_STATS allow
 ```
 
-Return to Advanced statistics and refresh. Grants may be refused by a device policy or build; collection errors remain visible. BATTERY_STATS and cross-user permissions are not substitutes for these dump permissions. Backend selection uses Shizuku when running and authorized, otherwise root, then ADB. Root mode requires an installed, authorized `su` implementation.
+Return to Advanced statistics and refresh. Grants may be refused by a device policy or build; collection errors remain visible. BATTERY_STATS and cross-user permissions are not substitutes for these dump permissions. Backend selection uses Shizuku only when it is running and authorized, otherwise root, then ADB where supported. Root mode requires an installed, authorized `su` implementation. This access behavior is implemented in `ShellRunner`; device availability remains platform-dependent.
 
 Per-app breakdowns need `QUERY_ALL_PACKAGES` to name and draw the icon of any app batterystats reports, including ones with no launcher entry. This permission is subject to Google Play review and a submission can be rejected over it even though a local build installs fine; GitHub and F-Droid distribution are not affected. Non-root Shizuku also does not survive a reboot on its own — expect the Apps screen to show "no access" after a restart until it's started again, which is normal Shizuku behavior, not a BatStats failure.
 
@@ -53,13 +53,13 @@ Clearing history stops monitoring and deletes battery samples, sessions and stor
 
 ## Build and install
 
-See the [phone build and signing guide](docs/BUILD_AND_INSTALL.md) for the manual APK workflow, Preview installation and update compatibility. Earlier hosted validation is recorded in the validation guide; importing this snapshot into the newly created repository does not establish a new passing run. Final source changes remain unverified, and saved APKs predate them.
+See the [phone build and signing guide](docs/BUILD_AND_INSTALL.md) for the manual APK workflow, Preview installation and update compatibility. Historical hosted validation checkpoints are recorded in [VALIDATION.md](docs/VALIDATION.md); they do not establish validation of later source changes or device-specific behavior.
 
 The [measurement guide](docs/MEASUREMENTS.md) explains sources, units, observation periods and estimates. See [actual validation](docs/VALIDATION.md) for completed checks and hardware limitations, and [localization](docs/LOCALIZATION.md) for supported translations and English fallback. Spanish (`values-es`) and Turkish (`values-tr`) are complete but machine-quality translations, flagged for native-speaker review; other languages fall back to English.
 
 ## Development
 
-Use JDK 21 and Android SDK 37 for compilation; target API 36, minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`).
+Use JDK 21 and Android SDK 37 to compile (configure the SDK through `ANDROID_HOME`; the documented host path is only an example). The project targets API 36 and supports minimum API 26. Run `./gradlew :app:assembleDebug :app:testDebugUnitTest :app:lintDebug`. Android tests require a connected device/emulator (`:app:connectedDebugAndroidTest`).
 
 ## Contributing and license
 

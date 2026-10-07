@@ -1,5 +1,7 @@
 # BatStats Audit Report
 
+> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README.md](README.md).**
+
 Baseline: `76bc831328572c81717b97ffb0e280b10b14b8ad`; branch `codex/android16-reliability`. Supplied APK6.2.6/code735 matches APK-dist's universal +1 offset for source734; that difference does not imply a different source revision. [PROGRESS.md](PROGRESS.md) is the execution handoff; [VALIDATION.md](docs/VALIDATION.md) retains actual checks, failures and commands.
 
 Publication provenance, 2026-09-27: this source snapshot is being imported into the newly created `akane599/BatStatsAKA` repository on a new branch from the baseline. The broken local Git pointer was replaced with restored upstream metadata; earlier development commits, PR1 and CI runs below remain historical evidence from the previous environment. No new application validation accompanies this import. See [BASELINE_TO_CURRENT.md](docs/BASELINE_TO_CURRENT.md) for the ordered changelog and current unresolved items. Restoring the missing upstream changelog and wrapper executable bit does not change app behavior; generated APKs/caches/keys remain excluded.

@@ -1,5 +1,7 @@
 # Validation record
 
+> **Historical checkpoint — 2026-10-07; superseded. Current guidance: [README](../README.md).**
+
 Results identify local versus GitHub Actions execution. None establish physical Samsung behavior.
 
 Local log and report paths below (`/tmp/batstats-*`) refer to the previous build host and were not carried over to the current environment.
