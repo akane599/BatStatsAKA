@@ -13,6 +13,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.batstats.R
@@ -51,7 +52,7 @@ class DestructiveConfirmDeviceTest {
     }
 
     private fun openClearDialog(onClear: suspend () -> Unit) {
-        val vm = DataViewModel(FakeData(onClear))
+        val vm = DataViewModel(FakeData(onClear), SavedStateHandle())
         compose.setContent {
             MainTheme {
                 val state by vm.state.collectAsStateWithLifecycle()
