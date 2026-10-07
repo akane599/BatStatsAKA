@@ -27,6 +27,9 @@ import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Whether the writer's current session can be reset by a user action. */
+internal fun resetApplies(open: ChargeSession?): Boolean = open?.type == SessionType.DISCHARGE
+
 /** The repository's FIFO writer and acknowledged deletion seam, also runnable without Android. */
 internal class HistoryWriter<E>(
     scope: CoroutineScope,
@@ -211,10 +214,11 @@ class BatteryRepository(
                         _observation.value = engine.summary
                         finishSession("Monitoring stopped")
                     }
-                    Event.Reset -> {
+                    Event.Reset -> if (resetApplies(session)) {
                         resetObservationState()
                         finishSession("Observation reset by user")
                         seedDischargeEta()
+                        sampler.restartSequence()
                     }
                     // With monitoring on, its start already ran it, before this generation's first capture.
                     Event.Backfill -> if (generation == null) backfillDailySummaries()
@@ -276,9 +280,9 @@ class BatteryRepository(
         events.trySend(Event.Backfill)
     }
 
+    /** Resets only an open discharge window, as decided when the writer processes the request. */
     fun resetObservation() {
         events.trySend(Event.Reset)
-        sampler.restartSequence()
     }
 
     suspend fun startSession(type: SessionType) {
