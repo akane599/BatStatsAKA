@@ -16,11 +16,11 @@ unit tests mirror them under `app/src/test/java/app/batstats/`.
 | `battery/apps/` | Per-app usage | `AppStatsRepository.kt`, `SessionSnapshotCollector.kt`, `SessionSnapshotStore.kt`, `AppUsage*.kt`, `TopApps.kt`, `AppInfo*.kt`, `AppLabel.kt` (see [privileged-shell.md](privileged-shell.md)) |
 | `battery/shizuku/` | Shizuku binding | `ShizukuBridge.kt`, `ShellUserService.kt` |
 | `battery/util/` | Shell + parsing + misc | `ShellRunner.kt`, `BatteryStatsParser.kt`, `CommandOutput.kt`, `CommandProtocol.kt`, `DumpOutput.kt`, `RootStatsCollector.kt`, `PrivilegeChecker.kt`, `TimeEstimator.kt`, `UpdateGate.kt` (dedupe/gate pushes), `Notifier.kt` |
-| `battery/drain/` | Ongoing notification | `DrainNotificationManager.kt`, `NotificationContent.kt`, `NotificationFitter.kt`, `NotificationInputs.kt`, `StatusIconRenderer.kt` / `StatusIconText.kt` (status-bar icon text), `DrainState.kt`, `DrainNotificationReceiver.kt`; layouts `res/layout/notification_*.xml` |
+| `battery/drain/` | Ongoing notification | `DrainNotificationManager.kt`, `NotificationContent.kt`, `NotificationFitter.kt` (longest text form that fits; `rows(fontScale)` hides the summary and footer above 1.3x), `NotificationInputs.kt`, `StatusIconRenderer.kt` / `StatusIconText.kt` (status-bar icon text), `DrainState.kt`, `DrainNotificationReceiver.kt`; layouts `res/layout/notification_*.xml` |
 | `battery/widget/` | RemoteViews widgets | `WidgetUpdater.kt`, `Battery{Level,Temp,Time}Widget.kt`, `WidgetIdCache.kt` |
 | `battery/tile/` | QS tile | `MonitorTileService.kt`, `TileListenSession.kt`, `TileText.kt` |
 | `battery/diagnostics/` | Privacy-safe local diagnostics | `DiagnosticStore.kt`, `DiagnosticLog.kt` (fixed codes only), `DiagnosticReport.kt` |
-| `settings/` | Settings schema (kmp-settings, KSP) | `SettingsDefinition.kt` (`AppSettings`, schema v3), `SettingsMigrations.kt`, `SettingsMigrator.kt`, `SettingsWrites.kt`, `SettingsImportPolicy.kt` |
+| `settings/` | Settings schema (kmp-settings, KSP) | `SettingsDefinition.kt` (`AppSettings`, schema v3), `SettingsMigrations.kt`, `SettingsMigrator.kt`, `SettingsWrites.kt`, `SettingsImportPolicy.kt`, `SettingsDataStore.kt` (DataStore with a corruption handler) |
 | `di/` | Koin | `AppModules.kt` (`appModule`: singletons + `viewModel {}` with parameters) |
 | `data/` | Constants | `Constants.kt` |
 | `viewmodel/` | One VM per screen + its repository interface | `NowViewModel.kt` (+ `NowRepository.kt`, `NowUiState.kt`, `NowMapping.kt`), `HistoryViewModel.kt`, `SessionDetailsViewModel.kt`, `AppsViewModel.kt`, `AppDetailsViewModel.kt`, `HealthViewModel.kt`, `DataViewModel.kt`, `StatusViewModel.kt`, `SettingsViewModel.kt`, `ShizukuState.kt` |
@@ -34,7 +34,7 @@ unit tests mirror them under `app/src/test/java/app/batstats/`.
 ## Screen → ViewModel → repository
 | Screen | ViewModel | Repository impl (in the VM file) |
 | --- | --- | --- |
-| Now | `NowViewModel` | `DefaultNowRepository` (`NowRepository.kt`) |
+| Now | `NowViewModel` (SavedStateHandle) | `DefaultNowRepository` (`NowRepository.kt`) |
 | History | `HistoryViewModel` (SavedStateHandle) | `DefaultHistoryRepository` |
 | Session details | `SessionDetailsViewModel(sessionId)` | `DefaultSessionDetailsRepository` |
 | Apps | `AppsViewModel` (SavedStateHandle) | `DefaultAppsRepository` |

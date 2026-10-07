@@ -21,7 +21,7 @@ Room database `battery.db`, **version 5**, `exportSchema = true`.
 | `session_app_usage` | `SessionAppUsage` | (`sessionId`,`rank`), FK → `charge_sessions` ON DELETE CASCADE | The ranked per-session app breakdown (top-N plus an `isOthers` row) with `basis`. |
 
 ## DAOs (`Dao.kt`)
-- `BatteryDao`: sample insert/lookups, chart queries (`chartSamples`, `sessionChartSamples` bucketed), `boundStorage`, `purge`, `clearAll`.
+- `BatteryDao`: sample insert/lookups, chart queries (`chartSamples`, `sessionChartSamples` bucketed), `latestSamplesBetween` (newest N, returned ascending), `boundStorage`, `purge`, `clearAll`. `ExportImport.kt`'s `BatteryDao.exportSamples` uses it for an ALL export, so that export holds the newest `MAX_SAMPLES`.
 - `SessionDao`: `active()` / `activeFlow()`, `filteredSessions`, `capacityEstimates`, `closeInterrupted`, `deleteSession(id, recordingGeneration)` (deletes samples, snapshots and the row together), `purge`.
 - `PersistDao`: `persistSample(sample, session, days)` is the single transactional write the repository uses per persisted capture.
 - `DailySummaryDao`: per-day upsert/read/range, `purgeBefore`.
@@ -58,5 +58,5 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
   (`data/HistoryFiles.kt`), so tables may sit slightly over `MAX_SAMPLES`/`MAX_SESSIONS` between trims; import
   refuses only its own growth past the cap (`importWithinLimit`).
 - Import validation (`HistoryPolicy.kt`): session coverage is clamped to the span within a clock-correction
-  allowance (5 s + span/10, capped at 15 min; `normalizeCoverage`, `sampleInSessionWindow`), and
+  allowance (5 s + span/10, capped at 15 min; `normalizeCoverage`, which scales screen-on/off charge with the clamped time, `sampleInSessionWindow`), and
   `planSessionImport` decides ADDED/UPDATED/UNCHANGED/STALE from the raw stored and raw incoming rows.

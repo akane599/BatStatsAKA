@@ -5,7 +5,8 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 ## Now
 - [x] Bootstrap complete — verify build command
 - [x] US-1 audit fixes (docs/AUDIT_RESULTS_2026-10-07.md, SQ-2..SQ-31) integrated into local feat/overhaul @ 6ca5ffd; full gate green; not pushed
-- [x] US-2 bug-hunt fixes (SQ-37..47, SQ-54) integrated into local feat/overhaul @ 4672588; full gate green; not pushed. Open: SQ-52, SQ-53, SQ-55
+- [x] US-2 bug-hunt fixes (SQ-37..47, SQ-54) integrated into local feat/overhaul @ 4672588; full gate green; pushed
+- [x] US-3 bug hunt vs origin/main (SQ-57..60 hunts; fixes SQ-61..84, SQ-86..89 + US-2 follow-ups SQ-52/53/55) integrated into feat/overhaul @ eca09b8; full gate green. Device-only checks pending (notification at 2.0x font, widget clock, unlock-required actions)
 
 ## Baseline
 - 2026-10-07 @ dc7a4c5 (working tree): debug build OK, assembleDebug exit 0 with JDK 21 and ANDROID_HOME=/home/dev/android-sdk; log `.claude/kit/logs/gradle.6vEcmiDx.log`. Existing testDebugUnitTest reports: 82 suites, 542 tests, 0 failures/errors/skips; not rerun during bootstrap.
@@ -17,6 +18,16 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 - 2026-10-07 — Bug hunt (US-2): TopLevelBackStack gets per-entry leave blockers (DataScreen blocks while a task runs), and tab re-selection/popToRoot respect them, instead of moving Data tasks to a longer-lived scope; known gap: an external deep link can still cancel an off-screen task (SQ-52).
 - 2026-10-07 — Bug hunt (US-2): batterystats checkin column offsets are chosen by the device SDK (`parseCheckin(sdkInt)`, background/cached at 8/9 before API 28, 7/10 after), because pre-P dumps put the fields in different columns.
 - 2026-10-07 — Bug hunt (US-2): a Shizuku permission the user denied permanently is shown as "blocked" with an Open Shizuku action instead of a dead Allow button, because requestPermission is a no-op once Shizuku stops asking.
+- 2026-10-07 — Bug hunt (US-3): Data's leave block is owned by a `LeaveBlockers` ViewModel and registered through `blockLeavingWhileBusy` (SQ-52), because a composition-scoped blocker vanished with the screen and an external deep link could cancel an off-screen task; closes the US-2 known gap.
+- 2026-10-07 — Bug hunt (US-3): an ALL export takes the newest `MAX_SAMPLES` (`latestSamplesBetween`) instead of failing past the cap (SQ-53); imported coverage normalization scales screen-on/off charge with the clamped time (SQ-55).
+- 2026-10-07 — Bug hunt (US-3): root access is invalidated only on typed evidence (su denial or missing su → `CommandOutput.AccessFailure`); an ordinary command failure keeps ROOT selected, because one failing dumpsys must not drop a working backend (SQ-64).
+- 2026-10-07 — Bug hunt (US-3): batterystats checkin is split with AOSP's fixed framing (`wl` keeps raw quotes; `sy`/`jb` names framed between 4 header and 4 tail fields) instead of a CSV quote parser, because AOSP's dumpLine does no escaping (SQ-69, source lookup SQ-91).
+- 2026-10-07 — Bug hunt (US-3): notification Stop/Reset require unlock on API 31+ (SQ-67); older Android has no equivalent, accepted.
+- 2026-10-07 — Bug hunt (US-3): above 1.3x font scale the ongoing notification hides its summary (collapsed) and footer (expanded) so the issue line survives (SQ-76); `whittle:` one threshold, not measured heights — measure inflated views if a device clips between 1.3x and 2.0x.
+- 2026-10-07 — Bug hunt (US-3): session peak power is recomputed from the (subsampled) readings with the stored peak as fallback (SQ-84); stored rows with wrong sums/peaks are not backfilled, accepted.
+- 2026-10-07 — Bug hunt (US-3): the °F threshold slider stores fractional °C clamped to range (no 1 °C snap) so whole-°F steps round-trip (SQ-89); a settings save failure maps to UNEXPECTED, never the import "REJECTED" copy (SQ-78).
+- 2026-10-07 — Bug hunt (US-3): app-scope coroutine failures are recorded as `APP_SCOPE_FAILED` instead of crashing, and a corrupt settings DataStore resets to defaults without a diagnostic (SQ-77, accepted gap).
+- 2026-10-07 — US-3 process: ui/ logic tickets (incl. androidTest/ui) go to a Claude route because the UI hook refuses GPT edits there; parallel Gradle slots need `-Pkotlin.daemon.jvmargs=-Xmx2g` (default daemon OOMed with 4 concurrent builds).
 - 2026-10-07 — US-1 integration: Shizuku's USER_SERVICE_TRANSACTION_destroy is @RestrictTo its library group, so ShellUserService keeps the literal 16777115 and ShellUserServiceTest asserts it equals ShizukuApiConstants, because referencing the constant from app code fails lint (RestrictedApi) while the test still catches a library change.
 - 2026-10-07 — US-1 integration: C06 export requests live in SavedStateHandle and DataScreen forwards every event (Pick included) to the VM before launching SAF (SQ-17 + SQ-31 split), because the launch-time selection must survive process death and the screen previously never told the VM about Pick.
 - 2026-10-07 — US-1 integration: C14 shared UIDs keep per-UID power and show a sorted representative + "Shared UID · N apps" line (AppRow optional supportingText); stored session_app_usage rows now use that sorted representative, and AppDetails still shows the representative's identity for whole-UID power (accepted limitation).
@@ -50,11 +61,11 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 | Area | Last run | Result | How |
 |---|---|---|---|
 | Plan audit | — | — | `/plan-audit` |
-| Bug hunt | 2026-10-07 | /bug-hunt over data/persistence, drain/notifications/service, shizuku/apps/util, navigation/UI: 21 verified, 10 fixed (US-2, SQ-37..47 + follow-up SQ-54), 3 follow-ups on board (SQ-52/53/55); unit 689/0 fail, screenshots 205/0 fail, lint 0 errors @ 4672588. Earlier: audit C01–C26 fixed (US-1) @ 6ca5ffd | `/bug-hunt` |
+| Bug hunt | 2026-10-07 | US-3 /bug-hunt vs origin/main over measurement/data, viewmodel/settings/di, background surfaces, UI (SQ-57..60): all verified findings fixed in 28 tickets (SQ-61..84, SQ-86..89) + US-2 follow-ups SQ-52/53/55; unit 795/0 fail, screenshots 210/0 fail, lint 0 errors @ eca09b8. Earlier: US-2 (SQ-37..47, 54) @ 4672588; audit C01–C26 (US-1) @ 6ca5ffd | `/bug-hunt` |
 | Security | — | — | `/claude-security` |
 | UI / design | — | — | `/ui-overhaul` phase review |
 | Build (bootstrap) | 2026-10-07 | PASS, exit 0; JDK 21, actual environment SDK | `bash .claude/kit/gradle-check.sh :app:assembleDebug` |
-| Lint | 2026-10-07 | PASS @ 4672588 (0 errors, 47 warnings) | `./gradlew :app:lintDebug --console=plain -q` |
+| Lint | 2026-10-07 | PASS @ eca09b8 (0 errors, 50 warnings) | `./gradlew :app:lintDebug --console=plain -q` |
 | Device QA (none — create one) | — | Not run; no AVD or attached device | android-emulator-qa skill |
 
 ## Environment notes

@@ -12,8 +12,9 @@ actually does.
   `interface <X>Repository`, and a `Default<X>Repository` that adapts the app singletons. The VM exposes
   `val state: StateFlow<…>` (usually `combine(...).stateIn`) and `fun onEvent(event)`. Koin wires the
   `Default*` impl in `di/AppModules.kt`, and tests pass a fake.
-- **Process-death state.** History, Apps and Data VMs take the nav entry's `SavedStateHandle` (second
-  `get()` in Koin) and keep filter, selection and pending export requests there.
+- **Process-death state.** Now, History, Apps and Data VMs take the nav entry's `SavedStateHandle` (a
+  `get()` in Koin) and keep chart range, filter, selection, the History page limit, the Data range/toggles
+  and pending export requests there.
 - **Single writer.** `BatteryRepository` serializes every write through `HistoryWriter` (FIFO).
   `SamplingController` confines sampler state to its `HandlerThread`. `ShellRunner` serializes commands
   with a `Mutex`, and `AppStatsRepository` shares one in-flight dump between callers.
@@ -32,6 +33,10 @@ actually does.
 - `DiagnosticStore` / `DiagnosticLog` record **fixed codes only**: no commands, package names or
   exception messages (privacy). Log the exception *type* at most.
 - Coroutine code rethrows `CancellationException` (e.g. `DataViewModel` resets its running state on it).
+- The Koin app scope (`di/AppModules.kt`) has a `CoroutineExceptionHandler` that records
+  `DiagnosticCode.APP_SCOPE_FAILED` instead of crashing the process.
+- A corrupt settings DataStore is replaced with empty preferences (`settings/SettingsDataStore.kt`,
+  `ReplaceFileCorruptionHandler`), so the app starts on defaults; no diagnostic is recorded for it.
 
 ## UI conventions
 - Dark-only (`MainTheme(oled, dynamicColor)`). Dynamic color is opt-in on API 31+ and changes accents only.
