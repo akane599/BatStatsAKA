@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Offline regression suite. Never installs plugins or modifies user settings."""
 import ast
+import contextlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -23,6 +25,7 @@ def load(name, path):
 
 merge = load('merge', KIT/'lib/merge-settings.py')
 ui = load('ui', SCRIPTS/'ui-guard.py')
+scaffold = load('scaffold', SCRIPTS/'scaffold.py')
 
 
 class KitTests(unittest.TestCase):
@@ -142,6 +145,22 @@ class KitTests(unittest.TestCase):
         self.assertEqual(p.read_text(),first); self.assertEqual(merge.load(p)['model'],'sonnet')
         self.assertIn('Bash(echo:*)',merge.load(p)['permissions']['allow'])
 
+    def test_settings_unvetted_hook_not_wired(self):
+        tpl=KIT/'template'; kit_dir=self.project/'.claude/kit'; kit_dir.mkdir(parents=True)
+        for name in ('compact-checkpoint.py','ui-guard.py','map-guard.py'):
+            shutil.copy2(tpl/'.claude/kit'/name,kit_dir/name)
+        (kit_dir/'format-edit.py').write_text('print("planted")\n')
+        local=self.project/'.claude/settings.local.json'
+        local.write_text(json.dumps({'hooks':{'PostToolUse':merge.load(tpl/'.claude/settings.json')['hooks']['PostToolUse']}}))
+        out=io.StringIO()
+        with contextlib.redirect_stdout(out):
+            merge.merge(tpl/'.claude/settings.json',local)
+        self.assertIn('hook not wired: .claude/kit/format-edit.py',out.getvalue())
+        hooks=json.dumps(merge.load(local)['hooks'])
+        self.assertNotIn('format-edit.py',hooks)
+        for name in ('compact-checkpoint.py','ui-guard.py','map-guard.py'):
+            self.assertIn(name,hooks)
+
     def test_detection_empty(self):
         r=self.run_cmd(['bash',SCRIPTS/'detect-stack.sh']); values=dict(x.split('=',1) for x in r.stdout.splitlines())
         for key in ('di','db','network','async','screenshot_testing'): self.assertEqual(values[key],'none')
@@ -205,6 +224,20 @@ class KitTests(unittest.TestCase):
         self.assertNotEqual(self.scaffold(ok=False).returncode,0)
         self.assertEqual((self.project/'build.gradle.kts').read_text(),'// preserve')
         self.assertFalse((self.project/'settings.gradle.kts').exists())
+
+    def test_scaffold_write_refuses_symlink(self):
+        victim=self.root/'victim'; (self.project/'.gitignore').symlink_to(victim)
+        with self.assertRaises(ValueError): scaffold.write(self.project,'.gitignore','build/\n',[])
+        (self.project/'gradle').symlink_to(self.root)
+        with self.assertRaises(ValueError): scaffold.write(self.project,'gradle/libs.versions.toml','',[])
+        self.assertFalse(victim.exists()); self.assertFalse((self.root/'libs.versions.toml').exists())
+
+    def test_scaffold_wrapper_refuses_symlink(self):
+        (self.project/'.claude/kit').mkdir(parents=True)
+        (self.project/'.claude/kit/scaffold-versions.json').write_text('{"gradle":"9.0"}')
+        victim=self.root/'victim'; (self.project/'gradlew').symlink_to(victim)
+        r=self.run_cmd([sys.executable,SCRIPTS/'scaffold.py','--name','App','--package','com.example.demo','--wrapper-only'],ok=False)
+        self.assertNotEqual(r.returncode,0); self.assertIn('symlink',r.stderr); self.assertFalse(victim.exists())
 
     def test_checkpoint_session_isolation(self):
         transcript=self.root/'transcript.jsonl'

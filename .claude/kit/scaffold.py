@@ -11,7 +11,7 @@ What you get: a pinned version catalog (live resolution is opt-in with --latest)
 immutable UiState, a unit test, and Compose Preview screenshot tests (light/dark/large font/tablet).
 Preserves existing files; only .gitignore is merged. --offline never downloads a wrapper.
 """
-import argparse, hashlib, json, os, re, shutil, subprocess, sys, tempfile, textwrap, urllib.error, urllib.request, zipfile
+import argparse, hashlib, itertools, json, os, re, shutil, subprocess, sys, tempfile, textwrap, urllib.error, urllib.request, zipfile
 from xml.sax.saxutils import escape
 from pathlib import Path
 
@@ -88,8 +88,16 @@ def resolve(offline, use_latest=False):
     return v, notes
 
 
+def guarded(root, rel):
+    """root/rel, refusing a symlink at it or on any directory between it and root."""
+    dest = root / rel
+    if dest.is_symlink() or any(p.is_symlink() for p in itertools.takewhile(lambda p: p != root, dest.parents)):
+        raise ValueError(f"symlink in scaffold destination: {rel}")
+    return dest
+
+
 def write(root, rel, content, created):
-    p = root / rel
+    p = guarded(root, rel)
     if p.exists() and rel == ".gitignore":   # merge: android-kit may have created it already
         have = p.read_text().splitlines()
         add = [l for l in textwrap.dedent(content).strip().splitlines() if l not in have]
@@ -106,7 +114,7 @@ def write(root, rel, content, created):
 
 def gradle_wrapper(root, version, created):
     wrapper_files = ["gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties"]
-    if any((root / rel).exists() for rel in wrapper_files):
+    if any(guarded(root, rel).exists() for rel in wrapper_files):
         raise ValueError("wrapper files already exist; refusing to overwrite a complete or partial wrapper")
     checksum = fetch(f"https://services.gradle.org/distributions/gradle-{version}-bin.zip.sha256").strip()
     if not re.fullmatch(r"[a-fA-F0-9]{64}", checksum):
@@ -133,7 +141,7 @@ def gradle_wrapper(root, version, created):
         subprocess.run([gradle, "-q", "wrapper", "--gradle-version", version, "--distribution-type", "bin", "--gradle-distribution-sha256-sum", checksum],
                        cwd=t, check=True, stdout=subprocess.DEVNULL, timeout=240)
         for rel in ["gradlew", "gradlew.bat", "gradle/wrapper/gradle-wrapper.jar", "gradle/wrapper/gradle-wrapper.properties"]:
-            dst = root / rel
+            dst = guarded(root, rel)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(t / rel, dst)
             created.append(rel)
@@ -667,9 +675,7 @@ def main():
         wrapper = gradle_wrapper(root, v["gradle"], created)
     W('.claude/kit/scaffold-versions.json', json.dumps(v, indent=2) + '\n')
     for rel in created:
-        dest = target_root / rel
-        if dest.is_symlink() or any(p.is_symlink() for p in dest.parents if p != target_root):
-            raise ValueError(f"symlink in scaffold destination: {rel}")
+        dest = guarded(target_root, rel)
         if dest.exists() and rel != '.gitignore':
             raise ValueError(f"scaffold destination already exists: {rel}")
     for rel in created:

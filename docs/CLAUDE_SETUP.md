@@ -24,6 +24,9 @@ claude                                  # then /reload-plugins or restart; run /
 - `setup.sh` keeps the committed project files: when a tracked file differs from the kit template,
   the template goes to `.claude/kit/incoming/` instead of overwriting it. Don't run `/bootstrap` again;
   the project is already bootstrapped. Use `/kit-doctor` for a health check.
+- A kit hook is wired only when its `.claude/kit/` script is byte-identical to the kit template. If
+  setup prints `hook not wired: <file>`, review that file's diff against `android-kit/template/<file>`,
+  copy the template over it, and rerun setup.
 - GPT routes need Model Gateway signed in to your ChatGPT/Codex account on that machine (the
   `model-gateway` plugin's setup skill). Without it, Sidequest still routes to Claude models.
 - The Sidequest board (tickets, stories) lives in `~/.claude/sidequest` on each machine and doesn't

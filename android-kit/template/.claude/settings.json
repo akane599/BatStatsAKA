@@ -7,11 +7,7 @@
       "Bash(avdmanager:*)",
       "Bash(sdkmanager:*)",
       "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git show:*)",
       "Bash(git remote -v:*)",
-      "Bash(rg:*)",
       "Bash(bash .claude/kit/detect-stack.sh:*)",
       "Bash(python3 .claude/kit/scaffold.py:*)",
       "Bash(bash .claude/kit/gradle-check.sh:*)"

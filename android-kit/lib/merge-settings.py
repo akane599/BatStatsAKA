@@ -3,12 +3,14 @@
 import copy
 import json
 import os
+import re
 import sys
 import tempfile
 from pathlib import Path
 from urllib.parse import urlparse
 
 LEGACY = Path(__file__).with_name('legacy-settings-v1.json')
+KIT_SCRIPT = re.compile(r'\.claude/kit/[\w.-]+')
 
 
 def load(p):
@@ -107,10 +109,29 @@ def strip(path, kit_path=None, move_to=None):
         print('stripped')
 
 
+def unvetted_hooks(kit, tpl_root, root):
+    """Kit hook groups whose project script is missing, a symlink or not byte-identical to the template's."""
+    found = {}
+    for event, entries in kit.get('hooks', {}).items():
+        for entry in entries:
+            for h in entry.get('hooks', []):
+                for rel in KIT_SCRIPT.findall(h.get('command', '')):
+                    p, t = root / rel, tpl_root / rel
+                    if not (p.is_file() and p.resolve() == root / rel and t.is_file() and p.read_bytes() == t.read_bytes()):
+                        found.setdefault(event, []).append(entry)
+                        print(f'warn hook not wired: {rel} is missing, a symlink or differs from the kit template; '
+                              f'review it, then copy the template over it and rerun setup.sh')
+    return {'hooks': found}
+
+
 def merge(src, dst):
     cur = load(dst)
     kit = load(src)
     retired = load(LEGACY)
+    # A hook runs the project's copy of its script: never wire one that differs from the kit's.
+    unvetted = unvetted_hooks(kit, Path(src).resolve().parent.parent, Path(dst).resolve().parent.parent)
+    remove_hooks(kit, unvetted)
+    remove_hooks(cur, unvetted)
     # Unchanged handlers retain their position; only obsolete exact handlers are replaced.
     remove_hooks(retired, kit)
     remove_hooks(cur, retired)

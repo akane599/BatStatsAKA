@@ -367,7 +367,7 @@ PY
 
   # settings: the kit's hooks/permissions are local; an earlier kit's entries leave the committed settings.json
   [ -n "$(python3 "$(kit lib/merge-settings.py)" --strip-kit .claude/settings.json "$TPL/.claude/settings.json" .claude/settings.local.json)" ] && ok "old kit hooks/permissions moved out of committed .claude/settings.json"
-  python3 "$(kit lib/merge-settings.py)" "$TPL/.claude/settings.json" .claude/settings.local.json
+  python3 "$(kit lib/merge-settings.py)" "$TPL/.claude/settings.json" .claude/settings.local.json | report
   ok ".claude/settings.local.json (hooks, permissions)"
   local g dst src line
   if [ "$LOCAL_ONLY" = 1 ]; then

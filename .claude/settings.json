@@ -7,20 +7,12 @@
       "Bash(avdmanager:*)",
       "Bash(sdkmanager:*)",
       "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git checkout:*)",
       "Bash(git switch:*)",
       "Bash(gh pr:*)",
-      "Bash(rg:*)",
-      "Bash(grep:*)",
-      "Bash(find:*)",
-      "Bash(ls:*)",
-      "Bash(cat:*)",
-      "Bash(head:*)",
-      "Bash(tail:*)"
+      "Bash(ls:*)"
     ],
     "deny": [
       "Read(./local.properties)",
