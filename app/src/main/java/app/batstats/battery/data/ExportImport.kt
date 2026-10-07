@@ -52,6 +52,10 @@ internal fun exportUnits(): Map<String, String> = mapOf(
 )
 
 
+internal suspend fun BatteryDao.exportSamples(from: Long, to: Long): List<BatterySample> =
+    if (from == 0L) latestSamplesBetween(from, to, HistoryLimits.MAX_SAMPLES)
+    else samplesBetween(from, to).first()
+
 /** No writes occur until the complete bounded file passes validation. */
 @OptIn(ExperimentalSerializationApi::class)
 class ExportImportManager(private val context: Context, private val db: BatteryDatabase, private val maintenance: HistoryMaintenance) {
@@ -68,7 +72,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         require(from >= 0 && end >= from) { "Invalid export date range" }
         require(samples || sessions) { "Select samples or sessions" }
         return db.withTransaction {
-            val points = if (samples) db.batteryDao().samplesBetween(from, end).first() else emptyList()
+            val points = if (samples) db.batteryDao().exportSamples(from, end) else emptyList()
             val periods = if (sessions) db.sessionDao().sessionsBetween(from, end) else emptyList()
             val usage = if (sessions) db.appUsageDao().usageForSessionsBetween(from, end) else emptyList()
             require(points.size <= HistoryLimits.MAX_SAMPLES && periods.size <= HistoryLimits.MAX_SESSIONS && usage.size <= MAX_APP_USAGE_ROWS) { "Use a smaller export date range" }
