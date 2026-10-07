@@ -28,7 +28,7 @@ class ImportUsageMergeTest {
         var usageWrites = 0
 
         fun import(session: ChargeSession? = null, rows: List<SessionAppUsage>): HistoryImportResult {
-            val parent = session?.let { HistoryPolicy.planSessionImport(stored, HistoryPolicy.session(it)) }
+            val parent = session?.let { HistoryPolicy.planSessionImport(stored, it) }
             if (parent != null) stored = parent.session
             val disposition = parent?.disposition
             val plan = HistoryPolicy.planUsageImport(
@@ -126,7 +126,7 @@ class ImportUsageMergeTest {
         val previous = HistoryPolicy.session(session())
         for (incoming in listOf(session(1500).copy(observationId = "foreign"), session().copy(endLevel = 58))) {
             assertThrows(IllegalArgumentException::class.java) {
-                HistoryPolicy.planSessionImport(previous, HistoryPolicy.session(incoming))
+                HistoryPolicy.planSessionImport(previous, incoming)
             }
         }
     }

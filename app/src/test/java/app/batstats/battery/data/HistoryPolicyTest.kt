@@ -127,6 +127,56 @@ class HistoryPolicyTest {
         val plan = HistoryPolicy.planSessionImport(HistoryPolicy.session(stored), incoming)
         assertEquals(ImportSessionDisposition.UNCHANGED, plan.disposition)
     }
+    @Test fun counterGapExtensionWithClockCorrectionsUpdatesImportedSession() {
+        val first = session().copy(endTime = 3_601_000, lastSampleTime = 3_601_000,
+            observedMs = 3_600_000, counterCoveredMs = 3_600_000)
+        val second = first.copy(endTime = 4_191_000, lastSampleTime = 4_191_000, observedMs = 4_200_000)
+        val result = runCatching {
+            HistoryPolicy.planSessionImport(HistoryPolicy.session(first), second)
+        }
+        assertTrue("Counter-gap extension must update, not abort: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        val plan = result.getOrThrow()
+        assertEquals(ImportSessionDisposition.UPDATED, plan.disposition)
+        assertEquals(4_190_000L, plan.session.observedMs)
+        assertEquals(3_591_428L, plan.session.counterCoveredMs)
+        assertEquals(ImportSessionDisposition.UNCHANGED,
+            HistoryPolicy.planSessionImport(plan.session, second).disposition)
+        assertEquals(ImportSessionDisposition.STALE,
+            HistoryPolicy.planSessionImport(plan.session, first).disposition)
+    }
+    @Test fun genuinelyDecreasingRawCoverageStillRejectsAnExtension() {
+        val previous = session().copy(source = "import:legacy", endTime = 3_591_000,
+            lastSampleTime = 3_591_000, observedMs = 3_600_000, counterCoveredMs = 3_600_000)
+        val counterRegression = previous.copy(endTime = 4_201_000, lastSampleTime = 4_201_000,
+            observedMs = 4_200_000, counterCoveredMs = 3_595_000)
+        val observedRegression = previous.copy(endTime = 3_596_000, lastSampleTime = 3_596_000,
+            observedMs = 3_595_000, counterCoveredMs = 3_595_000)
+        for (incoming in listOf(counterRegression, observedRegression)) {
+            val failure = assertThrows(IllegalArgumentException::class.java) {
+                HistoryPolicy.planSessionImport(previous, incoming)
+            }
+            assertEquals("Incompatible imported session coverage", failure.message)
+        }
+    }
+    @Test fun longSessionClockAllowanceStopsAtFifteenMinutesPlusFiveSeconds() {
+        val span = 3 * 24 * 60 * 60 * 1000L
+        val end = 1000 + span
+        val original = session().copy(endTime = end, lastSampleTime = end, observedMs = span + 905_000)
+        assertEquals(span, HistoryPolicy.session(original).observedMs)
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.session(original.copy(observedMs = span + 905_001))
+        }
+        assertTrue(HistoryPolicy.sampleInSessionWindow(end + 905_000, original))
+        assertFalse(HistoryPolicy.sampleInSessionWindow(end + 905_001, original))
+    }
+    @Test fun hourOfClockExcessOnThreeDaySessionIsRejected() {
+        val span = 3 * 24 * 60 * 60 * 1000L
+        val original = session().copy(endTime = 1000 + span, lastSampleTime = 1000 + span,
+            observedMs = span + 60 * 60 * 1000L)
+        assertThrows("An hour of clock excess must not be normalized away", IllegalArgumentException::class.java) {
+            HistoryPolicy.session(original)
+        }
+    }
     @Test fun invalidCoverageIsNotHiddenByClockCorrectionNormalization() {
         val original = session().copy(endTime = 101_000, lastSampleTime = 101_000, observedMs = 108_000)
         for (bad in listOf(original.copy(counterCoveredMs = 108_001),

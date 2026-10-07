@@ -203,7 +203,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                     }
                     skipped++; continue
                 }
-                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId)?.let(HistoryPolicy::session), session)
+                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId), original)
                 when (plan.disposition) {
                     ImportSessionDisposition.ADDED -> db.sessionDao().insert(plan.session)
                     ImportSessionDisposition.UPDATED -> db.sessionDao().update(plan.session)

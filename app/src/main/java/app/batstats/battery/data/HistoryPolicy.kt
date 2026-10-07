@@ -71,7 +71,7 @@ object HistoryPolicy {
     }
     fun sameSample(first: BatterySample, second: BatterySample): Boolean = sample(first) == sample(second)
     // A session can accumulate several sub-5-second wall-clock corrections without an observation gap.
-    private fun clockCorrectionAllowance(span: Long): Long = 5_000 + span / 10
+    private fun clockCorrectionAllowance(span: Long): Long = 5_000 + minOf(span / 10, 15 * 60 * 1000L)
 
     internal fun sampleInSessionWindow(timestamp: Long, session: ChargeSession,
         end: Long = session.endTime ?: session.lastSampleTime ?: session.startTime): Boolean =
@@ -139,18 +139,19 @@ object HistoryPolicy {
         return incoming.copy(appUsageStatus = usage.appUsageStatus, appUsageBasis = usage.appUsageBasis,
             capacityEstimateMah = capacity.capacityEstimateMah, capacityConfidence = capacity.capacityConfidence, capacityBasis = capacity.capacityBasis)
     }
-    /** Plans the parent write and keeps a stale skip distinct from same-window enrichment. */
+    /** Plans raw rows before normalization can shrink coverage; keeps stale skips distinct from enrichment. */
     internal fun planSessionImport(previous: ChargeSession?, incoming: ChargeSession): SessionImportPlan {
-        if (previous == null) return SessionImportPlan(incoming, ImportSessionDisposition.ADDED)
-        val merged = mergeDerived(previous, incoming)
-        if (previous == merged) return SessionImportPlan(previous, ImportSessionDisposition.UNCHANGED)
-        if (sameMeasurement(previous, incoming)) return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
-        require(previous.source.startsWith("import:") && sameOrigin(previous, incoming)) { "Conflicting imported session" }
-        require(incoming.endTime != previous.endTime) { "Conflicting values for one imported session window" }
+        val candidate = session(incoming)
+        val stored = previous?.let(::session) ?: return SessionImportPlan(candidate, ImportSessionDisposition.ADDED)
+        val merged = mergeDerived(stored, candidate)
+        if (stored == merged) return SessionImportPlan(stored, ImportSessionDisposition.UNCHANGED)
+        if (sameMeasurement(stored, candidate)) return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
+        require(previous.source.startsWith("import:") && sameOrigin(stored, candidate)) { "Conflicting imported session" }
+        require(candidate.endTime != stored.endTime) { "Conflicting values for one imported session window" }
         // Imported and stored rows always carry an end (session sets one).
-        val incomingEnd = checkNotNull(incoming.endTime) { "Imported session without an end" }
-        val storedEnd = checkNotNull(previous.endTime) { "Imported session without an end" }
-        if (incomingEnd < storedEnd) return SessionImportPlan(previous, ImportSessionDisposition.STALE)
+        val incomingEnd = checkNotNull(candidate.endTime) { "Imported session without an end" }
+        val storedEnd = checkNotNull(stored.endTime) { "Imported session without an end" }
+        if (incomingEnd < storedEnd) return SessionImportPlan(stored, ImportSessionDisposition.STALE)
         require(incoming.observedMs >= previous.observedMs && incoming.counterCoveredMs >= previous.counterCoveredMs) { "Incompatible imported session coverage" }
         return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
     }
