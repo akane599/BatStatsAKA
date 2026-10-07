@@ -14,12 +14,15 @@ import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-/** Resumes monitoring after a reboot when auto-start is on; if Android refuses, a notification offers to start it. */
+internal fun resumesMonitoring(action: String?): Boolean =
+    action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED
+
+/** Resumes monitoring after a reboot or app update when auto-start is on; if refused, offers a start notification. */
 class BootReceiver : BroadcastReceiver(), KoinComponent {
     private val monitoring: MonitoringControl by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (!resumesMonitoring(intent.action)) return
         val pending = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try {
