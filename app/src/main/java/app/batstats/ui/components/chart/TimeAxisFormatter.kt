@@ -80,7 +80,7 @@ class TimeAxisFormatter internal constructor(
             use24Hour: Boolean,
             bestPattern: (Locale, String) -> String,
         ): TimeAxisFormatter {
-            fun best(skeleton: String) = bestPattern(locale, skeleton)
+            fun best(skeleton: String) = withAmPmDayPeriod(bestPattern(locale, skeleton))
             val hour = if (use24Hour) "H" else "h"
             val patterns = mapOf(
                 TimeGranularity.SECONDS to best("${hour}ms"),
@@ -92,6 +92,17 @@ class TimeAxisFormatter internal constructor(
             )
             val axisMinutes = if (use24Hour) patterns.getValue(TimeGranularity.MINUTES) else withoutDayPeriod(best("hm"))
             return TimeAxisFormatter(zone, locale, patterns, axisMinutes)
+        }
+
+        /** [pattern] with unquoted day-period letters b/B (CLDR flexible periods, e.g. zh-TW "Bh:mm") as 'a': SimpleDateFormat rejects them. */
+        internal fun withAmPmDayPeriod(pattern: String): String {
+            val out = StringBuilder()
+            var quoted = false
+            for (c in pattern) {
+                if (c == '\'') quoted = !quoted
+                out.append(if (!quoted && (c == 'b' || c == 'B')) 'a' else c)
+            }
+            return out.toString()
         }
 
         /** [pattern] without its AM/PM field (unquoted a/b/B) and the space next to it. */
