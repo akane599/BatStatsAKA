@@ -16,7 +16,20 @@ object CommandOutput {
      * dropping them while reading (instead of after) keeps large dumps under [MAX_BYTES]. */
     private const val HISTORY_LINE_PREFIX = "9,h,"
 
-    data class Result(val output: String = "", val error: String? = null) {
+    /** Fixed access-loss evidence, separate from successful data and safe to log. */
+    enum class AccessFailure { DENIED, EXECUTABLE_UNAVAILABLE }
+
+    private val denial = Regex(
+        """(?im)^\h*(?:su:\h*[^\r\n]*\b)?(?:permission denied|access denied|request rejected|not allowed)\h*[.!]?\h*$""",
+    )
+    private val unavailable = Regex("""(?im)^\h*su:[^\r\n]*(?:not found|no such file or directory)\h*$""")
+    private val launchError = Regex("""(?:error=|error:\h*)(2|13)(?:,|\h+\()""")
+
+    data class Result(
+        val output: String = "",
+        val error: String? = null,
+        val accessFailure: AccessFailure? = null,
+    ) {
         val successful: Boolean get() = error == null
 
         /** The (already history-filtered) output as a line sequence, for streaming parse. */
@@ -57,7 +70,10 @@ object CommandOutput {
             when {
                 !child.waitFor((deadline - System.nanoTime()).coerceAtLeast(1), TimeUnit.NANOSECONDS) ->
                     Result(error = "Command timed out")
-                child.exitValue() != 0 -> Result(error = "Command exited with status ${child.exitValue()}")
+                child.exitValue() != 0 -> Result(
+                    error = "Command exited with status ${child.exitValue()}",
+                    accessFailure = classifyAccessFailure(text),
+                )
                 else -> Result(output = text)
             }
         } catch (_: TimeoutException) {
@@ -65,8 +81,13 @@ object CommandOutput {
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             Result(error = "Command interrupted")
-        } catch (e: ExecutionException) {
-            Result(error = e.cause?.message ?: "Command output could not be read")
+        } catch (_: ExecutionException) {
+            Result(error = "Command output could not be read")
+        } catch (e: IOException) {
+            Result(
+                error = "IOException",
+                accessFailure = if (process == null) classifyLaunchFailure(e.message.orEmpty()) else null,
+            )
         } catch (e: Exception) {
             Result(error = e.javaClass.simpleName)
         } finally {
@@ -78,5 +99,17 @@ object CommandOutput {
                     .apply { isDaemon = true; start() }
             }
         }
+    }
+
+    internal fun classifyAccessFailure(text: String): AccessFailure? = when {
+        denial.containsMatchIn(text) -> AccessFailure.DENIED
+        unavailable.containsMatchIn(text) -> AccessFailure.EXECUTABLE_UNAVAILABLE
+        else -> null
+    }
+
+    internal fun classifyLaunchFailure(detail: String): AccessFailure? = when (launchError.find(detail)?.groupValues?.get(1)) {
+        "2" -> AccessFailure.EXECUTABLE_UNAVAILABLE
+        "13" -> AccessFailure.DENIED
+        else -> null
     }
 }
