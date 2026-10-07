@@ -1,12 +1,17 @@
 package app.batstats.battery.apps
 
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 class AppInfoCacheTest {
     private data class Icon(val packageName: String, val version: Int)
@@ -36,6 +41,52 @@ class AppInfoCacheTest {
         override fun put(packageName: String, icon: Icon) { map[packageName] = icon }
         override fun remove(packageName: String) { map.remove(packageName) }
         override fun clear() = map.clear()
+    }
+
+    private class LatchedRead<T>(private val value: T) {
+        private val started = CountDownLatch(1)
+        private val released = CountDownLatch(1)
+
+        fun read(): T {
+            started.countDown()
+            assertTrue("Lookup must be released", released.await(10, TimeUnit.SECONDS))
+            return value
+        }
+
+        fun awaitStarted() {
+            assertTrue("Lookup must start", started.await(10, TimeUnit.SECONDS))
+        }
+
+        fun release() = released.countDown()
+    }
+
+    private class LatchedLookup : PackageLookup<Icon> {
+        val oldInfo = AppInfo("com.example", "Old", isSystem = false, installed = true)
+        val newInfo = AppInfo("com.example", "New", isSystem = true, installed = true)
+        val oldIcon = Icon("com.example", 1)
+        val newIcon = Icon("com.example", 2)
+        val infoRead = LatchedRead(oldInfo)
+        val iconRead = LatchedRead(oldIcon)
+        val infoReads = AtomicInteger()
+        val iconReads = AtomicInteger()
+
+        override fun info(packageName: String): AppInfo =
+            if (infoReads.getAndIncrement() == 0) infoRead.read() else newInfo
+
+        override fun icon(packageName: String): Icon =
+            if (iconReads.getAndIncrement() == 0) iconRead.read() else newIcon
+    }
+
+    private suspend fun TestScope.withLatchedLookup(block: suspend (AppInfoCache<Icon>, LatchedLookup) -> Unit) {
+        val lookup = LatchedLookup()
+        val io = Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+        try {
+            block(AppInfoCache(lookup, MapIconStore(), io), lookup)
+        } finally {
+            lookup.infoRead.release()
+            lookup.iconRead.release()
+            io.close()
+        }
     }
 
     private val lookup = FakeLookup().apply {
@@ -97,6 +148,83 @@ class AppInfoCacheTest {
         cache.info("com.example"); cache.icon("com.example")
         assertEquals(2, lookup.infoReads.size)
         assertEquals(2, lookup.iconReads.size)
+    }
+
+    @Test fun invalidateDuringInfoLookupPreventsStalePublication() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.info("com.example") }
+            lookup.infoRead.awaitStarted()
+            cache.invalidate("com.example")
+            lookup.infoRead.release()
+            assertEquals(lookup.oldInfo, old.await())
+            assertEquals(lookup.newInfo, cache.info("com.example"))
+            assertEquals(lookup.newInfo, cache.info("com.example"))
+            assertEquals(2, lookup.infoReads.get())
+        }
+    }
+
+    @Test fun invalidateDuringIconLookupPreventsStalePublication() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.icon("com.example") }
+            lookup.iconRead.awaitStarted()
+            cache.invalidate("com.example")
+            lookup.iconRead.release()
+            assertEquals(lookup.oldIcon, old.await())
+            assertNull(cache.cachedIcon("com.example"))
+            assertEquals(lookup.newIcon, cache.icon("com.example"))
+            assertEquals(lookup.newIcon, cache.cachedIcon("com.example"))
+            assertEquals(2, lookup.iconReads.get())
+        }
+    }
+
+    @Test fun clearDuringInfoLookupPreventsStalePublication() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.info("com.example") }
+            lookup.infoRead.awaitStarted()
+            cache.clear()
+            lookup.infoRead.release()
+            assertEquals(lookup.oldInfo, old.await())
+            assertEquals(lookup.newInfo, cache.info("com.example"))
+            assertEquals(2, lookup.infoReads.get())
+        }
+    }
+
+    @Test fun clearDuringIconLookupPreventsStalePublication() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.icon("com.example") }
+            lookup.iconRead.awaitStarted()
+            cache.clear()
+            lookup.iconRead.release()
+            assertEquals(lookup.oldIcon, old.await())
+            assertNull(cache.cachedIcon("com.example"))
+            assertEquals(lookup.newIcon, cache.icon("com.example"))
+            assertEquals(2, lookup.iconReads.get())
+        }
+    }
+
+    @Test fun olderInfoLookupCannotOverwriteNewerCompletion() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.info("com.example") }
+            lookup.infoRead.awaitStarted()
+            assertEquals(lookup.newInfo, cache.info("com.example"))
+            lookup.infoRead.release()
+            assertEquals(lookup.oldInfo, old.await())
+            assertEquals(lookup.newInfo, cache.info("com.example"))
+            assertEquals(2, lookup.infoReads.get())
+        }
+    }
+
+    @Test fun olderIconLookupCannotOverwriteNewerCompletion() = runTest {
+        withLatchedLookup { cache, lookup ->
+            val old = async(start = CoroutineStart.UNDISPATCHED) { cache.icon("com.example") }
+            lookup.iconRead.awaitStarted()
+            assertEquals(lookup.newIcon, cache.icon("com.example"))
+            lookup.iconRead.release()
+            assertEquals(lookup.oldIcon, old.await())
+            assertEquals(lookup.newIcon, cache.icon("com.example"))
+            assertEquals(lookup.newIcon, cache.cachedIcon("com.example"))
+            assertEquals(2, lookup.iconReads.get())
+        }
     }
 
     @Test fun lookupsRunOnTheIoDispatcher() = runTest {
