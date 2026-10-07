@@ -17,6 +17,8 @@
     <string name="status_access_adb_limited">Yalnızca pil ayrıntıları. Bu Android sürümünde uygulama başına istatistikler için Shizuku ya da root gerekir.</string>
     <string name="status_access_authorize_hint">Shizuku çalışıyor. Kullanmak için BatStats\'e izin verin.</string>
     <string name="status_access_authorize">Shizuku\'ya izin ver</string>
+    <string name="status_access_blocked_hint">BatStats Shizuku\'da engellendi (“Reddet ve bir daha sorma”). Shizuku\'yu açın, yetkili uygulamalarına gidin ve BatStats\'i açın.</string>
+    <string name="status_access_open_shizuku">Shizuku\'yu aç</string>
     <string name="status_access_check">Yeniden denetle</string>
     <string name="status_access_checking_short">Denetleniyor…</string>
     <string name="status_access_info_title">Gelişmiş erişim hakkında</string>

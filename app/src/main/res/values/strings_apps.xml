@@ -24,6 +24,8 @@
     <string name="apps_access_refused">Android refused per-app stats to the current access.</string>
     <string name="apps_access_set_up">Set up access</string>
     <string name="apps_access_allow">Allow in Shizuku</string>
+    <string name="apps_access_shizuku_blocked">BatStats is blocked in Shizuku (“Deny and don\'t ask again”), so Shizuku won\'t ask again. Open Shizuku, go to its authorized apps and switch BatStats on.</string>
+    <string name="apps_access_open_shizuku">Open Shizuku</string>
 
     <string name="apps_failed_title">Couldn\'t read Android\'s stats</string>
     <string name="apps_failed_format">Android answered in a format BatStats can\'t read.</string>

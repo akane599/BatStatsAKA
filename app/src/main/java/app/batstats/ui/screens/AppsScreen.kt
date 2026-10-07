@@ -1,5 +1,7 @@
 package app.batstats.ui.screens
 
+import android.content.ActivityNotFoundException
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -58,6 +60,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -110,6 +113,7 @@ import app.batstats.viewmodel.StatsSummary
 import java.util.Locale
 import org.koin.androidx.compose.koinViewModel
 import org.koin.compose.koinInject
+import rikka.shizuku.ShizukuProvider
 
 /** Two panes from this window width (the Material "expanded" breakpoint): overview on the start, the list on the end. */
 internal const val TWO_PANE_MIN_WIDTH_DP = 840
@@ -129,6 +133,7 @@ fun AppsScreen(
     vm: AppsViewModel = koinViewModel(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
     val shizuku: ShizukuBridge = koinInject()
     LifecycleStartEffect(vm) {
         vm.onStart()
@@ -141,7 +146,7 @@ fun AppsScreen(
             when (event) {
                 is AppsEvent.OpenApp -> onOpenApp(event.uid, event.packageName)
                 AppsEvent.OpenAccessSetup -> onOpenAccessSetup()
-                AppsEvent.AllowShizuku -> shizuku.requestPermission()
+                AppsEvent.AllowShizuku -> allowShizuku(context, state.problem, shizuku)
                 else -> vm.onEvent(event)
             }
         },
@@ -527,9 +532,30 @@ private fun LoadingRows(modifier: Modifier = Modifier) {
 }
 
 /**
+ * "Allow in Shizuku" from Apps or AppDetails: Shizuku's permission dialog, or, once BatStats is blocked there ("Deny and
+ * don't ask again", after which Shizuku shows no dialog), the Shizuku app itself, where BatStats can be switched on.
+ */
+internal fun allowShizuku(context: Context, problem: StatsProblem?, shizuku: ShizukuBridge) {
+    if ((problem as? StatsProblem.NoAccess)?.blocked == true) openShizuku(context) else shizuku.requestPermission()
+}
+
+/**
+ * Opens the Shizuku app (visible through QUERY_ALL_PACKAGES). Without its launcher entry (Sui has none) there is
+ * nothing to open, and the blocked copy alone says what to do.
+ */
+internal fun openShizuku(context: Context) {
+    val launch = context.packageManager.getLaunchIntentForPackage(ShizukuProvider.MANAGER_APPLICATION_ID) ?: return
+    try {
+        context.startActivity(launch)
+    } catch (_: ActivityNotFoundException) {
+        // Uninstalled between the lookup and the launch.
+    }
+}
+
+/**
  * The last read's problem as the app's quiet [Notice]: an access hint (info accent; "Set up access" opens Settings ›
- * Status, and Shizuku can be asked directly when it runs) or a read failure (error accent) with Try again. Nothing
- * when there's none.
+ * Status, and Shizuku can be asked directly when it runs, or opened when BatStats is blocked there) or a read failure
+ * (error accent) with Try again. Nothing when there's none.
  */
 @Composable
 internal fun StatsProblemNotice(
@@ -542,7 +568,9 @@ internal fun StatsProblemNotice(
     when (problem) {
         null -> Unit
         is StatsProblem.NoAccess -> Notice(
-            message = stringResource(accessBody(problem.problem)),
+            message = stringResource(
+                if (problem.blocked) R.string.apps_access_shizuku_blocked else accessBody(problem.problem),
+            ),
             modifier = modifier,
             title = stringResource(R.string.apps_access_title),
             tone = NoticeTone.INFO,
@@ -550,7 +578,8 @@ internal fun StatsProblemNotice(
             framed = true,
         ) {
             if (problem.problem == AccessProblem.SHIZUKU_NOT_ALLOWED) {
-                TextButton(onClick = onAllowShizuku) { Text(stringResource(R.string.apps_access_allow)) }
+                val label = if (problem.blocked) R.string.apps_access_open_shizuku else R.string.apps_access_allow
+                TextButton(onClick = onAllowShizuku) { Text(stringResource(label)) }
             }
             TextButton(onClick = onSetUp) { Text(stringResource(R.string.apps_access_set_up)) }
         }

@@ -17,6 +17,8 @@
     <string name="status_access_adb_limited">Solo datos de batería. En esta versión de Android, las estadísticas por app necesitan Shizuku o root.</string>
     <string name="status_access_authorize_hint">Shizuku está en marcha. Autoriza a BatStats para usarlo.</string>
     <string name="status_access_authorize">Autorizar Shizuku</string>
+    <string name="status_access_blocked_hint">BatStats está bloqueada en Shizuku («Denegar y no volver a preguntar»). Abre Shizuku, ve a sus apps autorizadas y activa BatStats.</string>
+    <string name="status_access_open_shizuku">Abrir Shizuku</string>
     <string name="status_access_check">Volver a comprobar</string>
     <string name="status_access_checking_short">Comprobando…</string>
     <string name="status_access_info_title">Acerca del acceso avanzado</string>
