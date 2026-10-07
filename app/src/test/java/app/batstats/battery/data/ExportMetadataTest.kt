@@ -7,7 +7,7 @@ import org.junit.Test
 class ExportMetadataTest {
     @Test
     fun currentNowUaDescriptionIdentifiesRawDeviceDependentCurrent() {
-        val description = CURRENT_NOW_UA_EXPORT_DESCRIPTION
+        val description = exportUnits().getValue("currentNowUa")
 
         assertFalse(description.contains("positive into battery", ignoreCase = true))
         assertFalse(description.contains("normalized", ignoreCase = true))

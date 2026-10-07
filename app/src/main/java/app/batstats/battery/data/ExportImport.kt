@@ -40,7 +40,14 @@ private const val MAX_APP_USAGE_ROWS = HistoryLimits.MAX_SESSIONS * SessionAppUs
 internal const val CURRENT_NOW_UA_EXPORT_DESCRIPTION =
     "Raw BatteryManager current as reported by the device; unit and sign are device-dependent, and detected calibration is not applied"
 
-data class HistoryImportResult(val samplesAdded: Int, val sessionsAdded: Int, val sessionsUpdated: Int, val unchanged: Int)
+internal fun exportUnits(): Map<String, String> = mapOf(
+    "timestamps" to "Unix epoch milliseconds UTC", "durations" to "milliseconds", "currentNowUa" to CURRENT_NOW_UA_EXPORT_DESCRIPTION,
+    "chargeCounterUah" to "µAh", "deltaUah" to "µAh, positive gained for CHARGE or consumed for DISCHARGE",
+    "voltageMv" to "mV", "temperatureDeciC" to "tenths Celsius", "energyNwh" to "nWh", "estCapacityMah" to "mAh, legacy estimate",
+    "capacityEstimateMah" to "mAh, full-capacity estimate", "peakPowerMw" to "mW", "powerMah" to "mAh attributed by Android batterystats",
+    "mobileBytes" to "bytes received and sent", "wifiBytes" to "bytes received and sent",
+)
+
 
 /** No writes occur until the complete bounded file passes validation. */
 @OptIn(ExperimentalSerializationApi::class)
@@ -63,11 +70,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
             val usage = if (sessions) db.appUsageDao().usageForSessionsBetween(from, end) else emptyList()
             require(points.size <= HistoryLimits.MAX_SAMPLES && periods.size <= HistoryLimits.MAX_SESSIONS && usage.size <= MAX_APP_USAGE_ROWS) { "Use a smaller export date range" }
             BatteryExport(points, periods, HISTORY_FORMAT_VERSION, System.currentTimeMillis(), from, end,
-                mapOf("timestamps" to "Unix epoch milliseconds UTC", "durations" to "milliseconds", "currentNowUa" to CURRENT_NOW_UA_EXPORT_DESCRIPTION,
-                    "chargeCounterUah" to "µAh", "deltaUah" to "µAh, positive gained for CHARGE or consumed for DISCHARGE",
-                    "voltageMv" to "mV", "temperatureDeciC" to "tenths Celsius", "energyNwh" to "nWh", "estCapacityMah" to "mAh, legacy estimate",
-                    "capacityEstimateMah" to "mAh, full-capacity estimate", "peakPowerMw" to "mW", "powerMah" to "mAh attributed by Android batterystats",
-                    "mobileBytes" to "bytes received and sent", "wifiBytes" to "bytes received and sent"),
+                exportUnits(),
                 "Samples are within the requested range. Sessions overlap the range; their totals cover their complete original windows, not a clipped range. Per-app rows belong to the exported sessions. Missing fields are unavailable. Imports never resume monitoring.",
                 usage)
         }
