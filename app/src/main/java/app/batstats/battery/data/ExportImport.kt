@@ -184,7 +184,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
             payload.appUsage.size <= MAX_APP_USAGE_ROWS) { "Too many history records" }
         val samples = payload.samples.map(HistoryPolicy::sample)
         val sessions = payload.sessions.map(HistoryPolicy::session)
-        val usage = HistoryPolicy.appUsage(payload.appUsage)
+        val usage = HistoryPolicy.appUsage(payload.appUsage).groupBy { it.sessionId }
         require(sessions.map { it.sessionId }.toSet().size == sessions.size) { "Duplicate session identities in file" }
         var addedSamples = 0; var addedSessions = 0; var updated = 0; var skipped = 0
         return db.withTransaction {
@@ -203,7 +203,8 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                     }
                     skipped++; continue
                 }
-                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId), original)
+                val plan = HistoryPolicy.planSessionImport(db.sessionDao().byId(session.sessionId), original,
+                    hasAppUsage = session.sessionId in usage)
                 when (plan.disposition) {
                     ImportSessionDisposition.ADDED -> db.sessionDao().insert(plan.session)
                     ImportSessionDisposition.UPDATED -> db.sessionDao().update(plan.session)
@@ -245,14 +246,17 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                 addedSamples++
             }
             // A breakdown follows its parent's merge: stale imports and local sessions keep their own.
-            for ((sessionId, rows) in usage.groupBy { it.sessionId }) {
+            for ((sessionId, rows) in usage) {
                 currentCoroutineContext().ensureActive()
                 val local = db.sessionDao().byId(HistoryPolicy.originalId(sessionId))
+                val session = db.sessionDao().byId(sessionId)
                 val plan = HistoryPolicy.planUsageImport(
-                    dispositions[sessionId], local?.source, db.sessionDao().byId(sessionId) != null,
+                    dispositions[sessionId], local?.source, session != null,
                     db.appUsageDao().sessionUsageRows(sessionId), rows,
                 ) ?: continue
                 db.appUsageDao().replaceSessionUsageRows(sessionId, plan.rows)
+                val enriched = HistoryPolicy.withImportedUsage(checkNotNull(session), plan.rows)
+                if (enriched != session) db.sessionDao().update(enriched)
                 updated += plan.updated
                 skipped += plan.unchanged
             }

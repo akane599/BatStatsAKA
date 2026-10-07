@@ -140,8 +140,11 @@ object HistoryPolicy {
             capacityEstimateMah = capacity.capacityEstimateMah, capacityConfidence = capacity.capacityConfidence, capacityBasis = capacity.capacityBasis)
     }
     /** Plans raw rows before normalization can shrink coverage; keeps stale skips distinct from enrichment. */
-    internal fun planSessionImport(previous: ChargeSession?, incoming: ChargeSession): SessionImportPlan {
-        val candidate = session(incoming)
+    internal fun planSessionImport(previous: ChargeSession?, incoming: ChargeSession, hasAppUsage: Boolean): SessionImportPlan {
+        // READY describes rows in this copy, not the source's omitted breakdown. A partial copy can
+        // still retain an existing breakdown through mergeDerived, and a full copy can enrich it later.
+        val candidate = session(if (!hasAppUsage && incoming.appUsageStatus == AppUsageStatus.READY)
+            incoming.copy(appUsageStatus = null, appUsageBasis = null) else incoming)
         val stored = previous?.let(::session) ?: return SessionImportPlan(candidate, ImportSessionDisposition.ADDED)
         val merged = mergeDerived(stored, candidate)
         if (stored == merged) return SessionImportPlan(stored, ImportSessionDisposition.UNCHANGED)
@@ -154,6 +157,12 @@ object HistoryPolicy {
         if (incomingEnd < storedEnd) return SessionImportPlan(stored, ImportSessionDisposition.STALE)
         require(incoming.observedMs >= previous.observedMs && incoming.counterCoveredMs >= previous.counterCoveredMs) { "Incompatible imported session coverage" }
         return SessionImportPlan(merged, ImportSessionDisposition.UPDATED)
+    }
+
+    /** Called only after this transaction writes the validated breakdown (including a usage-only CSV). */
+    internal fun withImportedUsage(session: ChargeSession, rows: List<SessionAppUsage>): ChargeSession {
+        if (!session.source.startsWith("import:") || session.appUsageStatus != null || rows.isEmpty()) return session
+        return session.copy(appUsageStatus = AppUsageStatus.READY, appUsageBasis = rows.first().basis)
     }
 
     /** A usage-only write counts once, promoting an unchanged parent rather than counting it twice. */
