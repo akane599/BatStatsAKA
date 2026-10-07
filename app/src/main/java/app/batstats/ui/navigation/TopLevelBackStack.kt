@@ -99,24 +99,29 @@ fun rememberTopLevelBackStack(): TopLevelBackStack {
     }
 }
 
-/** Applies a `destination` intent extra value (see [Destinations]) to this back stack. */
+/**
+ * Applies a `destination` intent extra value (see [Destinations]) to this back stack. Every value is an explicit
+ * link, so the target tab is reset to its root first ([openRoot]): a retained detail stack never stands in for the
+ * requested screen, and a detail link (session, health, status) leaves exactly root + that detail however often it
+ * repeats. Bottom-bar [TopLevelBackStack.select] keeps its stack retention.
+ */
 fun TopLevelBackStack.openDestination(value: String) {
     val sessionId = Destinations.sessionIdOrNull(value)
     when {
         sessionId != null -> {
-            select(Routes.History)
+            openRoot(Routes.History)
             navigate(Routes.SessionDetails(sessionId))
         }
-        value == Destinations.NOW -> select(Routes.Now)
-        value == Destinations.HISTORY -> select(Routes.History)
-        value == Destinations.APPS -> select(Routes.Apps)
-        value == Destinations.SETTINGS -> select(Routes.Settings)
+        value == Destinations.NOW -> openRoot(Routes.Now)
+        value == Destinations.HISTORY -> openRoot(Routes.History)
+        value == Destinations.APPS -> openRoot(Routes.Apps)
+        value == Destinations.SETTINGS -> openRoot(Routes.Settings)
         value == Destinations.HEALTH -> {
-            select(Routes.Now)
+            openRoot(Routes.Now)
             navigate(Routes.Health)
         }
         value == Destinations.STATUS -> {
-            select(Routes.Settings)
+            openRoot(Routes.Settings)
             navigate(Routes.SettingsStatus)
         }
     }

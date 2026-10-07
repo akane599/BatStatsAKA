@@ -47,7 +47,7 @@ fun NavGraph(
     // One-shot: Now's Today card asks History for today's figures.
     var historyShowToday by rememberSaveable { mutableStateOf(false) }
     val entryProvider = entryProvider<NavKey> {
-        // Now -> Health, AppDetails (pushed); Today opens History › Days at today, "See all" switches to Apps
+        // Now -> Health, AppDetails (pushed); Today opens History › Days at today, "See all" opens Apps at its root
         entry<Routes.Now> {
             NowScreen(
                 onOpenHistory = {
@@ -55,7 +55,7 @@ fun NavGraph(
                     topLevelBackStack.openRoot(Routes.History)
                 },
                 onOpenHealth = { topLevelBackStack.navigate(Routes.Health) },
-                onOpenApps = { topLevelBackStack.select(Routes.Apps) },
+                onOpenApps = { topLevelBackStack.openRoot(Routes.Apps) },
                 onOpenApp = { uid, packageName -> topLevelBackStack.navigate(Routes.AppDetails(uid, packageName)) },
             )
         }
