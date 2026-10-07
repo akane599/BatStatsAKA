@@ -325,7 +325,9 @@ class ShizukuBridge(private val context: Context) {
                             binder.transact(ShellUserService.TRANSACTION_RUN_PIPE, data, null, IBinder.FLAG_ONEWAY)
                         } finally { data.recycle(); runCatching { pipe[1].close() } }
                         if (!continuation.isActive) { cancelRemote(); return@Thread }
-                        val result = if (accepted) ParcelFileDescriptor.AutoCloseInputStream(pipe[0]).use(CommandProtocol::read) else null
+                        val result = readPipeResult(accepted) {
+                            ParcelFileDescriptor.AutoCloseInputStream(pipe[0]).use(CommandProtocol::read)
+                        }
                         continuation.resumeWith(Result.success(result))
                     } catch (e: Exception) {
                         continuation.resumeWith(Result.failure(e))
@@ -391,6 +393,12 @@ class ShizukuBridge(private val context: Context) {
         }
     }
 }
+
+internal fun readPipeResult(
+    accepted: Boolean,
+    read: () -> CommandOutput.Result,
+): CommandOutput.Result =
+    if (accepted) read() else CommandOutput.Result(error = "Helper command refused")
 
 internal fun classifyAfterRead(
     running: Boolean,
