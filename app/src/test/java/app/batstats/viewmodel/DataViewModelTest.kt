@@ -303,6 +303,21 @@ class DataViewModelTest {
         assertEquals(DataOutcome.Failed(DataTask.RESTORE_SETTINGS, DataFailure.NO_PICKER), vm.state.value.outcome)
     }
 
+    @Test fun settingsExportFailureIsNotAnImportRejection() = runTest {
+        val vm = start()
+        repo.saveFailure = IllegalStateException("Settings export failed")
+
+        vm.onFileChosen(DataTask.SAVE_SETTINGS, "content://settings.json")
+        runCurrent()
+
+        assertEquals(
+            "a failed settings export must not report an import rejection or expose its technical detail",
+            DataOutcome.Failed(DataTask.SAVE_SETTINGS, DataFailure.UNEXPECTED),
+            vm.state.value.outcome,
+        )
+        assertTrue("a failed settings export releases the running task", vm.state.value.idle)
+    }
+
     @Test fun settingsRestoreAppliesOrSaysWhyNothingChanged() = runTest {
         val vm = start()
         repo.restore = SettingsRestore.Applied(applied = 17, skipped = 1, failed = 0)
