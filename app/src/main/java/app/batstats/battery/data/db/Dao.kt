@@ -31,6 +31,10 @@ interface BatteryDao {
     @Query("SELECT * FROM battery_samples WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
     fun samplesBetween(from: Long, to: Long): Flow<List<BatterySample>>
 
+    /** ALL exports omit only oldest overflow awaiting the writer's next trim, without deleting it. */
+    @Query("SELECT * FROM (SELECT * FROM battery_samples WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp DESC, id DESC LIMIT :limit) ORDER BY timestamp ASC, id ASC")
+    suspend fun latestSamplesBetween(from: Long, to: Long, limit: Int): List<BatterySample>
+
     @Query("SELECT * FROM battery_samples WHERE id IN (SELECT MAX(id) FROM battery_samples WHERE timestamp BETWEEN :from AND :to AND source = 'BatteryManager' GROUP BY timestamp / :bucketMs) ORDER BY timestamp")
     fun chartSamples(from: Long, to: Long, bucketMs: Long): Flow<List<BatterySample>>
 
