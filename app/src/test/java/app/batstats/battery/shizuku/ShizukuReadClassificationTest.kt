@@ -38,6 +38,37 @@ class ShizukuReadClassificationTest {
         assertEquals(RunResult.Success("dump"), classifyAfterRead(true, true, CommandOutput.Result("dump")))
     }
 
+    @Test fun refusedTransactionIsCommandFailureNotTimeoutAndDoesNotRetry() = runTest {
+        val pipeResult = readPipeResult(false) { error("Refused transaction must not read the pipe") }
+        val first = classifyAfterRead(true, true, pipeResult)
+        assertEquals(RunResult.Error("Helper command refused", Failure.COMMAND), first)
+        var retries = 0
+        val result = retryAfterTransportFailure(first) {
+            retries++
+            RunResult.Success("retried dump")
+        }
+        assertSame("Refusal must return the first result", first, result)
+        assertEquals("Refusal must not retry the dump", 0, retries)
+    }
+
+    @Test fun unsupportedCommandResponseIsCommandFailureAndDoesNotRetry() = runTest {
+        val first = classifyAfterRead(true, true, readPipeResult(true) {
+            CommandOutput.Result(error = "Unsupported command")
+        })
+        assertEquals(RunResult.Error("Unsupported command", Failure.COMMAND), first)
+        assertSame(first, retryAfterTransportFailure(first) { error("Unsupported command must not retry") })
+    }
+
+    @Test fun acceptedTransactionReadsAndPreservesItsResult() {
+        val expected = CommandOutput.Result("dump")
+        var reads = 0
+        assertSame(expected, readPipeResult(true) {
+            reads++
+            expected
+        })
+        assertEquals("Accepted transaction reads exactly once", 1, reads)
+    }
+
     @Test fun postReadAccessLossDoesNotRebindOrRepeatTheDump() = runTest {
         for ((running, permitted) in listOf(false to false, true to false)) {
             val first = classifyAfterRead(running, permitted, CommandOutput.Result("partial dump"))
