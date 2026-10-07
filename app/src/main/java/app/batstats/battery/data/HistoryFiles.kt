@@ -33,6 +33,13 @@ object HistoryLimits {
     const val MAX_SAMPLES = 100_000
     const val MAX_SESSIONS = 10_000
     const val MAX_FIELD_CHARS = 2048
+    internal const val CLEANUP_SAMPLE_INTERVAL = 200
+    // Leave room for the next maintenance interval, including its final write before cleanup.
+    internal const val SAMPLE_TRIM_TARGET = MAX_SAMPLES - CLEANUP_SAMPLE_INTERVAL
+    internal const val SESSION_TRIM_TARGET = MAX_SESSIONS - CLEANUP_SAMPLE_INTERVAL
+
+    // Existing excess history must not block imports that leave this store unchanged or smaller.
+    internal fun importWithinLimit(before: Int, after: Int, limit: Int): Boolean = after <= limit || after <= before
 }
 
 class LimitedHistoryInput(input: InputStream, private val limit: Long = HistoryLimits.MAX_BYTES, private val json: Boolean = false) : FilterInputStream(input) {

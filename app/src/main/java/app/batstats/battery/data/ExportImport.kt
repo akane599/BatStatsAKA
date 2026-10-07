@@ -188,6 +188,8 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         require(sessions.map { it.sessionId }.toSet().size == sessions.size) { "Duplicate session identities in file" }
         var addedSamples = 0; var addedSessions = 0; var updated = 0; var skipped = 0
         return db.withTransaction {
+            val samplesBefore = db.batteryDao().count()
+            val sessionsBefore = db.sessionDao().count()
             val dispositions = mutableMapOf<String, ImportSessionDisposition>()
             for ((index, session) in sessions.withIndex()) {
                 currentCoroutineContext().ensureActive()
@@ -254,7 +256,8 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
                 skipped += plan.unchanged
             }
             // Refuse rather than silently deleting existing history to make room for an import.
-            require(db.batteryDao().count() <= HistoryLimits.MAX_SAMPLES && db.sessionDao().count() <= HistoryLimits.MAX_SESSIONS) { "History limit exceeded; clear or export older records first" }
+            require(HistoryLimits.importWithinLimit(samplesBefore, db.batteryDao().count(), HistoryLimits.MAX_SAMPLES) &&
+                HistoryLimits.importWithinLimit(sessionsBefore, db.sessionDao().count(), HistoryLimits.MAX_SESSIONS)) { "History limit exceeded; clear or export older records first" }
             HistoryImportResult(addedSamples, addedSessions, updated, skipped)
         }
     }

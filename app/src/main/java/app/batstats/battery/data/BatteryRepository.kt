@@ -423,7 +423,7 @@ class BatteryRepository(
             samplesSinceCleanup++
         }
         if (ended != null) emitTransition(ended, point, updated)
-        if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= 200 || point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
+        if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= HistoryLimits.CLEANUP_SAMPLE_INTERVAL || point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             lastCleanupElapsed = point.elapsedMs
             samplesSinceCleanup = 0
             try { cleanup(sample.timestamp); failure(FailureSource.RETENTION) }
@@ -529,7 +529,7 @@ class BatteryRepository(
         }
         // The size bound never waits on the retention setting: a failed cutoff still trims.
         sessionDao.boundStorage()
-        batteryDao.boundStorage() // Trim to 100,000; at most 200 new samples accumulate between trims.
+        batteryDao.boundStorage() // Both bounds reserve headroom for the next cleanup interval.
         purgeFailure?.let { throw it }
     }
 
