@@ -5,7 +5,6 @@ import android.os.Parcel
 import android.os.ParcelFileDescriptor
 import app.batstats.battery.util.CommandOutput
 import app.batstats.battery.util.CommandProtocol
-import rikka.shizuku.ShizukuApiConstants
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ConcurrentHashMap
 
@@ -14,7 +13,8 @@ class ShellUserService : Binder() {
     companion object {
         const val TRANSACTION_RUN_PIPE = 2
         const val TRANSACTION_CANCEL = 3
-        const val TRANSACTION_DESTROY = ShizukuApiConstants.USER_SERVICE_TRANSACTION_destroy
+        // Shizuku's USER_SERVICE_TRANSACTION_destroy (restricted to its library group; ShellUserServiceTest pins it).
+        const val TRANSACTION_DESTROY = 16777115
         private val COMMANDS = setOf(
             "dumpsys batterystats -c --charged", "dumpsys battery"
         )
