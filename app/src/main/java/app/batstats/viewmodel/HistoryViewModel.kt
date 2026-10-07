@@ -12,11 +12,13 @@ import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.DailySummary
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.DailySummaryAggregator
+import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,8 +27,10 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -134,7 +138,7 @@ sealed interface HistoryEvent {
 
 /** What History reads, as one seam: [DefaultHistoryRepository] on device, a fake in unit tests. */
 interface HistoryRepository {
-    /** The latest capture; each one re-evaluates the local day, so Days moves on after midnight without a timer. */
+    /** The latest capture; each one also re-evaluates the local day. */
     val realtime: Flow<BatteryRepository.Realtime>
     val isMonitoring: Flow<Boolean>
 
@@ -186,9 +190,19 @@ class HistoryViewModel(
     private val filter = savedState.getStateFlow(KEY_FILTER, SessionFilter.ALL.name).map { name -> enumOr(name, SessionFilter.ALL) }
     private val selectedDay = savedState.getStateFlow<Long?>(KEY_DAY, null)
 
-    private val today: Flow<Long> = source.realtime
-        .map { DailySummaryAggregator.epochDay(clock(), zone()) }
-        .distinctUntilChanged()
+    private val today: Flow<Long> = merge(
+        source.realtime.map { DailySummaryAggregator.epochDay(clock(), zone()) },
+        flow {
+            while (true) {
+                val now = clock()
+                val localNow = Instant.ofEpochMilli(now).atZone(zone())
+                val date = localNow.toLocalDate()
+                emit(date.toEpochDay())
+                val nextMidnight = date.plusDays(1).atStartOfDay(localNow.zone).toInstant().toEpochMilli()
+                delay(nextMidnight - now)
+            }
+        },
+    ).distinctUntilChanged()
 
     private val days: Flow<DaysState> = combine(range, today, page.map { it.revision }.distinctUntilChanged(), ::Triple)
         .flatMapLatest { (range, today, _) ->
