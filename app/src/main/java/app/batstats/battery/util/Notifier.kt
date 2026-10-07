@@ -19,7 +19,11 @@ import app.batstats.battery.service.BatteryMonitorService
 import app.batstats.settings.useFahrenheit
 import app.batstats.ui.navigation.Destinations
 
+internal data class StartPromptIntents<T>(val action: T, val content: T = action)
+
 object Notifier {
+    private const val START_PROMPT_ID = 1000
+
     fun promptStartOnBoot(ctx: Context) {
         DrainNotificationManager.ensureChannel(ctx)
         val startIntent = Intent(ctx, BatteryMonitorService::class.java)
@@ -34,15 +38,21 @@ object Notifier {
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
             )
         }
+        val intents = StartPromptIntents(pi)
         val n = NotificationCompat.Builder(ctx, DrainNotificationManager.CHANNEL_ID)
             .setContentTitle(ctx.getString(R.string.monitoring_ready))
             .setContentText(ctx.getString(R.string.tap_to_start))
             .setSmallIcon(android.R.drawable.ic_lock_idle_charging)
             .setAutoCancel(true)
-            .addAction(android.R.drawable.ic_media_play, ctx.getString(R.string.start_monitoring), pi)
+            .setContentIntent(intents.content)
+            .addAction(android.R.drawable.ic_media_play, ctx.getString(R.string.start_monitoring), intents.action)
             .build()
         (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(1000, n)
+            .notify(START_PROMPT_ID, n)
+    }
+
+    fun cancelStartPrompt(ctx: Context) {
+        ctx.getSystemService(NotificationManager::class.java).cancel(START_PROMPT_ID)
     }
 
     const val ALERT_CHANNEL_ID = "battery_alerts"

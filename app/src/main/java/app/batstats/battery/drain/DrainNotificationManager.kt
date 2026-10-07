@@ -25,6 +25,8 @@ import java.util.Locale
 import java.util.TimeZone
 import android.text.format.DateFormat as AndroidDateFormat
 
+internal fun <T> promotionNotification(lastPosted: T?, fallback: () -> T): T = lastPosted ?: fallback()
+
 /**
  * The ongoing monitoring notification: custom collapsed and expanded views in the system's decorated template,
  * Stop and Reset actions, a tap that opens Now, and a status-bar icon that can spell a live value. The service
@@ -65,6 +67,7 @@ class DrainNotificationManager(private val context: Context, private val reposit
         }
     }
 
+    private var lastPostedNotification: Notification? = null
     private val contentBuilder = NotificationContent.Builder(context)
     private val icons = StatusIconRenderer.of(context)
     init { ensureChannel(context) }
@@ -86,6 +89,14 @@ class DrainNotificationManager(private val context: Context, private val reposit
 
     /** The first notification, for `startForeground`: the latest reading; [run] adds the session at once. */
     fun getNotification(): Notification = build(content(NotificationInput(EtaHold.next(EtaHold.Reading(), repository.realtimeFlow.value))))
+
+    /** Re-promoting a running service must not replace the gated live content with startup defaults. */
+    fun promotionNotification(): Notification = promotionNotification(lastPostedNotification, ::getNotification)
+
+    fun post(notification: Notification) {
+        context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+        lastPostedNotification = notification
+    }
 
     /**
      * Keeps the notification current until cancelled: the calibrated reading (with its held estimate), the open
@@ -166,5 +177,8 @@ class DrainNotificationManager(private val context: Context, private val reposit
         setViewVisibility(id, if (text == null) View.GONE else View.VISIBLE)
     }
 
-    fun stopNotification() { context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID) }
+    fun stopNotification() {
+        lastPostedNotification = null
+        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+    }
 }
