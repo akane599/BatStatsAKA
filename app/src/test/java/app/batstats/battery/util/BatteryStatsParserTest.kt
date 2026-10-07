@@ -161,6 +161,61 @@ class BatteryStatsParserTest {
         assertFalse(s.hasValidWindow)
     }
 
+    @Test fun allRelevantPowerRowsRejectedFlagsAnOtherwiseValidWindow() {
+        val snapshot = BatteryStatsParser.parseCheckin("""
+            $VALID_WINDOW
+            9,10001,l,pwi,uid,NaN
+            9,10002,l,pwi,uid,-1
+            9,10003,l,pwi,uid
+            9,broken,l,pwi,uid,1.0
+        """.trimIndent())
+        assertTrue(snapshot.hasValidWindow)
+        assertTrue(snapshot.apps.isEmpty())
+        assertEquals(4, snapshot.appPowerRecords)
+        assertEquals(4, snapshot.rejectedAppPowerRecords)
+        assertTrue(snapshot.hasOnlyRejectedAppPowerRecords)
+    }
+    @Test fun validWindowWithoutAppPowerRowsIsGenuinelyEmpty() {
+        val snapshot = BatteryStatsParser.parseCheckin(VALID_WINDOW)
+        assertTrue(snapshot.hasValidWindow)
+        assertTrue(snapshot.apps.isEmpty())
+        assertEquals(0, snapshot.appPowerRecords)
+        assertEquals(0, snapshot.rejectedAppPowerRecords)
+        assertFalse(snapshot.hasOnlyRejectedAppPowerRecords)
+    }
+    @Test fun unrelatedRejectedRecordsDoNotFlagAppPowerData() {
+        val snapshot = BatteryStatsParser.parseCheckin("""
+            $VALID_WINDOW
+            9,0,l,pwi,screen,NaN
+            9,10001,l,jb,job,broken,2
+            9,10001,u,pwi,uid,NaN
+        """.trimIndent())
+        assertTrue(snapshot.hasValidWindow)
+        assertTrue(snapshot.apps.isEmpty())
+        assertEquals(2, snapshot.rejectedRecords)
+        assertEquals(0, snapshot.appPowerRecords)
+        assertEquals(0, snapshot.rejectedAppPowerRecords)
+        assertFalse(snapshot.hasOnlyRejectedAppPowerRecords)
+    }
+    @Test fun partialAndDuplicateRejectionKeepAcceptedAppPowerRows() {
+        val snapshot = BatteryStatsParser.parseCheckin("""
+            $VALID_WINDOW
+            9,10001,l,pwi,uid,NaN
+            9,10002,l,pwi,uid,0
+            9,10002,l,pwi,uid,2.0
+        """.trimIndent())
+        assertTrue(snapshot.hasValidWindow)
+        assertEquals(10002, snapshot.apps.single().uid)
+        assertEquals(0.0, snapshot.apps.single().powerMah, 0.0)
+        assertEquals(3, snapshot.appPowerRecords)
+        assertEquals(2, snapshot.rejectedAppPowerRecords)
+        assertFalse(snapshot.hasOnlyRejectedAppPowerRecords)
+    }
+
+    private companion object {
+        const val VALID_WINDOW = "9,0,l,bt,2,60000,50000,100000,80000,1700000000000,30000,20000,4000,3800000,3900000,10000"
+    }
+
     private val streamingFixtures = listOf(
         "9,0,l,pws,0.75\n9,0,l,dc,0,0,120,0",
         "9,0,l,dc,0,0,1e300,1e300",

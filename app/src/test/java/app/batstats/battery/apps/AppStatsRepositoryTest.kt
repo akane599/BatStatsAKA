@@ -238,6 +238,53 @@ class AppStatsRepositoryTest {
         assertEquals(listOf(DiagnosticCode.ADVANCED_FORMAT_INVALID), diagnostics)
     }
 
+    @Test fun allRejectedAppPowerRowsFailWithoutCachingAndTheNextReadRetries() = runTest {
+        val malformed = VALID_DUMP.replace("pwi,uid,1.5", "pwi,uid,NaN")
+        val shell = FakeShell().apply { next = { Outcome.Success(malformed, access) } }
+        val repository = repository(shell)
+        assertEquals(AppStatsResult.Failed(AppStatsRepository.FORMAT_UNAVAILABLE), repository.snapshot())
+        assertEquals(listOf(DiagnosticCode.ADVANCED_FORMAT_INVALID), diagnostics)
+        assertNull("Malformed empty app data must not be cached", repository.cached.value)
+
+        shell.next = { Outcome.Success(VALID_DUMP, shell.access) }
+        val retried = repository.snapshot() as AppStatsResult.Ready
+        assertEquals("A failed parse must run the next dump, not serve an empty cache", 2, shell.commands.size)
+        assertEquals(1.5, retried.snapshot.apps.single().powerMah, 0.0)
+        assertSame(retried.snapshot, repository.cached.value)
+    }
+
+    @Test fun validWindowWithoutAppRowsIsReadyEmpty() = runTest {
+        val empty = VALID_DUMP.lineSequence().first()
+        val shell = FakeShell().apply { next = { Outcome.Success(empty, access) } }
+        val repository = repository(shell)
+        val ready = repository.snapshot() as AppStatsResult.Ready
+        assertTrue(ready.snapshot.apps.isEmpty())
+        assertSame(ready.snapshot, repository.cached.value)
+        assertTrue(diagnostics.isEmpty())
+    }
+
+    @Test fun unrelatedRejectedRowsDoNotPreventReadyEmpty() = runTest {
+        val unrelated = VALID_DUMP.lineSequence().first() + "\n9,0,l,pwi,screen,NaN\n9,10001,l,jb,job,broken,2"
+        val shell = FakeShell().apply { next = { Outcome.Success(unrelated, access) } }
+        val ready = repository(shell).snapshot() as AppStatsResult.Ready
+        assertTrue(ready.snapshot.apps.isEmpty())
+        assertEquals(2, ready.snapshot.rejectedRecords)
+        assertTrue(diagnostics.isEmpty())
+    }
+
+    @Test fun partialAppPowerRejectionIsReadyWithAcceptedRows() = runTest {
+        val partial = VALID_DUMP + "\n9,10002,l,pwi,uid,NaN"
+        val shell = FakeShell().apply { next = { Outcome.Success(partial, access) } }
+        val repository = repository(shell)
+        val ready = repository.snapshot() as AppStatsResult.Ready
+        assertEquals(10001, ready.snapshot.apps.single().uid)
+        assertEquals(1.5, ready.snapshot.apps.single().powerMah, 0.0)
+        assertEquals(2, ready.snapshot.appPowerRecords)
+        assertEquals(1, ready.snapshot.rejectedAppPowerRecords)
+        assertSame(ready.snapshot, repository.cached.value)
+        assertTrue(diagnostics.isEmpty())
+    }
+
     @Test fun readySnapshotsAreParsedLabelledAndKeptAsTheCachedSnapshotPastTheTtl() = runTest {
         val shell = FakeShell()
         val repository = repository(shell)
