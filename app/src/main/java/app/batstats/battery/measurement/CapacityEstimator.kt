@@ -69,7 +69,8 @@ object CapacityEstimator {
      * The current value from several estimates (the caller picks which, e.g. the latest sessions
      * plus sysfs): the confidence-weighted median (LOW 1, MEDIUM 2, HIGH 3; the lower median on
      * a tie), keeping that estimate's basis. Its confidence is the strongest among the estimates
-     * within 10 % of it, so one outlier cannot raise it.
+     * within 10 % of it, so low-confidence outliers have less influence, but one high-confidence
+     * estimate can dominate sparse lower-confidence history (two 4 Ah LOW + one 6 Ah HIGH → 6 Ah/HIGH).
      */
     fun combine(estimates: List<CapacityEstimate>): CapacityEstimate? {
         if (estimates.isEmpty()) return null
