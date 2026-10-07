@@ -28,21 +28,21 @@ object CapacityEstimator {
     private const val MIN_SPAN_PERCENT = 10
     private const val MEDIUM_SPAN_PERCENT = 20
     private const val HIGH_SPAN_PERCENT = 40
-    private const val MIN_COVERAGE = 0.75
     private const val HIGH_COVERAGE = 0.9
 
     /**
      * Δq ÷ Δlevel × 100 for one charge or discharge session ([deltaUah] ≥ 0, as
      * `ChargeSession.deltaUah`; coverage = [counterCoveredMs] ÷ [observedMs]).
      * HIGH: span ≥ 40 % and coverage ≥ 90 %; MEDIUM: span ≥ 20 %; LOW: span ≥ 10 %.
-     * Null for a shorter span, coverage under 75 % (Δq would miss part of the span) or an
-     * implausible result.
+     * Null for a shorter span, incomplete counter coverage (Δq would miss part of the span) or an
+     * implausible result. Coverage has zero tolerance: observed and covered durations sum the same
+     * integer-millisecond intervals, so full coverage does not need a rounding allowance.
      */
     fun fromSession(deltaUah: Long?, startLevel: Int?, endLevel: Int?, observedMs: Long, counterCoveredMs: Long): CapacityEstimate? {
         if (deltaUah == null || deltaUah <= 0 || startLevel == null || endLevel == null || observedMs <= 0) return null
         val span = abs(endLevel - startLevel)
         val coverage = counterCoveredMs.toDouble() / observedMs
-        if (span < MIN_SPAN_PERCENT || coverage < MIN_COVERAGE) return null
+        if (span < MIN_SPAN_PERCENT || counterCoveredMs < observedMs) return null
         val fullUah = deltaUah * 100 / span
         if (fullUah !in PLAUSIBLE_FULL_UAH) return null
         val confidence = when {

@@ -86,6 +86,75 @@ class SessionReportTest {
         assertNull("A 2 % span gives no capacity estimate", report.capacityEstimateMah)
     }
 
+    @Test fun fullyCoveredDischargeKeepsCapacityWhenClosedByChargingBoundary() {
+        val first = sample(level = 90, charge = 4_000_000, plugged = 0, status = 3, elapsed = 0)
+        val session = SessionReport.open(first.point(PowerState.DISCHARGING), first)
+        engine.accept(first.point(PowerState.DISCHARGING))
+        // Constant 800 mA drain: 1,600 mAh over 40 points gives 4,000 mAh capacity.
+        val middle = sample(level = 70, charge = 3_200_000, plugged = 0, status = 3, elapsed = 3_600_000)
+        engine.accept(middle.point(PowerState.DISCHARGING, uptime = 30_000))
+        val last = sample(level = 50, charge = 2_400_000, plugged = 0, status = 3, elapsed = 7_200_000)
+        val summary = engine.accept(last.point(PowerState.DISCHARGING, uptime = 60_000))
+        val current = SessionReport.report(session, last, summary, SessionExtremes())
+        assertEquals(current.observedMs, current.counterCoveredMs)
+        assertEquals(4_000, current.capacityEstimateMah)
+        assertEquals(CapacityConfidence.HIGH.name, current.capacityConfidence)
+        assertEquals(CapacityBasis.COUNTER_SPAN.name, current.capacityBasis)
+
+        val boundary = sample(level = 49, charge = 2_390_000, plugged = 1, status = 2, elapsed = 7_230_000)
+        val closed = SessionReport.reportPowerBoundary(
+            current, boundary, boundary.point(PowerState.CHARGING, Boundary.POWER, uptime = 90_000),
+            engine, SessionExtremes(),
+        )
+        assertEquals(0, engine.summary.gaps)
+        assertEquals(7_230_000L, closed.observedMs)
+        assertEquals(7_200_000L, closed.counterCoveredMs)
+        assertEquals(current.deltaUah, closed.deltaUah)
+        assertEquals(49, closed.endLevel)
+        assertEquals(boundary.timestamp, closed.lastSampleTime)
+        assertEquals("Power boundary must keep the last same-state capacity", current.capacityEstimateMah, closed.capacityEstimateMah)
+        assertEquals(current.capacityConfidence, closed.capacityConfidence)
+        assertEquals(current.capacityBasis, closed.capacityBasis)
+    }
+
+    @Test fun partialCounterCoverageKeepsMeasuredChargeButWithholdsCapacityFields() {
+        for (intervalCount in listOf(4, 10)) {
+            engine.reset()
+            val first = sample(level = 90, charge = 4_000_000, plugged = 0, status = 3, elapsed = 0)
+                .copy(chargeCounterUah = null)
+            val session = SessionReport.open(first.point(PowerState.DISCHARGING), first)
+            engine.accept(first.point(PowerState.DISCHARGING))
+            var last = first
+            for (index in 1..intervalCount) {
+                last = sample(
+                    level = 90 - 40 * index / intervalCount,
+                    charge = 4_000_000L - 1_600_000L * index / intervalCount,
+                    plugged = 0,
+                    status = 3,
+                    elapsed = index * 30_000L,
+                )
+                engine.accept(last.point(PowerState.DISCHARGING))
+            }
+            // One uncovered interval leaves 75 % or 90 % coverage of the full 40-point level drop.
+            val report = SessionReport.report(session, last, engine.summary, SessionExtremes())
+            assertEquals(intervalCount * 30_000L, report.observedMs)
+            assertEquals((intervalCount - 1) * 30_000L, report.counterCoveredMs)
+            assertEquals(1_600_000L * (intervalCount - 1) / intervalCount, report.deltaUah)
+            assertNotNull(report.avgCurrentUa)
+            assertNull(report.capacityEstimateMah)
+            assertNull(report.capacityConfidence)
+            assertNull(report.capacityBasis)
+            val boundary = last.copy(timestamp = last.timestamp + 30_000, elapsedMs = last.elapsedMs!! + 30_000,
+                uptimeMs = last.uptimeMs!! + 30_000, plugged = 1, status = 2)
+            val closed = SessionReport.reportPowerBoundary(
+                report, boundary, boundary.point(PowerState.CHARGING, Boundary.POWER), engine, SessionExtremes(),
+            )
+            assertNull(closed.capacityEstimateMah)
+            assertNull(closed.capacityConfidence)
+            assertNull(closed.capacityBasis)
+        }
+    }
+
     @Test fun extremesKeepMaximaAndIgnoreMissingValues() {
         val extremes = SessionExtremes()
             .plus(-1_500.0, 310, 0, screenOffBefore = false)
