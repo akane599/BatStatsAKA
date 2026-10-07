@@ -31,7 +31,10 @@
     <string name="settings_measurement_title">Ölçüm</string>
     <string name="settings_detected_unit">Algılanan birim</string>
     <string name="settings_detected_sign">Algılanan işaret</string>
-    <string name="settings_evidence_windows">Eşleşen %1$d şarj sayacı penceresinden.</string>
+    <plurals name="settings_evidence_windows">
+        <item quantity="one">Eşleşen %1$d şarj sayacı penceresinden.</item>
+        <item quantity="other">Eşleşen %1$d şarj sayacı penceresinden.</item>
+    </plurals>
     <string name="settings_evidence_sign_only">Pildeyken pozitif okumalardan (yalnızca işaret).</string>
     <string name="settings_evidence_none">Henüz algılanmadı. Telefon kullanılırken veya şarj olurken izleme gerekir.</string>
     <string name="settings_override_note">Aşağıdaki birim veya işaret ayarınız algılamayı geçersiz kılar.</string>
