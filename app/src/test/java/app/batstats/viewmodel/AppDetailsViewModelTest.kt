@@ -13,6 +13,7 @@ import app.batstats.viewmodel.AppsViewModelTest.Companion.YOUTUBE
 import app.batstats.viewmodel.AppsViewModelTest.Companion.YOUTUBE_UID
 import app.batstats.viewmodel.AppsViewModelTest.Companion.dump
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -225,6 +226,54 @@ class AppDetailsViewModelTest {
 
         assertEquals(2, repository.reads)
         assertEquals(AppHistoryState.Loaded(AppHistory(sessions)), state().history)
+    }
+
+    @Test fun olderHistorySuccessCannotOverwriteNewerRefreshHistory() = runTest {
+        val repository = HistorySource(source)
+        val older = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { older.await() }
+        val (vm, state) = start(repository = repository)
+
+        val newer = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { newer.await() }
+        vm.onEvent(AppDetailsEvent.Refresh)
+        runCurrent()
+        assertEquals(2, repository.reads)
+
+        val sessions = listOf(AppSessionUsage("newer", NOW - DAY, 12.0))
+        newer.complete(sessions)
+        runCurrent()
+        val expected = AppHistoryState.Loaded(AppHistory(sessions))
+        assertEquals(expected, state().history)
+
+        older.complete(listOf(AppSessionUsage("older", NOW - 2 * DAY, 4.0)))
+        runCurrent()
+        assertEquals("an older success must not replace the refreshed history", expected, state().history)
+        assertTrue(warnings.isEmpty())
+    }
+
+    @Test fun olderHistoryFailureCannotOverwriteNewerRetryHistory() = runTest {
+        val repository = HistorySource(source)
+        val older = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { older.await() }
+        val (vm, state) = start(repository = repository)
+
+        val newer = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { newer.await() }
+        vm.onEvent(AppDetailsEvent.RetryHistory)
+        runCurrent()
+        assertEquals(2, repository.reads)
+
+        val sessions = listOf(AppSessionUsage("newer", NOW - DAY, 12.0))
+        newer.complete(sessions)
+        runCurrent()
+        val expected = AppHistoryState.Loaded(AppHistory(sessions))
+        assertEquals(expected, state().history)
+
+        older.completeExceptionally(IllegalStateException("older read failed"))
+        runCurrent()
+        assertEquals("an older failure must not replace the retried history", expected, state().history)
+        assertTrue("cancelling the older read must not log a failure", warnings.isEmpty())
     }
 
     @Test fun anEmptyHistoryReadIsLoadedWithNoSessions() = runTest {
