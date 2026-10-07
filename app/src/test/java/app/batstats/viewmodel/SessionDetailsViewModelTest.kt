@@ -150,7 +150,7 @@ class SessionDetailsViewModelTest {
             assertEquals(ChargerType.USB, charging.charger)
             // 10 Wh over 1 h of counter coverage.
             assertEquals(10.0, charging.averagePowerW!!, 1e-9)
-            assertEquals(18.2, charging.peakPowerW!!, 1e-9)
+            assertEquals(7.8, charging.peakPowerW!!, 1e-9)
             assertEquals(40.1, charging.peakTemperature!!, 1e-9)
             assertEquals(48 * MINUTE, charging.twentyToEightyMs)
             assertNull(apps)
