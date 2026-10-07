@@ -30,6 +30,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.Hyphens
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
@@ -68,7 +69,9 @@ private val VALUE_SCALES = floatArrayOf(1f, 0.9f, 0.8f, 0.7f)
  * **Narrow cells never cut a number:** when value + unit don't fit the width, both shrink in 10 % steps down to
  * 80 % of [valueStyle] (keeping the cell's height and value baseline, so a row of cells stays aligned); if they
  * still don't fit, the unit moves under the value, which keeps the number large (down to 70 % if needed); a value
- * wider than the cell even at 70 % shrinks until it fits.
+ * wider than the cell even at 70 % shrinks until it fits. A label too long for the width wraps to a second line
+ * (hyphenated where the locale has patterns, so a long word never splits silently) and only then ellipsizes; cells
+ * in a row stay top-aligned, so a two-line label pushes only its own value down.
  * Give 4-across rows equal `Modifier.weight(1f)` cells. Supports intrinsic measurement (e.g. `IntrinsicSize.Max`
  * rows of equal-height panels).
  *
@@ -108,9 +111,10 @@ fun StatCell(
             if (indicator != null) Box(Modifier.size(IndicatorSize).background(indicator, CircleShape))
             Text(
                 label,
-                style = MaterialTheme.typography.labelMedium,
+                style = MaterialTheme.typography.labelMedium.copy(hyphens = Hyphens.Auto),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                // Two lines before ellipsizing: narrow cells at large font keep "Screen on" and "Screen off" apart.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }

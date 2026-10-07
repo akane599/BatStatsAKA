@@ -21,9 +21,11 @@ import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Paint
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import app.batstats.R
 import app.batstats.ui.ComponentPreviews
 import app.batstats.ui.ScreenshotTheme
 import app.batstats.ui.theme.chartColors
@@ -193,6 +195,44 @@ fun StatCellNarrowPreview() {
             }
             Panel(Modifier.weight(1f).fillMaxHeight(), title = "Screen off") {
                 StatCell("Drain", "0.8", unit = "%/h")
+            }
+        }
+    }
+}
+
+/**
+ * Apps' summary rows (3 cells, no 2×2 fallback) in Spanish on a 360 dp phone at 2× font, ~88 dp cells: long labels
+ * wrap (hyphenated) to a second line before ellipsizing, so "Pantalla encendida" and "Pantalla apagada" stay
+ * distinct ("Panta-lla en…" / "Panta-lla ap…") instead of both reading "Panta…".
+ */
+@PreviewTest
+@Preview(name = "W360Font2Es", widthDp = 360, fontScale = 2f, locale = "es")
+@Composable
+fun StatCellLargeFontLabelsPreview() {
+    val hours = stringResource(R.string.now_unit_hours)
+    Frame {
+        Panel {
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                StatCell(stringResource(R.string.apps_summary_on_battery), "14:20", Modifier.weight(1f), unit = hours)
+                StatCell(
+                    stringResource(R.string.apps_summary_screen_on),
+                    "2:05",
+                    Modifier.weight(1f),
+                    unit = hours,
+                    supporting = stringResource(R.string.apps_summary_used, "27"),
+                )
+                StatCell(
+                    stringResource(R.string.apps_summary_screen_off),
+                    "12:15",
+                    Modifier.weight(1f),
+                    unit = hours,
+                    supporting = stringResource(R.string.apps_summary_used, "8"),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+                StatCell(stringResource(R.string.apps_summary_deep_doze), "9:40", Modifier.weight(1f), unit = hours)
+                StatCell(stringResource(R.string.apps_summary_light_doze), "1:10", Modifier.weight(1f), unit = hours)
+                StatCell(stringResource(R.string.apps_summary_capacity), "4.812", Modifier.weight(1f), unit = "mAh")
             }
         }
     }
