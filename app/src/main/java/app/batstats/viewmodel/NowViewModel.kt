@@ -1,5 +1,6 @@
 package app.batstats.viewmodel
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.apps.AppInfo
@@ -53,8 +54,10 @@ class NowViewModel(
     private val clock: () -> Long = System::currentTimeMillis,
     private val zone: () -> ZoneId = ZoneId::systemDefault,
     private val computeDispatcher: CoroutineDispatcher = Dispatchers.Default,
+    private val savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
-    private val range = MutableStateFlow(TraceRange.LIVE)
+    private val range = savedStateHandle.getStateFlow(KEY_RANGE, TraceRange.LIVE.name)
+        .map { name -> TraceRange.entries.firstOrNull { it.name == name } ?: TraceRange.LIVE }
     private val startBlocked = MutableStateFlow(false)
 
     private class Live(val hero: HeroState, val readouts: Readouts, val nowMs: Long, val counterFullUah: Long?)
@@ -131,7 +134,7 @@ class NowViewModel(
     fun onEvent(event: NowEvent) {
         when (event) {
             NowEvent.ToggleMonitoring -> toggleMonitoring()
-            is NowEvent.SelectRange -> range.value = event.range
+            is NowEvent.SelectRange -> savedStateHandle[KEY_RANGE] = event.range.name
             // Only the current on-battery window can be reset: a Reset racing a plug-in must not end the CHARGE session.
             NowEvent.ResetObservation -> if (state.value.sinceUnplug?.current == true) source.resetObservation()
             NowEvent.UndoCalibration -> source.undoCalibration()
@@ -187,6 +190,7 @@ class NowViewModel(
     }
 
     private companion object {
+        const val KEY_RANGE = "now.range"
         const val STOP_TIMEOUT_MS = 5_000L
     }
 }

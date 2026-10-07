@@ -155,7 +155,18 @@ class DataViewModel(
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(DataUiState())
+    private val range = savedState.getStateFlow(KEY_RANGE, HistoryRange.ALL.name)
+    private val includeSamples = savedState.getStateFlow(KEY_SAMPLES, true)
+    private val includeSessions = savedState.getStateFlow(KEY_SESSIONS, true)
+
+    // Keep publication synchronous: a Pick immediately after a selection must snapshot that selection.
+    private val _state = MutableStateFlow(
+        DataUiState(
+            range = HistoryRange.entries.firstOrNull { it.name == range.value } ?: HistoryRange.ALL,
+            includeSamples = includeSamples.value,
+            includeSessions = includeSessions.value,
+        ),
+    )
     val state: StateFlow<DataUiState> = _state.asStateFlow()
 
     init {
@@ -164,9 +175,18 @@ class DataViewModel(
 
     fun onEvent(event: DataEvent) {
         when (event) {
-            is DataEvent.SelectRange -> _state.update { it.copy(range = event.range) }
-            DataEvent.ToggleSamples -> _state.update { it.copy(includeSamples = !it.includeSamples) }
-            DataEvent.ToggleSessions -> _state.update { it.copy(includeSessions = !it.includeSessions) }
+            is DataEvent.SelectRange -> {
+                savedState[KEY_RANGE] = event.range.name
+                _state.update { it.copy(range = event.range) }
+            }
+            DataEvent.ToggleSamples -> {
+                savedState[KEY_SAMPLES] = !includeSamples.value
+                _state.update { it.copy(includeSamples = includeSamples.value) }
+            }
+            DataEvent.ToggleSessions -> {
+                savedState[KEY_SESSIONS] = !includeSessions.value
+                _state.update { it.copy(includeSessions = includeSessions.value) }
+            }
             is DataEvent.Pick -> when (event.task) {
                 DataTask.EXPORT_JSON, DataTask.EXPORT_CSV -> saveExportRequest(event.task)
                 else -> Unit // The wrapper opens the picker.
@@ -295,6 +315,9 @@ class DataViewModel(
     }
 
     private companion object {
+        const val KEY_RANGE = "data.range"
+        const val KEY_SAMPLES = "data.includeSamples"
+        const val KEY_SESSIONS = "data.includeSessions"
         const val DAY_MS = 86_400_000L
 
         /** `to = 0` asks the exporter for "until the export starts". */
