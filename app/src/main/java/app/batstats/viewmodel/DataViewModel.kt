@@ -331,7 +331,8 @@ class DataViewModel(
                 // A parser error is technical; say what the file is not instead.
                 is SerializationException -> DataOutcome.Failed(task, DataFailure.NOT_AN_EXPORT)
                 is IllegalArgumentException, is IllegalStateException ->
-                    DataOutcome.Failed(task, DataFailure.REJECTED, e.message?.take(200)?.takeIf { it.isNotBlank() })
+                    if (task == DataTask.SAVE_SETTINGS) DataOutcome.Failed(task, DataFailure.UNEXPECTED)
+                    else DataOutcome.Failed(task, DataFailure.REJECTED, e.message?.take(200)?.takeIf { it.isNotBlank() })
                 else -> DataOutcome.Failed(task, DataFailure.UNEXPECTED)
             }
         }
