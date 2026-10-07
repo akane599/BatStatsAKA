@@ -1,9 +1,15 @@
 package app.batstats.ui.navigation
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -299,6 +305,113 @@ class TopLevelBackStackTest {
 
         assertEquals(listOf(Routes.Settings), settings.toList())
         assertEquals(0, refusals)
+    }
+
+    @Test
+    fun `a block that is not busy lets select and openRoot pop to the root`() {
+        selected = Routes.Settings
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData, isBusy = { false }) { refusals++ }
+
+        subject.select(Routes.Settings)
+
+        assertEquals(listOf(Routes.Settings), settings.toList())
+        assertEquals(0, refusals)
+    }
+
+    @Test
+    fun `a replaced block's unblock does not lift the newer block`() {
+        selected = Routes.Settings
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        val staleUnblock = subject.blockLeaving(Routes.SettingsData) {}
+        subject.blockLeaving(Routes.SettingsData) {}
+
+        staleUnblock()
+
+        assertFalse(subject.openRoot(Routes.Settings))
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), settings.toList())
+    }
+
+    // The block is held from the entry's ViewModel, not its composition: with another tab visible, Settings › Data
+    // is not composed, yet a settings or status link from a notification or tile would pop it and cancel its task.
+
+    private class HostViewModel : ViewModel()
+
+    private fun hostViewModel(store: ViewModelStore): HostViewModel =
+        ViewModelProvider.create(store, viewModelFactory { initializer { HostViewModel() } })[HostViewModel::class]
+
+    private fun TopLevelBackStack.blockData(): (() -> Boolean, () -> Unit) -> () -> Unit =
+        { isBusy, onBlocked -> blockLeaving(Routes.SettingsData, isBusy, onBlocked) }
+
+    @Test
+    fun `a busy ViewModel's block holds its off-screen entry against settings and status links`() {
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        var busy = true
+        val refusals = hostViewModel(ViewModelStore()).blockLeavingWhileBusy(subject.blockData()) { busy }
+        selected = Routes.Now
+
+        subject.openDestination(Destinations.SETTINGS)
+
+        assertEquals(Routes.Settings, subject.selectedTab)
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), settings.toList())
+        assertTrue("the refusal waits for the screen", refusals.tryReceive().isSuccess)
+
+        subject.select(Routes.Now)
+        subject.openDestination(Destinations.STATUS)
+
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), settings.toList())
+
+        busy = false
+        subject.select(Routes.Now)
+        subject.openDestination(Destinations.STATUS)
+
+        assertEquals(listOf(Routes.Settings, Routes.SettingsStatus), settings.toList())
+    }
+
+    @Test
+    fun `clearing the ViewModel lifts its block`() {
+        selected = Routes.Settings
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        val store = ViewModelStore()
+        val refusals = hostViewModel(store).blockLeavingWhileBusy(subject.blockData()) { true }
+
+        store.clear()
+
+        assertTrue(subject.openRoot(Routes.Settings))
+        assertEquals(listOf(Routes.Settings), settings.toList())
+        assertTrue(refusals.isClosedForReceive)
+    }
+
+    @Test
+    fun `a ViewModel registers once and its block outlives a recreated back stack`() {
+        selected = Routes.Settings
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        val leaveBlockers = LeaveBlockers()
+        val before = TopLevelBackStack(backStacks, { selected }, { selected = it }, leaveBlockers)
+        val vm = hostViewModel(ViewModelStore())
+        val refusals = vm.blockLeavingWhileBusy(before.blockData()) { true }
+
+        // Activity recreation: a new back stack over the retained stacks and blockers; the screen composes again.
+        val after = TopLevelBackStack(backStacks, { selected }, { selected = it }, leaveBlockers)
+        var registeredAgain = false
+        val noUnblock: () -> Unit = {}
+        val again = vm.blockLeavingWhileBusy(
+            { _, _ ->
+                registeredAgain = true
+                noUnblock
+            },
+        ) { true }
+
+        assertSame(refusals, again)
+        assertFalse(registeredAgain)
+        assertFalse(after.openRoot(Routes.Settings))
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), settings.toList())
     }
 
     @Test
