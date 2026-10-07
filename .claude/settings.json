@@ -29,27 +29,28 @@
       "Read(./**/google-services.json)",
       "Read(./.env*)",
       "Bash(git push --force:*)",
-      "Bash(rm -rf:*)"
+      "Bash(rm -rf:*)",
+      "Read(./.claude-plugin-config.json)"
     ]
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-res-db.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
           {
-            "type": "command",
-            "command": "if [ -f PROGRESS.md ]; then echo '--- PROGRESS.md (Now/Next/Blockers) ---'; sed -n '/^## Now/,/^## Recently done/p' PROGRESS.md | head -60; fi"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-res-db.sh\""
+            "command": "if [ -f PROGRESS.md ]; then echo '--- PROGRESS.md (Now/Next/Blockers) ---'; sed -n '/^## Now/,/^## Recently done/p' PROGRESS.md | head -60; fi",
+            "type": "command"
           }
         ]
       }
