@@ -4,6 +4,7 @@ import androidx.room.*
 import app.batstats.battery.apps.AppUsageBasis
 import app.batstats.battery.apps.AppUsageRow
 import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.HistoryLimits
 import app.batstats.battery.data.SessionEvidence
 import kotlinx.coroutines.flow.Flow
 
@@ -45,7 +46,7 @@ interface BatteryDao {
      * fewer rows exist (the subquery is NULL).
      */
     @Query("DELETE FROM battery_samples WHERE timestamp <= (SELECT timestamp FROM battery_samples ORDER BY timestamp DESC LIMIT 1 OFFSET :limit)")
-    suspend fun boundStorage(limit: Int = 100_000)
+    suspend fun boundStorage(limit: Int = HistoryLimits.SAMPLE_TRIM_TARGET)
 
     @Query("DELETE FROM battery_samples")
     suspend fun clearAll()
@@ -74,7 +75,7 @@ interface SessionDao {
     suspend fun count(): Int
 
     @Query("DELETE FROM charge_sessions WHERE activeKey IS NULL AND sessionId NOT IN (SELECT sessionId FROM charge_sessions ORDER BY activeKey IS NOT NULL DESC, startTime DESC LIMIT :limit)")
-    suspend fun boundStorage(limit: Int = 10_000)
+    suspend fun boundStorage(limit: Int = HistoryLimits.SESSION_TRIM_TARGET)
 
     @Query("SELECT * FROM charge_sessions WHERE activeKey = 1 LIMIT 1")
     suspend fun active(): ChargeSession?
