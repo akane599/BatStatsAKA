@@ -127,6 +127,7 @@
     <string name="apps_details_history_title">Pildeki oturumlar</string>
     <string name="apps_details_history_caption">%2$d oturumun %1$d tanesinde ilk 30 içinde</string>
     <string name="apps_details_history_empty">Son 30 günde uygulama başına veri içeren oturum yok.</string>
+    <string name="apps_details_history_failed">Kaydedilen oturumlar okunamadı.</string>
     <string name="apps_details_history_series">Kullanılan pil</string>
     <string name="apps_details_history_info_title">Pildeki oturumlar hakkında</string>
     <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. BatStats, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
