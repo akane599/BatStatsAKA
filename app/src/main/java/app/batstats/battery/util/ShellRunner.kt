@@ -96,12 +96,12 @@ class ShellRunner(
     }
 
     private suspend fun probeMode(): Mode = withContext(Dispatchers.IO) {
-        if (shizuku.ping()) return@withContext if (shizuku.hasPermission()) Mode.SHIZUKU else Mode.NONE
-        if (RootStatsCollector.isRootAvailable()) return@withContext Mode.ROOT
-        if (PrivilegeChecker.hasAdvancedViaAdb(context)) {
-            return@withContext Mode.ADB
-        }
-        Mode.NONE
+        selectShellMode(
+            shizukuRunning = shizuku::ping,
+            shizukuAuthorized = shizuku::hasPermission,
+            rootAvailable = RootStatsCollector::isRootAvailable,
+            adbAvailable = { PrivilegeChecker.hasAdvancedViaAdb(context) },
+        )
     }
 
     fun invalidateMode() {
@@ -109,4 +109,17 @@ class ShellRunner(
         cachedModeAt = 0L
         RootStatsCollector.invalidateRootCache()
     }
+}
+
+/** Probes only as far as the first authorized backend; this does not retry failed commands. */
+internal suspend fun selectShellMode(
+    shizukuRunning: () -> Boolean,
+    shizukuAuthorized: () -> Boolean,
+    rootAvailable: suspend () -> Boolean,
+    adbAvailable: () -> Boolean,
+): ShellRunner.Mode = when {
+    shizukuRunning() && shizukuAuthorized() -> ShellRunner.Mode.SHIZUKU
+    rootAvailable() -> ShellRunner.Mode.ROOT
+    adbAvailable() -> ShellRunner.Mode.ADB
+    else -> ShellRunner.Mode.NONE
 }

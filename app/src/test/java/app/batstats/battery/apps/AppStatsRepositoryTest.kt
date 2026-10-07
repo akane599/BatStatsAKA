@@ -4,6 +4,7 @@ import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.util.DumpOutput
 import app.batstats.battery.util.ShellRunner.Mode
 import app.batstats.battery.util.ShellRunner.Outcome
+import app.batstats.battery.util.selectShellMode
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -98,6 +99,24 @@ class AppStatsRepositoryTest {
         val again = repository.snapshot() as AppStatsResult.Ready
         assertEquals(2, shell.commands.size)
         assertTrue(again.snapshot.source.endsWith("ROOT"))
+    }
+
+    @Test fun forcedReadUsesRootOrAdbFallbackAfterShizukuDenial() = runTest {
+        for (fallback in listOf(Mode.ROOT, Mode.ADB)) {
+            val selected = selectShellMode(
+                shizukuRunning = { true },
+                shizukuAuthorized = { false },
+                rootAvailable = { fallback == Mode.ROOT },
+                adbAvailable = { true },
+            )
+            val shell = FakeShell().apply { access = selected }
+            val ready = repository(shell).snapshot(force = true) as AppStatsResult.Ready
+            assertEquals(fallback, selected)
+            assertEquals("Android batterystats · ${fallback.name}", ready.snapshot.source)
+            assertEquals(listOf(true), shell.probes)
+            assertEquals(listOf(AppStatsRepository.COMMAND), shell.commands)
+        }
+        assertTrue(diagnostics.isEmpty())
     }
 
     @Test fun noAccessIsReportedWithoutADumpAndIsNotCached() = runTest {
