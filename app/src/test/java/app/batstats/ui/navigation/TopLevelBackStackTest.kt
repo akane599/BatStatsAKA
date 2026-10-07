@@ -302,6 +302,45 @@ class TopLevelBackStackTest {
     }
 
     @Test
+    fun `navigate ignores a duplicate of the visible top`() {
+        selected = Routes.Apps
+        val apps = backStacks.getValue(Routes.Apps)
+
+        subject.navigate(Routes.AppDetails(1, "app.batstats"))
+        subject.navigate(Routes.AppDetails(1, "app.batstats"))
+
+        assertEquals(listOf(Routes.Apps, Routes.AppDetails(1, "app.batstats")), apps.toList())
+
+        subject.navigate(Routes.AppDetails(2, "other"))
+        assertEquals(3, apps.size)
+    }
+
+    @Test
+    fun `a second up for an already popped entry does not pop the parent`() {
+        selected = Routes.History
+        val history = backStacks.getValue(Routes.History)
+        history.add(Routes.SessionDetails("42"))
+
+        assertTrue(subject.onBack(Routes.SessionDetails("42")))
+        assertTrue(subject.onBack(Routes.SessionDetails("42")))
+
+        assertEquals(Routes.History, subject.selectedTab)
+        assertEquals(listOf(Routes.History), history.toList())
+    }
+
+    @Test
+    fun `up for an entry that is not on top pops nothing`() {
+        selected = Routes.Apps
+        val apps = backStacks.getValue(Routes.Apps)
+        apps.add(Routes.AppDetails(1, "app.batstats"))
+        apps.add(Routes.SettingsStatus)
+
+        subject.onBack(Routes.AppDetails(1, "app.batstats"))
+
+        assertEquals(3, apps.size)
+    }
+
+    @Test
     fun `plain tab select still restores retained details after an explicit link elsewhere`() {
         backStacks.getValue(Routes.Apps).add(Routes.AppDetails(3, "app.batstats"))
         subject.openDestination(Destinations.HISTORY)

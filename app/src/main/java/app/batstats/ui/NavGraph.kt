@@ -43,7 +43,8 @@ fun NavGraph(
     topLevelBackStack: TopLevelBackStack,
     modifier: Modifier = Modifier,
 ) {
-    val popBack: () -> Unit = { topLevelBackStack.onBack() }
+    // Up actions name their own entry so a double tap (or a late leave signal) pops it at most once.
+    val popBack: (NavKey) -> Unit = { entry -> topLevelBackStack.onBack(entry) }
     // One-shot: Now's Today card asks History for today's figures.
     var historyShowToday by rememberSaveable { mutableStateOf(false) }
     val entryProvider = entryProvider<NavKey> {
@@ -72,7 +73,7 @@ fun NavGraph(
         // SessionDetails -> AppDetails (from the per-app list), Settings › Status (no access); Back after a delete
         entry<Routes.SessionDetails> { args ->
             SessionDetailsScreen(
-                onBack = popBack,
+                onBack = { popBack(args) },
                 onOpenApp = { uid, packageName -> topLevelBackStack.navigate(Routes.AppDetails(uid, packageName)) },
                 onOpenAccessSetup = { topLevelBackStack.navigate(Routes.SettingsStatus) },
                 vm = koinViewModel(parameters = { parametersOf(args.sessionId) }),
@@ -91,15 +92,15 @@ fun NavGraph(
             AppDetailsScreen(
                 uid = args.uid,
                 packageName = args.packageName,
-                onBack = popBack,
+                onBack = { popBack(args) },
                 onOpenAccessSetup = { topLevelBackStack.navigate(Routes.SettingsStatus) },
             )
         }
 
         // Health (from Now's Health card or the "health" deep link) -> SessionDetails; design capacity is set in place
-        entry<Routes.Health> {
+        entry<Routes.Health> { key ->
             HealthScreen(
-                onBack = popBack,
+                onBack = { popBack(key) },
                 onOpenSession = { id -> topLevelBackStack.navigate(Routes.SessionDetails(id)) },
             )
         }
@@ -114,11 +115,11 @@ fun NavGraph(
 
         // A running task holds re-taps of Settings and links to its root off this entry too (Back is guarded inside).
         entry<Routes.SettingsData> { key ->
-            DataScreen(onBack = popBack, blockLeaving = { onBlocked -> topLevelBackStack.blockLeaving(key, onBlocked) })
+            DataScreen(onBack = { popBack(key) }, blockLeaving = { onBlocked -> topLevelBackStack.blockLeaving(key, onBlocked) })
         }
 
-        entry<Routes.SettingsStatus> {
-            StatusScreen(onBack = popBack)
+        entry<Routes.SettingsStatus> { key ->
+            StatusScreen(onBack = { popBack(key) })
         }
     }
     val entries = TOP_LEVEL_TABS.associateWith { tab ->
@@ -135,7 +136,7 @@ fun NavGraph(
     }
     NavDisplay(
         entries = entries.getValue(topLevelBackStack.selectedTab),
-        onBack = popBack,
+        onBack = { topLevelBackStack.onBack() },
         modifier = modifier,
     )
 }
