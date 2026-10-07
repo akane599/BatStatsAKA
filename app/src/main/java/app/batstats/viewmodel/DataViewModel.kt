@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.batstats.battery.data.BatteryRepository
@@ -105,7 +106,7 @@ sealed interface DataEvent {
 
     data object ToggleSessions : DataEvent
 
-    /** Open the system picker for [task]: handled by the screen wrapper, which then calls [DataViewModel.onFileChosen]. */
+    /** Snapshot an export request in the VM, then open the system picker in the wrapper. */
     data class Pick(val task: DataTask) : DataEvent
 
     data object RequestClear : DataEvent
@@ -150,6 +151,7 @@ interface DataRepository {
  */
 class DataViewModel(
     private val repository: DataRepository,
+    private val savedState: SavedStateHandle,
     private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
@@ -165,7 +167,10 @@ class DataViewModel(
             is DataEvent.SelectRange -> _state.update { it.copy(range = event.range) }
             DataEvent.ToggleSamples -> _state.update { it.copy(includeSamples = !it.includeSamples) }
             DataEvent.ToggleSessions -> _state.update { it.copy(includeSessions = !it.includeSessions) }
-            is DataEvent.Pick -> Unit // The wrapper opens the picker.
+            is DataEvent.Pick -> when (event.task) {
+                DataTask.EXPORT_JSON, DataTask.EXPORT_CSV -> saveExportRequest(event.task)
+                else -> Unit // The wrapper opens the picker.
+            }
             DataEvent.RequestClear -> _state.update {
                 if (it.idle && it.clear == ClearStep.HIDDEN) it.copy(clear = ClearStep.CONFIRM) else it
             }
@@ -176,17 +181,8 @@ class DataViewModel(
 
     /** The picker for [task] returned [uri]; a cancelled picker never calls this. */
     fun onFileChosen(task: DataTask, uri: String) {
-        val current = _state.value
-        val from = if (current.range.days == 0) 0L else clock() - current.range.days * DAY_MS
         when (task) {
-            DataTask.EXPORT_JSON -> if (current.canExport) run(task) {
-                repository.exportJson(uri, from, NOW, current.includeSamples, current.includeSessions)
-                DataOutcome.Exported(task)
-            }
-            DataTask.EXPORT_CSV -> if (current.canExport) run(task) {
-                repository.exportCsv(uri, from, NOW, current.includeSamples, current.includeSessions)
-                DataOutcome.Exported(task)
-            }
+            DataTask.EXPORT_JSON, DataTask.EXPORT_CSV -> export(task, uri)
             DataTask.IMPORT_JSON -> run(task) { DataOutcome.HistoryImported(task, repository.importJson(uri)) }
             DataTask.IMPORT_CSV -> run(task) { DataOutcome.HistoryImported(task, repository.importCsv(uri)) }
             DataTask.SAVE_SETTINGS -> run(task) {
@@ -203,8 +199,34 @@ class DataViewModel(
         }
     }
 
+    private fun saveExportRequest(task: DataTask) {
+        val current = _state.value
+        if (!current.canExport) return
+        val from = if (current.range.days == 0) 0L else clock() - current.range.days * DAY_MS
+        savedState[exportKey(task)] = ExportRequest(from, current.includeSamples, current.includeSessions)
+    }
+
+    private fun export(task: DataTask, uri: String) {
+        val request = savedState.remove<ExportRequest>(exportKey(task))
+        run(task) {
+            if (request == null) return@run DataOutcome.Failed(task, DataFailure.UNEXPECTED)
+            if (task == DataTask.EXPORT_JSON) {
+                repository.exportJson(uri, request.fromMs, NOW, request.samples, request.sessions)
+            } else {
+                repository.exportCsv(uri, request.fromMs, NOW, request.samples, request.sessions)
+            }
+            DataOutcome.Exported(task)
+        }
+    }
+
+    /** Serializable so SavedStateHandle can restore the launch-time request after process death. */
+    private data class ExportRequest(val fromMs: Long, val samples: Boolean, val sessions: Boolean) : java.io.Serializable
+
+    private fun exportKey(task: DataTask): String = "pendingExport.${task.name}"
+
     /** No app could open a picker for [task]. */
     fun onPickerUnavailable(task: DataTask) {
+        savedState.remove<ExportRequest>(exportKey(task))
         _state.update { if (it.idle) it.copy(outcome = DataOutcome.Failed(task, DataFailure.NO_PICKER)) else it }
     }
 

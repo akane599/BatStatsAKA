@@ -1,5 +1,6 @@
 package app.batstats.viewmodel
 
+import androidx.lifecycle.SavedStateHandle
 import app.batstats.battery.data.HistoryImportResult
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +18,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.ObjectInputStream
+import java.io.ObjectOutputStream
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataViewModelTest {
@@ -28,7 +33,8 @@ class DataViewModelTest {
 
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun TestScope.start(): DataViewModel = DataViewModel(repo, clock = { NOW }).also { runCurrent() }
+    private fun TestScope.start(saved: SavedStateHandle = SavedStateHandle(), now: Long = NOW): DataViewModel =
+        DataViewModel(repo, saved, clock = { now }).also { runCurrent() }
 
     @Test fun storedCountsLoadOnOpenAndRefreshAfterAnImport() = runTest {
         repo.stored = StoredHistory(samples = 12_480, sessions = 86)
@@ -51,6 +57,7 @@ class DataViewModelTest {
         val vm = start()
         vm.onEvent(DataEvent.SelectRange(HistoryRange.WEEK))
         vm.onEvent(DataEvent.ToggleSessions)
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
         vm.onFileChosen(DataTask.EXPORT_JSON, "content://out.json")
         runCurrent()
         assertEquals(listOf(Export("json", "content://out.json", NOW - 7 * DAY, 0L, true, false)), repo.exports)
@@ -58,6 +65,7 @@ class DataViewModelTest {
 
         vm.onEvent(DataEvent.SelectRange(HistoryRange.ALL))
         vm.onEvent(DataEvent.ToggleSessions)
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_CSV))
         vm.onFileChosen(DataTask.EXPORT_CSV, "content://tree")
         runCurrent()
         assertEquals(Export("csv", "content://tree", 0L, 0L, true, true), repo.exports.last())
@@ -67,9 +75,79 @@ class DataViewModelTest {
         vm.onEvent(DataEvent.ToggleSamples)
         vm.onEvent(DataEvent.ToggleSessions)
         assertEquals(false, vm.state.value.canExport)
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
         vm.onFileChosen(DataTask.EXPORT_JSON, "content://none.json")
         runCurrent()
         assertEquals(2, repo.exports.size)
+    }
+
+    @Test fun launchedExportSurvivesProcessDeathAndIsConsumedOnce() = runTest {
+        for (task in listOf(DataTask.EXPORT_JSON, DataTask.EXPORT_CSV)) {
+            val saved = SavedStateHandle()
+            val vm = start(saved)
+            vm.onEvent(DataEvent.SelectRange(HistoryRange.WEEK))
+            vm.onEvent(DataEvent.ToggleSamples)
+            vm.onEvent(DataEvent.Pick(task))
+            // Later edits must not change the request that already launched the picker.
+            vm.onEvent(DataEvent.SelectRange(HistoryRange.ALL))
+            vm.onEvent(DataEvent.ToggleSamples)
+            vm.onEvent(DataEvent.ToggleSessions)
+
+            val restored = restoreSavedState(saved)
+            val recreated = start(restored, now = NOW + DAY)
+            assertEquals(HistoryRange.ALL, recreated.state.value.range)
+            assertTrue(recreated.state.value.includeSamples)
+            recreated.onFileChosen(task, "content://restored")
+            runCurrent()
+            val format = if (task == DataTask.EXPORT_JSON) "json" else "csv"
+            assertEquals(
+                Export(format, "content://restored", NOW - 7 * DAY, 0L, false, true),
+                repo.exports.last(),
+            )
+            assertEquals(DataOutcome.Exported(task), recreated.state.value.outcome)
+            assertTrue("the launched request is cleared after completion", restored.keys().isEmpty())
+
+            val count = repo.exports.size
+            recreated.onFileChosen(task, "content://duplicate")
+            runCurrent()
+            assertEquals("a consumed request cannot export again", count, repo.exports.size)
+            assertEquals(DataOutcome.Failed(task, DataFailure.UNEXPECTED), recreated.state.value.outcome)
+        }
+    }
+
+    @Test fun missingLaunchedRequestFailsWithoutExportingDefaults() = runTest {
+        val vm = start()
+        for (task in listOf(DataTask.EXPORT_JSON, DataTask.EXPORT_CSV)) {
+            vm.onFileChosen(task, "content://no-request")
+            runCurrent()
+            assertEquals(DataOutcome.Failed(task, DataFailure.UNEXPECTED), vm.state.value.outcome)
+            assertTrue("no saved request must not export all history", repo.exports.isEmpty())
+        }
+    }
+
+    @Test fun unavailableExportPickerDiscardsItsLaunchedRequest() = runTest {
+        val saved = SavedStateHandle()
+        val vm = start(saved)
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
+        vm.onPickerUnavailable(DataTask.EXPORT_JSON)
+        assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.NO_PICKER), vm.state.value.outcome)
+        assertTrue(saved.keys().isEmpty())
+        vm.onFileChosen(DataTask.EXPORT_JSON, "content://late")
+        runCurrent()
+        assertTrue(repo.exports.isEmpty())
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun restoreSavedState(saved: SavedStateHandle): SavedStateHandle {
+        // Round-trip the payload through serialization, not shared in-memory request objects.
+        val bytes = ByteArrayOutputStream()
+        ObjectOutputStream(bytes).use { output ->
+            output.writeObject(HashMap(saved.keys().associateWith { saved.get<Any?>(it) }))
+        }
+        val values = ObjectInputStream(ByteArrayInputStream(bytes.toByteArray())).use { input ->
+            input.readObject() as Map<String, Any?>
+        }
+        return SavedStateHandle(values)
     }
 
     @Test fun oneTaskAtATimeAndItsResultReplacesThePreviousOne() = runTest {
@@ -122,16 +200,19 @@ class DataViewModelTest {
         assertEquals(DataOutcome.Failed(DataTask.IMPORT_CSV, DataFailure.UNREADABLE), vm.state.value.outcome)
 
         repo.exportFailure = SecurityException("revoked")
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
         vm.onFileChosen(DataTask.EXPORT_JSON, "content://revoked.json")
         runCurrent()
         assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.UNWRITABLE), vm.state.value.outcome)
 
         repo.exportFailure = IOException("destination could not be opened")
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_JSON))
         vm.onFileChosen(DataTask.EXPORT_JSON, "content://unwritable.json")
         runCurrent()
         assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.UNWRITABLE), vm.state.value.outcome)
 
         repo.exportFailure = UnsupportedOperationException("x")
+        vm.onEvent(DataEvent.Pick(DataTask.EXPORT_CSV))
         vm.onFileChosen(DataTask.EXPORT_CSV, "content://tree")
         runCurrent()
         assertEquals(DataOutcome.Failed(DataTask.EXPORT_CSV, DataFailure.UNEXPECTED), vm.state.value.outcome)

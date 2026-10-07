@@ -137,7 +137,7 @@ val appModule = module {
     viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
     // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
     viewModel { HistoryViewModel(DefaultHistoryRepository(get(), get()), get()) }
-    viewModel { DataViewModel(DefaultDataRepository(androidContext(), get(), get(), get(), get())) }
+    viewModel { DataViewModel(DefaultDataRepository(androidContext(), get(), get(), get(), get()), get()) }
     viewModel { StatusViewModel(DefaultStatusRepository(androidContext(), get(), get(), get(), get(), get(), get())) }
     viewModel { HealthViewModel(DefaultHealthRepository(androidContext(), get(), get(), KmpSettingsStore(get()))) }
     // Apps' second get() is the nav entry's SavedStateHandle (sort, query and "show system" survive process death).
