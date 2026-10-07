@@ -72,8 +72,9 @@ private val CSV_TYPES = arrayOf("text/csv", "text/comma-separated-values", "text
 
 /**
  * Settings › Data, wired: the Koin [DataViewModel] and the Storage Access Framework pickers. [DataEvent.Pick]
- * opens the picker for its task; the chosen document goes to [DataViewModel.onFileChosen] (a cancelled picker
- * does nothing). Every other event goes to the ViewModel.
+ * goes to the ViewModel first (an export saves its launch-time request there), then opens the picker for its task;
+ * the chosen document goes to [DataViewModel.onFileChosen] (a cancelled picker does nothing). Every event reaches
+ * the ViewModel.
  */
 @Composable
 fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewModel = koinViewModel()) {
@@ -88,6 +89,7 @@ fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewMo
     DataContent(
         state = state,
         onEvent = { event ->
+            vm.onEvent(event)
             if (event is DataEvent.Pick) {
                 try {
                     when (event.task) {
@@ -102,8 +104,6 @@ fun DataScreen(onBack: () -> Unit, modifier: Modifier = Modifier, vm: DataViewMo
                 } catch (_: ActivityNotFoundException) {
                     vm.onPickerUnavailable(event.task)
                 }
-            } else {
-                vm.onEvent(event)
             }
         },
         onBack = onBack,
