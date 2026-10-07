@@ -29,6 +29,8 @@ import kotlinx.coroutines.CompletableDeferred
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
+internal fun shouldMarkContinuityLoss(observe: Boolean): Boolean = observe
+
 /**
  * A sequenced observation: [sample] and [point] hold RAW `CURRENT_NOW` (the database keeps raw
  * values). [poll] is true for timer and handoff captures (PersistPolicy), false for broadcasts
@@ -253,7 +255,7 @@ class SamplingController(
         } catch (e: RuntimeException) {
             diagnostics.record(DiagnosticCode.BATTERY_READ_FAILED)
             sink?.onBatteryIssue("Battery collection failed (${e.javaClass.simpleName})")
-            overflow = true
+            if (shouldMarkContinuityLoss(observe)) overflow = true
             null
         }
 
@@ -262,7 +264,7 @@ class SamplingController(
         if (intent == null) {
             diagnostics.record(DiagnosticCode.BATTERY_UNAVAILABLE)
             sink?.onBatteryIssue("Android has not supplied a battery reading")
-            overflow = true
+            if (shouldMarkContinuityLoss(observe)) overflow = true
             return null
         }
         fun extra(name: String): Int? = if (intent.hasExtra(name)) intent.getIntExtra(name, Int.MIN_VALUE) else null
