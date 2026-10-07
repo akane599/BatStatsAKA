@@ -70,6 +70,28 @@ object HistoryPolicy {
         return normalized.copy(id = if (id == -1L) -2L else id)
     }
     fun sameSample(first: BatterySample, second: BatterySample): Boolean = sample(first) == sample(second)
+    // A session can accumulate several sub-5-second wall-clock corrections without an observation gap.
+    private fun clockCorrectionAllowance(span: Long): Long = 5_000 + span / 10
+
+    internal fun sampleInSessionWindow(timestamp: Long, session: ChargeSession,
+        end: Long = session.endTime ?: session.lastSampleTime ?: session.startTime): Boolean =
+        timestamp >= session.startTime && timestamp - end <= clockCorrectionAllowance(end - session.startTime)
+
+    private fun normalizeCoverage(input: ChargeSession, span: Long): ChargeSession {
+        if (input.observedMs <= span) return input
+        fun duration(ms: Long): Long = (ms.toDouble() / input.observedMs * span).toLong()
+        val counter = duration(input.counterCoveredMs)
+        val screenOn = duration(input.screenOnMs)
+        val screenOff = duration(input.screenOffMs).coerceAtMost(span - screenOn)
+        return input.copy(observedMs = span, counterCoveredMs = counter,
+            screenOnMs = screenOn, screenOffMs = screenOff,
+            cpuSuspendMs = input.cpuSuspendMs?.let(::duration),
+            screenOffSuspendMs = input.screenOffSuspendMs?.let(::duration),
+            deltaUah = input.deltaUah.takeUnless { counter == 0L },
+            screenOnUah = input.screenOnUah.takeUnless { screenOn == 0L },
+            screenOffUah = input.screenOffUah.takeUnless { screenOff == 0L })
+    }
+
     fun session(input: ChargeSession): ChargeSession {
         epoch(input.startTime)
         input.endTime?.let(::epoch); input.lastSampleTime?.let(::epoch)
@@ -77,7 +99,8 @@ object HistoryPolicy {
         require(end >= input.startTime) { "Session ends before it starts" }
         require(input.startLevel == null || input.startLevel in 0..100) { "Invalid start level" }
         require(input.endLevel == null || input.endLevel in 0..100) { "Invalid end level" }
-        require(input.observedMs >= 0 && input.observedMs <= end - input.startTime + 5000) { "Invalid observed interval" }
+        val span = end - input.startTime
+        require(input.observedMs >= 0 && input.observedMs - span <= clockCorrectionAllowance(span)) { "Invalid observed interval" }
         require(input.counterCoveredMs in 0..input.observedMs && input.screenOnMs in 0..input.observedMs &&
             input.screenOffMs in 0..(input.observedMs - input.screenOnMs)) { "Incompatible session coverage" }
         require(input.cpuSuspendMs == null || input.cpuSuspendMs in 0..input.observedMs) { "Invalid CPU suspend interval" }
@@ -96,8 +119,9 @@ object HistoryPolicy {
         require(input.peakPowerMw == null || input.peakPowerMw in 0..1_000_000L) { "Invalid peak power; expected mW" }
         require(input.peakTemperatureDeciC == null || BatteryReading.temperatureDeciC(input.peakTemperatureDeciC) != null) { "Invalid peak temperature; expected tenths Celsius" }
         require(input.screenOffSuspendMs == null || input.screenOffSuspendMs in 0..input.observedMs) { "Invalid screen-off suspend interval" }
-        require(input.lastSampleTime == null || input.lastSampleTime in input.startTime..end) { "Invalid session sample time" }
-        return input.copy(sessionId = requiredIdentity(input.sessionId), observationId = identity(input.observationId),
+        require(input.lastSampleTime == null || sampleInSessionWindow(input.lastSampleTime, input, end)) { "Invalid session sample time" }
+        return normalizeCoverage(input, span).copy(sessionId = requiredIdentity(input.sessionId), observationId = identity(input.observationId),
+            lastSampleTime = input.lastSampleTime?.coerceAtMost(end),
             endTime = end, activeKey = null, source = source(requiredText(input.source)), avgCurrentUa = current(input.avgCurrentUa),
             closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason),
             chargerType = text(input.chargerType), capacityConfidence = text(input.capacityConfidence), capacityBasis = text(input.capacityBasis),
