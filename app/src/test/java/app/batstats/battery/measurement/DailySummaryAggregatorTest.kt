@@ -119,14 +119,4 @@ class DailySummaryAggregatorTest {
         assertEquals(DayInterval(start + 120_000, start + 180_000, chargedUah = 10_000, endLevelPercent = 70),
             DailySummaryAggregator.interval(c, d, endTemperatureDeciC = null))
     }
-
-    @Test fun typicalDischargeRateCoversTheGivenDays() {
-        val days = listOf(
-            DailySummary(1, screenOnMs = 3_600_000, screenOnDischargeUah = 200_000),
-            DailySummary(2, screenOffMs = 7_200_000, screenOffDischargeUah = 100_000, chargedUah = 900_000),
-        )
-        assertEquals(100_000.0, DailySummaryAggregator.typicalDischargeUa(days)!!, 1e-6)
-        assertNull(DailySummaryAggregator.typicalDischargeUa(listOf(DailySummary(1, screenOnMs = 3_000_000, screenOnDischargeUah = 1_000))))
-        assertNull(DailySummaryAggregator.typicalDischargeUa(emptyList()))
-    }
 }

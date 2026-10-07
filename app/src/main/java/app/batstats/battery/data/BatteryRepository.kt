@@ -21,6 +21,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
+import java.time.Instant
 import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
@@ -439,8 +440,12 @@ class BatteryRepository(
     /** The 7-day typical drain seeds the discharge ETA until live data dominates. */
     private suspend fun seedDischargeEta() {
         try {
-            val today = DailySummaryAggregator.epochDay(System.currentTimeMillis(), ZoneId.systemDefault())
-            dischargeEta.seed(DailySummaryAggregator.typicalDischargeUa(dailySummaryDao.between(today - 6, today).first()))
+            val now = System.currentTimeMillis()
+            val zone = ZoneId.systemDefault()
+            val from = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().minusDays(6)
+                .atStartOfDay(zone).toInstant().toEpochMilli()
+            val sessions = sessionDao.closedDischargeSessionsBetween(from, now)
+            dischargeEta.seed(TypicalDischargeSeed.rateUa(sessions, from, now))
         } catch (e: Exception) {
             currentCoroutineContext().ensureActive() // No seed: the estimate waits for live data.
         }
