@@ -104,9 +104,86 @@ class AppDetailsViewModelTest {
         assertEquals(AppLabel.SystemProcess, system().label)
     }
 
+    @Test fun reusedApplicationUidDoesNotAttributeReplacementPackagesLiveUsageToTheRoute() = runTest {
+        val base = detailedDump()
+        source.next = {
+            AppStatsResult.Ready(base.copy(apps = base.apps.map { app ->
+                if (app.uid == CHROME_UID) app.copy(packageName = YOUTUBE, packages = listOf(YOUTUBE)) else app
+            }))
+        }
+        val (vm, state) = start()
+        vm.onStart()
+        runCurrent()
+
+        assertEquals(AppLabel.Named("Chrome"), state().label)
+        assertEquals(base.capturedAt, state().capturedAtMs)
+        assertNull("the replacement app's drain and activity must not appear under Chrome", state().usage)
+    }
+
+    @Test fun matchingPackageInSharedApplicationUidShowsLiveUsageRegardlessOfPackageOrder() = runTest {
+        val base = detailedDump()
+        source.cached.value = base.copy(apps = base.apps.map { app ->
+            if (app.uid == CHROME_UID) app.copy(packageName = "Shared UID $CHROME_UID", packages = listOf(YOUTUBE, CHROME)) else app
+        })
+        val (_, state) = start()
+
+        assertEquals(124.0, checkNotNull(state().usage).powerMah, 1e-9)
+        source.cached.value = base.copy(apps = base.apps.map { app ->
+            if (app.uid == CHROME_UID) app.copy(packages = listOf(CHROME, YOUTUBE)) else app
+        })
+        runCurrent()
+        assertEquals(124.0, checkNotNull(state().usage).powerMah, 1e-9)
+    }
+
+    @Test fun unknownPackageMembershipDoesNotFallBackToTheDisplayPackage() = runTest {
+        val base = detailedDump()
+        source.cached.value = base.copy(apps = base.apps.map { app ->
+            if (app.uid == CHROME_UID) app.copy(packages = emptyList()) else app
+        })
+        val (_, state) = start()
+
+        assertNotNull(state().capturedAtMs)
+        assertNull("unknown packages are not evidence that the UID still belongs to Chrome", state().usage)
+    }
+
+    @Test fun losingPackageMembershipOnRefreshClearsPreviousLiveUsage() = runTest {
+        source.cached.value = detailedDump()
+        val (vm, state) = start()
+        assertNotNull(state().usage)
+        val base = detailedDump()
+        source.next = {
+            AppStatsResult.Ready(base.copy(apps = base.apps.map { app ->
+                if (app.uid == CHROME_UID) app.copy(packages = listOf(YOUTUBE)) else app
+            }))
+        }
+        vm.onEvent(AppDetailsEvent.Refresh)
+        runCurrent()
+
+        assertNull("refresh must not retain usage after the route package leaves the UID", state().usage)
+    }
+
+    @Test fun secondaryUserSystemUidShowsLiveUsageWithoutPackageMembership() = runTest {
+        val uid = 1_001_000
+        source.cached.value = dump().copy(apps = listOf(
+            BatteryStatsParser.AppPowerStats(uid, "android", 20.0, packages = listOf("android")),
+        ))
+        val (_, state) = start(uid = uid, packageName = "com.android.settings")
+        assertEquals(20.0, checkNotNull(state().usage).powerMah, 1e-9)
+
+        source.cached.value = dump().copy(apps = listOf(
+            BatteryStatsParser.AppPowerStats(uid, "System UID $uid", 20.0),
+        ))
+        runCurrent()
+        assertEquals(20.0, checkNotNull(state().usage).powerMah, 1e-9)
+    }
+
     @Test fun anAppWithLittleActivityHasNoListsNetworkOrHardware() = runTest {
-        source.cached.value = dump()
-        val (_, state) = start(uid = GONE_UID, packageName = "UID $GONE_UID")
+        val packageName = "com.example.quiet"
+        val base = dump()
+        source.cached.value = base.copy(apps = base.apps.map { app ->
+            if (app.uid == GONE_UID) app.copy(packageName = packageName, packages = listOf(packageName)) else app
+        })
+        val (_, state) = start(uid = GONE_UID, packageName = packageName)
         val usage = checkNotNull(state().usage)
         assertEquals(8.0, usage.powerMah, 1e-9)
         assertTrue(usage.wakelocks.isEmpty() && usage.alarms.isEmpty() && usage.jobs.isEmpty() && usage.syncs.isEmpty())
