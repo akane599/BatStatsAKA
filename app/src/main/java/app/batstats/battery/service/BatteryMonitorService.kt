@@ -3,7 +3,6 @@ package app.batstats.battery.service
 import app.batstats.battery.diagnostics.DiagnosticCode
 import app.batstats.battery.diagnostics.DiagnosticStore
 import android.app.Service
-import android.app.NotificationManager
 import android.app.Notification
 import androidx.core.app.NotificationCompat
 import app.batstats.R
@@ -62,8 +61,10 @@ class BatteryMonitorService : Service() {
         // any stopSelf() (ForegroundServiceDidNotStartInTimeException). So promote first, with a cheap notification
         // when not yet running: building the full one can be slow while the main thread is busy.
         val promoted = try {
-            startForegroundWith(if (started) notifications.getNotification() else placeholder())
+            startForegroundWith(if (started) notifications.promotionNotification() else placeholder())
             true
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: RuntimeException) {
             Log.e("BatteryMonitorService", "Could not enter the foreground", e)
             false
@@ -79,10 +80,12 @@ class BatteryMonitorService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        display("start prompt") { Notifier.cancelStartPrompt(this) }
         if (started) return START_STICKY
         try {
-            getSystemService(NotificationManager::class.java)
-                .notify(DrainNotificationManager.NOTIFICATION_ID, notifications.getNotification())
+            notifications.post(notifications.getNotification())
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: RuntimeException) {
             // Monitoring continues; the update loop below replaces the placeholder on its next push.
             Log.w("BatteryMonitorService", "Could not show the full notification", e)
@@ -144,7 +147,7 @@ class BatteryMonitorService : Service() {
             }
             notifications.run(issue) { content ->
                 display("notification") {
-                    getSystemService(NotificationManager::class.java).notify(DrainNotificationManager.NOTIFICATION_ID, notifications.build(content))
+                    notifications.post(notifications.build(content))
                 }
             }
         }
