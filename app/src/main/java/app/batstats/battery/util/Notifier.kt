@@ -62,6 +62,9 @@ object Notifier {
     fun canPostAlerts(ctx: Context): Boolean = NotificationManagerCompat.from(ctx).areNotificationsEnabled() &&
         ctx.getSystemService(NotificationManager::class.java).getNotificationChannel(ALERT_CHANNEL_ID)?.importance != NotificationManager.IMPORTANCE_NONE
 
+    // Episode latches prevent duplicate posts; a new episode must alert even with the same ID.
+    internal fun alertOnlyAlertOnce(): Boolean = false
+
     /**
      * One threshold alert. [sample] carries the calibrated current (the service copies it in), so the discharge
      * value matches the realtime readings; it is shown as a positive drain. Tapping opens Now.
@@ -85,7 +88,7 @@ object Notifier {
             .setContentTitle(ctx.getString(title)).setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSmallIcon(R.drawable.ic_stat_battery).setContentIntent(content)
-            .setAutoCancel(true).setOnlyAlertOnce(true).setWhen(sample.timestamp)
+            .setAutoCancel(true).setOnlyAlertOnce(alertOnlyAlertOnce()).setWhen(sample.timestamp)
             .setCategory(NotificationCompat.CATEGORY_STATUS).build()
         // One stable ID per condition; successive observations do not create new notifications.
         ctx.getSystemService(NotificationManager::class.java).notify(1100 + type.ordinal, notification)
