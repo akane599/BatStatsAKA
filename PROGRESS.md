@@ -1,31 +1,36 @@
 # PROGRESS.md — BatStats
 
-_Last updated: 2026-09-28 by claude_
-_Claude: read this first every session. Update it before ending. Keep each section under ~15 lines; archive old entries at the bottom._
+_Work items, stories and blockers live on the Sidequest board. This file keeps what outlives tickets._
 
-## Now (this session / this week)
-Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/adaptive-wibbling-twilight.md`. Executed, reviewed and verified; PR #1 open with green checks (the run ledger was deleted after CI passed). Old before/after renders in `design/` (gitignored).
-- [x] P0a bug fixes · P0b dead code/resources · Contracts
-- [x] Wave A: A1 measurement · A2 per-app parsing · A3 DB v5 · A4 theme (merged 6f9d130 + 2be6ff9)
-- [x] Wave B: B1a sampler (833cc5a) · B1b settings v3 + gating (ac8bb6f) · B2 per-app repositories (a7e089f) · cadence check screen on/off ✓ (Now-demand half → P4a)
-- [x] P3a shell/navigation (merged 935e985) · [x] P3b components/charts (2 fix rounds, merged 2770ebc)
-- [x] P4a Now (c43b796 + a1b36e7; user approved the look, 2×2 phone readouts, true since-unplug window)
-- [x] P4b ∥ P5 wave: 9 tasks reviewed + merged (7ea5448); WAVE-INTEGRATION de7eae5 (wiring, shims gone, shared design capacity, DAO queries, device tests green one class at a time) — review running
-- [x] P4c removal of old screens/shims (c5bd318)
-- [x] P6: tests, docs, final reviews → fix wave (990d8a3), verification PASS, screenshots rebaselined (e667cf9, 201/201), /device-check PASS (ordinary 70/70, Shizuku 1/1)
+## Now
+- [x] Bootstrap complete — verify build command
+- [x] US-1 audit fixes (docs/AUDIT_RESULTS_2026-10-07.md, SQ-2..SQ-31) integrated into local feat/overhaul @ 6ca5ffd; full gate green; not pushed
+- [x] US-2 bug-hunt fixes (SQ-37..47, SQ-54) integrated into local feat/overhaul @ 4672588; full gate green; not pushed. Open: SQ-52, SQ-53, SQ-55
 
-## Next (ordered)
-1. PR #1 (https://github.com/akane599/BatStatsAKA/pull/1, feat/overhaul → codex/android16-reliability): all checks green on ae28239 (both build jobs incl. the 16 KB-page emulator suite). Merge when reviewed; handle any feedback on `feat/overhaul`.
+## Baseline
+- 2026-10-07 @ dc7a4c5 (working tree): debug build OK, assembleDebug exit 0 with JDK 21 and ANDROID_HOME=/home/dev/android-sdk; log `.claude/kit/logs/gradle.6vEcmiDx.log`. Existing testDebugUnitTest reports: 82 suites, 542 tests, 0 failures/errors/skips; not rerun during bootstrap.
 
-## Blockers / open questions
-
-## Recently done (newest first, keep ~10)
-- 2026-09-28 — /review-pr fixes: stale screenshot docs (compose-design, ui-overhaul), rebaseline restores refs on failure, stale-results guard in `screenshot_failures.py`, CI uploads screenshot results, hook fails loudly without jq, `@Immutable` on 4 screen state classes, `DestructiveConfirmDeviceTest` (7 device tests: stats reset + Clear All Data confirm/cancel/disabled/failure)
-- 2026-09-28 — Claude Code automations: re-wired `check-res-db.sh` PostToolUse hook (verified exit 0 clean / exit 2 on duplicate key), removed dormant `ktlint -F` hook, skills `/new-screen` `/screenshot-rebaseline` `/device-check`, agent `screenshot-diff-triager` (+ `.claude/scripts/screenshot_failures.py`, tested on a forced failure), CI runs the screenshot suite
-- 2026-09-28 — AGP 9.5.0-alpha07; screenshots on AGP test suite; UTC/en-US pinned; 8 screens split into wrapper + `XxxContent` with screen-level screenshot tests (125 refs); LSP → official kotlin-lsp. Verified by: independent agent — unit 107/107, screenshot suite 125/125, emulator smoke of all 8 screens (no crash/exception); compose-reviewer no regressions; module-graph-auditor pass
-- 2026-09-28 — Added Compose Preview Screenshot Testing (`com.android.compose.screenshot` 0.0.1-alpha16) + smoke test `TelemetryChartScreenshotTest` (light/dark/1.5× font). Verified by: independent agent — `assembleDebug` exit 0, `testDebugUnitTest` 107/107, `validateDebugScreenshotTest` 3/3, refs unchanged
-
-## Decision log (never delete, one line each)
+## Decision log (never delete; one line each)
+- 2026-10-07 — Bug hunt (US-2): an observation Reset is guarded writer-side (`resetApplies` only for an open DISCHARGE session) and restarts the sampler sequence only when it applies, because a stale notification Reset could otherwise close a charge, plugged or unknown session that the user never asked to reset.
+- 2026-10-07 — Bug hunt (US-2): history trimming keeps 200 rows of headroom below MAX_SAMPLES/MAX_SESSIONS, and an import is refused only when it grows the table past the cap, because cleanup runs only every 200 inserts, so the tables legitimately exceed the cap between trims and an ALL export/re-import of that history used to be refused.
+- 2026-10-07 — Bug hunt (US-2): import clamps clock-corrected session coverage to the session span (allowance 5 s + span/10, capped at 15 min) instead of rejecting the file, and the monotonic-coverage check compares raw rows, because writer clock steps made valid backups unimportable and normalized rows made re-imports abort.
+- 2026-10-07 — Bug hunt (US-2): TopLevelBackStack gets per-entry leave blockers (DataScreen blocks while a task runs), and tab re-selection/popToRoot respect them, instead of moving Data tasks to a longer-lived scope; known gap: an external deep link can still cancel an off-screen task (SQ-52).
+- 2026-10-07 — Bug hunt (US-2): batterystats checkin column offsets are chosen by the device SDK (`parseCheckin(sdkInt)`, background/cached at 8/9 before API 28, 7/10 after), because pre-P dumps put the fields in different columns.
+- 2026-10-07 — Bug hunt (US-2): a Shizuku permission the user denied permanently is shown as "blocked" with an Open Shizuku action instead of a dead Allow button, because requestPermission is a no-op once Shizuku stops asking.
+- 2026-10-07 — US-1 integration: Shizuku's USER_SERVICE_TRANSACTION_destroy is @RestrictTo its library group, so ShellUserService keeps the literal 16777115 and ShellUserServiceTest asserts it equals ShizukuApiConstants, because referencing the constant from app code fails lint (RestrictedApi) while the test still catches a library change.
+- 2026-10-07 — US-1 integration: C06 export requests live in SavedStateHandle and DataScreen forwards every event (Pick included) to the VM before launching SAF (SQ-17 + SQ-31 split), because the launch-time selection must survive process death and the screen previously never told the VM about Pick.
+- 2026-10-07 — US-1 integration: C14 shared UIDs keep per-UID power and show a sorted representative + "Shared UID · N apps" line (AppRow optional supportingText); stored session_app_usage rows now use that sorted representative, and AppDetails still shows the representative's identity for whole-UID power (accepted limitation).
+- 2026-10-07 — Sidequest scoping: this repo splits strings per screen (strings_<screen>.xml in values/values-es/values-tr) and screenshot refs live in app/src/screenshotTestDefaultDebug/reference/<pkg>/<File>Kt; declare those paths on UI tickets, because declaring values/strings.xml caused scope refusals mid-run.
+- 2026-10-07 — Audit fixes (US-1, SQ-2..SQ-26): C04 backend selection falls back (Shizuku only when running AND authorized, else root, then ADB), because availability of an authorized backend should not be blocked by a denied Shizuku; no fallback after a command failure.
+- 2026-10-07 — Audit fixes C02/C23: no Room migration — per-screen drain rates are withheld unless session counter coverage is complete (overall session rate stays), and the 7-day ETA seed comes from closed local discharge sessions' counter-covered time, because the session row only stores combined coverage and daily rows mix covered/uncovered time.
+- 2026-10-07 — Audit fixes: C03 rejects capacity estimates from incompletely covered sessions (no uniform-drain scaling); C07 corrects export metadata only (format unchanged for import compatibility); C12 blocks Back while a Data task commits instead of moving work to a longer-lived scope.
+- 2026-10-07 — Commit/push only docs/AUDIT_RESULTS_2026-10-07.md per user scope; keep unrelated dirty files local. Use recent verified author identity through per-command Git options because this host lacks configured identity; do not alter global/repository configuration.
+- 2026-10-07 — Consolidate completed reviews in a new docs file and retain the earlier report; merge duplicate daily coverage/ADB claims and exclude disputed C04 from the confirmed count, because conflicting policy assessments and model-specific gaps must remain visible rather than being silently resolved or counted twice.
+- 2026-10-07 — Run this explicit review with inherited reviewer model/effort against clean pinned 76bc831..38205e1, not historical Fable/Astra overrides, because those were separate requests. All eight roles + two fresh falsification passes completed; runtime settings unconfirmed and candidate validation static, so this selective result does not supersede earlier coverage limits or imply device/security assurance.
+- 2026-10-07 — Follow updated code-audit v3 stable profiles; stop before passing unsupported Astra model to Agent and provide validated startup launcher, because registered startup model definitions avoid unsupported per-call selection without changing permissions or silently substituting a model.
+- 2026-10-07 — User explicitly retried the all-Astra/xhigh command after exit; check discovery against immutable objects before creating another checkout. Stop on repeated profile-loading failure without model overrides or settings changes, because a base-profile fallback would not fulfill the requested configuration.
+- 2026-10-07 — Interpret `main` in the user audit command as the base branch (`origin/main`, no local main); require pinned clean source and configured Astra/xhigh profiles. Stop after the permitted discovery retry instead of substituting a static agent/model, because model/effort fidelity is part of the request.
+- 2026-10-06 — User requested an independent all-fable review against main; consolidate both reviews by root cause and report model limits explicitly because resumed agents lost verified profiles and fresh fable validation hit a session limit. Do not turn conservative gap policies or latent type invariants into demonstrated critical defects.
 - 2026-09-29 Overhaul executed via subagent-driven development; ~47 controller rulings (listed in the final session summary; ledger deleted after CI went green). User decisions at the Now checkpoint: look approved, 2×2 phone readouts, since-unplug = open discharge session. Notable: QS tile without ACTIVE_TILE; Reset settings removed; Sparkline removed; package-cycle refactor deferred to debt.
 - 2026-09-28 — Overhaul outline token: M3 `outline` = #63758D (approved #3A4452 kept as `outlineVariant`) because #3A4452 was 1.45–1.95:1 on surfaces (invisible Switch track); smallest lightening passing ≥3:1 on every tier.
 - 2026-09-28 — Overhaul ETA/calibration: "sleep gaps" skip only observation gaps (engine's awake-time rule), not CPU-suspended intervals — counter Δq across suspend is real idle drain. Calibration fast path requires plugged == 0 and a falling counter.
@@ -41,28 +46,22 @@ Overhaul on `feat/overhaul` — plan + approved design brief: `~/.claude/plans/a
 - 2026-09-28 — Replaced kotlinsense (fwcd kotlin-language-server, embedded Kotlin 2.1 compiler) with the official `kotlin-lsp` plugin (JetBrains) because fwcd could not read Kotlin 2.5 metadata and flagged the screenshotTest source set as unresolved.
 - 2026-09-28 — Chose standalone `com.android.compose.screenshot` plugin over AGP test suites because AGP is 9.4.0 (suites need ≥ 9.5.0-alpha03) and AGP bumps need approval. Revisit when AGP ≥ 9.5.0-alpha03 (standalone setup is deprecated there). (Superseded 2026-09-28: moved to AGP 9.5.0-alpha07 + test suites, see above.)
 
-## Known debt / follow-ups
-- Package cycles from the overhaul audit: replace `BatteryGraph` service locator with Koin inject; move AppUsage enums/row into `data.db`; SessionEvidence → data.db; EtaHold off `BatteryRepository.Realtime`; Notifier out of util; SamplingDemand into data.sampling; ChartMath/TimePoint/TimeWindow into a Compose-free file; Destinations out of ui.
-- Review suggestions not yet done: `DetailedStatsTab` enum instead of `Int` tab; one shared Shizuku/access UI class for Dashboard + DetailedStats; `KernelDetailsState` single `sources` list; `DiagnosticsUiState` builder shared by wrapper/tests; previews for DetailedStats tabs 1–5/error, Settings dialogs, SessionDetails failed/recording/interrupted/imported — low
-- Transient UI (snackbars) can't be screenshot-tested: layoutlib captures one frame before `showSnackbar` renders — low
-- DetailedStats/History/Settings `rememberSaveable` keys moved with the split; a state bundle saved by the previous APK won't restore once after update — low
-- `app/build.gradle.kts` `unitTests.isIncludeAndroidResources = true` now required by the screenshot suite (adds resource processing to plain JUnit tests) — low
-
 ## Audit status
-| Area | Last run | Result | Command |
+| Area | Last run | Result | How |
 |---|---|---|---|
-| Security (claude-security) | — | — | `/claude-security` |
-| Compose review | 2026-09-29 (overhaul) | compose-reviewer + independent design critic: 2 important (tab switch wiped tab state/VMs; Apps search async text) + error-treatment unification, History labels at 1.5× — all fixed in 990d8a3 | android-kmp-playbook:compose-reviewer + design critic on renders |
-| Module graph | 2026-09-28 (overhaul) | 1 important (unused libs.material) + dep cleanup + WidgetUpdater uncaught exception + 10 `!!` → final fix wave; package cycles (BatteryGraph locator, db↔apps enums, …) → debt | module-graph-auditor agent |
-| Lint (Android lint) | 2026-09-29 | Pass (debug + preview, 0 errors) | `./gradlew :app:lintDebug :app:lintPreview -q` |
-| Emulator QA (API 36) | 2026-09-29 (overhaul, /device-check) | Pass — ordinary 70/70 (19 classes), Shizuku 1/1 (official Shizuku 13.6.0 as shell); API 36 ranchu, 4 KB pages; screenshot suite 201/201 after rebaseline (e667cf9) | `bash scripts/check_android_device.sh` |
+| Plan audit | — | — | `/plan-audit` |
+| Bug hunt | 2026-10-07 | /bug-hunt over data/persistence, drain/notifications/service, shizuku/apps/util, navigation/UI: 21 verified, 10 fixed (US-2, SQ-37..47 + follow-up SQ-54), 3 follow-ups on board (SQ-52/53/55); unit 689/0 fail, screenshots 205/0 fail, lint 0 errors @ 4672588. Earlier: audit C01–C26 fixed (US-1) @ 6ca5ffd | `/bug-hunt` |
+| Security | — | — | `/claude-security` |
+| UI / design | — | — | `/ui-overhaul` phase review |
+| Build (bootstrap) | 2026-10-07 | PASS, exit 0; JDK 21, actual environment SDK | `bash .claude/kit/gradle-check.sh :app:assembleDebug` |
+| Lint | 2026-10-07 | PASS @ 4672588 (0 errors, 47 warnings) | `./gradlew :app:lintDebug --console=plain -q` |
+| Device QA (none — create one) | — | Not run; no AVD or attached device | android-emulator-qa skill |
 
-## Environment notes (quirks discovered)
+## Environment notes
+- 2026-10-07 host: actual `ANDROID_HOME=/home/dev/android-sdk` (`adb` there), not the documented `$HOME/Android/Sdk`. Pinned-checkout checks used this explicit environment plus JDK 21; no `local.properties` access/change. SDK-path failure was environmental, not a source failure.
 - CI's device jobs use the `pixel_2` profile (411×731 dp): device tests must scroll to below-the-fold content. The 16 KB-page job needs 4 GB emulator RAM (at 2 GB the low-memory killer took the app under test). `check_android_device.sh` saves `<phase>-crash-logcat.txt` / `<phase>-logcat-tail.txt` for failed phases in the uploaded reports.
 - AGP 9.5.0-alpha07 registers `generate<Variant>ComposePreviewRunfiles` for every Compose variant; realizing all tasks (`./gradlew tasks --all`) fails on `release` (unit tests disabled). Normal builds are fine. List tasks via `tasks.names` in an init script instead.
 - Suite task names are variant-first (`testDebugScreenshotTestDefaultTestSuite`), not the doc's `testScreenshotTestDefaultDebugTestSuite`.
 - Screenshot plugin truncates `@Preview(name=…)` at "." (`"Font 1.5"` → `5_….png`); keep preview names dot-free.
 - Shell is zsh: `${PIPESTATUS[0]}` is empty — use `$pipestatus[1]` or redirect Gradle output to a file and check `$?`.
-
 ---
-## Archive
