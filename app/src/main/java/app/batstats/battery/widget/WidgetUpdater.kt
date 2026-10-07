@@ -20,6 +20,7 @@ import app.batstats.battery.measurement.BatteryReading
 import app.batstats.battery.measurement.EtaHold
 import app.batstats.battery.measurement.PowerState
 import app.batstats.battery.util.TimeEstimator
+import app.batstats.ui.format.percentText
 import app.batstats.settings.useFahrenheit
 import java.text.DateFormat
 import java.util.Date
@@ -125,13 +126,14 @@ object WidgetUpdater {
         val freshness = sample?.timestamp?.let {
             DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
         } ?: context.getString(R.string.widget_no_reading)
+        val locale = context.resources.configuration.locales[0] ?: Locale.getDefault()
         return Content(
-            level = sample?.levelPercent?.let { "$it%" } ?: "—",
+            level = sample?.levelPercent?.let { percentText(it.toDouble(), locale) { id, args -> context.getString(id, *args) } } ?: "—",
             temperature = sample?.temperatureDeciC?.let {
                 if (fahrenheit) String.format(Locale.getDefault(), "%.1f °F", it / 10.0 * 1.8 + 32)
                 else String.format(Locale.getDefault(), "%.1f °C", it / 10.0)
             } ?: "—",
-            estimate = if (monitoring) TimeEstimator.etaString(context, reading) ?: "—" else "—",
+            estimate = if (monitoring) TimeEstimator.etaString(context, reading, locale) ?: "—" else "—",
             caption = if (monitoring) context.getString(R.string.widget_read_at, freshness)
                 else context.getString(R.string.widget_paused_at, freshness),
             direction = sample?.let { directionFor(BatteryReading.powerState(it.status, it.plugged), it.levelPercent) }
