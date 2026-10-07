@@ -23,6 +23,7 @@ internal data class StartPromptIntents<T>(val action: T, val content: T = action
 
 object Notifier {
     private const val START_PROMPT_ID = 1000
+    internal const val OPEN_APP_REQUEST_CODE = 20
 
     fun promptStartOnBoot(ctx: Context) {
         DrainNotificationManager.ensureChannel(ctx)
@@ -90,7 +91,7 @@ object Notifier {
             BatteryAlert.DISCHARGE -> R.string.high_discharge to ctx.getString(R.string.alert_discharge_reported,
                 formatDrainRate(sample.currentNowUa?.let { -it / 1_000.0 }, locale))
         }
-        val content = PendingIntent.getActivity(ctx, 20, Intent(ctx, BatteryMainActivity::class.java)
+        val content = PendingIntent.getActivity(ctx, OPEN_APP_REQUEST_CODE, Intent(ctx, BatteryMainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             .putExtra(Destinations.EXTRA_DESTINATION, Destinations.NOW),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)

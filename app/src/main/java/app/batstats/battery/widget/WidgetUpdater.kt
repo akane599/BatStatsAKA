@@ -40,6 +40,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  */
 object WidgetUpdater {
     const val ACTION_REFRESH = "app.batstats.battery.widget.ACTION_REFRESH"
+    internal const val OPEN_APP_REQUEST_CODE = 22
 
     /** The widgets' visible text; the service's update gate compares it to skip unchanged pushes. */
     data class Content(
@@ -165,7 +166,7 @@ object WidgetUpdater {
                 setViewVisibility(R.id.subtitle, View.VISIBLE)
                 setTextViewText(R.id.subtitle, content.caption)
                 setContentDescription(R.id.root, "${context.getString(title)}: $value. ${content.caption}")
-                setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(context, 0,
+                setOnClickPendingIntent(R.id.root, PendingIntent.getActivity(context, OPEN_APP_REQUEST_CODE,
                     mainActivityIntent(context), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
             }
             manager.updateAppWidget(ids, views)
