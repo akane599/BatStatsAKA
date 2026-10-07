@@ -7,6 +7,7 @@ import app.batstats.battery.measurement.CalibrationState
 import app.batstats.battery.measurement.CurrentCalibration
 import app.batstats.battery.measurement.CurrentSign
 import app.batstats.battery.measurement.CurrentUnit
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -71,6 +72,27 @@ class StatusViewModelTest {
         assertFalse(state().access.canAuthorizeShizuku)
     }
 
+    @Test fun shizukuChangesDuringProbeAreCoalescedIntoOneFreshProbe() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        repo.gate = gate
+        val (_, state) = start()
+        assertEquals(listOf(false), repo.probes)
+        assertTrue(state().access.checking)
+
+        repo.shizuku.value = ShizukuState(running = true)
+        runCurrent()
+        repo.detected = AccessMode.SHIZUKU
+        repo.shizuku.value = ShizukuState(running = true, granted = true)
+        runCurrent()
+        assertEquals(listOf(false), repo.probes)
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals("Both changes require exactly one follow-up probe", listOf(false, false), repo.probes)
+        assertEquals("The fresh probe must replace the stale no-access result", AccessMode.SHIZUKU, state().access.mode)
+        assertFalse(state().access.checking)
+    }
+
     @Test fun blockedShizukuIsExposedWithoutOfferingAnotherDialog() = runTest {
         val (_, state) = start()
         repo.shizuku.value = ShizukuState(running = true, granted = false, blocked = true)
@@ -96,13 +118,16 @@ class StatusViewModelTest {
         assertTrue(state().access.checking)
         assertEquals(listOf(true), repo.probes)
 
-        // A second tap while it runs is covered by the running probe.
+        // Multiple requests queue one fresh probe; automatic requests cannot downgrade a manual recheck.
         vm.onEvent(StatusEvent.RecheckAccess)
+        vm.onEvent(StatusEvent.RecheckAccess)
+        repo.shizuku.value = ShizukuState(running = true)
         runCurrent()
         assertEquals(listOf(true), repo.probes)
 
         gate.complete(Unit)
         runCurrent()
+        assertEquals(listOf(true, true), repo.probes)
         assertFalse(state().access.checking)
         assertEquals(AccessMode.ADB, state().access.mode)
 
@@ -113,6 +138,43 @@ class StatusViewModelTest {
         runCurrent()
         assertFalse(state().access.checking)
         assertEquals(AccessMode.ADB, state().access.mode)
+    }
+
+    @Test fun queuedProbeRunsAfterFailureAndKeepsLastMode() = runTest {
+        repo.detected = AccessMode.ROOT
+        val (vm, state) = start()
+        repo.probes.clear()
+        val gate = CompletableDeferred<Unit>()
+        repo.gate = gate
+        repo.probeFailure = IllegalStateException("su crashed")
+        vm.onEvent(StatusEvent.RecheckAccess)
+        runCurrent()
+        repo.shizuku.value = ShizukuState(running = true)
+        runCurrent()
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf(true, false), repo.probes)
+        assertEquals(AccessMode.ROOT, state().access.mode)
+        assertFalse(state().access.checking)
+    }
+
+    @Test fun cancellationStopsTheProbeWithoutRunningQueuedRequests() = runTest {
+        val (vm, state) = start()
+        repo.probes.clear()
+        val gate = CompletableDeferred<Unit>()
+        repo.gate = gate
+        repo.probeFailure = CancellationException("probe cancelled")
+        vm.onEvent(StatusEvent.RecheckAccess)
+        runCurrent()
+        repo.shizuku.value = ShizukuState(running = true)
+        runCurrent()
+
+        gate.complete(Unit)
+        runCurrent()
+        assertEquals(listOf(true), repo.probes)
+        assertEquals(AccessMode.NONE, state().access.mode)
+        assertFalse(state().access.checking)
     }
 
     @Test fun adbOnAndroid16IsFlaggedAndAuthorizeGoesToShizuku() = runTest {
@@ -218,10 +280,11 @@ class StatusViewModelTest {
 
         override suspend fun detectAccess(recheck: Boolean): AccessMode {
             probes += recheck
+            val result = detected
             gate?.await()
             probeFailure?.let { throw it }
-            accessMode.value = detected
-            return detected
+            accessMode.value = result
+            return result
         }
 
         override fun requestShizukuPermission() {

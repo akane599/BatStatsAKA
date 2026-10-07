@@ -138,6 +138,7 @@ class StatusViewModel(
     private val checking = MutableStateFlow(false)
     private val shareUnavailable = MutableStateFlow(false)
     private var probe: Job? = null
+    private var pendingRecheck: Boolean? = null
 
     private val access = combine(repository.access, checking, repository.shizuku) { mode, checking, shizuku ->
         AccessState(mode, checking, shizuku, repository.adbCommands, repository.adbCoversAppStats)
@@ -173,17 +174,24 @@ class StatusViewModel(
         shareUnavailable.value = !shared
     }
 
-    /** One probe at a time: a request while one runs is covered by it (it reads the backends afresh). */
+    /** One probe at a time; requests during it coalesce into one fresh probe, preserving a manual recheck. */
     private fun detect(recheck: Boolean) {
+        pendingRecheck = pendingRecheck == true || recheck
         if (probe?.isActive == true) return
         probe = viewModelScope.launch {
             checking.value = true
             try {
-                repository.detectAccess(recheck)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Exception) {
-                // The mode flow keeps its last value; nothing else to show.
+                while (pendingRecheck != null) {
+                    val refresh = pendingRecheck == true
+                    pendingRecheck = null
+                    try {
+                        repository.detectAccess(refresh)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // The mode flow keeps its last value; a queued request still probes afresh.
+                    }
+                }
             } finally {
                 checking.value = false
             }
