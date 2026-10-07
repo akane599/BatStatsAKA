@@ -12,6 +12,19 @@ enum class CapacityBasis {
     SYSFS,
 }
 
+/** Capacity-only counter coverage: charging ends at the first 100%, discharge starts below 100%. */
+data class CapacitySpan(
+    val startLevel: Int? = null,
+    val endLevel: Int? = null,
+    val bucket: ObservedBucket = ObservedBucket(),
+) {
+    fun plus(point: Observation, interval: ObservedBucket): CapacitySpan = when {
+        point.power == PowerState.CHARGING && endLevel == 100 -> this
+        point.power == PowerState.DISCHARGING && startLevel == 100 -> CapacitySpan(point.level, point.level)
+        else -> copy(endLevel = point.level, bucket = bucket + interval)
+    }
+}
+
 /** A full-charge capacity estimate. Stored per session as mAh + confidence/basis names. */
 data class CapacityEstimate(val fullUah: Long, val confidence: CapacityConfidence, val basis: CapacityBasis) {
     val fullMah: Int get() = ((fullUah + 500) / 1_000).toInt()
@@ -31,8 +44,9 @@ object CapacityEstimator {
     private const val HIGH_COVERAGE = 0.9
 
     /**
-     * Δq ÷ Δlevel × 100 for one charge or discharge session ([deltaUah] ≥ 0, as
-     * `ChargeSession.deltaUah`; coverage = [counterCoveredMs] ÷ [observedMs]).
+     * Δq ÷ Δlevel × 100 for a charge or discharge level sub-span ([deltaUah] ≥ 0;
+     * coverage = [counterCoveredMs] ÷ [observedMs]). Charge and both durations must describe
+     * the same sub-span, excluding the 100% plateau.
      * HIGH: span ≥ 40 % and coverage ≥ 90 %; MEDIUM: span ≥ 20 %; LOW: span ≥ 10 %.
      * Null for a shorter span, incomplete counter coverage (Δq would miss part of the span) or an
      * implausible result. Coverage has zero tolerance: observed and covered durations sum the same
