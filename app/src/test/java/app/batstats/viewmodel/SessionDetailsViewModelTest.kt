@@ -94,17 +94,19 @@ class SessionDetailsViewModelTest {
             assertEquals(T0 + HOUR + HOUR / 2, charts.level[2].timeMs)
             assertEquals(30.0, charts.temperature.first().value!!, 1e-9)
 
-            // Drain: 1 h on (400 mAh) and 2 h off (200 mAh) at half coverage; %/h against the counter's full charge
-            // (2,400 mAh at 60 % → 4,000 mAh); deep sleep over the screen-off time.
+            // Partial coverage cannot identify either screen bucket's denominator; deep sleep is still measured.
             val drain = insights as SessionInsights.Drain
-            assertEquals(800.0, drain.screenOn.currentMa!!, 1e-9)
-            assertEquals(20.0, drain.screenOn.percentPerHour!!, 1e-9)
-            assertEquals(200.0, drain.screenOff.currentMa!!, 1e-9)
+            assertNull(drain.screenOn.currentMa)
+            assertNull(drain.screenOn.percentPerHour)
+            assertNull(drain.screenOff.currentMa)
+            assertNull(drain.screenOff.percentPerHour)
             assertEquals(90.0, drain.deepSleepPercent!!, 1e-9)
             assertTrue(drain.deepSleepScreenOff)
         }
 
-        // Fahrenheit is applied to the chart values; without a counter reading, %/h falls back to the Health estimate.
+        // With complete coverage, %/h falls back to Health when no counter reading supplies capacity.
+        // Fahrenheit is applied to the chart values.
+        repo.row.value = discharge().copy(counterCoveredMs = 3 * HOUR)
         repo.settings.value = AppSettings(temperatureUnitIndex = 1)
         repo.rows.value = listOf(sample(T0, level = 90, temperature = 300, counter = null), sample(T0 + HOUR, level = 80, counter = null))
         repo.sessions.value = listOf(discharge().copy(capacityEstimateMah = 5_000, capacityConfidence = "HIGH"))
@@ -112,7 +114,7 @@ class SessionDetailsViewModelTest {
         with(state.ready()) {
             assertTrue(useFahrenheit)
             assertEquals(86.0, charts.temperature.first().value!!, 1e-9)
-            assertEquals(16.0, (insights as SessionInsights.Drain).screenOn.percentPerHour!!, 1e-9)
+            assertEquals(8.0, (insights as SessionInsights.Drain).screenOn.percentPerHour!!, 1e-9)
         }
     }
 
