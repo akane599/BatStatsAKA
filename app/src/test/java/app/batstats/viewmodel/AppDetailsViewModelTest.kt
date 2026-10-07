@@ -254,6 +254,23 @@ class AppDetailsViewModelTest {
         assertEquals(2, source.historyCalls.size)
     }
 
+    @Test fun permanentShizukuDenialIsDistinctFromOrdinaryDenial() = runTest {
+        source.next = { AppStatsResult.NoAccess }
+        val blocked = ShizukuState(running = true, granted = false, blocked = true)
+        source.shizuku.value = blocked
+        source.accessNow = AccessSnapshot(ShellRunner.Mode.NONE, null, blocked)
+        val (vm, state) = start()
+        vm.onStart()
+        runCurrent()
+        assertEquals(StatsProblem.NoAccess(AccessProblem.SHIZUKU_NOT_ALLOWED, blocked = true), state().problem)
+
+        val requestable = blocked.copy(blocked = false)
+        source.accessNow = source.accessNow.copy(shizuku = requestable)
+        source.shizuku.value = requestable
+        runCurrent()
+        assertEquals(StatsProblem.NoAccess(AccessProblem.SHIZUKU_NOT_ALLOWED), state().problem)
+    }
+
     @Test fun noAccessShowsTheProblemWithoutUsage() = runTest {
         source.next = { AppStatsResult.NoAccess }
         source.accessNow = AccessSnapshot(ShellRunner.Mode.NONE, null, ShizukuState(running = false, granted = false))

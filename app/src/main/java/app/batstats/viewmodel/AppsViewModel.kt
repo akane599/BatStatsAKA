@@ -58,7 +58,7 @@ enum class AccessProblem {
     /** No Shizuku, root or ADB grant. */
     NOT_SET_UP,
 
-    /** Shizuku runs but hasn't allowed BatStats yet; the app can ask. */
+    /** Shizuku runs but hasn't allowed BatStats yet; NoAccess.blocked distinguishes a permanent denial. */
     SHIZUKU_NOT_ALLOWED,
 
     /** ADB grants exist, but this Android version refuses the per-app dump to them (Shizuku or root needed). */
@@ -101,7 +101,7 @@ enum class ReadProblem {
 /** The last read's problem; none while the last read was good. */
 sealed interface StatsProblem {
     @Immutable
-    data class NoAccess(val problem: AccessProblem) : StatsProblem
+    data class NoAccess(val problem: AccessProblem, val blocked: Boolean = false) : StatsProblem
     @Immutable
     data class Failed(val problem: ReadProblem) : StatsProblem
 }
@@ -141,14 +141,14 @@ class DefaultAppsRepository(
     private val shizukuBridge: ShizukuBridge,
 ) : AppsRepository {
     override val cached = appStats.cached
-    override val shizuku = combine(shizukuBridge.running, shizukuBridge.granted, ::ShizukuState).distinctUntilChanged()
+    override val shizuku = combine(shizukuBridge.running, shizukuBridge.granted, shizukuBridge.blocked, ::ShizukuState).distinctUntilChanged()
 
     override suspend fun snapshot(force: Boolean) = appStats.snapshot(force)
 
     override fun access() = AccessSnapshot(
         mode = shell.access.value,
         lastError = shell.lastError.value,
-        shizuku = ShizukuState(shizukuBridge.running.value, shizukuBridge.granted.value),
+        shizuku = ShizukuState(shizukuBridge.running.value, shizukuBridge.granted.value, shizukuBridge.blocked.value),
     )
 
     override suspend fun info(packageName: String) = appInfo.info(packageName)
@@ -232,7 +232,12 @@ internal class StatsLoader(private val scope: CoroutineScope, private val source
 
     private fun problemOf(result: AppStatsResult): StatsProblem? = when (result) {
         is AppStatsResult.Ready -> null
-        AppStatsResult.NoAccess -> StatsProblem.NoAccess(AccessProblem.of(source.access()))
+        AppStatsResult.NoAccess -> source.access().let { access ->
+            StatsProblem.NoAccess(
+                AccessProblem.of(access),
+                blocked = access.shizuku.running && !access.shizuku.granted && access.shizuku.blocked,
+            )
+        }
         is AppStatsResult.Failed -> StatsProblem.Failed(ReadProblem.of(result.message, source.access().mode))
     }
 }

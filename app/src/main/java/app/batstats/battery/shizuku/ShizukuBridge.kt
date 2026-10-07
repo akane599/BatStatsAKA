@@ -36,6 +36,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.suspendCancellableCoroutine
 
+internal fun shizukuPermissionBlocked(
+    running: Boolean,
+    preV11: Boolean,
+    granted: Boolean,
+    rationale: Boolean,
+): Boolean = running && !preV11 && !granted && rationale
+
 class ShizukuBridge(private val context: Context) {
 
     companion object {
@@ -78,6 +85,9 @@ class ShizukuBridge(private val context: Context) {
 
     private val _granted = MutableStateFlow(false)
     val granted: StateFlow<Boolean> = _granted.asStateFlow()
+
+    private val _blocked = MutableStateFlow(false)
+    val blocked: StateFlow<Boolean> = _blocked.asStateFlow()
 
     private val args by lazy {
         UserServiceArgs(ComponentName(context.packageName, ShellUserService::class.java.name))
@@ -122,20 +132,21 @@ class ShizukuBridge(private val context: Context) {
         everSeen = true
         _running.value = true
         binding.forget()
-        _granted.value = checkPermissionNow()
+        refreshPermissionState()
     }
 
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
         Log.w(TAG, "Shizuku binder died")
         _running.value = false
         _granted.value = false
+        _blocked.value = false
         binding.reset()
     }
 
     private val permissionResultListener =
         Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
             if (requestCode == PERMISSION_REQUEST_CODE) {
-                _granted.value = grantResult == PackageManager.PERMISSION_GRANTED
+                refreshPermissionState(grantResult == PackageManager.PERMISSION_GRANTED)
                 Log.d(TAG, "Permission result: ${_granted.value}")
             }
         }
@@ -164,6 +175,7 @@ class ShizukuBridge(private val context: Context) {
             everSeen = true
         } else {
             _granted.value = false
+            _blocked.value = false
             binding.reset()
         }
         return alive
@@ -195,20 +207,30 @@ class ShizukuBridge(private val context: Context) {
 
     fun hasPermission(): Boolean {
         if (!ping()) return false
-        return checkPermissionNow().also { _granted.value = it }
+        return refreshPermissionState()
     }
 
     suspend fun hasPermissionResilient(): Boolean {
         if (!isRunning()) return false
-        return checkPermissionNow().also { _granted.value = it }
+        return refreshPermissionState()
     }
 
-    fun isPermanentlyDenied(): Boolean = try {
-        ping() && !Shizuku.isPreV11() &&
-            Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED &&
-            !Shizuku.shouldShowRequestPermissionRationale()
-    } catch (_: Throwable) {
-        false
+    private fun refreshPermissionState(granted: Boolean = checkPermissionNow()): Boolean {
+        _granted.value = granted
+        _blocked.value = try {
+            _running.value && !Shizuku.isPreV11() && !granted &&
+                shizukuPermissionBlocked(true, false, false, Shizuku.shouldShowRequestPermissionRationale())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            false
+        }
+        return granted
+    }
+
+    fun isPermanentlyDenied(): Boolean {
+        hasPermission()
+        return _blocked.value
     }
 
     fun requestPermission(requestCode: Int = PERMISSION_REQUEST_CODE) {
@@ -216,8 +238,13 @@ class ShizukuBridge(private val context: Context) {
             Log.w(TAG, "requestPermission: Shizuku not running, ignoring")
             return
         }
+        refreshPermissionState()
+        if (_granted.value || _blocked.value) return
         try {
             Shizuku.requestPermission(requestCode)
+            refreshPermissionState()
+        } catch (e: CancellationException) {
+            throw e
         } catch (t: Throwable) {
             Log.w(TAG, "requestPermission failed: ${t.message}")
         }
