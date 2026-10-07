@@ -131,7 +131,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         maintenance.mutations.withLock {
         check(!maintenance.isClearing) { "History is being cleared; try importing again afterward" }
         withContext(Dispatchers.IO) {
-            val payload = (context.contentResolver.openInputStream(src) ?: error("Cannot open history file")).let { LimitedHistoryInput(it, json = true) }.use {
+            val payload = (context.contentResolver.openInputStream(src) ?: throw IOException("Cannot open history file")).let { LimitedHistoryInput(it, json = true) }.use {
                 json.decodeFromStream(BatteryExport.serializer(), it)
             }
             importPayload(payload)
@@ -143,7 +143,7 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
         check(!maintenance.isClearing) { "History is being cleared; try importing again afterward" }
         withContext(Dispatchers.IO) {
             val samples = mutableListOf<BatterySample>(); val sessions = mutableListOf<ChargeSession>(); val usage = mutableListOf<SessionAppUsage>()
-            (context.contentResolver.openInputStream(src) ?: error("Cannot open CSV file")).let(::LimitedHistoryInput).bufferedReader().use { input ->
+            (context.contentResolver.openInputStream(src) ?: throw IOException("Cannot open CSV file")).let(::LimitedHistoryInput).bufferedReader().use { input ->
                 val iterator = HistoryCsv.rows(input).iterator()
                 require(iterator.hasNext()) { "CSV file is empty" }
                 val header = iterator.next().mapIndexed { index, text -> if (index == 0) text.removePrefix("\uFEFF") else text }

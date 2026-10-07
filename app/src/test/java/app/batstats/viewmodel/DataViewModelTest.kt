@@ -195,6 +195,10 @@ class DataViewModelTest {
         assertEquals(DataOutcome.Failed(DataTask.IMPORT_JSON, DataFailure.NOT_AN_EXPORT), vm.state.value.outcome)
 
         repo.importFailure = IOException("gone")
+        vm.onFileChosen(DataTask.IMPORT_JSON, "content://gone.json")
+        runCurrent()
+        assertEquals(DataOutcome.Failed(DataTask.IMPORT_JSON, DataFailure.UNREADABLE), vm.state.value.outcome)
+
         vm.onFileChosen(DataTask.IMPORT_CSV, "content://gone.csv")
         runCurrent()
         assertEquals(DataOutcome.Failed(DataTask.IMPORT_CSV, DataFailure.UNREADABLE), vm.state.value.outcome)
