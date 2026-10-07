@@ -78,7 +78,7 @@ class SessionDeleteOrderingTest {
         val reported = runCatching { writer.deleteSession(ID) }.exceptionOrNull()
         assertTrue(reported is IllegalStateException)
         assertEquals("storage failed", reported?.message)
-        assertEquals(listOf(failure), fixture.failures)
+        assertTrue("Delete failures are reported to the caller, not sampling", fixture.failures.isEmpty())
         assertNotNull(fixture.row)
         fixture.deleteFailure = null
         assertTrue(writer.deleteSession(ID))
