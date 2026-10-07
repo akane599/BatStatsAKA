@@ -19,6 +19,9 @@ class ShellRunner internal constructor(
     private val runShizuku: suspend (String, Long) -> ShizukuBridge.RunResult,
     private val shizukuRunning: () -> Boolean,
     private val elapsedMs: () -> Long = SystemClock::elapsedRealtime,
+    private val runRoot: suspend (String, Long) -> CommandOutput.Result = { cmd, timeoutMs ->
+        runInterruptible { CommandOutput.run(listOf("su", "-c", cmd), timeoutMs) }
+    },
 ) {
     constructor(context: Context, shizuku: ShizukuBridge) : this(
         probeMode = {
@@ -84,12 +87,18 @@ class ShellRunner internal constructor(
                         CommandOutput.Result(error = result.message)
                     }
                 }
-                Mode.ROOT -> runInterruptible { CommandOutput.run(listOf("su", "-c", cmd), CMD_TIMEOUT_SEC * 1000) }
+                Mode.ROOT -> runRoot(cmd, CMD_TIMEOUT_SEC * 1000)
                 Mode.ADB -> runInterruptible { CommandOutput.run(cmd.split(' '), CMD_TIMEOUT_SEC * 1000) }
                 Mode.NONE -> CommandOutput.Result(error = if (shizukuRunning())
                     "Shizuku authorization required" else "Privileged access unavailable")
             }
             currentCoroutineContext().ensureActive()
+            if (mode == Mode.ROOT && rootAccessLost(result)) {
+                invalidateMode()
+                _access.value = Mode.NONE
+                _lastError.value = "Root access unavailable"
+                return@withContext Outcome.NoAccess(mode, "Root access unavailable")
+            }
             val error = result.error ?: when {
                 !allowEmpty && result.output.isBlank() -> "Command returned no data"
                 DumpOutput.failure(result.output) != null -> DumpOutput.failure(result.output)
@@ -100,6 +109,7 @@ class ShellRunner internal constructor(
         }
     }
 
+    /** Reuses the selected backend for 10 seconds unless access loss invalidates it. */
     suspend fun detectMode(forceRefresh: Boolean = false): Mode {
         if (!forceRefresh) {
             cachedMode?.let {
@@ -128,6 +138,10 @@ class ShellRunner internal constructor(
         RootStatsCollector.invalidateRootCache()
     }
 }
+
+/** Only typed su denial/unavailability ends root access; command failures retain the backend. */
+internal fun rootAccessLost(result: CommandOutput.Result): Boolean =
+    !result.successful && result.accessFailure != null
 
 /** Probes only as far as the first authorized backend; this does not retry failed commands. */
 internal suspend fun selectShellMode(
