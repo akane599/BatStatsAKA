@@ -9,17 +9,21 @@ import app.batstats.battery.data.db.DailySummary
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.DailySummaryAggregator
 import java.io.IOException
+import java.time.Instant
+import java.time.ZoneId
 import java.time.ZoneOffset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -106,12 +110,72 @@ class HistoryViewModelTest {
         assertEquals(30, state().days.days.size)
         assertEquals(TODAY - 29..TODAY, repo.dayQueries.last())
 
-        // After midnight the next reading moves the range on; no timer involved.
+        // A reading still refreshes the day immediately when the clock changes.
         now = T0 + DAY
         repo.realtime.value = BatteryRepository.Realtime(sample(now))
         runCurrent()
         assertEquals(TODAY + 1, state().todayEpochDay)
         assertEquals(TODAY - 28..TODAY + 1, repo.dayQueries.last())
+    }
+
+    @Test fun todayAdvancesPastMidnightWithoutRealtimeEmissions() = runTest {
+        val silentRepo = object : HistoryRepository by repo {
+            override val realtime: Flow<BatteryRepository.Realtime> = emptyFlow()
+        }
+        val startMs = (TODAY + 1) * DAY - SECOND
+        val vm = HistoryViewModel(
+            silentRepo,
+            SavedStateHandle(),
+            clock = { startMs + testScheduler.currentTime },
+            zone = { ZoneOffset.UTC },
+            computeDispatcher = dispatcher,
+        )
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+
+        advanceTimeBy(SECOND + 1)
+        runCurrent()
+        assertFalse(vm.state.value.monitoring)
+        assertEquals("Today advances without any realtime capture", TODAY + 1, vm.state.value.todayEpochDay)
+        assertEquals((TODAY - 5..TODAY + 1).toList(), vm.state.value.days.days.map { it.epochDay })
+        assertEquals(TODAY - 5..TODAY + 1, repo.dayQueries.last())
+
+        advanceTimeBy(DAY)
+        runCurrent()
+        assertEquals("The ticker repeats on the next midnight", TODAY + 2, vm.state.value.todayEpochDay)
+        assertEquals(TODAY - 4..TODAY + 2, repo.dayQueries.last())
+    }
+
+    @Test fun midnightTickerUsesTheLocalZoneAcrossADaylightSavingDay() = runTest {
+        val localZone = ZoneId.of("America/New_York")
+        val startMs = Instant.parse("2025-11-02T03:59:59Z").toEpochMilli() // 23:59:59 before the 25-hour day.
+        val firstDay = DailySummaryAggregator.epochDay(startMs, localZone)
+        val vm = HistoryViewModel(
+            repo,
+            SavedStateHandle(),
+            clock = { startMs + testScheduler.currentTime },
+            zone = { localZone },
+            computeDispatcher = dispatcher,
+        )
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+        assertEquals(firstDay, vm.state.value.todayEpochDay)
+        assertEquals(1, repo.dayQueries.size)
+
+        advanceTimeBy(SECOND)
+        runCurrent()
+        assertEquals("The first local midnight, not UTC midnight", firstDay + 1, vm.state.value.todayEpochDay)
+        assertEquals(2, repo.dayQueries.size)
+
+        advanceTimeBy(DAY)
+        runCurrent()
+        assertEquals("A 25-hour local day has not ended after 24 hours", firstDay + 1, vm.state.value.todayEpochDay)
+        assertEquals(2, repo.dayQueries.size)
+
+        advanceTimeBy(HOUR)
+        runCurrent()
+        assertEquals("The next local midnight accounts for daylight saving", firstDay + 2, vm.state.value.todayEpochDay)
+        assertEquals(firstDay - 4..firstDay + 2, repo.dayQueries.last())
     }
 
     @Test fun modeRangeChipAndSelectedDayAreSavedAndRestoredAfterProcessDeath() = runTest {
