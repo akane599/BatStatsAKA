@@ -69,9 +69,43 @@ class HistoryPolicyTest {
         assertEquals(98_148L, imported.cpuSuspendMs)
         assertEquals(44_444L, imported.screenOffSuspendMs)
         assertEquals(original.deltaUah, imported.deltaUah)
-        assertEquals(original.screenOnUah, imported.screenOnUah)
-        assertEquals(original.screenOffUah, imported.screenOffUah)
+        assertEquals(555L, imported.screenOnUah)
+        assertEquals(370L, imported.screenOffUah)
         assertEquals(imported, HistoryPolicy.session(imported))
+    }
+    @Test fun clockCorrectedImportsPreservePerScreenDrainRates() {
+        val original = session().copy(endTime = 201_000, lastSampleTime = 201_000,
+            observedMs = 216_000, counterCoveredMs = 216_000, deltaUah = 45_000,
+            screenOnMs = 108_000, screenOffMs = 108_000,
+            screenOnUah = 30_000, screenOffUah = 15_000)
+        val imported = HistoryPolicy.session(original)
+        val before = SessionDrain.of(original, fullUah = 4_000_000)
+        val after = SessionDrain.of(imported, fullUah = 4_000_000)
+        assertEquals(100_000L, after.screenOn.durationMs)
+        assertEquals(100_000L, after.screenOff.durationMs)
+        for ((expected, actual) in listOf(before.screenOn to after.screenOn, before.screenOff to after.screenOff)) {
+            // Integer µAh rounding may lose less than one unit, but must not inflate the rate.
+            val chargeRoundingMa = 3_600.0 / actual.durationMs
+            assertEquals("Screen current must survive clock correction", checkNotNull(expected.currentMa),
+                checkNotNull(actual.currentMa), chargeRoundingMa)
+            assertEquals("Capacity-relative drain must survive clock correction", checkNotNull(expected.percentPerHour),
+                checkNotNull(actual.percentPerHour), chargeRoundingMa * 100_000 / 4_000_000)
+        }
+        assertEquals(original.deltaUah, imported.deltaUah)
+        assertEquals(imported, HistoryPolicy.session(imported))
+    }
+    @Test fun clockCorrectionScalesChargeByTheRoundedBucketDuration() {
+        val original = session().copy(endTime = 1010, lastSampleTime = 1010,
+            observedMs = 12, counterCoveredMs = 12, deltaUah = 120,
+            screenOnMs = 1, screenOffMs = 11, screenOnUah = 10, screenOffUah = 110)
+        val imported = HistoryPolicy.session(original)
+        assertEquals(0L, imported.screenOnMs)
+        assertNull(imported.screenOnUah)
+        assertEquals(9L, imported.screenOffMs)
+        assertEquals(90L, imported.screenOffUah)
+        assertEquals(original.deltaUah, imported.deltaUah)
+        assertEquals(imported, HistoryPolicy.session(imported))
+        assertNull(HistoryPolicy.session(original.copy(screenOffUah = null)).screenOffUah)
     }
     @Test fun twoSmallWriterClockStepsRemainImportableWithoutAnObservationGap() {
         val engine = ObservationEngine()

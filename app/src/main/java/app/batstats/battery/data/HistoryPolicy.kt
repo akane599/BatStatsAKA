@@ -83,13 +83,16 @@ object HistoryPolicy {
         val counter = duration(input.counterCoveredMs)
         val screenOn = duration(input.screenOnMs)
         val screenOff = duration(input.screenOffMs).coerceAtMost(span - screenOn)
+        // Keep bucket rates tied to their rounded durations; the measured session total stays intact.
+        fun bucketCharge(uah: Long?, originalMs: Long, normalizedMs: Long): Long? =
+            uah?.takeUnless { normalizedMs == 0L }?.let { (it.toDouble() / originalMs * normalizedMs).toLong() }
         return input.copy(observedMs = span, counterCoveredMs = counter,
             screenOnMs = screenOn, screenOffMs = screenOff,
             cpuSuspendMs = input.cpuSuspendMs?.let(::duration),
             screenOffSuspendMs = input.screenOffSuspendMs?.let(::duration),
             deltaUah = input.deltaUah.takeUnless { counter == 0L },
-            screenOnUah = input.screenOnUah.takeUnless { screenOn == 0L },
-            screenOffUah = input.screenOffUah.takeUnless { screenOff == 0L })
+            screenOnUah = bucketCharge(input.screenOnUah, input.screenOnMs, screenOn),
+            screenOffUah = bucketCharge(input.screenOffUah, input.screenOffMs, screenOff))
     }
 
     fun session(input: ChargeSession): ChargeSession {
