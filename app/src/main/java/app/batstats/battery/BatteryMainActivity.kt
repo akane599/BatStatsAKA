@@ -31,6 +31,14 @@ internal fun mainActivityIntent(context: Context, destination: String? = null): 
             if (destination != null) putExtra(Destinations.EXTRA_DESTINATION, destination)
         }
 
+internal fun shouldRequestNotificationPermission(
+    sdkInt: Int,
+    granted: Boolean,
+    restored: Boolean,
+    askedBefore: Boolean,
+    rationale: Boolean,
+): Boolean = sdkInt >= 33 && !granted && !restored && !askedBefore && !rationale
+
 class BatteryMainActivity : ComponentActivity() {
     private val destination = MutableStateFlow<String?>(null)
     private val notifPerm = registerForActivityResult(
@@ -54,7 +62,19 @@ class BatteryMainActivity : ComponentActivity() {
             val granted = ContextCompat.checkSelfPermission(
                 this, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-            if (!granted) notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+            val permissionPreferences = getSharedPreferences("notification_permission", MODE_PRIVATE)
+            if (shouldRequestNotificationPermission(
+                    sdkInt = Build.VERSION.SDK_INT,
+                    granted = granted,
+                    restored = savedInstanceState != null,
+                    askedBefore = permissionPreferences.getBoolean("asked_once", false),
+                    rationale = shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS),
+                )
+            ) {
+                // Record before launch so recreation while the dialog is open cannot request again.
+                permissionPreferences.edit().putBoolean("asked_once", true).apply()
+                notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
 
         setContent {
