@@ -126,6 +126,11 @@ class DataViewModelTest {
         runCurrent()
         assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.UNWRITABLE), vm.state.value.outcome)
 
+        repo.exportFailure = IOException("destination could not be opened")
+        vm.onFileChosen(DataTask.EXPORT_JSON, "content://unwritable.json")
+        runCurrent()
+        assertEquals(DataOutcome.Failed(DataTask.EXPORT_JSON, DataFailure.UNWRITABLE), vm.state.value.outcome)
+
         repo.exportFailure = UnsupportedOperationException("x")
         vm.onFileChosen(DataTask.EXPORT_CSV, "content://tree")
         runCurrent()
