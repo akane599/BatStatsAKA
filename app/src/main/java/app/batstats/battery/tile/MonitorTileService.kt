@@ -92,7 +92,7 @@ class MonitorTileService : TileService(), KoinComponent {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             val pendingIntent = PendingIntent.getActivity(
                 this,
-                0,
+                OPEN_APP_REQUEST_CODE,
                 intent,
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
@@ -103,7 +103,8 @@ class MonitorTileService : TileService(), KoinComponent {
         }
     }
 
-    private companion object {
-        const val DEMAND_TAG = "qs_tile"
+    companion object {
+        internal const val OPEN_APP_REQUEST_CODE = 21
+        private const val DEMAND_TAG = "qs_tile"
     }
 }
