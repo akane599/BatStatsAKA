@@ -17,7 +17,8 @@ import kotlin.math.roundToInt
  * Picks, for each text slot of [NotificationContent], the longest form that fits its view unclipped: a reading is
  * never shown as "+1,2…". RemoteViews can't autosize reliably on API 26, so the text is measured here with the paints
  * the layouts use (the system notification text appearances at the current font scale, tabular figures) against
- * the width the shade gives custom content ([contentWidthDp]). If no form fits, the shortest is shown.
+ * the width the shade gives custom content ([contentWidthDp]). If no form fits, the shortest is shown. Above the
+ * layouts' design font scale, the rows that would not fit the shade's fixed heights are hidden ([rows]).
  */
 class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthDp(context)) {
     private val resources = context.resources
@@ -28,11 +29,12 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
     private val cellPx = contentPx / COLUMNS - resources.getDimension(R.dimen.notification_cell_gap)
     private val levelGapPx = resources.getDimension(R.dimen.notification_level_gap)
     private val slackPx = SLACK_DP * density
+    private val shown = rows(resources.configuration.fontScale)
 
     fun headline(content: NotificationContent): String? = pick(content.headline, title, leadPx(content.level))
     fun state(content: NotificationContent): String? = pick(content.state, title, leadPx(content.level))
-    fun summary(content: NotificationContent): String? = pick(content.summary, line2, contentPx)
-    fun footer(content: NotificationContent): String? = pick(content.footer, line2, contentPx)
+    fun summary(content: NotificationContent): String? = if (Row.SUMMARY in shown) pick(content.summary, line2, contentPx) else null
+    fun footer(content: NotificationContent): String? = if (Row.FOOTER in shown) pick(content.footer, line2, contentPx) else null
     fun issue(content: NotificationContent): String? = pick(content.issue, line2, contentPx)
     fun value(cell: NotificationContent.Cell): CharSequence = pick(cell.values.map(::styled), title, cellPx) ?: NO_VALUE
 
@@ -41,6 +43,9 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
 
     private fun <T : CharSequence> pick(forms: List<T>, paint: TextPaint, widthPx: Float): T? =
         forms.firstOrNull { Layout.getDesiredWidth(it, paint) <= widthPx - slackPx } ?: forms.lastOrNull()
+
+    /** The rows the custom views can drop when the font is too large for the shade's fixed heights. */
+    enum class Row { SUMMARY, FOOTER, ISSUE }
 
     companion object {
         /** The unit beside a grid value, relative to its number (Now's `StatCellDefaults.UnitScale`). */
@@ -93,5 +98,18 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
         }
 
         private const val DEFAULT_TEXT_SP = 14f
+
+        /** The largest font scale the layouts are sized for (their comments give the heights at 1.0x and 1.3x). */
+        private const val DESIGN_FONT_SCALE = 1.3f
+
+        /**
+         * The optional rows that fit at [fontScale]. Above [DESIGN_FONT_SCALE] (Android 14+ goes to 2.0x) the collapsed
+         * view keeps only its first line, dropping the summary (also the notification's content text), and the
+         * expanded view drops the footer so the issue line, the last row, still fits.
+         * whittle: one threshold, not measured heights; measure the inflated views if a scale between 1.3x and 2.0x
+         * is found to clip on a device.
+         */
+        fun rows(fontScale: Float): Set<Row> =
+            if (fontScale <= DESIGN_FONT_SCALE) Row.entries.toSet() else setOf(Row.ISSUE)
     }
 }

@@ -2,7 +2,8 @@
 <!-- Ongoing notification, expanded (DecoratedCustomViewStyle; RemoteViews-safe views only): state with the level
      trailing, a 3×3 grid (Current, Power, Temp / Voltage, Screen on, Screen off / Deep sleep, Session, Time left),
      the "Since … · updated …" footer and, only when needed, one issue line. ≈ 160–170 dp at 1.0x font and ≤ 235 dp
-     at 1.3x with the issue line, under the 252 dp minimum expanded height. Set by DrainNotificationManager.build. -->
+     at 1.3x with the issue line, under the 252 dp minimum expanded height; above 1.3x the footer is hidden so the issue
+     line keeps its room (NotificationFitter.rows). Set by DrainNotificationManager.build. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
