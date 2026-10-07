@@ -18,6 +18,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.io.File
 import java.io.FilterOutputStream
+import java.io.IOException
 import java.io.OutputStream
 import java.time.Instant
 
@@ -90,23 +91,23 @@ class ExportImportManager(private val context: Context, private val db: BatteryD
             try {
                 BoundedOutput(temp.outputStream()).use { json.encodeToStream(BatteryExport.serializer(), payload, it) }
                 currentCoroutineContext().ensureActive()
-                (context.contentResolver.openOutputStream(dest, "wt") ?: error("Cannot open export destination")).use { output -> temp.inputStream().use { it.copyTo(output) } }
+                (context.contentResolver.openOutputStream(dest, "wt") ?: throw IOException("Cannot open export destination")).use { output -> temp.inputStream().use { it.copyTo(output) } }
             } finally { temp.delete() }
         }
     }
     suspend fun exportCsvToFolder(tree: Uri, from: Long, to: Long, includeSamples: Boolean = true, includeSessions: Boolean = true) = operations.withLock {
         withContext(Dispatchers.IO) {
             val payload = snapshot(from, to, includeSamples, includeSessions)
-            val folder = DocumentFile.fromTreeUri(context, tree) ?: error("Cannot open export folder")
+            val folder = DocumentFile.fromTreeUri(context, tree) ?: throw IOException("Cannot open export folder")
             val stamp = checkNotNull(payload.exportedAtEpochMs) { "An export snapshot always carries its time" }
             val exportContext = currentCoroutineContext()
             val created = mutableListOf<DocumentFile>()
             try {
                 fun write(name: String, records: Sequence<JsonObject>, blank: JsonObject) {
-                    val file = folder.createFile("text/csv", "$name-$stamp.csv") ?: error("Cannot create CSV file")
+                    val file = folder.createFile("text/csv", "$name-$stamp.csv") ?: throw IOException("Cannot create CSV file")
                     created += file
                     val keys = blank.keys.toList()
-                    (context.contentResolver.openOutputStream(file.uri, "wt") ?: error("Cannot open CSV destination")).let(::BoundedOutput).bufferedWriter().use { writer ->
+                    (context.contentResolver.openOutputStream(file.uri, "wt") ?: throw IOException("Cannot open CSV destination")).let(::BoundedOutput).bufferedWriter().use { writer ->
                         HistoryCsv.writeRow(writer, keys + metadataColumns)
                         for (record in records) {
                             exportContext.ensureActive()
