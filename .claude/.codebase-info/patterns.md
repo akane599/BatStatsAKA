@@ -1,6 +1,6 @@
 # Patterns, Conventions and Testing
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 Project-wide rules (Kotlin/Compose conventions, ticketing, Gradle discipline) live in
 `.claude/live-rules/rules/` and are injected into every session. This page covers what the code
@@ -36,7 +36,10 @@ actually does.
 - The Koin app scope (`di/AppModules.kt`) has a `CoroutineExceptionHandler` that records
   `DiagnosticCode.APP_SCOPE_FAILED` instead of crashing the process.
 - A corrupt settings DataStore is replaced with empty preferences (`settings/SettingsDataStore.kt`,
-  `ReplaceFileCorruptionHandler`), so the app starts on defaults; no diagnostic is recorded for it.
+  `ReplaceFileCorruptionHandler`), so the app starts on defaults; no diagnostic is recorded for it. Any other read
+  `IOException` yields defaults through `withDefaultsOnReadFailure()` (the unqualified Koin `DataStore`), so settings
+  collectors never crash the service; settings export uses the raw store (`named("rawSettingsDataStore")`) so it
+  fails instead of writing an empty backup.
 
 ## UI conventions
 - Dark-only (`MainTheme(oled, dynamicColor)`). Dynamic color is opt-in on API 31+ and changes accents only.
