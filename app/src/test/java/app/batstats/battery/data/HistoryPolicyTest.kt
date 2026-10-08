@@ -38,6 +38,19 @@ class HistoryPolicyTest {
         assertNull(imported.currentNowUa); assertNull(imported.chargeCounterUah)
         assertNull(imported.voltageMv); assertNull(imported.temperatureDeciC)
     }
+    @Test fun outOfRangeSampleHealthIsUnknownAndKnownCategoriesSurviveImport() {
+        for (health in listOf(Int.MIN_VALUE, -1, 0, 8, 99, Int.MAX_VALUE)) {
+            val result = runCatching { HistoryPolicy.sample(sample().copy(health = health)) }
+            assertTrue("OEM health $health must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+            val imported = result.getOrThrow()
+            assertNull(imported.health)
+            assertEquals(HistoryPolicy.sample(sample().copy(health = null)), imported)
+            assertEquals(imported, HistoryPolicy.sample(imported))
+        }
+        for (health in (1..7).toList() + null) {
+            assertEquals(health, HistoryPolicy.sample(sample().copy(health = health)).health)
+        }
+    }
     @Test fun invalidUnitsTimesAndTextAreRejected() {
         for (bad in listOf(sample().copy(levelPercent = 101), sample().copy(currentNowUa = 1_000_000_000),
             sample().copy(voltageMv = 4_000_000), sample().copy(uptimeMs = 101), sample().copy(timestamp = -1),
@@ -243,10 +256,23 @@ class HistoryPolicyTest {
             source = "import:legacy", closeReason = "Imported snapshot; monitoring was not resumed"), imported)
         assertEquals(imported, HistoryPolicy.session(imported))
         assertNull(HistoryPolicy.session(full.copy(appUsageStatus = AppUsageStatus.PENDING)).appUsageStatus)
-        for (bad in listOf(full.copy(energyNwh = -1), full.copy(peakPowerMw = -1), full.copy(peakPowerMw = 2_000_000),
+        for (bad in listOf(full.copy(energyNwh = -1),
             full.copy(peakTemperatureDeciC = 2000), full.copy(screenOffSuspendMs = 1001), full.copy(capacityEstimateMah = 0),
             full.copy(chargerType = "=HYPERLINK()"), full.copy(capacityBasis = "@x"))) {
             assertThrows(IllegalArgumentException::class.java) { HistoryPolicy.session(bad) }
+        }
+    }
+    @Test fun outOfRangeSessionPeakIsUnknownAndPlausiblePeaksSurviveImport() {
+        for (peak in listOf(Long.MIN_VALUE, -1L, 1_000_001L, 2_000_000L, Long.MAX_VALUE)) {
+            val result = runCatching { HistoryPolicy.session(session().copy(peakPowerMw = peak)) }
+            assertTrue("Peak $peak must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+            val imported = result.getOrThrow()
+            assertNull(imported.peakPowerMw)
+            assertEquals(HistoryPolicy.session(session().copy(peakPowerMw = null)), imported)
+            assertEquals(imported, HistoryPolicy.session(imported))
+        }
+        for (peak in listOf(0L, 4_500L, 1_000_000L, null)) {
+            assertEquals(peak, HistoryPolicy.session(session().copy(peakPowerMw = peak)).peakPowerMw)
         }
     }
     @Test fun missingUsageOnlyClearsTheIncomingReadyClaim() {

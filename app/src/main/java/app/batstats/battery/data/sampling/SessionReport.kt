@@ -39,7 +39,7 @@ data class SessionExtremes(
      * @param screenOffBefore the interval began with the screen off
      */
     fun plus(powerMw: Double?, temperatureDeciC: Int?, suspendMs: Long, screenOffBefore: Boolean) = SessionExtremes(
-        peakPowerMw = listOfNotNull(peakPowerMw, powerMw?.let { abs(it).roundToLong() }).maxOrNull(),
+        peakPowerMw = listOfNotNull(peakPowerMw, powerMw?.takeIf { abs(it) <= 1_000_000 }?.let { abs(it).roundToLong() }).maxOrNull(),
         peakTemperatureDeciC = listOfNotNull(peakTemperatureDeciC, temperatureDeciC).maxOrNull(),
         screenOffSuspendMs = screenOffSuspendMs + if (screenOffBefore) suspendMs.coerceAtLeast(0) else 0,
     )

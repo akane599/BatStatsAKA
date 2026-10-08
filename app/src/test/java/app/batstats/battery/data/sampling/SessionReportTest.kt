@@ -1,6 +1,7 @@
 package app.batstats.battery.data.sampling
 
 import app.batstats.battery.apps.AppUsageStatus
+import app.batstats.battery.data.HistoryPolicy
 import app.batstats.battery.data.SessionDrain
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.SessionType
@@ -310,6 +311,30 @@ class SessionReportTest {
             assertNull(closed.capacityConfidence)
             assertNull(closed.capacityBasis)
         }
+    }
+
+    @Test fun implausibleCalibratedPowerNeverMakesTheWrittenSessionUnimportable() {
+        val first = sample(level = 90, charge = 4_000_000, plugged = 0, status = 3, elapsed = 0)
+        val point = first.point(PowerState.DISCHARGING)
+        val session = SessionReport.open(point, first)
+        val extremes = SessionExtremes().plus(1.56e6, first.temperatureDeciC, 0, screenOffBefore = false)
+        val written = SessionReport.report(session, first, engine.accept(point), extremes)
+        val result = runCatching { HistoryPolicy.session(written) }
+        assertTrue("Writer's own session must import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertNull("Implausible calibrated power must not become a stored peak", written.peakPowerMw)
+        assertNull(result.getOrThrow().peakPowerMw)
+        assertEquals(first.temperatureDeciC, written.peakTemperatureDeciC)
+    }
+
+    @Test fun extremesIgnoreImplausiblePowerWithoutLosingOtherMeasurementsOrPlausiblePeaks() {
+        val missing = SessionExtremes()
+            .plus(1_000_000.1, 310, 5_000, screenOffBefore = true)
+            .plus(-1.56e6, 290, 7_000, screenOffBefore = false)
+        assertEquals(SessionExtremes(peakTemperatureDeciC = 310, screenOffSuspendMs = 5_000), missing)
+        val plausible = missing.plus(-1_000_000.0, 320, 2_000, screenOffBefore = true)
+            .plus(1.56e6, 300, 0, screenOffBefore = false)
+        assertEquals(SessionExtremes(peakPowerMw = 1_000_000, peakTemperatureDeciC = 320, screenOffSuspendMs = 7_000), plausible)
+        assertEquals(0L, SessionExtremes().plus(0.0, null, 0, screenOffBefore = false).peakPowerMw)
     }
 
     @Test fun extremesKeepMaximaAndIgnoreMissingValues() {

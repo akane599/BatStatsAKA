@@ -55,7 +55,6 @@ object HistoryPolicy {
         require(voltage == null || BatteryReading.voltageMv(voltage) != null) { "Invalid voltage; expected mV" }
         val temperature = input.temperatureDeciC?.takeUnless { it == Int.MIN_VALUE }
         require(temperature == null || BatteryReading.temperatureDeciC(temperature) != null) { "Invalid temperature; expected tenths Celsius" }
-        require(input.health == null || input.health in 1..7) { "Invalid health category" }
         require(input.cycleCount == null || input.cycleCount >= 0) { "Invalid cycle count" }
         require(input.energyNwh == null || BatteryReading.energyNwh(input.energyNwh) != null) { "Invalid energy; expected nWh" }
         require(input.etaMs == null || input.etaMs in 1..604_800_000L) { "Invalid remaining-time estimate" }
@@ -63,6 +62,7 @@ object HistoryPolicy {
             sessionId = identity(input.sessionId), observationId = identity(input.observationId),
             currentNowUa = current(input.currentNowUa), currentAverageUa = current(input.currentAverageUa),
             chargeCounterUah = charge(input.chargeCounterUah), voltageMv = voltage, temperatureDeciC = temperature,
+            health = input.health?.takeIf { it in 1..7 },
             etaBasis = text(input.etaBasis), boundaryReason = text(input.boundaryReason))
         val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJson.encodeToString(BatterySample.serializer(), normalized).toByteArray())
         // Local AUTOINCREMENT IDs are positive. A collision is checked against complete row content before insert.
@@ -122,7 +122,6 @@ object HistoryPolicy {
         require(input.estCapacityMah == null || input.estCapacityMah in 1..200_000) { "Invalid legacy capacity estimate" }
         require(input.capacityEstimateMah == null || input.capacityEstimateMah in 1..200_000) { "Invalid capacity estimate; expected mAh" }
         require(input.energyNwh == null || input.energyNwh in 0..1_000_000_000_000_000L) { "Invalid session energy; expected nWh" }
-        require(input.peakPowerMw == null || input.peakPowerMw in 0..1_000_000L) { "Invalid peak power; expected mW" }
         require(input.peakTemperatureDeciC == null || BatteryReading.temperatureDeciC(input.peakTemperatureDeciC) != null) { "Invalid peak temperature; expected tenths Celsius" }
         require(input.screenOffSuspendMs == null || input.screenOffSuspendMs in 0..input.observedMs) { "Invalid screen-off suspend interval" }
         require(input.lastSampleTime == null || sampleInSessionWindow(input.lastSampleTime, input, end)) { "Invalid session sample time" }
@@ -136,6 +135,7 @@ object HistoryPolicy {
             lastSampleTime = input.lastSampleTime?.coerceAtMost(end),
             endTime = end, activeKey = null, source = source(requiredText(input.source)), avgCurrentUa = current(input.avgCurrentUa),
             closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason),
+            peakPowerMw = input.peakPowerMw?.takeIf { it in 0..1_000_000L },
             chargerType = text(input.chargerType), capacityConfidence = text(input.capacityConfidence), capacityBasis = text(input.capacityBasis),
             // An imported record never gets its end snapshot.
             appUsageStatus = input.appUsageStatus.takeUnless { it == AppUsageStatus.PENDING })
