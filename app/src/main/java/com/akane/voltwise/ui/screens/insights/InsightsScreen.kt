@@ -1,0 +1,307 @@
+package com.akane.voltwise.ui.screens.insights
+
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.HourglassTop
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.akane.voltwise.R
+import com.akane.voltwise.battery.apps.AppInfoSource
+import com.akane.voltwise.battery.apps.AppLabel
+import com.akane.voltwise.battery.insights.actions.IntentSpec
+import com.akane.voltwise.battery.insights.model.Subject
+import com.akane.voltwise.ui.components.EmptyState
+import com.akane.voltwise.ui.components.Notice
+import com.akane.voltwise.ui.components.NoticeTone
+import com.akane.voltwise.ui.theme.spacing
+import com.akane.voltwise.viewmodel.InsightActionMessage
+import com.akane.voltwise.viewmodel.InsightFindingState
+import com.akane.voltwise.viewmodel.InsightMessageCode
+import com.akane.voltwise.viewmodel.InsightUiEffect
+import com.akane.voltwise.viewmodel.InsightsEvent
+import com.akane.voltwise.viewmodel.InsightsUiState
+import com.akane.voltwise.viewmodel.InsightsViewModel
+import com.akane.voltwise.viewmodel.RecommendationState
+import org.koin.androidx.compose.koinViewModel
+import org.koin.compose.koinInject
+
+/** Two columns from this window width (the Material "expanded" breakpoint): findings start, changes and fixes end. */
+private const val TWO_COLUMN_MIN_WIDTH_DP = 840
+
+/** Sessions on battery the engine needs before it judges apps (the per-app baseline rule). */
+internal const val LEARNING_SESSIONS = 4
+
+/**
+ * Insights, wired: the Koin [InsightsViewModel], app labels from [AppInfoSource] for every app a finding or fix
+ * names, and the ViewModel's one-shot effects (result messages as a snackbar, Android settings pages, finding
+ * details). Navigation leaves through the lambdas; every [InsightsEvent] goes to the ViewModel.
+ */
+@Composable
+fun InsightsScreen(
+    onOpenFinding: (key: String) -> Unit,
+    onOpenAccessSetup: () -> Unit,
+    modifier: Modifier = Modifier,
+    vm: InsightsViewModel = koinViewModel(),
+) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val appInfo: AppInfoSource = koinInject()
+    val openFinding by rememberUpdatedState(onOpenFinding)
+    var message by remember { mutableStateOf<InsightActionMessage?>(null) }
+    LaunchedEffect(vm) {
+        vm.effects.collect { effect ->
+            when (effect) {
+                // Analysis and feedback failures already stand as the error notice on screen.
+                is InsightUiEffect.Message -> if (effect.result.code !in NOTICE_CODES) message = effect.result
+                is InsightUiEffect.OpenSettings -> openSettings(context, effect.spec)
+                is InsightUiEffect.OpenFinding -> openFinding(effect.key)
+            }
+        }
+    }
+    val subjects = remember(state.headline, state.keyFindings, state.changes, state.appliedActions) { appSubjects(state) }
+    val labels by produceState(emptyMap<String, AppLabel>(), subjects, appInfo) {
+        value = subjects.mapValues { (packageName, uid) -> AppLabel.of(uid, packageName, runCatching { appInfo.info(packageName) }.getOrNull()) }
+    }
+    InsightsContent(
+        state = state,
+        labels = labels,
+        nowMs = remember(state.lastAnalyzedAt) { System.currentTimeMillis() },
+        onEvent = vm::onEvent,
+        onOpenAccessSetup = onOpenAccessSetup,
+        message = message,
+        onMessageShown = { message = null },
+        modifier = modifier,
+    )
+}
+
+/** Codes the screen shows as its error notice rather than as a snackbar. */
+private val NOTICE_CODES = setOf(InsightMessageCode.ANALYSIS_FAILED, InsightMessageCode.FEEDBACK_FAILED)
+
+/** Package → uid of every app the screen names (a fix row knows no uid: -1, its label then never reads "system"). */
+private fun appSubjects(state: InsightsUiState): Map<String, Int> {
+    val apps = LinkedHashMap<String, Int>()
+    (listOfNotNull(state.headline) + state.keyFindings + state.changes).forEach { finding ->
+        (finding.subject as? Subject.App)?.let { apps[it.packageName] = it.uid }
+    }
+    state.appliedActions.forEach { action -> action.packageName?.let { apps.putIfAbsent(it, -1) } }
+    return apps
+}
+
+private fun openSettings(context: Context, spec: IntentSpec) {
+    val intent = Intent(spec.action)
+    spec.packageName?.let { intent.data = Uri.fromParts("package", it, null) }
+    try {
+        context.startActivity(intent)
+    } catch (_: ActivityNotFoundException) {
+        // A settings page this build doesn't have: there is nothing to open, and nothing was changed.
+    }
+}
+
+/** What the body under the header shows. */
+internal enum class InsightsBody { FINDINGS, ERROR, LEARNING, NEVER_ANALYZED, ALL_GOOD }
+
+/** Anything to list: a headline, a key finding, a change or a fix. */
+internal val InsightsUiState.hasContent: Boolean
+    get() = headline != null || keyFindings.isNotEmpty() || changes.isNotEmpty() || appliedActions.isNotEmpty()
+
+/**
+ * Findings always win; without any, a failed run is an error (never "all good"), too few sessions is "still
+ * learning", no run yet is an invitation, and only an analysed, quiet report is "all good".
+ */
+internal fun InsightsUiState.body(): InsightsBody = when {
+    hasContent -> InsightsBody.FINDINGS
+    error != null -> InsightsBody.ERROR
+    lowData -> InsightsBody.LEARNING
+    lastAnalyzedAt == null -> InsightsBody.NEVER_ANALYZED
+    else -> InsightsBody.ALL_GOOD
+}
+
+/** Key findings under the headline card, without repeating the headline itself. */
+internal fun InsightsUiState.listedFindings(): List<InsightFindingState> = keyFindings.filter { it.key != headline?.key }
+
+/** The fix a finding offers first: one that can run now, else the one already applied, else the first (needs access). */
+internal fun InsightFindingState.primaryRecommendation(): RecommendationState? =
+    recommendations.firstOrNull { it.available } ?: recommendations.firstOrNull { it.alreadyApplied } ?: recommendations.firstOrNull()
+
+/** The finding (headline, key finding or change) a pending apply refers to. */
+internal fun InsightsUiState.findingFor(key: String): InsightFindingState? =
+    (listOfNotNull(headline) + keyFindings + changes).firstOrNull { it.key == key }
+
+/**
+ * Insights, stateless: [state] in, [onEvent] out. A header (title, Analyze now, last analysed time), then notices
+ * (error, missing access, still learning), then the headline finding, key findings, what changed and applied fixes.
+ * Without findings the body is a designed state: learning (n of 4 sessions), not analysed yet, error, or all good.
+ * From 840 dp findings sit on the start and changes and fixes on the end. Apply always goes through the
+ * confirmation dialog; [labels] names apps by package (missing while loading), [nowMs] dates the last analysis.
+ */
+@Composable
+fun InsightsContent(
+    state: InsightsUiState,
+    labels: Map<String, AppLabel>,
+    nowMs: Long,
+    onEvent: (InsightsEvent) -> Unit,
+    onOpenAccessSetup: () -> Unit,
+    modifier: Modifier = Modifier,
+    message: InsightActionMessage? = null,
+    onMessageShown: () -> Unit = {},
+) {
+    val spacing = MaterialTheme.spacing
+    val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
+    val column = Arrangement.spacedBy(spacing.sm)
+    val snackbar = remember { SnackbarHostState() }
+    val messageText = message?.let { stringResource(it.code.messageRes()) }
+    LaunchedEffect(message) {
+        if (messageText != null) {
+            snackbar.showSnackbar(messageText)
+            onMessageShown()
+        }
+    }
+    val busy = state.apply.working
+    val open: (String) -> Unit = { key -> onEvent(InsightsEvent.OpenFinding(key)) }
+    val apply: (String, RecommendationState) -> Unit = { key, rec -> onEvent(InsightsEvent.RequestApply(key, rec.action)) }
+
+    val notices: @Composable () -> Unit = {
+        when (val code = state.error) {
+            null -> Unit
+            InsightMessageCode.ANALYSIS_FAILED -> Notice(
+                message = stringResource(R.string.insights_error_body),
+                title = stringResource(R.string.insights_error_title),
+                framed = true,
+            ) {
+                TextButton(onClick = { onEvent(InsightsEvent.AnalyzeNow) }, enabled = !state.analyzing) {
+                    Text(stringResource(R.string.insights_try_again))
+                }
+            }
+            else -> Notice(message = stringResource(code.messageRes()), framed = true)
+        }
+        if (!state.privileged) {
+            Notice(
+                message = stringResource(R.string.insights_access_body),
+                title = stringResource(R.string.insights_access_title),
+                tone = NoticeTone.INFO,
+                framed = true,
+            ) {
+                TextButton(onClick = onOpenAccessSetup) { Text(stringResource(R.string.insights_access_set_up)) }
+            }
+        }
+        if (state.lowData && state.hasContent) {
+            Notice(
+                message = stringResource(R.string.insights_learning_body, state.eligibleSessionCount, LEARNING_SESSIONS),
+                title = stringResource(R.string.insights_learning_title),
+                tone = NoticeTone.INFO,
+                icon = Icons.Rounded.HourglassTop,
+                framed = true,
+            )
+        }
+    }
+    val findings: @Composable () -> Unit = {
+        state.headline?.let { headline ->
+            HeadlinePanel(headline, labels, busy, onOpen = { open(headline.key) }, onApply = { apply(headline.key, it) })
+        }
+        val listed = state.listedFindings()
+        if (listed.isNotEmpty()) KeyFindingsPanel(listed, labels, busy, onOpen = open, onApply = apply)
+    }
+    val history: @Composable () -> Unit = {
+        if (state.changes.isNotEmpty()) ChangesPanel(state.changes, labels, onOpen = open)
+        if (state.appliedActions.isNotEmpty()) {
+            AppliedFixesPanel(state.appliedActions, labels, nowMs, busy, onUndo = { onEvent(InsightsEvent.Undo(it)) })
+        }
+    }
+
+    Box(modifier.fillMaxSize()) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top))
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = spacing.md),
+        ) {
+            InsightsHeader(state.analyzing, state.lastAnalyzedAt, nowMs, onAnalyze = { onEvent(InsightsEvent.AnalyzeNow) })
+            Column(Modifier.fillMaxWidth().padding(horizontal = spacing.md), verticalArrangement = column) {
+                notices()
+                when (state.body()) {
+                    InsightsBody.FINDINGS -> if (twoColumns) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                            Column(Modifier.weight(1f), verticalArrangement = column) { findings() }
+                            Column(Modifier.weight(1f), verticalArrangement = column) { history() }
+                        }
+                    } else {
+                        findings()
+                        history()
+                    }
+                    InsightsBody.ERROR -> Unit
+                    InsightsBody.LEARNING -> EmptyState(
+                        title = stringResource(R.string.insights_learning_title),
+                        body = stringResource(R.string.insights_learning_body, state.eligibleSessionCount, LEARNING_SESSIONS),
+                        icon = Icons.Rounded.HourglassTop,
+                    )
+                    InsightsBody.NEVER_ANALYZED -> EmptyState(
+                        title = stringResource(R.string.insights_never_title),
+                        body = stringResource(R.string.insights_never_body),
+                        icon = Icons.Rounded.Insights,
+                        actionLabel = stringResource(R.string.insights_analyze).takeUnless { state.analyzing },
+                        onAction = { onEvent(InsightsEvent.AnalyzeNow) },
+                    )
+                    InsightsBody.ALL_GOOD -> EmptyState(
+                        title = stringResource(R.string.insights_all_good_title),
+                        body = stringResource(R.string.insights_all_good_body),
+                        icon = Icons.Rounded.CheckCircle,
+                    )
+                }
+            }
+        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter))
+    }
+
+    state.apply.pending?.let { pending ->
+        val finding = state.findingFor(pending.key)
+        val rec = finding?.recommendations?.firstOrNull { it.action == pending.action }
+        if (finding != null && rec != null) {
+            InsightApplyDialog(
+                action = rec.action,
+                reversible = rec.reversible,
+                requiresPrivilege = rec.requiresPrivilege,
+                subjectName = subjectName(finding.subject, labels),
+                onConfirm = { onEvent(InsightsEvent.ConfirmApply) },
+                onDismiss = { onEvent(InsightsEvent.CancelApply) },
+            )
+        }
+    }
+}

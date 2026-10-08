@@ -155,14 +155,16 @@ fun ViewModel.blockLeavingWhileBusy(
 @Composable
 fun rememberTopLevelBackStack(): TopLevelBackStack {
     val nowStack = rememberNavBackStack(Routes.Now)
+    val insightsStack = rememberNavBackStack(Routes.Insights)
     val historyStack = rememberNavBackStack(Routes.History)
     val appsStack = rememberNavBackStack(Routes.Apps)
     val settingsStack = rememberNavBackStack(Routes.Settings)
     var selectedIndex by rememberSaveable { mutableIntStateOf(0) }
     val leaveBlockers = viewModel { LeaveBlockers() }
-    return remember(nowStack, historyStack, appsStack, settingsStack, leaveBlockers) {
+    return remember(nowStack, insightsStack, historyStack, appsStack, settingsStack, leaveBlockers) {
         val backStacks: Map<Routes, NavBackStack<NavKey>> = mapOf(
             Routes.Now to nowStack,
+            Routes.Insights to insightsStack,
             Routes.History to historyStack,
             Routes.Apps to appsStack,
             Routes.Settings to settingsStack,
@@ -188,6 +190,7 @@ fun TopLevelBackStack.openDestination(value: String) {
     when {
         sessionId != null -> if (openRoot(Routes.History)) navigate(Routes.SessionDetails(sessionId))
         value == Destinations.NOW -> openRoot(Routes.Now)
+        value == Destinations.INSIGHTS -> openRoot(Routes.Insights)
         value == Destinations.HISTORY -> openRoot(Routes.History)
         value == Destinations.APPS -> openRoot(Routes.Apps)
         value == Destinations.SETTINGS -> openRoot(Routes.Settings)

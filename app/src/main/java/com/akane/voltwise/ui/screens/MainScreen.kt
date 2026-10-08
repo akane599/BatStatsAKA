@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -48,13 +49,14 @@ private data class TabItem(val route: Routes, val icon: ImageVector, val labelRe
 
 private val TAB_ITEMS = listOf(
     TabItem(Routes.Now, Icons.Rounded.Bolt, R.string.tab_now, TestTags.TAB_NOW),
+    TabItem(Routes.Insights, Icons.Rounded.Insights, R.string.insights_tab, TestTags.TAB_INSIGHTS),
     TabItem(Routes.History, Icons.Rounded.History, R.string.history, TestTags.TAB_HISTORY),
     TabItem(Routes.Apps, Icons.Rounded.Apps, R.string.tab_apps, TestTags.TAB_APPS),
     TabItem(Routes.Settings, Icons.Rounded.Settings, R.string.settings, TestTags.TAB_SETTINGS),
 )
 
 /**
- * The 4-tab shell: Now · History · Apps · Settings, bottom bar below [RAIL_MIN_WIDTH_DP], a rail
+ * The 5-tab shell: Now · Insights · History · Apps · Settings, bottom bar below [RAIL_MIN_WIDTH_DP], a rail
  * at or above it. [destination] is a `destination` deep-link extra value (see
  * `com.akane.voltwise.ui.navigation.Destinations`), applied once via [onDestinationHandled].
  * Every screen below gets app icons from [AppInfoSource] through [LocalAppIconLoader] and one shared time formatter
