@@ -82,6 +82,9 @@ class SessionDetailsViewModelTest {
             assertEquals(1_200.0, summary.chargeMah!!, 1e-9)
             assertEquals(4.5, summary.energyWh!!, 1e-9)
             assertEquals(400.0, summary.averageMa!!, 1e-9)
+            // Over the newest reading's counter capacity (2.4 Ah at 60 % → 4 Ah), the one the drain cells use.
+            assertEquals(10.0, summary.percentPerHour!!, 1e-9)
+            assertEquals(30.0, summary.chargePercent!!, 1e-9)
             assertEquals(0.5, summary.counterCoverage!!, 1e-9)
             assertEquals(SessionCapacity(4_000, CapacityConfidence.HIGH), summary.capacity)
             assertTrue(summary.measured)

@@ -77,6 +77,9 @@ private fun dischargeSummary() = SessionSummary(
     chargeMah = 1_540.0,
     energyWh = 5.9,
     averageMa = 528.0,
+    // Over the 4,320 mAh the drain cells' %/h use.
+    chargePercent = 35.6,
+    percentPerHour = 12.2,
     counterCoverage = 1.0,
     capacity = SessionCapacity(4_320, CapacityConfidence.HIGH),
     measured = true,
@@ -142,6 +145,8 @@ private fun charging() = SessionDetailsUiState.Ready(
         chargeMah = 3_410.0,
         energyWh = 13.6,
         averageMa = 2_270.0,
+        chargePercent = 77.9,
+        percentPerHour = 51.8,
         counterCoverage = 1.0,
         capacity = SessionCapacity(4_380, CapacityConfidence.MEDIUM),
         measured = true,
@@ -184,6 +189,8 @@ private fun active() = SessionDetailsUiState.Ready(
         chargeMah = 212.0,
         energyWh = 0.82,
         averageMa = 303.0,
+        chargePercent = 4.9,
+        percentPerHour = 7.0,
         counterCoverage = 1.0,
         capacity = null,
         measured = true,
@@ -216,9 +223,17 @@ private fun active() = SessionDetailsUiState.Ready(
     canDelete = false,
 )
 
-/** An imported session whose readings weren't exported: header and drain from the row, no charts, no apps. */
+/**
+ * An imported session whose readings weren't exported: header and drain from the row, no charts, no apps. No reading
+ * gives the full capacity and no estimate stands in, so the header and drain fall back to mAh and mA.
+ */
 private fun noSamples() = discharge(apps = SessionApps.NotRecorded).copy(
+    summary = dischargeSummary().copy(chargePercent = null, percentPerHour = null, capacity = null),
     charts = SessionCharts(TimeWindow(DISCHARGE_START, DISCHARGE_END)),
+    insights = dischargeDrain.copy(
+        screenOn = dischargeDrain.screenOn.copy(percentPerHour = null),
+        screenOff = dischargeDrain.screenOff.copy(percentPerHour = null),
+    ),
 )
 
 @Composable

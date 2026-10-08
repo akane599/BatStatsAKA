@@ -83,8 +83,10 @@ import app.batstats.ui.format.currentLocale
 import app.batstats.ui.format.dayAwareTime
 import app.batstats.ui.format.durationAnnotated
 import app.batstats.ui.format.formatNumber
+import app.batstats.ui.format.formatPercent
 import app.batstats.ui.format.formatRate
 import app.batstats.ui.format.styledTemplate
+import app.batstats.ui.format.valueWithUnit
 import app.batstats.ui.format.unitSpan
 import app.batstats.ui.format.percentUnit
 import app.batstats.ui.format.mahText
@@ -360,26 +362,41 @@ private fun LevelsText(start: Int?, end: Int?) {
     )
 }
 
-/** Used / Charged (with energy), the average current, and this session's capacity estimate when it has one. */
+/**
+ * Used / Charged in mAh (the share of the battery and the energy underneath), the average as %/h of the capacity
+ * when it is known (mA underneath; else mA alone, like DrainCell), and this session's capacity estimate when it has one.
+ */
 @Composable
 private fun HeaderCells(summary: SessionSummary) {
     val locale = currentLocale()
     val noValue = stringResource(R.string.component_no_value)
     val mah = stringResource(R.string.now_unit_mah)
+    val milliamps = stringResource(R.string.now_unit_ma)
     Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
+        val share = summary.chargePercent?.let { formatPercent(it) }
+        val energy = summary.energyWh?.let { stringResource(R.string.sessiondetails_energy, formatRate(it, locale)) }
         StatCell(
             stringResource(if (summary.type == SessionType.CHARGE) R.string.sessiondetails_charged else R.string.sessiondetails_used),
             summary.chargeMah?.let { formatNumber(it, 0, locale) } ?: noValue,
             Modifier.weight(1f),
             unit = mah,
-            supporting = summary.energyWh?.let { stringResource(R.string.sessiondetails_energy, formatRate(it, locale)) },
+            supporting = if (share != null && energy != null) {
+                stringResource(R.string.sessiondetails_charge_supporting, share, energy)
+            } else share ?: energy,
         )
-        StatCell(
-            stringResource(R.string.sessiondetails_average),
-            summary.averageMa?.let { formatNumber(it, 0, locale) } ?: noValue,
-            Modifier.weight(1f),
-            unit = stringResource(R.string.now_unit_ma),
-        )
+        val average = summary.averageMa?.let { formatNumber(it, 0, locale) }
+        val perHour = summary.percentPerHour
+        if (perHour != null && average != null) {
+            StatCell(
+                stringResource(R.string.sessiondetails_average),
+                formatRate(perHour, locale),
+                Modifier.weight(1f),
+                unit = stringResource(R.string.now_unit_percent_per_hour),
+                supporting = valueWithUnit(average, milliamps),
+            )
+        } else {
+            StatCell(stringResource(R.string.sessiondetails_average), average ?: noValue, Modifier.weight(1f), unit = milliamps)
+        }
         summary.capacity?.let { capacity ->
             StatCell(
                 stringResource(R.string.sessiondetails_capacity),

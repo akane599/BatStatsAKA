@@ -106,6 +106,10 @@ data class SessionSummary(
     val energyWh: Double?,
     /** Average current magnitude over counter-covered time, mA. */
     val averageMa: Double?,
+    /** [chargeMah] as % of the full capacity; null when either is unknown. */
+    val chargePercent: Double? = null,
+    /** [averageMa] as % of the full capacity per hour (the drain cells' rule); null when either is unknown. */
+    val percentPerHour: Double? = null,
     /** Share of the observed time the charge counter covered, 0..1. */
     val counterCoverage: Double?,
     val capacity: SessionCapacity?,
@@ -297,10 +301,14 @@ internal object SessionDetailsMapping {
         return sorted + live.filter { it.timestamp > newest }
     }
 
-    fun summary(session: ChargeSession, recording: Boolean, readings: List<BatterySample>): SessionSummary {
+    /** [fullUah] is the resolved full capacity ([counterFullUah]) for the % figures; null keeps them null. */
+    fun summary(session: ChargeSession, recording: Boolean, readings: List<BatterySample>, fullUah: Long? = null): SessionSummary {
         val latest = readings.lastOrNull()
         val measured = SessionEvidence.hasCoverage(session)
         val counter = measured && session.counterCoveredMs > 0
+        val chargeUah = SessionEvidence.measuredChargeUah(session)
+        val averageMa = session.avgCurrentUa?.takeIf { measured && session.counterCoveredMs >= MIN_COUNTER_MS }?.let { abs(it) / 1_000.0 }
+        val full = fullUah?.takeIf { it > 0 }
         val endMs = if (recording) {
             maxOf(latest?.timestamp ?: session.startTime, SessionEvidence.lastEvidence(session))
         } else {
@@ -313,9 +321,12 @@ internal object SessionDetailsMapping {
             endedAtMs = endMs.coerceAtLeast(session.startTime),
             startLevel = session.startLevel,
             endLevel = if (recording) latest?.levelPercent ?: session.endLevel else session.endLevel,
-            chargeMah = SessionEvidence.measuredChargeUah(session)?.div(1_000.0),
+            chargeMah = chargeUah?.div(1_000.0),
             energyWh = session.energyNwh?.takeIf { counter }?.div(NWH_PER_WH),
-            averageMa = session.avgCurrentUa?.takeIf { measured && session.counterCoveredMs >= MIN_COUNTER_MS }?.let { abs(it) / 1_000.0 },
+            averageMa = averageMa,
+            chargePercent = if (chargeUah != null && full != null) chargeUah * 100.0 / full else null,
+            // SessionDrain's conversion: mA × 100 000 ÷ full µAh.
+            percentPerHour = if (averageMa != null && full != null) averageMa * 100_000 / full else null,
             counterCoverage = if (measured && session.observedMs >= MIN_COUNTER_MS) {
                 (session.counterCoveredMs.toDouble() / session.observedMs).coerceIn(0.0, 1.0)
             } else null,
@@ -571,10 +582,11 @@ class SessionDetailsViewModel(
         // Room can report the row gone before the delete call returns: that is still this screen's delete.
         if (parts.deletion == Deletion.DONE || (parts.deletion == Deletion.RUNNING && row == null)) return SessionDetailsUiState.Deleted
         if (row == null) return SessionDetailsUiState.Missing
-        val summary = SessionDetailsMapping.summary(row, inputs.recording, inputs.readings)
+        val fullUah = SessionDetailsMapping.counterFullUah(inputs.readings, parts.healthFullUah)
+        val summary = SessionDetailsMapping.summary(row, inputs.recording, inputs.readings, fullUah)
         val charts = SessionDetailsMapping.charts(inputs.readings, inputs.calibration, inputs.fahrenheit, SessionDetailsMapping.window(summary))
         val insights = when (row.type) {
-            SessionType.DISCHARGE -> SessionDetailsMapping.drain(row, SessionDetailsMapping.counterFullUah(inputs.readings, parts.healthFullUah))
+            SessionType.DISCHARGE -> SessionDetailsMapping.drain(row, fullUah)
             SessionType.CHARGE -> SessionDetailsMapping.charging(row, inputs.readings, inputs.calibration, inputs.fahrenheit)
             SessionType.PLUGGED, SessionType.UNKNOWN -> null
         }

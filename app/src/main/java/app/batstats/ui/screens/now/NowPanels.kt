@@ -43,6 +43,7 @@ import app.batstats.viewmodel.TodayState
 import app.batstats.viewmodel.TopAppsState
 
 private const val TODAY_MAH_TEMPLATE = 8_888.0
+private const val TODAY_PERCENT_TEMPLATE = 888.0
 
 /**
  * The on-battery window from one DISCHARGE session row: screen on and screen off as %/h (mA and duration below) and
@@ -103,15 +104,40 @@ internal fun TodayPanel(today: TodayState?, onOpen: () -> Unit, modifier: Modifi
             return@Panel
         }
         val locale = currentLocale()
-        val mah = stringResource(R.string.now_unit_mah)
-        // One template for both charge cells, so "1,240" and "800" share a size (also at large font).
-        val template = formatNumber(TODAY_MAH_TEMPLATE, 0, locale)
         Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.md)) {
-            StatCell(stringResource(R.string.now_today_used), formatNumber(today.usedMah, 0, locale), Modifier.weight(1f), unit = mah, sizingTemplate = template)
-            StatCell(stringResource(R.string.now_today_charged), formatNumber(today.chargedMah, 0, locale), Modifier.weight(1f), unit = mah, sizingTemplate = template)
+            TodayChargeCell(stringResource(R.string.now_today_used), today.usedMah, today.usedPercent, Modifier.weight(1f))
+            TodayChargeCell(stringResource(R.string.now_today_charged), today.chargedMah, today.chargedPercent, Modifier.weight(1f))
             val screenOn = compactDuration(today.screenOnMs, locale)
             StatCell(stringResource(R.string.now_today_screen_on), screenOn.value, Modifier.weight(1f), unit = stringResource(screenOn.unit))
         }
+    }
+}
+
+/**
+ * Used or charged today: % of the battery with the mAh underneath when the capacity is known, else mAh; a dash when
+ * nothing was measured. One template per unit, so both cells share a size (also at large font).
+ */
+@Composable
+private fun TodayChargeCell(label: String, mah: Double?, percent: Double?, modifier: Modifier = Modifier) {
+    val locale = currentLocale()
+    when {
+        mah == null -> StatCell(label, stringResource(R.string.component_no_value), modifier)
+        percent != null -> StatCell(
+            label,
+            formatNumber(percent, 0, locale),
+            modifier,
+            unit = percentUnit().sign,
+            unitFirst = percentUnit().first,
+            supporting = mahText(mah),
+            sizingTemplate = formatNumber(TODAY_PERCENT_TEMPLATE, 0, locale),
+        )
+        else -> StatCell(
+            label,
+            formatNumber(mah, 0, locale),
+            modifier,
+            unit = stringResource(R.string.now_unit_mah),
+            sizingTemplate = formatNumber(TODAY_MAH_TEMPLATE, 0, locale),
+        )
     }
 }
 
