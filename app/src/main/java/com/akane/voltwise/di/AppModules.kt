@@ -83,10 +83,7 @@ import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -211,19 +208,14 @@ val appModule = module {
             },
         )
     }
-    // Observes the report here so neither refresh caller (app catch-up, monitor service) needs a notify call.
-    single(createdAtStart = true) {
+    single {
         val preferences = androidContext().getSharedPreferences("insights", Context.MODE_PRIVATE)
         val diagnostics = get<DiagnosticStore>()
-        val notifier = InsightNotifier(
+        InsightNotifier(
             androidContext(),
             InsightNotificationPolicy(SharedPreferencesStore(preferences), System::currentTimeMillis),
             onFailure = diagnostics::record,
         )
-        get<CoroutineScope>().launch(Dispatchers.Default) {
-            get<InsightRepository>().report.filterNotNull().collect(notifier::maybeNotify)
-        }
-        notifier
     }
     single<InsightsRepository> { DefaultInsightsRepository(get(), get(), get(), get<BatteryDatabase>().sessionDao()) }
     single<NowRepository> {

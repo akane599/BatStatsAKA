@@ -6,7 +6,9 @@ import android.content.res.Configuration
 import com.akane.voltwise.battery.apps.AppInfoRepository
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.data.db.BatteryDatabase
+import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
+import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
 import com.akane.voltwise.di.appModule
@@ -15,6 +17,8 @@ import com.akane.voltwise.settings.SettingsMigrator
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 import org.koin.android.ext.koin.androidContext
@@ -31,6 +35,7 @@ class BatteryApp : Application() {
     private val repository: BatteryRepository by inject()
     private val insightActions: InsightActionRepository by inject()
     private val insights: InsightRepository by inject()
+    private val insightNotifier: InsightNotifier by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -57,11 +62,17 @@ class BatteryApp : Application() {
         }
 
         appScope.launch(Dispatchers.IO) {
-            settingsMigrator.awaitMigrated()
-            reconcileAndCatchUpInsights(
-                reconcile = { insightActions.reconcile() },
-                lastAnalyzedAt = { insights.lastAnalyzedAt.value },
-                refresh = { insights.refresh() },
+            startInsightNotifications(
+                awaitMigrated = { settingsMigrator.awaitMigrated() },
+                catchUp = {
+                    reconcileAndCatchUpInsights(
+                        reconcile = { insightActions.reconcile() },
+                        lastAnalyzedAt = { insights.lastAnalyzedAt.value },
+                        refresh = { insights.refresh() },
+                    )
+                },
+                reports = { insights.report },
+                maybeNotify = { insightNotifier.maybeNotify(it) },
             )
         }
 
@@ -71,6 +82,18 @@ class BatteryApp : Application() {
             repository.backfillDailySummariesOnce()
         }
     }
+}
+
+// Providers keep Android-backed dependencies unresolved until startup reaches them off the main thread.
+internal suspend fun startInsightNotifications(
+    awaitMigrated: suspend () -> Unit,
+    catchUp: suspend () -> Unit,
+    reports: () -> Flow<InsightReport?>,
+    maybeNotify: (InsightReport) -> Unit,
+) {
+    awaitMigrated()
+    catchUp()
+    reports().filterNotNull().collect(maybeNotify)
 }
 
 internal suspend fun reconcileAndCatchUpInsights(
