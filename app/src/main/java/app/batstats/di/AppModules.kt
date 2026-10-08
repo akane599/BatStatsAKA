@@ -2,6 +2,8 @@ package app.batstats.di
 
 import android.content.Context
 import android.os.Build
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
 import app.batstats.battery.apps.AppInfoRepository
 import app.batstats.battery.apps.AppInfoSource
@@ -35,6 +37,7 @@ import app.batstats.settings.AppSettingsSchema
 import app.batstats.settings.SettingsMigrations
 import app.batstats.settings.SettingsMigrator
 import app.batstats.settings.createSettingsDataStore
+import app.batstats.settings.withDefaultsOnReadFailure
 import app.batstats.viewmodel.AppDetailsViewModel
 import app.batstats.viewmodel.AppsViewModel
 import app.batstats.viewmodel.DataViewModel
@@ -66,11 +69,13 @@ import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.viewModel
+import org.koin.core.qualifier.named
 import org.koin.dsl.bind
 import org.koin.dsl.module
 
 private const val SCHEMA_VERSION = SettingsMigrations.CURRENT_VERSION
 private const val DATASTORE_NAME = "batstats_settings"
+private const val RAW_SETTINGS_DATASTORE = "rawSettingsDataStore"
 
 internal fun createAppScope(record: (DiagnosticCode) -> Unit): CoroutineScope = CoroutineScope(
     SupervisorJob() + CoroutineExceptionHandler { _, _ -> record(DiagnosticCode.APP_SCOPE_FAILED) },
@@ -80,7 +85,11 @@ val appModule = module {
     // Resolve diagnostics only on failure: DiagnosticStore itself depends on this scope.
     single { createAppScope { code -> get<DiagnosticStore>().record(code) } }
     single { BatteryDatabase.get(androidContext()) }
-    single { createSettingsDataStore(androidContext().preferencesDataStoreFile(DATASTORE_NAME)) }
+    single<DataStore<Preferences>>(named(RAW_SETTINGS_DATASTORE)) {
+        createSettingsDataStore(androidContext().preferencesDataStoreFile(DATASTORE_NAME))
+    }
+    // One underlying store; only normal settings reads substitute defaults on IOException.
+    single<DataStore<Preferences>> { get<DataStore<Preferences>>(named(RAW_SETTINGS_DATASTORE)).withDefaultsOnReadFailure() }
 
     single { ShizukuBridge(androidContext()) }
     single { ShellRunner(androidContext(), get()) }
@@ -108,7 +117,7 @@ val appModule = module {
         } catch (e: Exception) { "1.0.0" }
 
         SettingsBackupManager(
-            dataStore = get(),
+            dataStore = get(named(RAW_SETTINGS_DATASTORE)),
             schema = AppSettingsSchema,
             appId = "app.batstats",
             schemaVersion = SCHEMA_VERSION,
