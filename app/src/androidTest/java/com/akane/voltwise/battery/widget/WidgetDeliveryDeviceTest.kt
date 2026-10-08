@@ -25,6 +25,7 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -114,15 +115,24 @@ class WidgetDeliveryDeviceTest {
             val skeleton = if (AndroidDateFormat.is24HourFormat(context)) "yMdHm" else "yMdhm"
             val pattern = AndroidDateFormat.getBestDateTimePattern(locale, skeleton)
             val date = SimpleDateFormat(pattern, locale).format(Date(sample.timestamp))
+            // c79c379 localized widget percent/duration text; resolve the fixture's resources independently.
+            val numbers = NumberFormat.getNumberInstance(locale)
+            val expectedLevel = context.getString(R.string.percent_value, numbers.format(80))
+            val expectedDuration = context.getString(
+                R.string.now_duration_hours_minutes, numbers.format(2), numbers.format(0),
+            )
+            val expectedEstimate = context.getString(R.string.monitor_eta_remaining, expectedDuration)
+            val expectedCelsius = String.format(Locale.getDefault(), "%.1f °C", 25.0)
+            val expectedFahrenheit = String.format(Locale.getDefault(), "%.1f °F", 77.0)
             phase = "paused scripted values"
             pushUntil({ WidgetUpdater.push(context, sample, monitoring = false, fahrenheit = false) }) {
-                value(0) == "80%" && value(1) == "25.0 °C" && value(2) == "—" &&
+                value(0) == expectedLevel && value(1) == expectedCelsius && value(2) == "—" &&
                     captions().all { it == context.getString(R.string.widget_paused_at, date) }
             }
             DeviceEnvironment.screenshot("widgets-paused-scripted")
             phase = "Fahrenheit and estimate"
             pushUntil({ WidgetUpdater.push(context, sample, monitoring = true, fahrenheit = true) }) {
-                value(1) == "77.0 °F" && value(2) == context.getString(R.string.monitor_eta_remaining, "2h 0m") &&
+                value(0) == expectedLevel && value(1) == expectedFahrenheit && value(2) == expectedEstimate &&
                     captions().all { it == context.getString(R.string.widget_read_at, date) }
             }
             DeviceEnvironment.screenshot("widgets-fahrenheit-estimate-scripted")

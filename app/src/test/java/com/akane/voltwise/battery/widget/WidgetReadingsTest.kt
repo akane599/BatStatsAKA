@@ -55,6 +55,17 @@ class WidgetReadingsTest {
         assertEquals("1 min", TimeEstimator.duration(0, Locale.US, english))
     }
 
+    @Test fun twoHourWidgetEstimateUsesLocalizedDurationTemplate() {
+        // WidgetDeliveryDeviceTest's 7_200_000 ms fixture, using the resource pattern adopted in c79c379.
+        val duration = TimeEstimator.duration(7_200_000, Locale.US) { id, args ->
+            assertEquals(R.string.now_duration_hours_minutes, id)
+            assertEquals(listOf("2", "0"), args.toList())
+            english(id, args)
+        }
+
+        assertEquals("Two-hour widget ETA must retain the localized duration spacing and units", "2 h 0 min", duration)
+    }
+
     @Test fun widgetTextUsesTheLocalizedTemplates() {
         assertEquals("42%", percentText(42.0, Locale.US, english))
         assertEquals("%42", percentText(42.0, turkish, turkishTemplates))
