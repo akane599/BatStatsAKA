@@ -72,34 +72,70 @@ class HistoryViewModelTest {
             assertTrue(days.recorded)
             assertEquals(listOf(TODAY - 3, TODAY - 1, TODAY), days.days.filter { it.figures != null }.map { it.epochDay })
 
+            // No capacity known: totals stay in mAh.
+            assertEquals(DrainUnit.MAH, days.unit)
             val yesterday = days.days.single { it.epochDay == TODAY - 1 }.figures!!
-            assertEquals(600.0, yesterday.screenOnMah, 1e-9)
-            assertEquals(200.0, yesterday.screenOffMah, 1e-9)
-            assertEquals(800.0, yesterday.usedMah, 1e-9)
-            assertEquals(1_450.0, yesterday.chargedMah, 1e-9)
-            assertEquals(2 * HOUR, yesterday.screenOnMs)
+            assertEquals(600.0, yesterday.screenOnUsed!!, 1e-9)
+            assertEquals(200.0, yesterday.screenOffUsed!!, 1e-9)
+            assertEquals(800.0, yesterday.used!!, 1e-9)
+            assertEquals(1_450.0, yesterday.charged, 1e-9)
+            assertEquals(2 * HOUR, yesterday.screenOn.durationMs)
             // 12 h asleep of 16 h on battery.
             assertEquals(75.0, yesterday.deepSleepPercent!!, 1e-9)
             assertNull(days.days.single { it.epochDay == TODAY }.figures!!.deepSleepPercent)
 
             // Today isn't over, so the average is over yesterday and three days ago; deep sleep weighted by time.
+            // Three days ago had screen-off time but no charge (a legacy row): unmeasured, so screen off averages
+            // yesterday alone instead of counting that day as zero.
             val average = days.average!!
-            assertEquals(500.0, average.screenOnMah, 1e-9)
-            assertEquals(100.0, average.screenOffMah, 1e-9)
-            assertEquals(1_000.0, average.chargedMah, 1e-9)
-            assertEquals(3 * HOUR / 2, average.screenOnMs)
+            assertEquals(500.0, average.screenOnUsed!!, 1e-9)
+            assertEquals(200.0, average.screenOffUsed!!, 1e-9)
+            assertEquals(1_000.0, average.charged, 1e-9)
+            assertEquals(3 * HOUR / 2, average.screenOn.durationMs)
             assertEquals(12.0 / 20 * 100, average.deepSleepPercent!!, 1e-9)
+            // 1,000 mAh over 3 h of screen on; 200 mAh over yesterday's 14 h of screen off. No capacity: no %/h.
+            assertEquals(1_000.0 / 3, average.screenOn.currentMa!!, 1e-9)
+            assertEquals(200.0 / 14, average.screenOff.currentMa!!, 1e-9)
+            assertNull(average.screenOn.percentPerHour)
         }
 
         // Only today recorded: it is all there is, so it is the average.
         repo.summaries.value = listOf(day(TODAY, onUah = 900_000, offUah = 100_000, onMs = HOUR, offMs = HOUR, chargedUah = 0, suspendMs = null))
         runCurrent()
-        assertEquals(900.0, state().days.average!!.screenOnMah, 1e-9)
+        assertEquals(900.0, state().days.average!!.screenOnUsed!!, 1e-9)
 
         repo.summaries.value = emptyList()
         runCurrent()
         assertFalse(state().days.recorded)
         assertNull(state().days.average)
+    }
+
+    @Test fun capacityComesFromTheLiveCounterElseTheStoredEstimateElseTotalsStayInMah() = runTest {
+        repo.summaries.value = listOf(
+            day(TODAY - 1, onUah = 500_000, offUah = 250_000, onMs = 2 * HOUR, offMs = 10 * HOUR, chargedUah = 1_000_000, suspendMs = null)
+                .copy(screenOnCoveredMs = HOUR, screenOffCoveredMs = 5 * HOUR),
+        )
+        val (_, state) = start()
+        fun yesterday() = state().days.days.single { it.epochDay == TODAY - 1 }.figures!!
+
+        assertEquals(DrainUnit.MAH, state().days.unit)
+        assertEquals(DrainState(2 * HOUR, 500.0, null), yesterday().screenOn)
+        assertEquals(1_000.0, yesterday().charged, 1e-9)
+
+        // Stored Health estimate: 5,000 mAh.
+        repo.storedEstimateUah.value = 5_000_000
+        runCurrent()
+        assertEquals(DrainUnit.PERCENT, state().days.unit)
+        assertEquals(DrainState(2 * HOUR, 500.0, 10.0), yesterday().screenOn)
+        assertEquals(DrainState(10 * HOUR, 50.0, 1.0), yesterday().screenOff)
+        assertEquals(15.0, yesterday().used!!, 1e-9)
+        assertEquals(20.0, yesterday().charged, 1e-9)
+
+        // The live counter's own full charge wins: 2,000 mAh at 50 % is a 4,000 mAh battery.
+        repo.realtime.value = BatteryRepository.Realtime(sample = sample(T0).copy(chargeCounterUah = 2_000_000, levelPercent = 50))
+        runCurrent()
+        assertEquals(12.5, yesterday().screenOn.percentPerHour!!, 1e-9)
+        assertEquals(25.0, yesterday().charged, 1e-9)
     }
 
     @Test fun rangeSelectionAndTheLocalDayDriveTheQuery() = runTest {
@@ -407,6 +443,7 @@ class HistoryViewModelTest {
         override val realtime = MutableStateFlow(BatteryRepository.Realtime())
         override val isMonitoring = MutableStateFlow(false)
         override val recordingObservation = MutableStateFlow<String?>(null)
+        override val storedEstimateUah = MutableStateFlow<Long?>(null)
         val summaries = MutableStateFlow<List<DailySummary>>(emptyList())
         val sessionRows = MutableStateFlow<List<ChargeSession>>(emptyList())
         val dayQueries = mutableListOf<LongRange>()

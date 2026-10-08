@@ -2,7 +2,7 @@
 <!-- The History screen (ui/screens/HistoryScreen.kt). Units come from strings_now.xml. -->
 <resources>
     <string name="history_info_title">About history</string>
-    <string name="history_info_body">Days adds up each calendar day while monitoring runs. Screen on and screen off count only time on battery; charged is the charge taken in. Days without monitoring stay empty.\n\nThe daily average covers the recorded days in the chosen range, without today until it is over. Deep sleep is how much of the time on battery the processor was fully asleep.\n\nA session runs from plugging in to unplugging, or the other way round. A gap in monitoring ends a session and starts a new one.</string>
+    <string name="history_info_body" formatted="false">Days adds up each calendar day while monitoring runs. Screen on and screen off count only time on battery; charged is the charge taken in. Days without monitoring stay empty. With the battery\'s capacity known, totals are a share of a full battery and screen on and off show drain per hour (%/h); otherwise totals are in mAh and drain in mA. A day whose drain wasn\'t measured shows a dash and is left out of the average.\n\nThe daily average covers the recorded days in the chosen range, without today until it is over. Deep sleep is how much of the time on battery the processor was fully asleep.\n\nA session runs from plugging in to unplugging, or the other way round. A gap in monitoring ends a session and starts a new one.</string>
 
     <!-- Days | Sessions -->
     <string name="history_mode_label">History view</string>
@@ -26,6 +26,7 @@
     <string name="history_days_title">Daily totals</string>
     <string name="history_day_detail">Screen on %1$s</string>
     <string name="history_day_detail_charged">Screen on %1$s · charged %2$s</string>
+    <string name="history_day_unmeasured">Drain wasn\'t measured</string>
     <string name="history_days_empty_title">No days recorded</string>
     <string name="history_days_empty_body">Start monitoring on Now to record daily totals.</string>
     <string name="history_days_empty_monitoring">Totals appear here once the phone has run on battery.</string>
