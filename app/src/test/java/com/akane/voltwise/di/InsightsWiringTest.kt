@@ -34,7 +34,7 @@ import org.koin.core.parameter.parametersOf
 import org.koin.dsl.koinApplication
 import kotlin.reflect.KClass
 
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, org.koin.core.annotation.KoinInternalApi::class)
 class InsightsWiringTest {
     private fun definition(type: KClass<*>) = appModule.mappings.values
         .map { it.beanDefinition }.distinct().single { it.primaryType == type }
