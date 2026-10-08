@@ -16,6 +16,7 @@ import app.batstats.R
 import app.batstats.battery.BatteryMainActivity
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.measurement.EtaHold
+import app.batstats.battery.measurement.HealthSummary
 import app.batstats.battery.util.UpdateGate
 import app.batstats.ui.navigation.Destinations
 import kotlinx.coroutines.flow.Flow
@@ -110,7 +111,13 @@ class DrainNotificationManager(private val context: Context, private val reposit
      */
     suspend fun run(issue: Flow<NotificationIssue?>, deliver: (NotificationContent) -> Boolean) {
         val gate = UpdateGate<NotificationContent>()
-        NotificationInputs.of(repository.realtimeFlow, repository.activeSessionFlow, repository.settingsFlow, issue)
+        NotificationInputs.of(
+            repository.realtimeFlow,
+            repository.activeSessionFlow,
+            repository.settingsFlow,
+            issue,
+            repository.sessionDao.filteredSessions(null, "", HealthSummary.SESSIONS),
+        )
             .map { content(it.input) to it.screenOn }
             .collectLatest { (content, screenOn) ->
                 if (!gate.awaitTurn(content, screenOn, SystemClock::uptimeMillis)) return@collectLatest

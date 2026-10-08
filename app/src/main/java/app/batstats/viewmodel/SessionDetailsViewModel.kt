@@ -28,6 +28,7 @@ import app.batstats.battery.data.db.toRow
 import app.batstats.battery.data.sampling.ChargerType
 import app.batstats.battery.data.sampling.DailySummaryReplay
 import app.batstats.battery.data.sampling.SessionReport
+import app.batstats.battery.data.resolveFullUah
 import app.batstats.battery.measurement.BatteryReading
 import app.batstats.battery.measurement.CapacityConfidence
 import app.batstats.battery.measurement.CurrentCalibration
@@ -374,9 +375,11 @@ internal object SessionDetailsMapping {
         )
     }
 
-    /** The fuel gauge's full charge from the newest reading that allows it (for %/h); else null. */
-    fun counterFullUah(readings: List<BatterySample>): Long? =
-        readings.asReversed().firstNotNullOfOrNull { HealthSummary.counterFullUah(it.chargeCounterUah, it.levelPercent) }
+    /** Full charge from the newest usable reading (for %/h), then the stored Health estimate. */
+    fun counterFullUah(readings: List<BatterySample>, storedEstimateUah: Long? = null): Long? {
+        val reading = readings.asReversed().firstOrNull { HealthSummary.counterFullUah(it.chargeCounterUah, it.levelPercent) != null }
+        return resolveFullUah(reading?.chargeCounterUah, reading?.levelPercent, storedEstimateUah)
+    }
 
     /**
      * Charging insights: the charger (stored enum name, else the readings' plug), the average power (energy added over
@@ -571,7 +574,7 @@ class SessionDetailsViewModel(
         val summary = SessionDetailsMapping.summary(row, inputs.recording, inputs.readings)
         val charts = SessionDetailsMapping.charts(inputs.readings, inputs.calibration, inputs.fahrenheit, SessionDetailsMapping.window(summary))
         val insights = when (row.type) {
-            SessionType.DISCHARGE -> SessionDetailsMapping.drain(row, SessionDetailsMapping.counterFullUah(inputs.readings) ?: parts.healthFullUah)
+            SessionType.DISCHARGE -> SessionDetailsMapping.drain(row, SessionDetailsMapping.counterFullUah(inputs.readings, parts.healthFullUah))
             SessionType.CHARGE -> SessionDetailsMapping.charging(row, inputs.readings, inputs.calibration, inputs.fahrenheit)
             SessionType.PLUGGED, SessionType.UNKNOWN -> null
         }

@@ -7,11 +7,13 @@ import androidx.lifecycle.viewModelScope
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.SessionEvidence
+import app.batstats.battery.data.storedFullUah
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.DailySummary
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.DailySummaryAggregator
+import app.batstats.battery.measurement.HealthSummary
 import java.time.Instant
 import java.time.ZoneId
 import kotlin.math.abs
@@ -141,6 +143,10 @@ interface HistoryRepository {
     /** The latest capture; each one also re-evaluates the local day. */
     val realtime: Flow<BatteryRepository.Realtime>
     val isMonitoring: Flow<Boolean>
+
+    /** Stored Health capacity for drain conversion; independent of the visible session filter and design capacity. */
+    val storedEstimateUah: Flow<Long?>
+        get() = sessions(null, HealthSummary.SESSIONS).map(::storedFullUah).distinctUntilChanged()
 
     /** The observation being recorded right now (monitoring on and not stopped), else null. */
     val recordingObservation: Flow<String?>

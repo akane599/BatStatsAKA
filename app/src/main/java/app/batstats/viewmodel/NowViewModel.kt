@@ -11,6 +11,7 @@ import app.batstats.battery.apps.TopApps
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
+import app.batstats.battery.data.resolveFullUah
 import app.batstats.battery.data.uah
 import app.batstats.battery.measurement.CalibrationState
 import app.batstats.battery.measurement.DailySummaryAggregator
@@ -60,7 +61,7 @@ class NowViewModel(
         .map { name -> TraceRange.entries.firstOrNull { it.name == name } ?: TraceRange.LIVE }
     private val startBlocked = MutableStateFlow(false)
 
-    private class Live(val hero: HeroState, val readouts: Readouts, val nowMs: Long, val counterFullUah: Long?)
+    private class Live(val hero: HeroState, val readouts: Readouts, val nowMs: Long, val counterUah: Long?, val levelPct: Int?)
     private class Rows(val endMs: Long, val samples: List<BatterySample>)
     private class Now(val live: Live, val trace: TraceState, val fahrenheit: Boolean, val calibration: CalibrationState)
     private class Cards(val today: TodayState?, val health: HealthSummary?, val topApps: TopAppsState, val onBattery: ChargeSession?)
@@ -74,7 +75,8 @@ class NowViewModel(
             hero = NowMapping.hero(reading, on, blocked),
             readouts = NowMapping.readouts(reading.reading),
             nowMs = reading.reading.sample?.timestamp ?: clock(),
-            counterFullUah = NowMapping.counterFullUah(reading.reading),
+            counterUah = reading.reading.sample?.chargeCounterUah,
+            levelPct = reading.reading.level,
         )
     }
 
@@ -118,7 +120,7 @@ class NowViewModel(
             sinceUnplug = NowMapping.sinceUnplug(
                 cards.onBattery,
                 now.live.hero.monitoring,
-                now.live.counterFullUah ?: cards.health?.estimate?.fullUah,
+                resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah),
             ),
             today = cards.today,
             health = cards.health?.let(NowMapping::health),
