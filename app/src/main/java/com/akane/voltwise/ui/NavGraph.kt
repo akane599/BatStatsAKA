@@ -24,13 +24,15 @@ import com.akane.voltwise.ui.screens.HistoryScreen
 import com.akane.voltwise.ui.screens.SessionDetailsScreen
 import com.akane.voltwise.ui.screens.SettingsScreen
 import com.akane.voltwise.ui.screens.StatusScreen
+import com.akane.voltwise.ui.screens.insights.FindingDetailsPlaceholder
+import com.akane.voltwise.ui.screens.insights.InsightsScreen
 import com.akane.voltwise.ui.screens.now.NowScreen
 import org.koin.androidx.compose.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 /**
  * Entries for every [Routes] key, rendered against [topLevelBackStack]'s currently visible tab.
- * One entry provider is shared by all 4 tabs: a detail route (e.g. [Routes.SettingsStatus]) is pushed onto
+ * One entry provider is shared by all 5 tabs: a detail route (e.g. [Routes.SettingsStatus]) is pushed onto
  * whichever tab is active when it's reached (Settings, or Apps from its access banner).
  *
  * Every tab's stack is decorated all the time, each with its own saved-state and ViewModel stores; `NavDisplay`
@@ -59,6 +61,18 @@ fun NavGraph(
                 onOpenApps = { topLevelBackStack.openRoot(Routes.Apps) },
                 onOpenApp = { uid, packageName -> topLevelBackStack.navigate(Routes.AppDetails(uid, packageName)) },
             )
+        }
+
+        // Insights -> FindingDetails (pushed); its access notice -> Settings › Status
+        entry<Routes.Insights> {
+            InsightsScreen(
+                onOpenFinding = { key -> topLevelBackStack.navigate(Routes.FindingDetails(key)) },
+                onOpenAccessSetup = { topLevelBackStack.navigate(Routes.SettingsStatus) },
+            )
+        }
+
+        entry<Routes.FindingDetails> { key ->
+            FindingDetailsPlaceholder(onBack = { popBack(key) })
         }
 
         // History -> SessionDetails
