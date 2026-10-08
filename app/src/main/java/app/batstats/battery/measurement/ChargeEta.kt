@@ -11,8 +11,8 @@ import kotlin.math.roundToLong
  *
  * Taper learning: within one connection, from the observed step into ≥ 80 % to the step into
  * 100 %, as ms per percent, averaged with any earlier value for that charger. Steps across a CPU
- * suspend count; a GAP or a step across an observation gap (ObservationEngine's rule) spoils the
- * charge's timing and teaches nothing.
+ * suspend count; a non-charging interval, GAP or step across an observation gap
+ * (ObservationEngine's rule) spoils the charge's timing and teaches nothing.
  *
  * @param learnedTaperMsPerPercent earlier [ChargeEta.learnedTaperMsPerPercent], persisted by the caller
  */
@@ -71,7 +71,9 @@ class ChargeEta(
         val to = point.level
         val stepped = from != null && to != null && to > from
         val powered = point.power == PowerState.CHARGING || point.power == PowerState.PLUGGED
-        if (point.boundary == Boundary.GAP || !powered || (stepped && skipsTrend(before, point))) {
+        // whittle: trust reported CHARGING; filter hidden holds only with a device-grounded duration bound.
+        if (before.power != PowerState.CHARGING || point.boundary == Boundary.GAP || !powered ||
+            (stepped && skipsTrend(before, point))) {
             clearTaper()
             return
         }
