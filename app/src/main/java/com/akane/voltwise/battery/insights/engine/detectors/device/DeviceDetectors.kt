@@ -66,8 +66,8 @@ object DeviceDetectors {
         val rows = window.rows.filterNot { it.isOthers }.filter {
             (it.bgMs?.let { bg -> bg > 0 } == true || it.partialWakelockBgMs?.let { bg -> bg > 0 } == true) &&
                 AppWindows.value(window, it, Metric.POWER_MAH_PER_H) != null
-        }.sortedWith(compareByDescending<com.akane.voltwise.battery.insights.model.AppSessionInput> { it.bgMs ?: 0 }
-            .thenByDescending { it.partialWakelockBgMs ?: 0 }.thenByDescending { it.powerMah }
+        }.sortedWith(compareByDescending<com.akane.voltwise.battery.insights.model.AppSessionInput> { it.bgMs }
+            .thenByDescending { it.partialWakelockBgMs }.thenByDescending { it.powerMah }
             .thenBy { it.packageName }.thenBy { it.uid }).take(5)
         return rows.filter { it.packageName in whitelist }.map { row ->
             val evidence = listOf(Metric.BG_TIME_SHARE, Metric.PARTIAL_WAKELOCK_BG_SHARE, Metric.POWER_MAH_PER_H)

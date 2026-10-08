@@ -1,7 +1,7 @@
 package com.akane.voltwise.battery.insights.engine
 
 import com.akane.voltwise.battery.insights.engine.detectors.device.deviceValue
-import com.akane.voltwise.battery.insights.engine.detectors.device.dischargeSessions
+import com.akane.voltwise.battery.insights.model.SessionKind
 import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
 import com.akane.voltwise.battery.insights.engine.stats.EffectSize
 import com.akane.voltwise.battery.insights.model.ActionStatus
@@ -19,7 +19,9 @@ import com.akane.voltwise.battery.insights.model.Subject
 object ActionEffects {
     fun detect(inputs: InsightInputs): List<Finding> {
         val windows = AppWindows.select(inputs)
-        val sessions = dischargeSessions(inputs)
+        val sessions = inputs.sessions.filter {
+            !it.imported && it.endMs > it.startMs && it.endMs <= inputs.nowMs && it.observedMs > 0
+        }.sortedWith(compareBy({ it.endMs }, { it.id }))
         return inputs.actions.sortedBy { it.id }.mapNotNull { action ->
             val appliedAt = action.appliedAtMs ?: return@mapNotNull null
             if (action.status !in setOf(ActionStatus.APPLIED, ActionStatus.REVERTED) || appliedAt > inputs.nowMs) {
@@ -37,8 +39,18 @@ object ActionEffects {
                     point.value?.let { Observation(start, window.atMs, it) }
                 }
             } else {
-                sessions.mapNotNull { session ->
-                    deviceValue(session, metric, inputs.fullUah)?.let { Observation(session.startMs, session.endMs, it) }
+                val kind = when (metric) {
+                    Metric.TEMPERATURE_C -> SessionKind.CHARGE
+                    Metric.PLUGGED_AT_FULL_MS -> SessionKind.PLUGGED
+                    else -> SessionKind.DISCHARGE
+                }
+                sessions.filter { it.kind == kind }.mapNotNull { session ->
+                    val value = if (metric == Metric.PLUGGED_AT_FULL_MS) {
+                        session.observedMs.toDouble().takeIf { session.startLevel == 100 && session.endLevel == 100 }
+                    } else {
+                        deviceValue(session, metric, inputs.fullUah)
+                    }
+                    value?.let { Observation(session.startMs, session.endMs, it) }
                 }
             }
             val before = points.filter { it.end < appliedAt }
@@ -68,6 +80,8 @@ object ActionEffects {
             FindingType.LINGERING_FOREGROUND_SERVICE.name -> Metric.FGS_MS_PER_H
             FindingType.BACKGROUND_LOCATION.name -> Metric.GPS_MS_PER_H
             FindingType.BACKGROUND_RADIO.name -> Metric.RADIO_ACTIVE_MS_PER_H
+            FindingType.CHARGING_AT_FULL.name -> Metric.PLUGGED_AT_FULL_MS
+            FindingType.HOT_CHARGING.name -> Metric.TEMPERATURE_C
             else -> if (action.packageName == null) Metric.SCREEN_OFF_PCT_PER_H else Metric.POWER_MAH_PER_H
         }
     }

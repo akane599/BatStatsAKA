@@ -76,7 +76,7 @@ class InsightEngineTest {
         val action = AppliedActionInput(9, "APP_DRAIN_ANOMALY:$APP", ActionType.RESTRICT_BACKGROUND, APP, UID,
             base.sessions[2].startMs, ActionStatus.APPLIED)
         val effectOnly = base.copy(appSessions = base.appSessions.mapIndexed { i, r ->
-            r.copy(powerMah = if (i < 2) 20.0 else 5.0, bgMs = 1000)
+            row(r.sessionId).copy(powerMah = if (i < 2) 20.0 else 5.0)
         }, actions = listOf(action))
         val info = InsightEngine.analyze(effectOnly)
         assertTrue(info.findings.isNotEmpty())
