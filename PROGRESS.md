@@ -76,11 +76,12 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 - 2026-09-28 — Pinned timezone/locale in the screenshot Test JVMs instead of injecting a clock/formatter into app code, because it keeps production code unchanged. Revisit if a component needs per-test locales.
 - 2026-09-28 — Replaced kotlinsense (fwcd kotlin-language-server, embedded Kotlin 2.1 compiler) with the official `kotlin-lsp` plugin (JetBrains) because fwcd could not read Kotlin 2.5 metadata and flagged the screenshotTest source set as unresolved.
 - 2026-09-28 — Chose standalone `com.android.compose.screenshot` plugin over AGP test suites because AGP is 9.4.0 (suites need ≥ 9.5.0-alpha03) and AGP bumps need approval. Revisit when AGP ≥ 9.5.0-alpha03 (standalone setup is deprecated there). (Superseded 2026-09-28: moved to AGP 9.5.0-alpha07 + test suites, see above.)
+- 2026-10-08 — US-6 Voltwise Insights plan audited by fresh-context `/plan-audit` (SQ-131, GPT-6 Astra): REWORK, 4 blockers + fixes folded into the plan: per-app metrics are whole-window totals (no per-app screen-off energy/background CPU) so app detectors use process-state/wakelock/alarm proxies; only READY/DELTA ≥1 h windows are comparable and censoring is status-aware; privileged actions use a PREPARED→APPLIED/FAILED/UNKNOWN journal with startup reconciliation, revalidation and no Undo over external changes; seams assigned to earlier tickets and oversized tickets split. Chose robust effect-size rules over significance tests and an ML runtime (no labels, tiny per-device samples, explainability). Rollback is forward-fix only (v7 additive; no down-migration).
 
 ## Audit status
 | Area | Last run | Result | How |
 |---|---|---|---|
-| Plan audit | — | — | `/plan-audit` |
+| Plan audit | 2026-10-08 | US-6 Insights plan: REWORK → blockers/fixes applied to /home/dev/.claude/plans/curried-brewing-eclipse.md (SQ-131) | `/plan-audit` |
 | Bug hunt | 2026-10-08 | US-5 /bug-hunt after US-4 over persistence/migrations/export-import, sampling/measurement, service/notification/widgets/tile, viewmodels/UI/navigation (SQ-108..111): 11 verified findings fixed in 8 tickets (SQ-112..119) + 3 review follow-ups (SQ-123/124/127); unit 886/0 fail, screenshots 212/0 fail, lint 0 errors @ e4fc92e. Earlier: US-3 /bug-hunt vs origin/main over measurement/data, viewmodel/settings/di, background surfaces, UI (SQ-57..60): all verified findings fixed in 28 tickets (SQ-61..84, SQ-86..89) + US-2 follow-ups SQ-52/53/55; unit 795/0 fail, screenshots 210/0 fail, lint 0 errors @ eca09b8. Earlier: US-2 (SQ-37..47, 54) @ 4672588; audit C01–C26 (US-1) @ 6ca5ffd | `/bug-hunt` |
 | Security | — | — | `/claude-security` |
 | UI / design | — | — | `/ui-overhaul` phase review |
