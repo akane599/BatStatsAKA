@@ -281,13 +281,13 @@ private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (Hi
         // A selected day the counter didn't measure has a zero bar: its cap and announcement read "—", not "0%".
         val unmeasured = selectedIndex?.let { days.days[it].figures }?.let { it.used == null } == true
         val noValue = stringResource(R.string.component_no_value)
+        val formats = remember(unit.sign, unmeasured, noValue) { dayChartFormats(unit.sign, unmeasured, noValue) }
         BarChart(
             entries = entries,
             segments = segments,
             unit = unit.sign,
-            format = remember(unit.sign, unmeasured, noValue) {
-                DayTotalFormatter(NumberFormatter(unit.sign, maxDecimals = 0), zeroText = noValue.takeIf { unmeasured })
-            },
+            format = formats.totals,
+            selectedFormat = formats.selected,
             selectedIndex = selectedIndex,
             onSelect = { index -> onEvent(HistoryEvent.SelectDay(index?.let { days.days[it].epochDay })) },
             emptyText = stringResource(R.string.history_chart_empty),
@@ -305,6 +305,15 @@ private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (Hi
 /** [base], except a zero total reads [zeroText] when it is set (an unmeasured day selected). Data, so the chart can compare it. */
 private data class DayTotalFormatter(val base: NumberFormatter, val zeroText: String?) : ValueFormatter {
     override fun format(value: Double): String = if (zeroText != null && value == 0.0) zeroText else base.format(value)
+}
+
+/** The Days chart's formats: [totals] for the spoken summary, [selected] for the selected bar's cap and announcement. */
+internal data class DayChartFormats(val totals: ValueFormatter, val selected: ValueFormatter)
+
+/** Only the selected bar of a day the counter didn't measure reads [noValue]; a measured zero elsewhere stays a number. */
+internal fun dayChartFormats(sign: String, unmeasuredSelected: Boolean, noValue: String): DayChartFormats {
+    val totals = NumberFormatter(sign, maxDecimals = 0)
+    return DayChartFormats(totals, DayTotalFormatter(totals, zeroText = noValue.takeIf { unmeasuredSelected }))
 }
 
 /** How Days writes its totals: [sign] after (or, [first], before) the number, sized to [template]. */
@@ -359,11 +368,13 @@ private fun DayFiguresBlock(title: String, figures: DayFigures?, unit: TotalUnit
                 unitFirst = percentUnit().first,
                 sizingTemplate = formatNumber(PERCENT_TEMPLATE, 0, locale),
             )
+            val charged = figures.charged
             StatCell(
                 stringResource(R.string.history_charged),
-                formatNumber(figures.charged, 0, locale),
+                charged?.let { formatNumber(it, 0, locale) } ?: stringResource(R.string.component_no_value),
                 Modifier.weight(1f),
-                unit = unit.sign,
+                // Unknown: a bare dash, as on Now › Today.
+                unit = unit.sign.takeIf { charged != null },
                 unitFirst = unit.first,
                 sizingTemplate = unit.template,
             )
@@ -406,9 +417,9 @@ private fun DayRow(day: DayEntry, label: String, unit: TotalUnit, selected: Bool
     val locale = currentLocale()
     val screenOn = durationString(figures.screenOn.durationMs)
     val zero = formatNumber(0.0, 0, locale)
-    val charged = if (unit.percent) formatPercent(figures.charged) else mahText(figures.charged)
-    val detail = if (formatNumber(figures.charged, 0, locale) != zero) {
-        stringResource(R.string.history_day_detail_charged, screenOn, charged)
+    val charged = figures.charged
+    val detail = if (charged != null && formatNumber(charged, 0, locale) != zero) {
+        stringResource(R.string.history_day_detail_charged, screenOn, if (unit.percent) formatPercent(charged) else mahText(charged))
     } else {
         stringResource(R.string.history_day_detail, screenOn)
     }

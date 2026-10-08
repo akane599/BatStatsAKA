@@ -125,17 +125,21 @@ internal object NowMapping {
     }
 
     /**
-     * Today's row, as % of [fullUah] (the capacity Since unplug's %/h uses) when known, else mAh. Time on battery with
-     * no covered counter interval and no charge is missing data, not none used (a legacy row's null coverage counts as
-     * none, so its stored charge stands unless it is 0 as well); with no counter evidence at all, a 0 charge is just as
-     * unknown.
+     * Time on battery with no covered counter interval and no charge: missing data, not none used (a legacy row's null
+     * coverage counts as none, so its stored charge stands unless it is 0 as well).
      */
-    fun today(row: DailySummary, fullUah: Long?): TodayState {
-        val usedUah = row.screenOnDischargeUah + row.screenOffDischargeUah
+    fun unmeasured(row: DailySummary): Boolean {
         val coveredMs = (row.screenOnCoveredMs ?: 0) + (row.screenOffCoveredMs ?: 0)
-        val unmeasured = row.screenOnMs + row.screenOffMs > 0 && coveredMs == 0L && usedUah == 0L
-        val used = usedUah.takeUnless { unmeasured }
-        val charged = row.chargedUah.takeUnless { unmeasured && it == 0L }
+        return row.screenOnMs + row.screenOffMs > 0 && coveredMs == 0L && row.screenOnDischargeUah + row.screenOffDischargeUah == 0L
+    }
+
+    /** [row]'s charge taken in; null on an [unmeasured] day that stored 0 (with no counter evidence, 0 is unknown). Shared with History. */
+    fun chargedUah(row: DailySummary): Long? = row.chargedUah.takeUnless { unmeasured(row) && it == 0L }
+
+    /** Today's row, as % of [fullUah] (the capacity Since unplug's %/h uses) when known, else mAh; see [unmeasured]. */
+    fun today(row: DailySummary, fullUah: Long?): TodayState {
+        val used = (row.screenOnDischargeUah + row.screenOffDischargeUah).takeUnless { unmeasured(row) }
+        val charged = chargedUah(row)
         fun percent(uah: Long?) = if (uah != null && fullUah != null && fullUah > 0) uah * 100.0 / fullUah else null
         return TodayState(
             usedMah = used?.div(1_000.0),

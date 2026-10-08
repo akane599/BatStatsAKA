@@ -148,12 +148,17 @@ fun HistoryScreenMahPreview() {
     ScreenshotTheme { HistoryPreviewContent(daysWeek.copy(days = daysState(DayRange.WEEK, DrainUnit.MAH))) }
 }
 
-/** A day with screen time whose drain the counter didn't measure, selected: dashes and a note, not zeros. */
+/**
+ * A day with screen time the counter didn't measure, selected: dashes and a note, not zeros. Its stored charge was 0,
+ * so Charged is unknown too (a dash, as on Now › Today) and its row names no charge. Tall, so the figures show.
+ */
 @PreviewTest
-@PhonePreview
+@TallPhonePreview
 @Composable
 fun HistoryScreenUnmeasuredDayPreview() {
-    ScreenshotTheme { HistoryPreviewContent(daysWeek.copy(selectedDay = TODAY - UNMEASURED_DAY_INDEX)) }
+    val unmeasured = TODAY - UNMEASURED_DAY_INDEX
+    val days = daysWeek.days.days.map { day -> if (day.epochDay == unmeasured) day.copy(figures = day.figures?.copy(charged = null)) else day }
+    ScreenshotTheme { HistoryPreviewContent(daysWeek.copy(days = daysWeek.days.copy(days = days), selectedDay = unmeasured)) }
 }
 
 /** Sessions, all types: the one being recorded, a charge, a discharge without app usage, a plugged row. */

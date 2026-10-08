@@ -78,7 +78,7 @@ class HistoryViewModelTest {
             assertEquals(600.0, yesterday.screenOnUsed!!, 1e-9)
             assertEquals(200.0, yesterday.screenOffUsed!!, 1e-9)
             assertEquals(800.0, yesterday.used!!, 1e-9)
-            assertEquals(1_450.0, yesterday.charged, 1e-9)
+            assertEquals(1_450.0, yesterday.charged!!, 1e-9)
             assertEquals(2 * HOUR, yesterday.screenOn.durationMs)
             // 12 h asleep of 16 h on battery.
             assertEquals(75.0, yesterday.deepSleepPercent!!, 1e-9)
@@ -90,7 +90,7 @@ class HistoryViewModelTest {
             val average = days.average!!
             assertEquals(500.0, average.screenOnUsed!!, 1e-9)
             assertEquals(200.0, average.screenOffUsed!!, 1e-9)
-            assertEquals(1_000.0, average.charged, 1e-9)
+            assertEquals(1_000.0, average.charged!!, 1e-9)
             assertEquals(3 * HOUR / 2, average.screenOn.durationMs)
             assertEquals(12.0 / 20 * 100, average.deepSleepPercent!!, 1e-9)
             // 1,000 mAh over 3 h of screen on; 200 mAh over yesterday's 14 h of screen off. No capacity: no %/h.
@@ -120,7 +120,7 @@ class HistoryViewModelTest {
 
         assertEquals(DrainUnit.MAH, state().days.unit)
         assertEquals(DrainState(2 * HOUR, 500.0, null), yesterday().screenOn)
-        assertEquals(1_000.0, yesterday().charged, 1e-9)
+        assertEquals(1_000.0, yesterday().charged!!, 1e-9)
 
         // Stored Health estimate: 5,000 mAh.
         repo.storedEstimateUah.value = 5_000_000
@@ -129,13 +129,13 @@ class HistoryViewModelTest {
         assertEquals(DrainState(2 * HOUR, 500.0, 10.0), yesterday().screenOn)
         assertEquals(DrainState(10 * HOUR, 50.0, 1.0), yesterday().screenOff)
         assertEquals(15.0, yesterday().used!!, 1e-9)
-        assertEquals(20.0, yesterday().charged, 1e-9)
+        assertEquals(20.0, yesterday().charged!!, 1e-9)
 
         // The live counter's own full charge wins: 2,000 mAh at 50 % is a 4,000 mAh battery.
         repo.realtime.value = BatteryRepository.Realtime(sample = sample(T0).copy(chargeCounterUah = 2_000_000, levelPercent = 50))
         runCurrent()
         assertEquals(12.5, yesterday().screenOn.percentPerHour!!, 1e-9)
-        assertEquals(25.0, yesterday().charged, 1e-9)
+        assertEquals(25.0, yesterday().charged!!, 1e-9)
     }
 
     @Test fun rangeSelectionAndTheLocalDayDriveTheQuery() = runTest {
