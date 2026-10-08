@@ -58,6 +58,9 @@ class InsightActionRepository(
         if (!operation.restorable(prior.value, inspector.sdkInt)) {
             return@withLock ActionResult.Refused(RefusalCode.UNRESTORABLE_PRIOR)
         }
+        if (operation.atOrBeyondTarget(prior.value)) {
+            return@withLock ActionResult.Refused(RefusalCode.ALREADY_AT_TARGET)
+        }
         val prepared = row(finding, rec.action, PREPARED).copy(priorState = prior.value, targetState = operation.target)
         val saved = prepared.copy(id = dao.insertAction(prepared))
         val outcome = executor.run(operation.write(app.packageName, operation.target))
@@ -65,6 +68,7 @@ class InsightActionRepository(
         val confirmed = read(operation, app.packageName)
         if (confirmed !is StateRead.Known) return@withLock unknown(saved)
         if (confirmed.value != operation.target) {
+            if (confirmed.value != prior.value) return@withLock unknown(saved)
             dao.updateAction(saved.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
             return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
         }
@@ -82,14 +86,18 @@ class InsightActionRepository(
         val operation = journalOperation(row) ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
         val pkg = row.packageName ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
         val uid = row.uid ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
-        val refusal = validate(pkg, uid)
-        if (refusal == RefusalCode.NOT_INSTALLED) {
+        val refusal = validate(pkg, uid, restoring = true)
+        if (refusal == RefusalCode.NOT_INSTALLED || refusal == RefusalCode.UID_MISMATCH) {
             dao.updateAction(row.copy(status = REVERTED, revertedAt = clock()))
             return@withLock ActionResult.Reverted
         }
         if (refusal != null) return@withLock ActionResult.Refused(refusal)
         val current = read(operation, pkg)
         if (current !is StateRead.Known) return@withLock initialReadFailure(current)
+        if (row.status == UNKNOWN && current.value == row.priorState) {
+            dao.updateAction(row.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
+            return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
+        }
         if (current.value != row.targetState) return@withLock ActionResult.ChangedExternally(current.value)
         // Preserve uncertainty if cancellation/process death interrupts restoration.
         dao.updateAction(row.copy(status = UNKNOWN))
@@ -100,10 +108,10 @@ class InsightActionRepository(
         if (confirmed.value == row.priorState) {
             dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
             ActionResult.Reverted
-        } else {
-            dao.updateAction(row.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
+        } else if (confirmed.value == row.targetState) {
+            dao.updateAction(row.copy(status = APPLIED, message = FailureCode.STATE_MISMATCH.name))
             ActionResult.Failed(FailureCode.STATE_MISMATCH)
-        }
+        } else unknown(row)
     }
 
     /** Read-only recovery: never replay a command whose execution was interrupted. */
@@ -112,7 +120,16 @@ class InsightActionRepository(
             val operation = journalOperation(row)
             val pkg = row.packageName
             val uid = row.uid
-            if (operation == null || pkg == null || uid == null || validate(pkg, uid) != null) {
+            if (operation == null || pkg == null || uid == null) {
+                unknown(row)
+                continue
+            }
+            val refusal = validate(pkg, uid, restoring = true)
+            if (refusal == RefusalCode.NOT_INSTALLED || refusal == RefusalCode.UID_MISMATCH) {
+                dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
+                continue
+            }
+            if (refusal != null) {
                 unknown(row)
                 continue
             }
@@ -131,15 +148,15 @@ class InsightActionRepository(
         }
     }
 
-    private fun validate(pkg: String, uid: Int): RefusalCode? {
+    private fun validate(pkg: String, uid: Int, restoring: Boolean = false): RefusalCode? {
         if (CommandPolicy.isProtected(pkg, uid)) return RefusalCode.PROTECTED
         if (!CommandPolicy.isPackageName(pkg)) return RefusalCode.INVALID_PACKAGE
         return try {
             val installed = inspector.installedUid(pkg, 0) ?: return RefusalCode.NOT_INSTALLED
             when {
                 installed != uid -> RefusalCode.UID_MISMATCH
-                inspector.packagesForUid(uid) != listOf(pkg) -> RefusalCode.SHARED_UID
-                pkg in inspector.roleHolders() -> RefusalCode.ROLE_HOLDER
+                !restoring && inspector.packagesForUid(uid) != listOf(pkg) -> RefusalCode.SHARED_UID
+                !restoring && pkg in inspector.roleHolders() -> RefusalCode.ROLE_HOLDER
                 else -> null
             }
         } catch (_: SecurityException) {
@@ -162,7 +179,7 @@ class InsightActionRepository(
 
     private fun initialReadFailure(read: StateRead): ActionResult = when (read) {
         StateRead.NoAccess -> ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
-        StateRead.Failed -> ActionResult.Failed(FailureCode.READ_FAILED)
+        StateRead.Failed, StateRead.Unknown -> ActionResult.Failed(FailureCode.READ_FAILED)
         else -> ActionResult.Unknown
     }
 
@@ -227,6 +244,13 @@ class InsightActionRepository(
             ActionType.RESTRICT_BACKGROUND -> AppOpMode.entries.any { it.writable && state == "${op?.name}:${it.name}" }
             ActionType.REMOVE_DOZE_WHITELIST -> state == "PRESENT" || state == "ABSENT"
             else -> StandbyBucket.supported(sdk).any { it.name == state }
+        }
+
+        // Only called after the prior is known to be restorable.
+        fun atOrBeyondTarget(state: String): Boolean = when (type) {
+            ActionType.STANDBY_BUCKET_RARE, ActionType.STANDBY_BUCKET_RESTRICTED ->
+                StandbyBucket.valueOf(state).code >= StandbyBucket.valueOf(target).code
+            else -> state == target
         }
 
         fun write(pkg: String, state: String): PrivilegedCommand = when (type) {

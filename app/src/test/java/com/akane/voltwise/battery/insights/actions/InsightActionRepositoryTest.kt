@@ -29,11 +29,12 @@ class InsightActionRepositoryTest {
     private fun failure() = ShellRunner.Outcome.Failure(ShellRunner.Mode.ROOT, "sensitive diagnostic")
 
     private inner class Inspector : TargetInspector {
+        var inspectionFails = false
         var installed: Int? = uid
         var packages = listOf(pkg)
         var roles = emptySet<String>()
         override var sdkInt = 35
-        override fun installedUid(pkg: String, userId: Int): Int? { assertEquals(0, userId); return installed }
+        override fun installedUid(pkg: String, userId: Int): Int? { assertEquals(0, userId); if (inspectionFails) throw SecurityException(); return installed }
         override fun packagesForUid(uid: Int) = packages
         override fun roleHolders() = roles
     }
@@ -114,10 +115,6 @@ class InsightActionRepositoryTest {
         f.reply(system, "Added: $pkg", "$system\nuser,$pkg,$uid")
         assertEquals(ActionResult.Reverted, f.repo.undo(1))
         assertEquals(PrivilegedCommand.AddDozeWhitelist(pkg), f.commands[4])
-        val absent = Fixture()
-        absent.reply("system,$pkg,$uid", "", "system,$pkg,$uid")
-        assertEquals(ActionResult.Applied(1), absent.apply(ActionType.REMOVE_DOZE_WHITELIST))
-        assertEquals("ABSENT", absent.row().priorState)
     }
 
     @Test fun refusesUnrestorablePriorStatesWithoutMutationOrJournal() = runTest {
@@ -219,8 +216,6 @@ class InsightActionRepositoryTest {
         val f = Fixture(); f.reply("No operations.", "", "No operations.")
         assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.apply())
         assertEquals(FAILED, f.row().status)
-        val initial = Fixture(); initial.reply("garbage")
-        assertEquals(ActionResult.Unknown, initial.apply()); assertTrue(initial.dao.rows.value.isEmpty())
         val failed = Fixture(); failed.replies += failure()
         assertEquals(ActionResult.Failed(FailureCode.READ_FAILED), failed.apply()); assertTrue(failed.dao.rows.value.isEmpty())
     }
@@ -237,8 +232,6 @@ class InsightActionRepositoryTest {
 
     @Test fun undoRevalidatesIdentityAndRejectsInvalidJournal() = runTest {
         val f = Fixture(); f.reply("active", "", "rare"); f.apply(ActionType.STANDBY_BUCKET_RARE)
-        f.inspector.installed = uid + 1
-        assertEquals(ActionResult.Refused(RefusalCode.UID_MISMATCH), f.repo.undo(1)); assertEquals(3, f.commands.size)
         f.dao.updateAction(f.row().copy(priorStateVersion = 2))
         assertEquals(ActionResult.Failed(FailureCode.INVALID_JOURNAL), f.repo.undo(1))
         f.repo.reconcile(); assertEquals(3, f.commands.size)
@@ -278,7 +271,7 @@ class InsightActionRepositoryTest {
     @Test fun undoReadbackMustProveRestoration() = runTest {
         for ((output, result, status) in listOf(
             Triple("garbage", ActionResult.Unknown, UNKNOWN),
-            Triple("rare", ActionResult.Failed(FailureCode.STATE_MISMATCH), FAILED),
+            Triple("frequent", ActionResult.Unknown, UNKNOWN),
         )) {
             val f = Fixture(); f.reply("active", "", "rare"); f.apply(ActionType.STANDBY_BUCKET_RARE)
             f.reply("rare", "", output)
@@ -286,15 +279,125 @@ class InsightActionRepositoryTest {
         }
     }
 
-    @Test fun reconcileWillNotReadChangedIdentityOrFutureJournal() = runTest {
+    @Test fun reconcileWillNotReadFutureJournal() = runTest {
         val f = Fixture(); f.reply("active", "", "garbage"); f.apply(ActionType.STANDBY_BUCKET_RARE)
-        f.inspector.installed = uid + 1
-        f.repo.reconcile()
-        assertEquals(UNKNOWN, f.row().status); assertEquals(3, f.commands.size)
-        f.inspector.installed = uid
         f.dao.updateAction(f.row().copy(type = "FUTURE_ACTION"))
         f.repo.reconcile()
         assertEquals(UNKNOWN, f.row().status); assertEquals(3, f.commands.size)
+    }
+
+
+    @Test fun undoTargetReadbackKeepsAuthorityAndSecondUndoSucceeds() = runTest {
+        val f = Fixture(); f.reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        val appliedAt = f.row().appliedAt
+        f.replies.addAll(listOf(ok("rare"), failure(), ok("rare")))
+        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.repo.undo(1))
+        assertEquals(APPLIED, f.row().status)
+        assertEquals("STATE_MISMATCH", f.row().message)
+        assertEquals("ACTIVE", f.row().priorState)
+        assertEquals(appliedAt, f.row().appliedAt)
+        f.reply("rare", "", "active")
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+        assertEquals(REVERTED, f.row().status)
+        assertNull(f.row().message)
+        assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.ACTIVE), f.commands[7])
+    }
+
+    @Test fun applyThirdStateRetainsUnknownUndoAuthority() = runTest {
+        val f = Fixture(); f.reply("active", "", "frequent")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(UNKNOWN, f.row().status)
+        assertEquals("ACTIVE", f.row().priorState)
+        f.reply("rare", "", "active")
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+    }
+
+    @Test fun restoreSafeRefusalsSettleReinstallAndAllowCriticalApps() = runTest {
+        for (installed in listOf(uid + 1, null)) {
+            val f = Fixture(); f.reply("active", "", "rare")
+            f.apply(ActionType.STANDBY_BUCKET_RARE)
+            f.inspector.installed = installed
+            assertEquals(ActionResult.Reverted, f.repo.undo(1))
+            assertEquals(REVERTED, f.row().status)
+            assertNotNull(f.row().revertedAt)
+            assertEquals(3, f.commands.size)
+            for (status in listOf(PREPARED, UNKNOWN)) {
+                f.dao.updateAction(f.row().copy(status = status, revertedAt = null))
+                f.repo.reconcile()
+                assertEquals(REVERTED, f.row().status)
+                assertNotNull(f.row().revertedAt)
+                assertEquals(3, f.commands.size)
+            }
+        }
+        for (shared in listOf(false, true)) {
+            val f = Fixture(); f.reply("active", "", "rare")
+            f.apply(ActionType.STANDBY_BUCKET_RARE)
+            if (shared) f.inspector.packages = listOf(pkg, "com.example.other")
+            else f.inspector.roles = setOf(pkg)
+            f.dao.updateAction(f.row().copy(status = UNKNOWN))
+            f.reply("rare")
+            f.repo.reconcile()
+            assertEquals(APPLIED, f.row().status)
+            f.reply("rare", "", "active")
+            assertEquals(ActionResult.Reverted, f.repo.undo(1))
+            assertEquals(REVERTED, f.row().status)
+            assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.ACTIVE), f.commands[5])
+        }
+    }
+
+    @Test fun undoKeepsHardSafetyRefusals() = runTest {
+        for (code in listOf(RefusalCode.PROTECTED, RefusalCode.INVALID_PACKAGE, RefusalCode.INSPECTION_FAILED)) {
+            val f = Fixture(); f.reply("active", "", "rare")
+            f.apply(ActionType.STANDBY_BUCKET_RARE)
+            when (code) {
+                RefusalCode.PROTECTED -> f.dao.updateAction(f.row().copy(packageName = "com.android.systemui"))
+                RefusalCode.INVALID_PACKAGE -> f.dao.updateAction(f.row().copy(packageName = "bad;pkg"))
+                else -> f.inspector.inspectionFails = true
+            }
+            assertEquals(ActionResult.Refused(code), f.repo.undo(1))
+            assertEquals(APPLIED, f.row().status)
+            assertEquals(3, f.commands.size)
+        }
+        val f = Fixture(); f.inspector.inspectionFails = true
+        assertEquals(ActionResult.Refused(RefusalCode.INSPECTION_FAILED), f.apply())
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.dao.rows.value.isEmpty())
+    }
+
+    @Test fun unrecognizedInitialReadFailsWithoutJournalOrMutation() = runTest {
+        val f = Fixture(); f.reply("garbage")
+        assertEquals(ActionResult.Failed(FailureCode.READ_FAILED), f.apply())
+        assertTrue(f.dao.rows.value.isEmpty())
+        assertEquals(listOf(PrivilegedCommand.GetBackgroundOp(pkg, BackgroundOp.RUN_ANY_IN_BACKGROUND)), f.commands)
+    }
+
+    @Test fun noOpAndLooseningApplyAreRefusedWithoutJournalOrMutation() = runTest {
+        for ((type, output) in listOf(
+            ActionType.RESTRICT_BACKGROUND to "RUN_ANY_IN_BACKGROUND: ignore",
+            ActionType.STANDBY_BUCKET_RARE to "restricted",
+            ActionType.STANDBY_BUCKET_RARE to "rare",
+            ActionType.STANDBY_BUCKET_RESTRICTED to "restricted",
+            ActionType.REMOVE_DOZE_WHITELIST to "system,$pkg,$uid",
+        )) {
+            val f = Fixture(); f.reply(output, "", output)
+            val result = f.apply(type)
+            assertTrue("Expected refusal for $type", result is ActionResult.Refused)
+            assertEquals("ALREADY_AT_TARGET", (result as ActionResult.Refused).reason.name)
+            assertTrue(f.dao.rows.value.isEmpty())
+            assertEquals(1, f.commands.size)
+        }
+    }
+
+    @Test fun unknownUndoAtPriorSettlesFailedWithoutMutation() = runTest {
+        val f = Fixture(); f.reply("active", "", "garbage")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        f.reply("active")
+        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.repo.undo(1))
+        assertEquals(FAILED, f.row().status)
+        assertEquals("STATE_MISMATCH", f.row().message)
+        assertEquals(4, f.commands.size)
+        assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
     }
 
     @Test fun concurrentApplyAndUndoAreSerializedAcrossPreparationAndReadback() = runTest {
