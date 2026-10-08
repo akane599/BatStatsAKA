@@ -497,18 +497,21 @@ class NowViewModelTest {
 
     private class FakeMonitoring : MonitoringControl {
         override val isMonitoring = MutableStateFlow(false)
+        override var monitoringWanted = true
         var result = MonitoringControl.StartResult.STARTED
         var starts = 0
         var stops = 0
 
         override fun start(): MonitoringControl.StartResult {
             starts++
+            if (result != MonitoringControl.StartResult.BLOCKED) monitoringWanted = true
             if (result == MonitoringControl.StartResult.STARTED) isMonitoring.value = true
             return result
         }
 
         override fun stop() {
             stops++
+            monitoringWanted = false
             isMonitoring.value = false
         }
     }
