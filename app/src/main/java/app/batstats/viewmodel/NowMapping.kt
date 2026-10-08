@@ -124,11 +124,27 @@ internal object NowMapping {
         )
     }
 
-    fun today(row: DailySummary) = TodayState(
-        usedMah = (row.screenOnDischargeUah + row.screenOffDischargeUah) / 1_000.0,
-        chargedMah = row.chargedUah / 1_000.0,
-        screenOnMs = row.screenOnMs,
-    )
+    /**
+     * Today's row, as % of [fullUah] (the capacity Since unplug's %/h uses) when known, else mAh. Time on battery with
+     * no covered counter interval and no charge is missing data, not none used (a legacy row's null coverage counts as
+     * none, so its stored charge stands unless it is 0 as well); with no counter evidence at all, a 0 charge is just as
+     * unknown.
+     */
+    fun today(row: DailySummary, fullUah: Long?): TodayState {
+        val usedUah = row.screenOnDischargeUah + row.screenOffDischargeUah
+        val coveredMs = (row.screenOnCoveredMs ?: 0) + (row.screenOffCoveredMs ?: 0)
+        val unmeasured = row.screenOnMs + row.screenOffMs > 0 && coveredMs == 0L && usedUah == 0L
+        val used = usedUah.takeUnless { unmeasured }
+        val charged = row.chargedUah.takeUnless { unmeasured && it == 0L }
+        fun percent(uah: Long?) = if (uah != null && fullUah != null && fullUah > 0) uah * 100.0 / fullUah else null
+        return TodayState(
+            usedMah = used?.div(1_000.0),
+            chargedMah = charged?.div(1_000.0),
+            screenOnMs = row.screenOnMs,
+            usedPercent = percent(used),
+            chargedPercent = percent(charged),
+        )
+    }
 
     /** The newest sessions' stored estimates → [HealthSummary] (the rule the Health screen shares). */
     fun healthSummary(sessions: List<ChargeSession>, designUah: Long?): HealthSummary? = HealthSummary.withDesign(

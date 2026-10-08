@@ -354,7 +354,18 @@ class NowViewModelTest {
         )
         repo.realtime.value = BatteryRepository.Realtime(sample(T0))
         val (_, state) = start()
-        assertEquals(TodayState(usedMah = 1_240.0, chargedMah = 800.0, screenOnMs = 7_800_000), state().today)
+        // The latest reading's counter gives the full capacity (2.8 Ah at 67 %), the same one Since unplug uses.
+        val fullUah = 2_800_000L * 100 / 67
+        assertEquals(
+            TodayState(
+                usedMah = 1_240.0,
+                chargedMah = 800.0,
+                screenOnMs = 7_800_000,
+                usedPercent = 1_240_000 * 100.0 / fullUah,
+                chargedPercent = 800_000 * 100.0 / fullUah,
+            ),
+            state().today,
+        )
 
         now = (today + 1) * 24 * HOUR + SECOND
         repo.realtime.value = BatteryRepository.Realtime(sample(now))

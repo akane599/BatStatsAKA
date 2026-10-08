@@ -125,11 +125,17 @@ data class DrainState(
     val percentPerHour: Double? = null,
 )
 
+/**
+ * Today's discharge and charge. A null mAh is unavailable (time on battery with no counter-measured charge), not 0;
+ * the percents are the same charge as a share of the full capacity, null when the capacity is unknown.
+ */
 @Immutable
 data class TodayState(
-    val usedMah: Double,
-    val chargedMah: Double,
+    val usedMah: Double?,
+    val chargedMah: Double?,
     val screenOnMs: Long,
+    val usedPercent: Double? = null,
+    val chargedPercent: Double? = null,
 )
 
 @Immutable

@@ -29,7 +29,8 @@
     <string name="sessiondetails_charged">Şarj edilen</string>
     <string name="sessiondetails_average">Ortalama</string>
     <string name="sessiondetails_capacity">Kapasite</string>
-    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_energy">%1$s\u00A0Wh</string>
+    <string name="sessiondetails_charge_supporting">%1$s · %2$s</string>
     <string name="sessiondetails_confidence_low">Düşük güven</string>
     <string name="sessiondetails_confidence_medium">Orta güven</string>
     <string name="sessiondetails_confidence_high">Yüksek güven</string>

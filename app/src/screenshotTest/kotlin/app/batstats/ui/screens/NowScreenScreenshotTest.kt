@@ -94,7 +94,8 @@ private fun discharging() = NowUiState(
         maxGapMs = 95_000L,
     ),
     sinceUnplug = sinceUnplug,
-    today = TodayState(usedMah = 1_240.0, chargedMah = 800.0, screenOnMs = 2 * HOUR + 10 * MINUTE),
+    // Over the same 4,210 mAh as Since unplug's %/h.
+    today = TodayState(usedMah = 1_240.0, chargedMah = 800.0, screenOnMs = 2 * HOUR + 10 * MINUTE, usedPercent = 29.5, chargedPercent = 19.0),
     health = HealthState(capacityMah = 4_210, confidence = CapacityConfidence.MEDIUM, healthPercent = 94.0),
     topApps = topApps,
 )
@@ -116,6 +117,8 @@ private fun charging() = discharging().copy(
     ),
     // Plugged in 25 min ago: the last window on battery, which began yesterday.
     sinceUnplug = sinceUnplug.copy(current = false, startedAtMs = FIXED_TIME_MS - 20 * HOUR, endedAtMs = FIXED_TIME_MS - 25 * MINUTE),
+    // Today's time on battery had no counter data: unavailable, not 0.
+    today = TodayState(usedMah = null, chargedMah = 950.0, screenOnMs = 40 * MINUTE, chargedPercent = 22.6),
     // A two-day-old cache (its time carries the date) with a system-process row.
     topApps = topApps.copy(
         rows = topApps.rows.take(2) + TopApp(1_000, "System UID 1000", AppLabel.SystemProcess, 21.0, 0.05f),
@@ -124,7 +127,10 @@ private fun charging() = discharging().copy(
     ),
 )
 
-/** Monitoring stopped: no time left, the last on-battery window as it ended, the live trace from demand polls only. */
+/**
+ * Monitoring stopped: no time left, the last on-battery window as it ended, the live trace from demand polls only;
+ * and no capacity known, so drain and Today fall back to mA and mAh.
+ */
 private fun monitoringOff() = discharging().copy(
     hero = HeroState(
         hasReading = true,
@@ -134,7 +140,15 @@ private fun monitoringOff() = discharging().copy(
         etaPending = EtaPending.NEEDS_MONITORING_LEFT,
     ),
     trace = discharging().trace.copy(points = liveDrain.takeLast(90)),
-    sinceUnplug = sinceUnplug.copy(current = false, endedAtMs = FIXED_TIME_MS - 40 * MINUTE),
+    // No full capacity yet (no usable counter reading, no estimate): mA and mAh stand in.
+    sinceUnplug = sinceUnplug.copy(
+        current = false,
+        endedAtMs = FIXED_TIME_MS - 40 * MINUTE,
+        screenOn = sinceUnplug.screenOn.copy(percentPerHour = null),
+        screenOff = sinceUnplug.screenOff.copy(percentPerHour = null),
+    ),
+    today = TodayState(usedMah = 1_240.0, chargedMah = 800.0, screenOnMs = 2 * HOUR + 10 * MINUTE),
+    health = null,
 )
 
 /** First launch: a reading, nothing recorded yet, no per-app data. */

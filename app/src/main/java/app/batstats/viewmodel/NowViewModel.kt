@@ -10,6 +10,7 @@ import app.batstats.battery.apps.AppUsageSnapshot
 import app.batstats.battery.apps.TopApps
 import app.batstats.battery.data.db.BatterySample
 import app.batstats.battery.data.db.ChargeSession
+import app.batstats.battery.data.db.DailySummary
 import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.data.resolveFullUah
 import app.batstats.battery.data.uah
@@ -64,7 +65,7 @@ class NowViewModel(
     private class Live(val hero: HeroState, val readouts: Readouts, val nowMs: Long, val counterUah: Long?, val levelPct: Int?)
     private class Rows(val endMs: Long, val samples: List<BatterySample>)
     private class Now(val live: Live, val trace: TraceState, val fahrenheit: Boolean, val calibration: CalibrationState)
-    private class Cards(val today: TodayState?, val health: HealthSummary?, val topApps: TopAppsState, val onBattery: ChargeSession?)
+    private class Cards(val today: DailySummary?, val health: HealthSummary?, val topApps: TopAppsState, val onBattery: ChargeSession?)
 
     private val live: Flow<Live> = combine(
         source.realtime.scan(EtaHold.Reading()) { previous, reading -> EtaHold.next(previous, reading) },
@@ -91,11 +92,10 @@ class NowViewModel(
     }
 
     // Re-evaluated at every reading (2 s while visible), so the card moves to the new day after midnight.
-    private val today: Flow<TodayState?> = source.realtime
+    private val today: Flow<DailySummary?> = source.realtime
         .map { DailySummaryAggregator.epochDay(clock(), zone()) }
         .distinctUntilChanged()
         .flatMapLatest { day -> source.day(day) }
-        .map { row -> row?.let(NowMapping::today) }
 
     private val health: Flow<HealthSummary?> = combine(
         source.recentSessions(HealthSummary.SESSIONS),
@@ -112,17 +112,14 @@ class NowViewModel(
         combine(live, trace, source.settings.map { it.useFahrenheit }.distinctUntilChanged(), source.calibration, ::Now),
         combine(today, health, topApps, source.dischargeSessions(1).map { it.firstOrNull() }, ::Cards),
     ) { now, cards ->
+        val fullUah = resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah)
         NowUiState(
             nowMs = now.live.nowMs,
             hero = now.live.hero,
             readouts = now.live.readouts,
             trace = now.trace,
-            sinceUnplug = NowMapping.sinceUnplug(
-                cards.onBattery,
-                now.live.hero.monitoring,
-                resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah),
-            ),
-            today = cards.today,
+            sinceUnplug = NowMapping.sinceUnplug(cards.onBattery, now.live.hero.monitoring, fullUah),
+            today = cards.today?.let { NowMapping.today(it, fullUah) },
             health = cards.health?.let(NowMapping::health),
             topApps = cards.topApps,
             calibrationNotice = NowMapping.notice(now.calibration),

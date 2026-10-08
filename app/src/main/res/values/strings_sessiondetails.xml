@@ -30,7 +30,9 @@
     <string name="sessiondetails_charged">Charged</string>
     <string name="sessiondetails_average">Average</string>
     <string name="sessiondetails_capacity">Capacity</string>
-    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_energy">%1$s\u00A0Wh</string>
+    <!-- Under Used/Charged: the share of the battery, then the energy ("30% · 4.5 Wh"). -->
+    <string name="sessiondetails_charge_supporting">%1$s · %2$s</string>
     <string name="sessiondetails_confidence_low">Low confidence</string>
     <string name="sessiondetails_confidence_medium">Medium confidence</string>
     <string name="sessiondetails_confidence_high">High confidence</string>

@@ -29,7 +29,8 @@
     <string name="sessiondetails_charged">Cargado</string>
     <string name="sessiondetails_average">Media</string>
     <string name="sessiondetails_capacity">Capacidad</string>
-    <string name="sessiondetails_energy">%1$s Wh</string>
+    <string name="sessiondetails_energy">%1$s\u00A0Wh</string>
+    <string name="sessiondetails_charge_supporting">%1$s · %2$s</string>
     <string name="sessiondetails_confidence_low">Confianza baja</string>
     <string name="sessiondetails_confidence_medium">Confianza media</string>
     <string name="sessiondetails_confidence_high">Confianza alta</string>
