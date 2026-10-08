@@ -9,6 +9,8 @@ import com.akane.voltwise.battery.actions.ActionReadback
 import com.akane.voltwise.battery.actions.PrivilegedCommand
 import com.akane.voltwise.battery.actions.Readback
 import com.akane.voltwise.battery.actions.WhitelistKind
+import com.akane.voltwise.battery.insights.InsightNotificationPolicy
+import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
 import com.akane.voltwise.battery.insights.actions.ActionExecutor
 import com.akane.voltwise.battery.insights.actions.InsightActionRepository
@@ -81,7 +83,10 @@ import io.github.mlmgames.settings.core.resources.AndroidStringResourceProvider
 import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -205,6 +210,20 @@ val appModule = module {
                 sample?.chargeCounterUah to sample?.levelPercent
             },
         )
+    }
+    // Observes the report here so neither refresh caller (app catch-up, monitor service) needs a notify call.
+    single(createdAtStart = true) {
+        val preferences = androidContext().getSharedPreferences("insights", Context.MODE_PRIVATE)
+        val diagnostics = get<DiagnosticStore>()
+        val notifier = InsightNotifier(
+            androidContext(),
+            InsightNotificationPolicy(SharedPreferencesStore(preferences), System::currentTimeMillis),
+            onFailure = diagnostics::record,
+        )
+        get<CoroutineScope>().launch(Dispatchers.Default) {
+            get<InsightRepository>().report.filterNotNull().collect(notifier::maybeNotify)
+        }
+        notifier
     }
     single<InsightsRepository> { DefaultInsightsRepository(get(), get(), get(), get<BatteryDatabase>().sessionDao()) }
     single<NowRepository> {
