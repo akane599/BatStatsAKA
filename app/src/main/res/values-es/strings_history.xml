@@ -2,7 +2,7 @@
 <!-- The History screen (ui/screens/HistoryScreen.kt). Machine-quality translation; flagged for native review. -->
 <resources>
     <string name="history_info_title">Acerca del historial</string>
-    <string name="history_info_body">Días suma cada día natural mientras la supervisión está activa. Pantalla encendida y apagada cuentan solo el tiempo con batería; cargado es la carga recibida. Los días sin supervisión quedan vacíos.\n\nLa media diaria cubre los días registrados del rango elegido, sin hoy hasta que termine. El sueño profundo es la parte del tiempo con batería en que el procesador estuvo totalmente dormido.\n\nUna sesión va de enchufar a desenchufar, o al revés. Una interrupción de la supervisión cierra la sesión y abre una nueva.</string>
+    <string name="history_info_body" formatted="false">Días suma cada día natural mientras la supervisión está activa. Pantalla encendida y apagada cuentan solo el tiempo con batería; cargado es la carga recibida. Los días sin supervisión quedan vacíos. Si se conoce la capacidad de la batería, los totales son una parte de la batería llena y pantalla encendida y apagada muestran el consumo por hora (%/h); si no, los totales van en mAh y el consumo en mA. Un día cuyo consumo no se midió muestra un guion y queda fuera de la media.\n\nLa media diaria cubre los días registrados del rango elegido, sin hoy hasta que termine. El sueño profundo es la parte del tiempo con batería en que el procesador estuvo totalmente dormido.\n\nUna sesión va de enchufar a desenchufar, o al revés. Una interrupción de la supervisión cierra la sesión y abre una nueva.</string>
 
     <string name="history_mode_label">Vista del historial</string>
     <string name="history_mode_days">Días</string>
@@ -24,6 +24,7 @@
     <string name="history_days_title">Totales diarios</string>
     <string name="history_day_detail">Pantalla encendida %1$s</string>
     <string name="history_day_detail_charged">Pantalla encendida %1$s · cargado %2$s</string>
+    <string name="history_day_unmeasured">El consumo no se midió</string>
     <string name="history_days_empty_title">No hay días registrados</string>
     <string name="history_days_empty_body">Inicia la supervisión en Ahora para registrar los totales diarios.</string>
     <string name="history_days_empty_monitoring">Los totales aparecerán aquí cuando el teléfono haya funcionado con batería.</string>

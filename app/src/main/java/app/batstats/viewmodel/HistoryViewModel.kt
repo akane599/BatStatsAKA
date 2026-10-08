@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import app.batstats.battery.apps.AppUsageStatus
 import app.batstats.battery.data.BatteryRepository
 import app.batstats.battery.data.SessionEvidence
+import app.batstats.battery.data.resolveFullUah
 import app.batstats.battery.data.storedFullUah
 import app.batstats.battery.data.db.BatteryDatabase
 import app.batstats.battery.data.db.ChargeSession
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -62,12 +64,17 @@ data class HistoryUiState(
     val sessions: SessionsState = SessionsState(),
 )
 
+/** The one unit every charge total in Days uses: % of a full battery when its capacity is known, else mAh. */
+enum class DrainUnit { PERCENT, MAH }
+
 @Immutable
 data class DaysState(
     /** One entry per day of the range, oldest first; days without a stored summary have no figures. */
     val days: List<DayEntry> = emptyList(),
     /** Per-day average over the recorded days (today left out while earlier days exist: it isn't over yet). */
     val average: DayFigures? = null,
+    /** The unit of every total in [days] and [average]. */
+    val unit: DrainUnit = DrainUnit.MAH,
     val loading: Boolean = true,
     val failed: Boolean = false,
 ) {
@@ -77,18 +84,22 @@ data class DaysState(
 @Immutable
 data class DayEntry(val epochDay: Long, val figures: DayFigures?)
 
-/** One day's totals: drain with the screen on and off (discharging only), charge taken in, deep sleep while on battery. */
+/**
+ * One day's figures on battery. [screenOn] / [screenOff]: the time in that screen state and its drain rate (mA and
+ * %/h over the time the charge counter covered). The totals are in [DaysState.unit]: [screenOnUsed] / [screenOffUsed]
+ * are null when the counter measured no charge in that state, and [used] is null when it measured none all day
+ * although there was time on battery (unavailable, not zero). [charged] is the charge taken in.
+ */
 @Immutable
 data class DayFigures(
-    val screenOnMs: Long,
-    val screenOffMs: Long,
-    val screenOnMah: Double,
-    val screenOffMah: Double,
-    val chargedMah: Double,
+    val screenOn: DrainState,
+    val screenOff: DrainState,
+    val screenOnUsed: Double?,
+    val screenOffUsed: Double?,
+    val used: Double?,
+    val charged: Double,
     val deepSleepPercent: Double?,
-) {
-    val usedMah: Double get() = screenOnMah + screenOffMah
-}
+)
 
 @Immutable
 data class SessionsState(
@@ -212,10 +223,20 @@ class HistoryViewModel(
         },
     ).distinctUntilChanged()
 
+    /**
+     * The shared full-capacity rule (as Now and SessionDetails): the live counter's, else the stored estimate. Days
+     * don't wait for a first capture: until one arrives only the stored estimate counts.
+     */
+    private val fullUah: Flow<Long?> = combine(
+        source.realtime.onStart { emit(BatteryRepository.Realtime()) },
+        source.storedEstimateUah,
+    ) { realtime, stored ->
+        resolveFullUah(realtime.sample?.chargeCounterUah, realtime.level, stored)
+    }.distinctUntilChanged()
+
     private val days: Flow<DaysState> = combine(range, today, page.map { it.revision }.distinctUntilChanged(), ::Triple)
         .flatMapLatest { (range, today, _) ->
-            source.days(today - range.days + 1, today)
-                .map { rows -> HistoryMapping.days(range, today, rows) }
+            combine(source.days(today - range.days + 1, today), fullUah) { rows, full -> HistoryMapping.days(range, today, rows, full) }
                 .catch { emit(DaysState(loading = false, failed = true)) }
         }
 
@@ -291,36 +312,78 @@ internal object HistoryMapping {
     private const val UAH_PER_MAH = 1_000.0
     private const val MIN_SLEEP_BASIS_MS = 60_000L
 
+    /** Like SessionDrain: no average drain from less than a minute of counter-covered time. */
+    private const val MIN_RATE_MS = 60_000L
+
+    /**
+     * One screen state on one day: its time on battery, the counter's charge ([uah], null when it measured none) and
+     * the time that charge was measured over ([measuredMs]).
+     */
+    private class Bucket(val durationMs: Long, val uah: Long?, val measuredMs: Long)
+
+    private fun bucket(durationMs: Long, dischargeUah: Long, coveredMs: Long?): Bucket {
+        val duration = durationMs.coerceAtLeast(0)
+        val charge = dischargeUah.coerceAtLeast(0)
+        // whittle: a pre-v6 row has no coverage, so its charge counts as measured over the whole screen time and a
+        // zero charge as unmeasured. Limit: a partly covered legacy day reads a diluted rate, and a truly measured
+        // 0 µAh legacy bucket reads unavailable. Upgrade trigger: none needed once pre-v6 days leave the 30-day range.
+        val measured = if (coveredMs != null) coveredMs > 0 else charge > 0
+        return Bucket(duration, charge.takeIf { measured }, coveredMs?.coerceIn(0, duration) ?: duration)
+    }
+
+    private fun buckets(days: List<DailySummary>): Pair<List<Bucket>, List<Bucket>> =
+        days.map { bucket(it.screenOnMs, it.screenOnDischargeUah, it.screenOnCoveredMs) } to
+            days.map { bucket(it.screenOffMs, it.screenOffDischargeUah, it.screenOffCoveredMs) }
+
     /** One entry per day of [range] ending [today], with the stored figures where a summary exists. */
-    fun days(range: DayRange, today: Long, rows: List<DailySummary>): DaysState {
+    fun days(range: DayRange, today: Long, rows: List<DailySummary>, fullUah: Long?): DaysState {
+        val full = fullUah?.takeIf { it > 0 }
         val byDay = rows.associateBy { it.epochDay }
-        val entries = (today - range.days + 1..today).map { day -> DayEntry(day, byDay[day]?.let(::figures)) }
+        val entries = (today - range.days + 1..today).map { day -> DayEntry(day, byDay[day]?.let { average(listOf(it), full) }) }
         val recorded = entries.filter { it.figures != null }
         // Today is still running: it would pull the average down, so it counts only when it is all there is.
         val averaged = recorded.filter { it.epochDay != today }.ifEmpty { recorded }
-        return DaysState(days = entries, average = average(averaged.mapNotNull { day -> byDay[day.epochDay] }), loading = false)
+        return DaysState(
+            days = entries,
+            average = average(averaged.mapNotNull { day -> byDay[day.epochDay] }, full),
+            unit = if (full != null) DrainUnit.PERCENT else DrainUnit.MAH,
+            loading = false,
+        )
     }
 
-    fun figures(day: DailySummary): DayFigures = DayFigures(
-        screenOnMs = day.screenOnMs.coerceAtLeast(0),
-        screenOffMs = day.screenOffMs.coerceAtLeast(0),
-        screenOnMah = day.screenOnDischargeUah.coerceAtLeast(0) / UAH_PER_MAH,
-        screenOffMah = day.screenOffDischargeUah.coerceAtLeast(0) / UAH_PER_MAH,
-        chargedMah = day.chargedUah.coerceAtLeast(0) / UAH_PER_MAH,
-        deepSleepPercent = deepSleep(day.cpuSuspendMs, day.screenOnMs + day.screenOffMs),
-    )
-
-    /** The mean day: every figure averaged; deep sleep weighted by time on battery (suspend ÷ on-battery time). */
-    fun average(days: List<DailySummary>): DayFigures? {
+    /**
+     * The mean of [days] (one day's own figures when it is the only one). Time, charge taken in and deep sleep
+     * average over every day; drain only over the days the counter measured it, so an unmeasured day never counts
+     * as zero. Rates are the measured charge over the measured time. Totals are % of [fullUah], or mAh without it.
+     */
+    fun average(days: List<DailySummary>, fullUah: Long?): DayFigures? {
         if (days.isEmpty()) return null
         val count = days.size
+        fun total(uah: Double): Double = if (fullUah != null) uah * 100 / fullUah else uah / UAH_PER_MAH
+        fun used(buckets: List<Bucket>): Double? = buckets.mapNotNull { it.uah }.takeIf { it.isNotEmpty() }?.let { total(it.average()) }
+        fun drain(buckets: List<Bucket>): DrainState {
+            val measured = buckets.filter { it.uah != null }
+            val measuredMs = measured.sumOf { it.measuredMs }
+            // Same rate as SessionDrain: mA over the covered time, %/h of the full capacity.
+            val milliamps = if (measured.isNotEmpty() && measuredMs >= MIN_RATE_MS) measured.sumOf { it.uah ?: 0L } * 3_600.0 / measuredMs else null
+            val perHour = if (milliamps != null && fullUah != null) milliamps * 100_000 / fullUah else null
+            return DrainState(buckets.sumOf { it.durationMs } / count, milliamps, perHour)
+        }
+        val (on, off) = buckets(days)
+        val onUsed = used(on)
+        val offUsed = used(off)
         val slept = days.filter { it.cpuSuspendMs != null }
         return DayFigures(
-            screenOnMs = days.sumOf { it.screenOnMs.coerceAtLeast(0) } / count,
-            screenOffMs = days.sumOf { it.screenOffMs.coerceAtLeast(0) } / count,
-            screenOnMah = days.sumOf { it.screenOnDischargeUah.coerceAtLeast(0) } / UAH_PER_MAH / count,
-            screenOffMah = days.sumOf { it.screenOffDischargeUah.coerceAtLeast(0) } / UAH_PER_MAH / count,
-            chargedMah = days.sumOf { it.chargedUah.coerceAtLeast(0) } / UAH_PER_MAH / count,
+            screenOn = drain(on),
+            screenOff = drain(off),
+            screenOnUsed = onUsed,
+            screenOffUsed = offUsed,
+            used = when {
+                (on + off).all { it.durationMs == 0L } && onUsed == null && offUsed == null -> 0.0
+                onUsed == null && offUsed == null -> null
+                else -> (onUsed ?: 0.0) + (offUsed ?: 0.0)
+            },
+            charged = total(days.sumOf { it.chargedUah.coerceAtLeast(0) }.toDouble() / count),
             deepSleepPercent = deepSleep(
                 slept.takeIf { it.isNotEmpty() }?.sumOf { it.cpuSuspendMs ?: 0 },
                 slept.sumOf { it.screenOnMs + it.screenOffMs },

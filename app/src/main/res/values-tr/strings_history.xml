@@ -2,7 +2,7 @@
 <!-- The History screen (ui/screens/HistoryScreen.kt). Machine-quality translation; flagged for native review. -->
 <resources>
     <string name="history_info_title">Geçmiş hakkında</string>
-    <string name="history_info_body">Günler, izleme çalışırken her takvim gününü toplar. Ekran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar; şarj edilen, alınan şarjdır. İzleme olmayan günler boş kalır.\n\nGünlük ortalama, seçilen aralıktaki kayıtlı günleri kapsar; bugün bitene kadar dahil edilmez. Derin uyku, pilde geçen sürenin işlemcinin tamamen uyuduğu kısmıdır.\n\nBir oturum takmaktan çıkarmaya ya da tersine sürer. İzlemedeki bir boşluk oturumu bitirir ve yenisini başlatır.</string>
+    <string name="history_info_body" formatted="false">Günler, izleme çalışırken her takvim gününü toplar. Ekran açık ve ekran kapalı yalnızca pilde geçen süreyi sayar; şarj edilen, alınan şarjdır. İzleme olmayan günler boş kalır. Pil kapasitesi biliniyorsa toplamlar dolu pilin yüzdesidir; ekran açık ve kapalı saatlik tüketimi (%/h) gösterir. Bilinmiyorsa toplamlar mAh, tüketim mA cinsindendir. Tüketimi ölçülmeyen gün tireyle gösterilir ve ortalamaya katılmaz.\n\nGünlük ortalama, seçilen aralıktaki kayıtlı günleri kapsar; bugün bitene kadar dahil edilmez. Derin uyku, pilde geçen sürenin işlemcinin tamamen uyuduğu kısmıdır.\n\nBir oturum takmaktan çıkarmaya ya da tersine sürer. İzlemedeki bir boşluk oturumu bitirir ve yenisini başlatır.</string>
 
     <string name="history_mode_label">Geçmiş görünümü</string>
     <string name="history_mode_days">Günler</string>
@@ -24,6 +24,7 @@
     <string name="history_days_title">Günlük toplamlar</string>
     <string name="history_day_detail">Ekran açık %1$s</string>
     <string name="history_day_detail_charged">Ekran açık %1$s · şarj %2$s</string>
+    <string name="history_day_unmeasured">Tüketim ölçülmedi</string>
     <string name="history_days_empty_title">Kayıtlı gün yok</string>
     <string name="history_days_empty_body">Günlük toplamları kaydetmek için Şimdi ekranında izlemeyi başlatın.</string>
     <string name="history_days_empty_monitoring">Telefon pille çalıştıktan sonra toplamlar burada görünür.</string>

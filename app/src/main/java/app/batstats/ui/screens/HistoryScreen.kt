@@ -79,6 +79,7 @@ import app.batstats.ui.components.chart.MINUS_SIGN
 import app.batstats.ui.components.chart.NumberFormatter
 import app.batstats.ui.components.chart.TimeAxisFormatter
 import app.batstats.ui.components.chart.TimeGranularity
+import app.batstats.ui.components.chart.ValueFormatter
 import app.batstats.ui.components.chart.rememberTimeAxisFormatter
 import app.batstats.ui.components.headerActionOverhang
 import app.batstats.ui.format.currentLocale
@@ -87,6 +88,7 @@ import app.batstats.ui.format.formatNumber
 import app.batstats.ui.format.percentUnit
 import app.batstats.ui.format.formatPercent
 import app.batstats.ui.format.mahText
+import app.batstats.ui.format.percentAnnotated
 import app.batstats.ui.theme.batColors
 import app.batstats.ui.theme.chartColors
 import app.batstats.ui.theme.numericBody
@@ -95,6 +97,7 @@ import app.batstats.viewmodel.AppUsageHint
 import app.batstats.viewmodel.DayEntry
 import app.batstats.viewmodel.DayFigures
 import app.batstats.viewmodel.DayRange
+import app.batstats.viewmodel.DrainUnit
 import app.batstats.viewmodel.HistoryEvent
 import app.batstats.viewmodel.HistoryMode
 import app.batstats.viewmodel.HistoryUiState
@@ -234,8 +237,9 @@ private fun LazyListScope.daysItems(state: HistoryUiState, labels: DayLabels, tw
 }
 
 /**
- * 7 · 14 · 30 days, the stacked bars (screen on under screen off, in mAh), then the selected day's figures or the
- * daily average. With nothing recorded in the range the panel keeps its range tabs over an empty state.
+ * 7 · 14 · 30 days, the stacked bars (screen on under screen off, in % of a full battery or else mAh), then the
+ * selected day's figures or the daily average. With nothing recorded in the range the panel keeps its range tabs
+ * over an empty state.
  */
 @Composable
 private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (HistoryEvent) -> Unit, modifier: Modifier = Modifier) {
@@ -256,28 +260,34 @@ private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (Hi
             )
             return@Panel
         }
-        val mah = stringResource(R.string.now_unit_mah)
+        val unit = totalUnit(days.unit)
         val screenOn = stringResource(R.string.history_screen_on)
         val screenOff = stringResource(R.string.history_screen_off)
         val colors = MaterialTheme.chartColors
         val segments = remember(screenOn, screenOff, colors) {
             listOf(BarSegment(screenOn, colors.drain), BarSegment(screenOff, colors.drainSecondary))
         }
+        // An unmeasured screen state has no bar layer (its day row and figures say why), never a measured zero.
         val entries = remember(days.days, state.range, labels) {
             days.days.map { day ->
                 BarEntry(
                     labels.bar(day.epochDay, state.range),
-                    listOf(day.figures?.screenOnMah ?: 0.0, day.figures?.screenOffMah ?: 0.0),
+                    listOf(day.figures?.screenOnUsed ?: 0.0, day.figures?.screenOffUsed ?: 0.0),
                     shortLabel = labels.barShort(day.epochDay, state.range),
                 )
             }
         }
         val selectedIndex = days.days.indexOfFirst { it.epochDay == state.selectedDay }.takeIf { it >= 0 }
+        // A selected day the counter didn't measure has a zero bar: its cap and announcement read "—", not "0%".
+        val unmeasured = selectedIndex?.let { days.days[it].figures }?.let { it.used == null } == true
+        val noValue = stringResource(R.string.component_no_value)
         BarChart(
             entries = entries,
             segments = segments,
-            unit = mah,
-            format = remember(mah) { NumberFormatter(mah, maxDecimals = 0) },
+            unit = unit.sign,
+            format = remember(unit.sign, unmeasured, noValue) {
+                DayTotalFormatter(NumberFormatter(unit.sign, maxDecimals = 0), zeroText = noValue.takeIf { unmeasured })
+            },
             selectedIndex = selectedIndex,
             onSelect = { index -> onEvent(HistoryEvent.SelectDay(index?.let { days.days[it].epochDay })) },
             emptyText = stringResource(R.string.history_chart_empty),
@@ -286,8 +296,27 @@ private fun DayChartPanel(state: HistoryUiState, labels: DayLabels, onEvent: (Hi
         DayFiguresBlock(
             title = selected?.let { labels.full(it.epochDay, state.todayEpochDay) } ?: stringResource(R.string.history_average),
             figures = if (selected != null) selected.figures else days.average,
+            unit = unit,
             modifier = Modifier.padding(top = MaterialTheme.spacing.xs),
         )
+    }
+}
+
+/** [base], except a zero total reads [zeroText] when it is set (an unmeasured day selected). Data, so the chart can compare it. */
+private data class DayTotalFormatter(val base: NumberFormatter, val zeroText: String?) : ValueFormatter {
+    override fun format(value: Double): String = if (zeroText != null && value == 0.0) zeroText else base.format(value)
+}
+
+/** How Days writes its totals: [sign] after (or, [first], before) the number, sized to [template]. */
+private class TotalUnit(val sign: String, val first: Boolean, val template: String, val percent: Boolean)
+
+/** % of a full battery when the capacity is known (the locale's sign and side), else mAh. */
+@Composable
+private fun totalUnit(unit: DrainUnit): TotalUnit {
+    val locale = currentLocale()
+    return when (unit) {
+        DrainUnit.PERCENT -> percentUnit().let { TotalUnit(it.sign, it.first, formatNumber(PERCENT_TEMPLATE, 0, locale), percent = true) }
+        DrainUnit.MAH -> TotalUnit(stringResource(R.string.now_unit_mah), false, formatNumber(MAH_TEMPLATE, 0, locale), percent = false)
     }
 }
 
@@ -297,9 +326,13 @@ private fun rangeLabel(range: DayRange): Int = when (range) {
     DayRange.MONTH -> R.string.history_range_month
 }
 
-/** A day's (or the average day's) figures, 2 × 2: screen on, screen off (named as in the chart legend), deep sleep, charged. */
+/**
+ * A day's (or the average day's) figures, 2 × 2: screen on and screen off (named as in the chart legend) as drain
+ * rates the way Now shows them (%/h over mA and time, else mA), deep sleep, charged in the view's [unit]. A day the
+ * counter didn't measure says so under its dashes.
+ */
 @Composable
-private fun DayFiguresBlock(title: String, figures: DayFigures?, modifier: Modifier = Modifier) {
+private fun DayFiguresBlock(title: String, figures: DayFigures?, unit: TotalUnit, modifier: Modifier = Modifier) {
     val spacing = MaterialTheme.spacing
     Column(modifier, verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
         Text(
@@ -313,25 +346,9 @@ private fun DayFiguresBlock(title: String, figures: DayFigures?, modifier: Modif
             return@Column
         }
         val locale = currentLocale()
-        val mah = stringResource(R.string.now_unit_mah)
-        val mahTemplate = formatNumber(MAH_TEMPLATE, 0, locale)
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-            StatCell(
-                stringResource(R.string.history_screen_on),
-                formatNumber(figures.screenOnMah, 0, locale),
-                Modifier.weight(1f),
-                unit = mah,
-                supporting = durationString(figures.screenOnMs),
-                sizingTemplate = mahTemplate,
-            )
-            StatCell(
-                stringResource(R.string.history_screen_off),
-                formatNumber(figures.screenOffMah, 0, locale),
-                Modifier.weight(1f),
-                unit = mah,
-                supporting = durationString(figures.screenOffMs),
-                sizingTemplate = mahTemplate,
-            )
+            DrainCell(stringResource(R.string.history_screen_on), figures.screenOn, Modifier.weight(1f))
+            DrainCell(stringResource(R.string.history_screen_off), figures.screenOff, Modifier.weight(1f))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
             StatCell(
@@ -344,19 +361,22 @@ private fun DayFiguresBlock(title: String, figures: DayFigures?, modifier: Modif
             )
             StatCell(
                 stringResource(R.string.history_charged),
-                formatNumber(figures.chargedMah, 0, locale),
+                formatNumber(figures.charged, 0, locale),
                 Modifier.weight(1f),
-                unit = mah,
-                sizingTemplate = mahTemplate,
+                unit = unit.sign,
+                unitFirst = unit.first,
+                sizingTemplate = unit.template,
             )
         }
+        if (figures.used == null) QuietText(stringResource(R.string.history_day_unmeasured))
     }
 }
 
-/** The recorded days, newest first: used mAh, screen-on time and charge taken in. A row selects its bar. */
+/** The recorded days, newest first: charge used (% or mAh), screen-on time and charge taken in. A row selects its bar. */
 @Composable
 private fun DayListPanel(state: HistoryUiState, labels: DayLabels, onEvent: (HistoryEvent) -> Unit, modifier: Modifier = Modifier) {
     val spacing = MaterialTheme.spacing
+    val unit = totalUnit(state.days.unit)
     val recorded = remember(state.days.days) { state.days.days.filter { it.figures != null }.asReversed() }
     Panel(
         modifier,
@@ -369,6 +389,7 @@ private fun DayListPanel(state: HistoryUiState, labels: DayLabels, onEvent: (His
                 DayRow(
                     day = day,
                     label = labels.full(day.epochDay, state.todayEpochDay),
+                    unit = unit,
                     selected = selected,
                     onClick = { onEvent(HistoryEvent.SelectDay(if (selected) null else day.epochDay)) },
                 )
@@ -377,17 +398,25 @@ private fun DayListPanel(state: HistoryUiState, labels: DayLabels, onEvent: (His
     }
 }
 
+/** A recorded day: its total used ("—" with a quiet note when the counter measured none), then screen-on time and charge. */
 @Composable
-private fun DayRow(day: DayEntry, label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun DayRow(day: DayEntry, label: String, unit: TotalUnit, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val figures = day.figures ?: return
     val spacing = MaterialTheme.spacing
     val locale = currentLocale()
-    val mah = stringResource(R.string.now_unit_mah)
-    val screenOn = durationString(figures.screenOnMs)
-    val detail = if (figures.chargedMah >= 1) {
-        stringResource(R.string.history_day_detail_charged, screenOn, mahText(figures.chargedMah))
+    val screenOn = durationString(figures.screenOn.durationMs)
+    val zero = formatNumber(0.0, 0, locale)
+    val charged = if (unit.percent) formatPercent(figures.charged) else mahText(figures.charged)
+    val detail = if (formatNumber(figures.charged, 0, locale) != zero) {
+        stringResource(R.string.history_day_detail_charged, screenOn, charged)
     } else {
         stringResource(R.string.history_day_detail, screenOn)
+    }
+    val used = figures.used
+    val value = when {
+        used == null -> numberWithUnit(stringResource(R.string.component_no_value), unit = null)
+        unit.percent -> percentWithSign(formatNumber(used, 0, locale))
+        else -> numberWithUnit(formatNumber(used, 0, locale), unit.sign)
     }
     Column(
         modifier
@@ -397,8 +426,15 @@ private fun DayRow(day: DayEntry, label: String, selected: Boolean, onClick: () 
             .padding(horizontal = spacing.md, vertical = spacing.sm),
         verticalArrangement = Arrangement.spacedBy(spacing.xxs),
     ) {
-        TitleAndValue(label, numberWithUnit(formatNumber(figures.usedMah, 0, locale), mah), MaterialTheme.typography.titleSmall)
+        TitleAndValue(label, value, MaterialTheme.typography.titleSmall)
         QuietText(detail)
+        if (used == null) {
+            Text(
+                stringResource(R.string.history_day_unmeasured),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
 
@@ -642,17 +678,28 @@ private fun LoadFailed(onRetry: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 
-/** "812 mAh" with the unit at label size (as the chart's unit caption) and in the quieter color. */
+/** The unit beside a row's number: label size (as the chart's unit caption) in the quieter color. */
 @Composable
-private fun numberWithUnit(number: String, unit: String): AnnotatedString {
-    val quiet = SpanStyle(
-        fontSize = MaterialTheme.typography.labelMedium.fontSize,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+private fun quietUnit(): SpanStyle = SpanStyle(
+    fontSize = MaterialTheme.typography.labelMedium.fontSize,
+    color = MaterialTheme.colorScheme.onSurfaceVariant,
+)
+
+/** "812 mAh" with the unit quieter ([quietUnit]); a null [unit] is the number alone. */
+@Composable
+private fun numberWithUnit(number: String, unit: String?): AnnotatedString {
+    val quiet = quietUnit()
     return buildAnnotatedString {
         withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(number) }
-        withStyle(quiet) { append(" $unit") }
+        if (unit != null) withStyle(quiet) { append(" $unit") }
     }
+}
+
+/** "18%" the locale's way (Turkish "%18"), with the sign quieter as [numberWithUnit]'s unit. */
+@Composable
+private fun percentWithSign(number: String): AnnotatedString {
+    val text = percentAnnotated(number, quietUnit())
+    return buildAnnotatedString { withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurface)) { append(text) } }
 }
 
 /**
