@@ -8,6 +8,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -47,6 +51,12 @@ class SessionSnapshotCollector(
     private val warn: (String) -> Unit = { Log.w(LOG_TAG, it) },
 ) {
     private val writes = Mutex()
+    private val finalized = mutableSetOf<String>()
+    private val _finalizedSessions = MutableSharedFlow<String>(
+        replay = 0, extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    /** Notification only: consumers re-read the committed session; slow subscribers never block capture. */
+    val finalizedSessions: SharedFlow<String> = _finalizedSessions.asSharedFlow()
     // Plug-in ends waiting out their debounce or being taken; every sweep leaves them alone.
     private val endsInProgress: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
@@ -129,11 +139,16 @@ class SessionSnapshotCollector(
                     val end = result.snapshot.toAppUsageSnapshot()
                     val delta = AppUsageDelta.compute(store.baseline(sessionId), end)
                     if (store.saveEnd(sessionId, end, delta)) {
+                        emitFinalized(sessionId)
                         log("end stored session=$sessionId basis=${delta.basis} rows=${delta.rows.size}")
                     }
                 }
-                AppStatsResult.NoAccess -> store.setStatus(sessionId, AppUsageStatus.NO_ACCESS)
-                is AppStatsResult.Failed -> store.setStatus(sessionId, AppUsageStatus.FAILED)
+                AppStatsResult.NoAccess -> {
+                    if (store.setStatus(sessionId, AppUsageStatus.NO_ACCESS)) emitFinalized(sessionId)
+                }
+                is AppStatsResult.Failed -> {
+                    if (store.setStatus(sessionId, AppUsageStatus.FAILED)) emitFinalized(sessionId)
+                }
             }
         }
         if (result !is AppStatsResult.Ready) log("end not captured session=$sessionId result=$result")
@@ -143,9 +158,13 @@ class SessionSnapshotCollector(
         store.pendingClosedDischarges()
             .filter { it !in endsInProgress }
             .forEach { sessionId ->
-                store.setStatus(sessionId, AppUsageStatus.FAILED)
+                if (store.setStatus(sessionId, AppUsageStatus.FAILED)) emitFinalized(sessionId)
                 log("breakdown not captured session=$sessionId")
             }
+    }
+
+    private fun emitFinalized(sessionId: String) {
+        if (finalized.add(sessionId)) _finalizedSessions.tryEmit(sessionId)
     }
 
     /** A storage or dump error must never take the monitoring service down; it leaves the session PENDING. */
