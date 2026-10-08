@@ -56,6 +56,79 @@ class CompoundBoundaryTest {
         assertEquals(600L, engine.summary.screenOn.durationMs)
     }
 
+    @Test fun stagedWakeDozeEventBeforeScreenEventKeepsNoGap() {
+        val gate = StateEventSequencer<String>()
+        val engine = ObservationEngine()
+        gate.offer("baseline", baseline()).forEach { engine.accept(it.point) }
+        assertTrue(gate.offer("screen reading", wake().copy(dozing = true)).isEmpty())
+        val doze = gate.offer("doze reading", wake(300, Boundary.DOZE))
+        doze.forEach { engine.accept(it.point) }
+        val screen = gate.offer("screen event", wake(600, Boundary.SCREEN))
+        screen.forEach { engine.accept(it.point) }
+        assertEquals("Doze-first staged wake must not become a gap", 0, engine.summary.gaps)
+        assertTrue("Keep waiting for SCREEN", doze.isEmpty())
+        assertEquals(listOf("doze reading", "screen event"), screen.map { it.value })
+        assertEquals(setOf(Boundary.SAMPLE, Boundary.DOZE, Boundary.SCREEN), screen.first().point.confirmedBoundaries)
+        assertEquals(3_600_300L, engine.summary.screenOff.durationMs)
+        assertEquals(100_000L, engine.summary.screenOff.chargeChangeUah)
+        assertEquals(3_599_000L, engine.summary.cpuSuspendMs)
+        assertEquals(3_600_300L, engine.summary.dozeMs)
+        assertEquals(300L, engine.summary.screenOn.durationMs)
+        assertEquals(screen.size, screen.map { it.point.elapsedMs }.distinct().size)
+    }
+
+    @Test fun extendedWakeKeepsItsOriginalDeadlineAndFirstSameStateReading() {
+        for (delay in listOf(2_000L, 2_001L)) {
+            val gate = StateEventSequencer<String>()
+            gate.offer("baseline", baseline())
+            gate.offer("screen reading", wake().copy(dozing = true))
+            assertTrue(gate.offer("doze reading", wake(300, Boundary.DOZE)).isEmpty())
+            assertTrue(gate.offer("same state", wake(1_000)).isEmpty())
+            val result = gate.offer("screen event", wake(delay, Boundary.SCREEN))
+            assertEquals(listOf("doze reading", "screen event"), result.map { it.value })
+            assertEquals(if (delay == 2_000L) Boundary.SCREEN else Boundary.GAP, result.first().point.boundary)
+        }
+    }
+
+    @Test fun extendedWakeRejectsGapGenerationChangeBackwardsClockAndReversal() {
+        for (next in listOf(
+            wake(600, Boundary.GAP),
+            wake(600, Boundary.SCREEN).copy(generation = "new run"),
+            wake(200, Boundary.SCREEN),
+            wake(600).copy(interactive = false),
+        )) {
+            val gate = StateEventSequencer<Unit>()
+            gate.offer(Unit, baseline())
+            gate.offer(Unit, wake().copy(dozing = true))
+            assertTrue(gate.offer(Unit, wake(300, Boundary.DOZE)).isEmpty())
+            assertEquals(Boundary.GAP, gate.offer(Unit, next).first().point.boundary)
+        }
+    }
+
+    @Test fun extendedWakeAtEqualTimestampEmitsOnlyOneEndpoint() {
+        val gate = StateEventSequencer<String>()
+        gate.offer("baseline", baseline())
+        gate.offer("screen reading", wake().copy(dozing = true))
+        assertTrue(gate.offer("doze reading", wake(300, Boundary.DOZE)).isEmpty())
+        val result = gate.offer("screen event", wake(300, Boundary.SCREEN))
+        assertEquals(listOf("screen event"), result.map { it.value })
+        assertEquals(setOf(Boundary.SAMPLE, Boundary.DOZE, Boundary.SCREEN), result.single().point.confirmedBoundaries)
+    }
+
+    @Test fun extensionCannotHideANewUnconfirmedDimensionOrReverseAnEarlierConfirmedOne() {
+        val gate = StateEventSequencer<Unit>()
+        gate.offer(Unit, baseline())
+        gate.offer(Unit, wake().copy(dozing = true))
+        assertEquals(Boundary.GAP, gate.offer(Unit, wake(300, Boundary.DOZE).copy(power = PowerState.CHARGING)).first().point.boundary)
+
+        gate.reset()
+        gate.offer(Unit, baseline())
+        gate.offer(Unit, wake())
+        gate.offer(Unit, wake(100, Boundary.SCREEN))
+        val reversed = gate.offer(Unit, wake(300, Boundary.POWER).copy(interactive = false, power = PowerState.CHARGING))
+        assertEquals("Earlier SCREEN evidence cannot erase its reversed transition", Boundary.GAP, reversed.first().point.boundary)
+    }
+
     @Test fun stagedWakeWithoutTimelyScreenEventStillLeavesAGap() {
         for (event in listOf(wake(300, Boundary.DOZE), wake(2_001, Boundary.SCREEN))) {
             val gate = StateEventSequencer<Unit>()
