@@ -79,10 +79,14 @@ object SessionReport {
         engine: ObservationEngine,
         extremes: SessionExtremes,
     ): ChargeSession {
+        val before = engine.summary
         val summary = engine.accept(point)
-        // Keep the observed boundary duration; the engine excludes its cross-power charge.
+        val closingExtremes = if (before.latest?.interactive == false) extremes.copy(
+            screenOffSuspendMs = extremes.screenOffSuspendMs + (summary.cpuSuspendMs - before.cpuSuspendMs),
+        ) else extremes
+        // Keep the observed boundary duration and its screen-off suspend; cross-power charge is excluded.
         // The capacity estimate still ends at the last same-state sample.
-        return report(current, sample, summary, extremes).copy(
+        return report(current, sample, summary, closingExtremes).copy(
             capacityEstimateMah = current.capacityEstimateMah,
             capacityConfidence = current.capacityConfidence,
             capacityBasis = current.capacityBasis,

@@ -262,8 +262,8 @@ class SessionReportTest {
         assertEquals(current.screenOffMs + 30_000, closed.screenOffMs)
         assertTrue("Screen-off suspend must not exceed its screen duration",
             closed.screenOffSuspendMs!! <= closed.screenOffMs)
-        assertEquals("Screen-off suspend must exclude the charging boundary",
-            current.screenOffSuspendMs, closed.screenOffSuspendMs)
+        assertEquals("Screen-off suspend must include the closing interval paired with its duration",
+            current.screenOffSuspendMs!! + 29_000, closed.screenOffSuspendMs)
         assertEquals(current.cpuSuspendMs!! + 29_000, closed.cpuSuspendMs)
         assertEquals(current.screenOnUah, closed.screenOnUah)
         assertEquals(current.screenOffUah, closed.screenOffUah)
