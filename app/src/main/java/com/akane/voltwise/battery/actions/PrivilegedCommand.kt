@@ -28,7 +28,10 @@ enum class BackgroundOp {
 }
 
 enum class AppOpMode(val token: String) {
-    ALLOW("allow"), IGNORE("ignore"), DEFAULT("default"), DENY("deny");
+    ALLOW("allow"), IGNORE("ignore"), DEFAULT("default"), DENY("deny"), FOREGROUND("foreground");
+
+    /** DEFAULT, DENY and FOREGROUND are readback-only. */
+    val writable: Boolean get() = this == ALLOW || this == IGNORE
 }
 
 /** No caller-supplied command text crosses the action boundary. */
@@ -56,7 +59,7 @@ sealed interface PrivilegedCommand {
     data class SetBackgroundOp(val pkg: String, val op: BackgroundOp, val mode: AppOpMode) : PrivilegedCommand {
         init {
             requirePackage(pkg)
-            require(mode != AppOpMode.DENY) { "Unsupported app-op mode" }
+            require(mode.writable) { "Unsupported app-op mode" }
         }
         override val argv get() = listOf("cmd", "appops", "set", "--user", "0", pkg, op.name, mode.token)
     }

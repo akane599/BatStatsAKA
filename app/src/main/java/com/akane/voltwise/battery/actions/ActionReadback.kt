@@ -17,8 +17,8 @@ sealed interface WhitelistChange {
 /** Unknown or ambiguous output is never interpreted as the requested state. */
 object ActionReadback {
     private val appOp = Regex(
-        "(?:Uid mode: )?(RUN_ANY_IN_BACKGROUND|RUN_IN_BACKGROUND): (?:mode: )?" +
-            "(allow|ignore|default|deny)(; (?:time|rejectTime|duration)=[^;\\r\\n]+)*",
+        "(RUN_ANY_IN_BACKGROUND|RUN_IN_BACKGROUND): (?:mode: )?" +
+            "(allow|ignore|default|deny|foreground)(; (?:time|rejectTime|duration)=[^;\\r\\n]+)*",
     )
 
     fun standbyBucket(output: String): Readback<StandbyBucket> {
@@ -29,17 +29,21 @@ object ActionReadback {
         return bucket?.let { Readback.Recognized(it) } ?: Readback.Unrecognized
     }
 
-    private val noOperations = Regex("No operations\\.(?:\\r?\\nDefault mode: (?:allow|ignore|default|deny))?")
+    private val noOperations = Regex("No operations\\.(?:\\r?\\nDefault mode: (allow|ignore|deny|foreground))?")
 
     /**
      * Reads only `cmd appops get --user 0 <pkg> <op>` for [op], not an all-op dump.
-     * Exactly "No operations." (optionally followed by a Default mode line) preserves DEFAULT
-     * as the prior state for Undo's `set default`, not the effective mode named by that line.
+     * Exactly "No operations." reads the effective ALLOW, or the one accompanying Default mode
+     * value. ALLOW restores via `set allow`; MODE_DEFAULT is not the op's effective default.
      * Wrong-op, multiple/conflicting records and unexpected text remain unrecognized.
      */
     fun backgroundOp(output: String, op: BackgroundOp): Readback<AppOpMode> {
         val value = output.trim()
-        if (noOperations.matches(value)) return Readback.Recognized(AppOpMode.DEFAULT)
+        noOperations.matchEntire(value)?.let { match ->
+            val mode = if (match.groupValues[1].isEmpty()) AppOpMode.ALLOW
+                else AppOpMode.entries.single { it.token == match.groupValues[1] }
+            return Readback.Recognized(mode)
+        }
         val match = appOp.matchEntire(value) ?: return Readback.Unrecognized
         if (match.groupValues[1] != op.name) return Readback.Unrecognized
         return Readback.Recognized(AppOpMode.entries.single { it.token == match.groupValues[2] })

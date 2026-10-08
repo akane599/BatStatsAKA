@@ -42,7 +42,7 @@ object CommandPolicy {
         ) return false
         return when (argv[2]) {
             "get" -> argv.size == 7
-            "set" -> argv.size == 8 && AppOpMode.entries.any { it != AppOpMode.DENY && it.token == argv[7] }
+            "set" -> argv.size == 8 && AppOpMode.entries.any { it.writable && it.token == argv[7] }
             else -> false
         }
     }

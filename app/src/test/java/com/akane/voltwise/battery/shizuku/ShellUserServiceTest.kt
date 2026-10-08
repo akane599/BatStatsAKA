@@ -23,6 +23,13 @@ class ShellUserServiceTest {
         }
     }
 
+    @Test fun helperRejectsDefaultAppOpSetMode() {
+        for (op in listOf("RUN_ANY_IN_BACKGROUND", "RUN_IN_BACKGROUND")) {
+            assertTrue(ShellUserService.allows("cmd appops set --user 0 com.example $op allow"))
+            assertFalse(ShellUserService.allows("cmd appops set --user 0 com.example $op default"))
+        }
+    }
+
     @Test
     fun destroyTransactionMatchesShizukuConstant() {
         assertEquals(ShizukuApiConstants.USER_SERVICE_TRANSACTION_destroy, ShellUserService.TRANSACTION_DESTROY)

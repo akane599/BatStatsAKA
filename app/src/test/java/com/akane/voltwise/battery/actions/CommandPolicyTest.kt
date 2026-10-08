@@ -9,7 +9,7 @@ class CommandPolicyTest {
 
     @Test fun everyTemplateRoundTripsWithExactTokens() {
         assertEquals(listOf("active", "working_set", "frequent", "rare", "restricted"), StandbyBucket.supported(30).map { it.token })
-        assertEquals(listOf("allow", "ignore", "default", "deny"), AppOpMode.entries.map { it.token })
+        assertEquals(listOf("allow", "ignore", "default", "deny", "foreground"), AppOpMode.entries.map { it.token })
         val commands = mutableListOf<Pair<PrivilegedCommand, String>>(
             GetStandbyBucket(pkg) to "am get-standby-bucket --user 0 $pkg",
             ListDozeWhitelist to "cmd deviceidle whitelist",
@@ -23,7 +23,7 @@ class CommandPolicyTest {
         }
         for (op in BackgroundOp.entries) {
             commands += GetBackgroundOp(pkg, op) to "cmd appops get --user 0 $pkg ${op.name}"
-            for (mode in listOf(AppOpMode.ALLOW, AppOpMode.IGNORE, AppOpMode.DEFAULT)) {
+            for (mode in listOf(AppOpMode.ALLOW, AppOpMode.IGNORE)) {
                 commands += SetBackgroundOp(pkg, op, mode) to "cmd appops set --user 0 $pkg ${op.name} ${mode.token}"
             }
         }
@@ -74,6 +74,7 @@ class CommandPolicyTest {
             "am set-standby-bucket --user 0 $pkg 40", "am set-standby-bucket --user 0 $pkg never",
             "am set-standby-bucket --user 0 $pkg exempted", "cmd appops set --user 0 $pkg CAMERA allow",
             "cmd appops set --user 0 $pkg RUN_IN_BACKGROUND deny", "cmd appops get --user 1 $pkg RUN_IN_BACKGROUND",
+            "cmd appops set --user 0 $pkg RUN_IN_BACKGROUND foreground",
             "cmd deviceidle whitelist $pkg", "cmd deviceidle whitelist +", "cmd deviceidle whitelist -",
             "cmd deviceidle whitelist reset", "cmd deviceidle force-idle", "dumpsys battery reset",
             "dumpsys batterystats --reset", "sh -c id", "", " ", "cmd", "am", "dumpsys",
@@ -83,8 +84,22 @@ class CommandPolicyTest {
         for (bucket in listOf(StandbyBucket.EXEMPTED, StandbyBucket.NEVER)) {
             assertThrows(IllegalArgumentException::class.java) { SetStandbyBucket(pkg, bucket) }
         }
-        assertThrows(IllegalArgumentException::class.java) {
-            SetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND, AppOpMode.DENY)
+        for (mode in listOf(AppOpMode.DENY, AppOpMode.FOREGROUND)) {
+            assertThrows(IllegalArgumentException::class.java) {
+                SetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND, mode)
+            }
+        }
+    }
+
+    @Test fun policyRejectsDefaultAppOpSetMode() {
+        for (op in BackgroundOp.entries) {
+            assertFalse(CommandPolicy.allows(listOf("cmd", "appops", "set", "--user", "0", pkg, op.name, "default")))
+        }
+    }
+
+    @Test fun constructorsRejectDefaultAppOpSetMode() {
+        for (op in BackgroundOp.entries) {
+            assertThrows(IllegalArgumentException::class.java) { SetBackgroundOp(pkg, op, AppOpMode.DEFAULT) }
         }
     }
 
