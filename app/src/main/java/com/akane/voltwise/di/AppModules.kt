@@ -186,7 +186,8 @@ val appModule = module {
             database.sessionDao(), database.dailySummaryDao(), database.appUsageDao(), get(),
             get(), Clock.systemDefaultZone(),
             dozeWhitelist = {
-                if (shell.access.value == ShellRunner.Mode.SHIZUKU || shell.access.value == ShellRunner.Mode.ROOT) {
+                val mode = shell.detectMode()
+                if (mode == ShellRunner.Mode.SHIZUKU || mode == ShellRunner.Mode.ROOT) {
                     val outcome = shell.execAction(PrivilegedCommand.ListDozeWhitelist)
                     val readback = (outcome as? ShellRunner.Outcome.Success)?.let { ActionReadback.dozeWhitelist(it.output) }
                     when (readback) {

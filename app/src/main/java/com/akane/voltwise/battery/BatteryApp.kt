@@ -81,7 +81,9 @@ internal suspend fun reconcileAndCatchUpInsights(
 ) {
     reconcile()
     val last = lastAnalyzedAt()
-    if (last == null || clock() - last > 6 * 60 * 60 * 1_000L) refresh()
+    val now = clock()
+    // A corrected wall clock can put the saved analysis in the future; catch up rather than wait for it.
+    if (last == null || last > now || now - last > 6 * 60 * 60 * 1_000L) refresh()
 }
 
 /**

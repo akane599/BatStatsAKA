@@ -1,5 +1,6 @@
 package com.akane.voltwise.di
 
+import com.akane.voltwise.battery.diagnostics.DiagnosticCode
 import com.akane.voltwise.battery.reconcileAndCatchUpInsights
 import com.akane.voltwise.battery.service.refreshOnFinalizedSessions
 import com.akane.voltwise.battery.data.db.InsightDao
@@ -94,11 +95,11 @@ class InsightsWiringTest {
         assertEquals(listOf("reconcile", "timestamp", "refresh"), events)
     }
 
-    @Test fun catchUpRefreshesOnlyMissingOrOlderThanSixHours() = runTest {
+    @Test fun catchUpRefreshesMissingOldOrFutureTimestamps() = runTest {
         val now = 30_000_000L
         val sixHours = 6 * 60 * 60 * 1_000L
         for ((timestamp, expected) in listOf(null to 1, now - sixHours - 1 to 1,
-            now - sixHours to 0, now - 1 to 0, now + 1 to 0)) {
+            now - sixHours to 0, now - 1 to 0, now to 0, now + 1 to 1)) {
             var reconciliations = 0
             var refreshes = 0
             reconcileAndCatchUpInsights(
@@ -109,6 +110,43 @@ class InsightsWiringTest {
         }
     }
 
+    @Test fun refreshFailureIsContainedAndCollectorContinues() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        var refreshes = 0
+        val recorded = mutableListOf<DiagnosticCode>()
+        val collector = launch {
+            refreshOnFinalizedSessions(finalized, { recorded += it }) {
+                refreshes++
+                if (refreshes == 1) throw IllegalStateException("refresh failed")
+            }
+        }
+        runCurrent()
+        finalized.emit("a")
+        runCurrent()
+        finalized.emit("b")
+        runCurrent()
+        assertEquals(2, refreshes)
+        assertTrue(collector.isActive)
+        assertEquals(listOf(DiagnosticCode.APP_SCOPE_FAILED), recorded)
+        collector.cancelAndJoin()
+    }
+
+    @Test fun refreshCancellationStopsCollectorWithoutRecordingFailure() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        val recorded = mutableListOf<DiagnosticCode>()
+        val collector = launch {
+            refreshOnFinalizedSessions(finalized, { recorded += it }) {
+                throw kotlinx.coroutines.CancellationException("service stopped")
+            }
+        }
+        runCurrent()
+        finalized.emit("a")
+        runCurrent()
+        collector.join()
+        assertTrue(collector.isCancelled)
+        assertTrue(recorded.isEmpty())
+    }
+
     @Test fun finalizedSessionBurstsCoalesceWithoutConcurrentOrCancelledRefreshes() = runTest {
         val finalized = MutableSharedFlow<String>()
         val firstRefresh = CompletableDeferred<Unit>()
@@ -116,7 +154,7 @@ class InsightsWiringTest {
         var active = 0
         var maxActive = 0
         val collector = launch {
-            refreshOnFinalizedSessions(finalized) {
+            refreshOnFinalizedSessions(finalized, { fail("Successful refresh must not record a failure") }) {
                 refreshes++
                 active++
                 maxActive = maxOf(maxActive, active)

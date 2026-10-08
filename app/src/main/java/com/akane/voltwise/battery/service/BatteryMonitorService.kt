@@ -102,7 +102,7 @@ class BatteryMonitorService : Service() {
         repository.startSampling()
         // Subscribe before snapshots start: a finalized session must not race the refresh collector.
         serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            refreshOnFinalizedSessions(sessionSnapshots.finalizedSessions) { insights.refresh() }
+            refreshOnFinalizedSessions(sessionSnapshots.finalizedSessions, diagnostics::record) { insights.refresh() }
         }
         // Per-app baselines/ends at unplug and plug-in; runs (and dumps) only while monitoring runs.
         serviceScope.launch(Dispatchers.Default) { sessionSnapshots.run() }
@@ -199,6 +199,18 @@ class BatteryMonitorService : Service() {
 }
 
 /** Coalesce bursts without cancelling analysis: one refresh runs, and only the latest pending event is kept. */
-internal suspend fun refreshOnFinalizedSessions(finalizedSessions: Flow<String>, refresh: suspend () -> Unit) {
-    finalizedSessions.conflate().collect { refresh() }
+internal suspend fun refreshOnFinalizedSessions(
+    finalizedSessions: Flow<String>,
+    record: (DiagnosticCode) -> Unit,
+    refresh: suspend () -> Unit,
+) {
+    finalizedSessions.conflate().collect {
+        try {
+            refresh()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            record(DiagnosticCode.APP_SCOPE_FAILED)
+        }
+    }
 }
