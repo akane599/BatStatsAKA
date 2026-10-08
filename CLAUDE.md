@@ -32,7 +32,8 @@ Android, developed on Ubuntu from the CLI.
 ## Environment
 - ANDROID_HOME=/home/dev/android-sdk; use the environment SDK, never create/edit local.properties.
 - LSP: official JetBrains kotlin-lsp at /home/dev/.local/bin/kotlin-lsp (detector's legacy kotlin-language-server check missed it); no Kotlin LSP install needed.
-- AVDs: none — create one before emulator/device QA; no adb device connected, KVM unavailable on this host.
+- Devices: no AVD possible (KVM unavailable). Device QA uses the user's phone through a reverse-forwarded adb server: the user runs `adb start-server` locally with the phone attached, then `ssh -R 5037:127.0.0.1:5037 dev@<host>`; here `adb devices` must list it before any device ticket. Both sides need the same platform-tools version (host: adb 1.0.41), or the client restarts the user's server.
+- Disk: repo, Android SDK and Gradle user home (`~/.gradle` → /mnt/HC_Volume_106903020/gradle-home) live on the volume; Sidequest worktrees stay on the small root disk.
 
 ## Commands
 - Build: `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew :app:assembleDebug --console=plain -q`
