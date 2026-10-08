@@ -26,6 +26,20 @@ class WidgetFreshnessTest {
         assertEquals("yMdhm", pattern)
     }
 
+    @Test fun scriptedReadingUsesFullYearFromSystemClockPattern() {
+        // Same timestamp as WidgetDeliveryDeviceTest; fake Android's US 12-hour best-pattern lookup.
+        val pattern = widgetFreshnessPattern(is24h = false, locale = Locale.US) { _, _ ->
+            "M/d/y, h:mm a"
+        }
+        val formatter = SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+
+        assertEquals(
+            "Scripted widget freshness must use the system-clock pattern, not locale SHORT",
+            "5/19/2026, 10:00 AM",
+            formatter.format(Date(1_779_184_800_000L)),
+        )
+    }
+
     @Test fun usFreshnessUses1545WhenSystem24HourClockIsEnabled() {
         // A JVM pattern resolver stands in for Android's locale-specific best-pattern lookup.
         val pattern = widgetFreshnessPattern(is24h = true, locale = Locale.US) { _, skeleton ->

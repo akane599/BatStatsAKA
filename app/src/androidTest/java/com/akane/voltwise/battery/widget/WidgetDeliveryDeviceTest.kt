@@ -25,8 +25,10 @@ import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
-import java.text.DateFormat
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
+import android.text.format.DateFormat as AndroidDateFormat
 
 /** Real system widget binding/delivery, with explicitly scripted readings in a test-owned host. */
 @RunWith(AndroidJUnit4::class)
@@ -107,7 +109,11 @@ class WidgetDeliveryDeviceTest {
             val sample = BatterySample(timestamp = 1_779_184_800_000L, levelPercent = 80, status = 3,
                 plugged = 0, currentNowUa = null, chargeCounterUah = null, voltageMv = 4000,
                 temperatureDeciC = 250, health = null, screenOn = true, etaMs = 7_200_000)
-            val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(sample.timestamp))
+            // Independently resolve the system-clock contract, rather than the locale-only SHORT style.
+            val locale = context.resources.configuration.locales[0] ?: Locale.getDefault()
+            val skeleton = if (AndroidDateFormat.is24HourFormat(context)) "yMdHm" else "yMdhm"
+            val pattern = AndroidDateFormat.getBestDateTimePattern(locale, skeleton)
+            val date = SimpleDateFormat(pattern, locale).format(Date(sample.timestamp))
             phase = "paused scripted values"
             pushUntil({ WidgetUpdater.push(context, sample, monitoring = false, fahrenheit = false) }) {
                 value(0) == "80%" && value(1) == "25.0 °C" && value(2) == "—" &&
