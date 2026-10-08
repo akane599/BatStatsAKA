@@ -1,5 +1,5 @@
 <!-- android-kit -->
-# CLAUDE.md — BatStats
+# CLAUDE.md — Voltwise (formerly BatStats)
 
 Battery readings, observed charging/discharging sessions and privileged per-app statistics for Android users.
 Android, developed on Ubuntu from the CLI.
@@ -12,7 +12,7 @@ Android, developed on Ubuntu from the CLI.
 - JDK target 21 · JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64; not pinned in gradle.properties · Gradle 9.7.1 · AGP 9.5.0-alpha07 · Kotlin 2.4.20 · compileSdk 37 · minSdk 26
 - Modules: :app · Architecture: single-module MVVM; ui/, viewmodel/, data/, di/, settings/ + battery/ feature packages
 - DI/DB/Net: Koin / Room / none · Async: coroutines/Flow · Navigation: Navigation 3 · Firebase: no · Version catalog: yes
-- App id: org.mlm.batstats (debug .debug, preview .preview) · namespace: app.batstats · Launcher: app.batstats.battery.BatteryMainActivity
+- App id: com.akane.voltwise (debug .debug, preview .preview; was org.mlm.batstats before 2026-10-08) · namespace: app.batstats · Launcher: app.batstats.battery.BatteryMainActivity
 - Tests: JUnit4 + kotlinx-coroutines-test; androidTest present, no Espresso · Lint: Android lint; no detekt/ktlint/spotless
 - Baseline: debug build OK (2026-10-07); existing unit reports 542 tests, 0 failures/errors (not rerun by bootstrap; PROGRESS.md)
 <!-- STACK:END -->
@@ -40,8 +40,8 @@ Android, developed on Ubuntu from the CLI.
 - Gradle helper: `bash .claude/kit/gradle-check.sh :app:assembleDebug` (retains full log and actual exit code; uses --console=plain -q).
 - Screenshots: `bash .claude/scripts/run_screenshot_tests.sh` runs `:app:testDebugScreenshotTestDefaultTestSuite --rerun --console=plain -q`; the template's updateDebugScreenshotTest/validateDebugScreenshotTest tasks do not match this AGP suite. Do not update references during bootstrap.
 - Instrumented: `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku --console=plain -q` (requires a device; Shizuku tests are a separate phase).
-- Device: `./gradlew :app:installDebug --console=plain -q && adb shell am start -n org.mlm.batstats.debug/app.batstats.battery.BatteryMainActivity`
-- Logs: `adb logcat -d --pid=$(adb shell pidof -s org.mlm.batstats.debug) | tail -80`
+- Device: `./gradlew :app:installDebug --console=plain -q && adb shell am start -n com.akane.voltwise.debug/app.batstats.battery.BatteryMainActivity`
+- Logs: `adb logcat -d --pid=$(adb shell pidof -s com.akane.voltwise.debug) | tail -80`
 - Emulator: no configured AVD, so no launch command yet; after creating/launching one, wait with `adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'`.
 
 ## Open questions
