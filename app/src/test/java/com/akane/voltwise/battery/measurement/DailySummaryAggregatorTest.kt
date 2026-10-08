@@ -122,6 +122,74 @@ class DailySummaryAggregatorTest {
         assertEquals(40, rows.getValue(day("2026-06-11")).minLevel)
     }
 
+    @Test fun dozeAndScreenOffSuspendUseCumulativeDifferencesAndAccumulate() {
+        val start = at("2026-06-10T23:59+02:00")
+        fun obs(t: Long, screen: Boolean, boundary: Boundary = Boundary.SAMPLE) =
+            Observation(start + t, t, t / 2, 70, null, null, null, PowerState.DISCHARGING,
+                screen, true, "one", boundary = boundary)
+        val engine = ObservationEngine()
+        engine.accept(obs(0, true))
+        val before = engine.accept(obs(60_000, false, Boundary.SCREEN))
+        val after = engine.accept(obs(120_000, false))
+        val interval = DailySummaryAggregator.interval(before, after, null)!!
+        assertEquals(60_000L, interval.dozeMs)
+        assertEquals(60_000L, interval.screenOffDozeMs)
+        assertEquals(30_000L, interval.screenOffSuspendMs)
+        val first = apply(interval).getValue(day("2026-06-11"))
+        val second = apply(interval, mapOf(first.epochDay to first)).getValue(first.epochDay)
+        assertEquals(120_000L, second.dozeMs)
+        assertEquals(120_000L, second.screenOffDozeMs)
+        assertEquals(60_000L, second.screenOffSuspendMs)
+    }
+
+    @Test fun midnightAndDstSplitNewMetricsWithoutMeasuringEndpointOnlyDays() {
+        for ((start, end, shares) in listOf(
+            Triple("2026-06-10T23:45+02:00", "2026-06-11T00:15+02:00", listOf(900_000L, 900_000L)),
+            Triple("2026-03-29T00:00+01:00", "2026-03-30T01:00+02:00", listOf(82_800_000L, 3_600_000L)),
+            Triple("2026-10-25T00:00+02:00", "2026-10-26T00:00+01:00", listOf(90_000_000L, 0L)),
+        )) {
+            val total = shares.sum()
+            val rows = apply(DayInterval(at(start), at(end), dozeMs = total,
+                screenOffDozeMs = total / 2, screenOffSuspendMs = total / 4)).values.toList()
+            assertEquals(shares.map { it.takeIf { value -> value > 0 } }, rows.map { it.dozeMs })
+            assertEquals(shares.map { (it / 2).takeIf { _ -> it > 0 } }, rows.map { it.screenOffDozeMs })
+            assertEquals(shares.map { (it / 4).takeIf { _ -> it > 0 } }, rows.map { it.screenOffSuspendMs })
+        }
+    }
+
+    @Test fun roundingRemainderStaysOnObservedDaysNotMidnightEndpoint() {
+        val rows = apply(DayInterval(at("2026-06-10T00:00+02:00"), at("2026-06-13T00:00+02:00"),
+            dozeMs = 2, screenOffDozeMs = 1, screenOffSuspendMs = 1)).values.toList()
+        assertEquals(listOf(0L, 0L, 2L, null), rows.map { it.dozeMs })
+        assertEquals(listOf(0L, 0L, 1L, null), rows.map { it.screenOffDozeMs })
+        assertEquals(listOf(0L, 0L, 1L, null), rows.map { it.screenOffSuspendMs })
+    }
+
+    @Test fun noObservedIntervalKeepsUnknownButObservedZeroIsMeasured() {
+        val start = at("2026-06-10T23:59+02:00")
+        val engine = ObservationEngine()
+        val initial = engine.accept(Observation(start, 0, 0, 70, null, null, null,
+            PowerState.PLUGGED, false, false, "one"))
+        val baseline = apply(DailySummaryAggregator.interval(ObservationSummary(), initial, null)!!).values.single()
+        assertNull(baseline.dozeMs)
+        assertNull(baseline.screenOffDozeMs)
+        assertNull(baseline.screenOffSuspendMs)
+        val observed = engine.accept(initial.latest!!.copy(wallMs = start + 120_000, elapsedMs = 120_000, uptimeMs = 120_000))
+        val rows = apply(DailySummaryAggregator.interval(initial, observed, null)!!).values
+        assertEquals(2, rows.size)
+        assertTrue(rows.all { it.dozeMs == 0L && it.screenOffDozeMs == 0L && it.screenOffSuspendMs == 0L })
+        val gap = engine.accept(observed.latest!!.copy(wallMs = start + 180_000, elapsedMs = 180_000,
+            uptimeMs = 180_000, boundary = Boundary.GAP))
+        val empty = DailySummaryAggregator.interval(observed, gap, null)!!
+        assertNull(empty.dozeMs)
+        assertNull(empty.screenOffDozeMs)
+        assertNull(empty.screenOffSuspendMs)
+        val retained = apply(empty, rows.associateBy { it.epochDay }).values.single()
+        assertEquals(0L, retained.dozeMs)
+        assertEquals(0L, retained.screenOffDozeMs)
+        assertEquals(0L, retained.screenOffSuspendMs)
+    }
+
     @Test fun intervalIsTheDifferenceOfTwoEngineSummaries() {
         val start = at("2026-06-10T12:00+02:00")
         fun obs(t: Long, charge: Long, power: PowerState, uptime: Long = t, boundary: Boundary = Boundary.SAMPLE) =
@@ -132,11 +200,11 @@ class DailySummaryAggregatorTest {
             DailySummaryAggregator.interval(ObservationSummary(), a, endTemperatureDeciC = null))
         val b = engine.accept(obs(60_000, 3_999_000, PowerState.DISCHARGING, uptime = 20_000))
         assertEquals(DayInterval(start, start + 60_000, screenOffMs = 60_000, screenOffDischargeUah = 1_000,
-            cpuSuspendMs = 40_000, endLevelPercent = 70, endTemperatureDeciC = 301, screenOffCoveredMs = 60_000),
+            cpuSuspendMs = 40_000, dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 40_000, endLevelPercent = 70, endTemperatureDeciC = 301, screenOffCoveredMs = 60_000),
             DailySummaryAggregator.interval(a, b, endTemperatureDeciC = 301))
         val c = engine.accept(obs(120_000, 3_999_000, PowerState.CHARGING, uptime = 80_000, boundary = Boundary.POWER))
         val d = engine.accept(obs(180_000, 4_009_000, PowerState.CHARGING, uptime = 140_000))
-        assertEquals(DayInterval(start + 120_000, start + 180_000, chargedUah = 10_000, endLevelPercent = 70),
+        assertEquals(DayInterval(start + 120_000, start + 180_000, chargedUah = 10_000, dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 0, endLevelPercent = 70),
             DailySummaryAggregator.interval(c, d, endTemperatureDeciC = null))
     }
 }

@@ -8,7 +8,8 @@ import java.time.ZoneId
  * What one stored interval adds to the daily summaries: from the previous persisted sample
  * ([startWallMs]) to this one ([endWallMs], whose reading is [endLevelPercent] and
  * [endTemperatureDeciC]). Durations in ms are discharging time by screen state; charges in µAh
- * are ≥ 0; [cpuSuspendMs] is non-null only when the interval was discharging.
+ * are ≥ 0; [cpuSuspendMs] is non-null only when the interval was discharging. Doze and screen-off
+ * suspend deltas are non-null only when the engine observed time, including measured zero.
  */
 data class DayInterval(
     val startWallMs: Long,
@@ -23,6 +24,9 @@ data class DayInterval(
     val endTemperatureDeciC: Int? = null,
     val screenOnCoveredMs: Long = 0,
     val screenOffCoveredMs: Long = 0,
+    val dozeMs: Long? = null,
+    val screenOffDozeMs: Long? = null,
+    val screenOffSuspendMs: Long? = null,
 )
 
 /**
@@ -46,6 +50,7 @@ object DailySummaryAggregator {
         val end = after.latest ?: return null
         fun grew(now: Long, then: Long) = (now - then).coerceAtLeast(0)
         val dischargeMs = grew(after.discharge.durationMs, before.discharge.durationMs)
+        val observed = grew(after.observedMs, before.observedMs) > 0
         return DayInterval(
             startWallMs = before.latest?.wallMs ?: end.wallMs,
             endWallMs = end.wallMs,
@@ -57,6 +62,9 @@ object DailySummaryAggregator {
             screenOffDischargeUah = grew(after.screenOff.chargeChangeUah, before.screenOff.chargeChangeUah),
             chargedUah = grew(after.charging.chargeChangeUah, before.charging.chargeChangeUah),
             cpuSuspendMs = if (dischargeMs > 0) grew(after.cpuSuspendMs, before.cpuSuspendMs) else null,
+            dozeMs = if (observed) grew(after.dozeMs, before.dozeMs) else null,
+            screenOffDozeMs = if (observed) grew(after.screenOffDozeMs, before.screenOffDozeMs) else null,
+            screenOffSuspendMs = if (observed) grew(after.screenOffSuspendMs, before.screenOffSuspendMs) else null,
             endLevelPercent = end.level,
             endTemperatureDeciC = endTemperatureDeciC,
         )
@@ -80,8 +88,17 @@ object DailySummaryAggregator {
         val screenOffUah = apportion(interval.screenOffDischargeUah, weights)
         val charged = apportion(interval.chargedUah, weights)
         val suspend = interval.cpuSuspendMs?.let { apportion(it, weights) }
+        fun observedShares(value: Long): List<Long> {
+            val shares = apportion(value, weights.filter { it > 0 }).iterator()
+            return weights.map { if (it > 0) shares.next() else 0L }
+        }
+        val doze = interval.dozeMs?.let(::observedShares)
+        val screenOffDoze = interval.screenOffDozeMs?.let(::observedShares)
+        val screenOffSuspend = interval.screenOffSuspendMs?.let(::observedShares)
         val endDay = segments.last().first
-        return segments.mapIndexed { i, (day, _) ->
+        return segments.mapIndexed { i, (day, duration) ->
+            fun contribute(previous: Long?, shares: List<Long>?): Long? =
+                if (duration > 0 && shares != null) (previous ?: 0L) + shares[i] else previous
             val row = rows[day] ?: DailySummary(epochDay = day, screenOnCoveredMs = 0, screenOffCoveredMs = 0)
             val added = row.copy(
                 screenOnMs = row.screenOnMs + screenOn[i],
@@ -93,6 +110,9 @@ object DailySummaryAggregator {
                 screenOffDischargeUah = row.screenOffDischargeUah + screenOffUah[i],
                 chargedUah = row.chargedUah + charged[i],
                 cpuSuspendMs = suspend?.let { (row.cpuSuspendMs ?: 0L) + it[i] } ?: row.cpuSuspendMs,
+                dozeMs = contribute(row.dozeMs, doze),
+                screenOffDozeMs = contribute(row.screenOffDozeMs, screenOffDoze),
+                screenOffSuspendMs = contribute(row.screenOffSuspendMs, screenOffSuspend),
                 updatedAt = updatedAt,
             )
             if (day == endDay) added.withReading(interval.endLevelPercent, interval.endTemperatureDeciC) else added
@@ -113,7 +133,8 @@ object DailySummaryAggregator {
         val start = interval.startWallMs
         val end = interval.endWallMs
         val empty = interval.screenOnMs == 0L && interval.screenOffMs == 0L && interval.screenOnDischargeUah == 0L &&
-            interval.screenOffDischargeUah == 0L && interval.chargedUah == 0L && (interval.cpuSuspendMs ?: 0L) == 0L
+            interval.screenOffDischargeUah == 0L && interval.chargedUah == 0L && (interval.cpuSuspendMs ?: 0L) == 0L &&
+            interval.dozeMs == null && interval.screenOffDozeMs == null && interval.screenOffSuspendMs == null
         if (empty || end <= start) return listOf(epochDay(end, zone) to 0L)
         val segments = mutableListOf<Pair<Long, Long>>()
         var date = Instant.ofEpochMilli(start).atZone(zone).toLocalDate()
