@@ -115,6 +115,8 @@ object SessionReport {
             screenOnUah = summary.screenOn.chargeChangeUah.takeIf { summary.screenOn.chargeCoveredMs > 0 },
             screenOffUah = summary.screenOff.chargeChangeUah.takeIf { summary.screenOff.chargeCoveredMs > 0 },
             cpuSuspendMs = summary.cpuSuspendMs,
+            dozeMs = summary.dozeMs.takeIf { summary.observedMs > 0 },
+            screenOffDozeMs = summary.screenOffDozeMs.takeIf { summary.observedMs > 0 },
             energyNwh = bucket.estimatedEnergyMwh?.let { (it * 1_000_000).roundToLong() },
             peakPowerMw = extremes.peakPowerMw,
             peakTemperatureDeciC = extremes.peakTemperatureDeciC,

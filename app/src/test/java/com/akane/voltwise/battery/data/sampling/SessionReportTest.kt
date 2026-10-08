@@ -27,6 +27,26 @@ class SessionReportTest {
         Observation(timestamp, elapsedMs!!, uptime, levelPercent, chargeCounterUah, currentNowUa, voltageMv, power, screenOn, false,
             "run", 30_000, boundary)
 
+    @Test fun dozeIsUnknownUntilObservedThenReportCopiesBothCounters() {
+        val first = sample(80, 4_000_000, 0, 3, 0)
+        val point = first.point(PowerState.DISCHARGING).copy(dozing = true)
+        val session = SessionReport.open(point, first)
+        val initial = SessionReport.report(session, first, engine.accept(point), SessionExtremes())
+        assertNull(initial.dozeMs)
+        assertNull(initial.screenOffDozeMs)
+        val off = sample(80, 3_999_000, 0, 3, 60_000, screenOn = false)
+        engine.accept(off.point(PowerState.DISCHARGING, Boundary.SCREEN).copy(dozing = true))
+        val last = sample(80, 3_998_000, 0, 3, 120_000, screenOn = false)
+        val summary = engine.accept(last.point(PowerState.DISCHARGING).copy(dozing = true))
+        val report = SessionReport.report(session, last, summary, SessionExtremes())
+        assertEquals(120_000L, report.dozeMs)
+        assertEquals(60_000L, report.screenOffDozeMs)
+        engine.reset()
+        val zero = reportSamples(PowerState.PLUGGED, first, first.copy(timestamp = first.timestamp + 60_000, elapsedMs = 60_000, uptimeMs = 60_000))
+        assertEquals(0L, zero.dozeMs)
+        assertEquals(0L, zero.screenOffDozeMs)
+    }
+
     @Test fun chargerTypeFollowsExtraPlugged() {
         assertEquals(ChargerType.AC, ChargerType.of(1))
         assertEquals(ChargerType.USB, ChargerType.of(2))
