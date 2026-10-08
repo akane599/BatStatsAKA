@@ -30,8 +30,13 @@ class CompoundWakeSessionTest {
         source = DailySummaryReplay.SAMPLE_SOURCE,
     )
 
-    @Test fun confirmedWakeKeepsTheOpenSessionAndPersistedOffIntervalInEitherOrder() {
-        for (order in listOf(listOf(Boundary.SCREEN, Boundary.DOZE), listOf(Boundary.DOZE, Boundary.SCREEN))) {
+    @Test fun confirmedWakeKeepsTheOpenSessionAndPersistedOffIntervalInEitherOrderOrStages() {
+        val scenarios = listOf(
+            listOf(point(), point(0), point(100, Boundary.SCREEN), point(200, Boundary.DOZE), point(3_000)),
+            listOf(point(), point(0), point(100, Boundary.DOZE), point(200, Boundary.SCREEN), point(3_000)),
+            listOf(point(), point(0).copy(dozing = true), point(300, Boundary.SCREEN), point(600, Boundary.DOZE), point(3_000)),
+        )
+        for (points in scenarios) {
             val gate = StateEventSequencer<BatterySample>()
             val engine = ObservationEngine()
             val first = point()
@@ -41,7 +46,7 @@ class CompoundWakeSessionTest {
             var last: PersistPolicy.State? = null
             val saved = mutableListOf<BatterySample>()
             val replay = DailySummaryReplay(ZoneOffset.UTC, 5_000_000)
-            for (p in listOf(first, point(0), point(100, order[0]), point(200, order[1]), point(3_000))) {
+            for (p in points) {
                 for (capture in gate.offer(sample(p), p)) {
                     val before = engine.summary
                     val after = engine.accept(capture.point)

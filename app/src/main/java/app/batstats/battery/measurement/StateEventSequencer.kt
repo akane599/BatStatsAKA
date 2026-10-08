@@ -22,26 +22,33 @@ class StateEventSequencer<T>(private val settleMs: Long = 2_000) {
         if (held != null) {
             val age = point.elapsedMs - held.point.elapsedMs
             val timely = point.generation == held.point.generation && age in 0..settleMs
-            if (timely && sameState(held.point, point) && point.boundary != Boundary.GAP) {
+            if (timely && point.boundary != Boundary.GAP) {
                 pendingEvents = pendingEvents + point.boundary
-                if (!confirms(previous, held.point, pendingEvents)) {
-                    return emptyList() // Keep the first actual reading, not a later inferred endpoint.
-                }
-                // Keep an existing always-persisted label for screen/Doze compound boundaries.
-                val boundary = when {
-                    Boundary.SCREEN in pendingEvents -> Boundary.SCREEN
-                    Boundary.DOZE in pendingEvents -> Boundary.DOZE
-                    else -> Boundary.POWER
-                }
-                // Equal timestamps need only the event capture (Room has a unique elapsed key).
+                // Equal timestamps share one endpoint (Room has a unique elapsed key).
                 val endpoint = if (age == 0L) StateCapture(value, point) else held
-                emit(endpoint.copy(point = endpoint.point.copy(boundary = boundary, confirmedBoundaries = pendingEvents)))
-                pending = null
-                pendingEvents = emptySet()
-                if (age > 0) emit(StateCapture(value, point))
-                return result
+                if (confirms(previous, endpoint.point, pendingEvents)) {
+                    // Keep an existing always-persisted label for screen/Doze compound boundaries.
+                    val boundary = when {
+                        Boundary.SCREEN in pendingEvents -> Boundary.SCREEN
+                        Boundary.DOZE in pendingEvents -> Boundary.DOZE
+                        else -> Boundary.POWER
+                    }
+                    emit(endpoint.copy(point = endpoint.point.copy(boundary = boundary, confirmedBoundaries = pendingEvents)))
+                    if (age == 0L) {
+                        pending = null
+                        pendingEvents = emptySet()
+                        return result
+                    }
+                    // The confirming capture may already show another transition; check it below.
+                } else if (age == 0L || sameState(held.point, point)) {
+                    pending = endpoint // Keep the first actual reading, except for the shared elapsed key.
+                    return emptyList()
+                } else {
+                    emit(held.copy(point = held.point.copy(boundary = Boundary.GAP)))
+                }
+            } else {
+                emit(held.copy(point = held.point.copy(boundary = Boundary.GAP)))
             }
-            emit(held.copy(point = held.point.copy(boundary = Boundary.GAP)))
             pending = null
             pendingEvents = emptySet()
         }
