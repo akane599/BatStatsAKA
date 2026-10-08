@@ -4,11 +4,24 @@ import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.measurement.CapacityEstimator
 import app.batstats.battery.measurement.HealthSummary
 
-/** Full capacity for drain conversion: usable counter-derived capacity, then the stored Health estimate. */
-fun resolveFullUah(counterUah: Long?, levelPct: Int?, storedEstimateUah: Long?): Long? =
-    HealthSummary.counterFullUah(counterUah, levelPct) ?: storedEstimateUah
+/** At this level, integer-level quantisation changes counter-derived full capacity by at most about 2%. */
+private const val MIN_LEVEL_TO_PREFER_COUNTER = 50
 
-/** The Health rule's confidence-weighted median of recent stored session estimates, without design capacity. */
-fun storedFullUah(sessions: List<ChargeSession>): Long? = CapacityEstimator.combine(
-    sessions.mapNotNull { HealthSummary.storedEstimate(it.capacityEstimateMah, it.capacityConfidence, it.capacityBasis) },
-)?.fullUah
+/** Drain capacity: prefer the usable counter at ≥ 50%, otherwise the stored estimate; never design capacity. */
+fun resolveFullUah(counterUah: Long?, levelPct: Int?, storedEstimateUah: Long?): Long? {
+    val counterFullUah = HealthSummary.counterFullUah(counterUah, levelPct)
+    return if (levelPct != null && levelPct >= MIN_LEVEL_TO_PREFER_COUNTER) {
+        counterFullUah ?: storedEstimateUah
+    } else {
+        storedEstimateUah ?: counterFullUah
+    }
+}
+
+/** Confidence-weighted median of usable local estimates, or imported estimates when no local estimate exists. */
+fun storedFullUah(sessions: List<ChargeSession>): Long? {
+    val (imported, local) = sessions.mapNotNull { session ->
+        HealthSummary.storedEstimate(session.capacityEstimateMah, session.capacityConfidence, session.capacityBasis)
+            ?.let { session to it }
+    }.partition { (session, _) -> session.source.startsWith("import:") || session.sessionId.startsWith("import:") }
+    return CapacityEstimator.combine(local.ifEmpty { imported }.map { it.second })?.fullUah
+}
