@@ -151,3 +151,83 @@ with sqlite3.connect(':memory:') as db:
     assert counts == {'charge_sessions': 11, 'app_snapshots': 1, 'app_snapshot_uids': 0, 'session_app_usage': 1, 'battery_samples': 1}, \
         'Per-session delete missed rows or touched another session: %s' % counts
 print('PASS actual trend/delete SQL: bounded newest-first estimate projection, per-session delete with snapshot-uid and app-usage cascade')
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for session, kind, end in [('before', 'DISCHARGE', 99), ('discharge', 'DISCHARGE', 100),
+                               ('charge', 'CHARGE', 150), ('plugged', 'PLUGGED', 200),
+                               ('after', 'DISCHARGE', 201), ('open', 'DISCHARGE', None)]:
+        db.execute('INSERT INTO charge_sessions(sessionId,type,startTime,endTime) VALUES(?,?,0,?)', (session, kind, end))
+    assert [r['sessionId'] for r in db.execute(query('closedSessionsBetween'), {'from': 100, 'to': 200})] == ['discharge', 'charge', 'plugged'], 'Closed range must include both endpoints/all types, never open/outside sessions'
+    for day in (1, 2, 3):
+        db.execute('INSERT INTO daily_summaries(epochDay,screenOnMs,screenOffMs,screenOnDischargeUah,screenOffDischargeUah,chargedUah,updatedAt) VALUES(?,0,0,0,0,0,0)', (day,))
+    assert [r['epochDay'] for r in db.execute(query('range', 'DailySummaryDao'), {'fromDay': 1, 'toDay': 2})] == [1, 2], 'One-shot day range differs from flow'
+
+    # Room expands collection parameters. Execute the extracted SQL with the same bounded expansion.
+    def collection(method, parameter, values):
+        sql = query(method).replace(':' + parameter, ','.join('?' for _ in values))
+        return db.execute(sql, values).fetchall()
+    for session in ('charge', 'discharge'):
+        for rank in (1, 0):
+            db.execute('INSERT INTO session_device_wakers(sessionId,kind,name,count,totalMs,rank) VALUES(?,?,?,?,?,?)',
+                       (session, 'WAKEUP_REASON', f'alarm{rank}', rank + 1, 20, rank))
+            db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES(?,?,10001,'example.app',1,0,'DELTA')", (session, rank))
+    expected = [('charge', 0), ('charge', 1), ('discharge', 0), ('discharge', 1)]
+    for method in ('sessionWakers', 'usageRowsForSessions'):
+        assert [(r['sessionId'], r['rank']) for r in collection(method, 'sessionIds', ['discharge', 'charge'])] == expected, method
+        assert [r['sessionId'] for r in collection(method, 'sessionIds', ['charge'])] == ['charge', 'charge'], 'Mixed unrequested sessions'
+        assert collection(method, 'sessionIds', []) == [], 'Empty collection returned rows'
+    db.execute(query('deleteSessionWakers'), {'sessionId': 'charge'})
+    assert len(collection('sessionWakers', 'sessionIds', ['discharge', 'charge'])) == 2, 'Replacement delete touched another session'
+    db.execute(query('deleteSessionRow'), {'id': 'discharge'})
+    assert collection('sessionWakers', 'sessionIds', ['discharge']) == [], 'Session wakers did not cascade'
+    assert collection('usageRowsForSessions', 'sessionIds', ['discharge']) == [], 'Usage did not cascade'
+
+    snapshots = []
+    for at in range(4):
+        sid = db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('charge','END',?)", (at,)).lastrowid
+        snapshots.append(sid)
+        db.execute("INSERT INTO snapshot_device_wakers VALUES(?,'KERNEL_WAKELOCK','kernel',1,20)", (sid,))
+    assert [r['name'] for r in db.execute(query('snapshotWakers'), {'snapshotId': snapshots[0]})] == ['kernel']
+    db.execute(query('pruneSnapshots'), {'keepLatest': 3})
+    assert db.execute(query('snapshotWakers'), {'snapshotId': snapshots[0]}).fetchall() == [], 'Pruned snapshot wakers did not cascade'
+    assert db.execute('SELECT COUNT(*) FROM snapshot_device_wakers').fetchone()[0] == 3
+    for table, sql in [('snapshot_device_wakers', "INSERT INTO snapshot_device_wakers VALUES(-1,'WAKEUP_REASON','missing',1,1)"),
+                       ('session_device_wakers', "INSERT INTO session_device_wakers VALUES('missing','WAKEUP_REASON','missing',1,1,0)")]:
+        try:
+            db.execute(sql)
+        except sqlite3.IntegrityError:
+            pass
+        else:
+            raise AssertionError(f'{table} accepted an absent parent')
+
+    for key, seen, score in [('old', 99, 1.0), ('boundary', 100, 3.0), ('new', 101, 2.0)]:
+        db.execute("INSERT INTO insight_findings(`key`,type,severity,confidence,score,firstSeenAt,lastSeenAt,status,evidenceVersion,evidenceJson) VALUES(?,'TREND','LOW','HIGH',?,1,?,'ACTIVE',1,'{}')", (key, score, seen))
+    for method in ('findings', 'findingsOnce'):
+        assert [r['key'] for r in db.execute(query(method, 'InsightDao'))] == ['boundary', 'new', 'old'], 'Findings ordering differs'
+    assert db.execute("SELECT feedbackMultiplier FROM insight_findings WHERE `key`='old'").fetchone()[0] == 1.0, 'SQL feedback default missing'
+    db.execute(query('setStatus', 'InsightDao'), {'key': 'boundary', 'status': 'DISMISSED'})
+    db.execute(query('setFeedback'), {'key': 'boundary', 'multiplier': 2.0})
+    assert tuple(db.execute("SELECT status,feedbackMultiplier FROM insight_findings WHERE `key`='boundary'").fetchone()) == ('DISMISSED', 2.0)
+    assert tuple(db.execute("SELECT status,feedbackMultiplier FROM insight_findings WHERE `key`='new'").fetchone()) == ('ACTIVE', 1.0), 'Targeted update touched another finding'
+    db.execute(query('purgeFindingsSeenBefore'), {'ms': 100})
+    assert [r['key'] for r in db.execute(query('findingsOnce'))] == ['boundary', 'new'], 'Retention boundary wrong'
+    for status, at in [('PREPARED', 1), ('UNKNOWN', 2), ('APPLIED', 3), ('FAILED', 4), ('REVERTED', 5), ('ONE_SHOT', 6)]:
+        db.execute("INSERT INTO insight_actions(findingKey,type,userId,status,priorStateVersion,createdAt) VALUES('boundary','RESTRICT_BACKGROUND',0,?,1,?)", (status, at))
+    assert [r['status'] for r in collection('actionsWithStatus', 'statuses', ['PREPARED', 'UNKNOWN'])] == ['UNKNOWN', 'PREPARED'], 'Reconciliation selection wrong'
+    assert collection('actionsWithStatus', 'statuses', []) == []
+    expected_actions = [tuple(r) for r in db.execute(query('actionsOnce'))]
+    assert expected_actions == [tuple(r) for r in db.execute(query('actions'))]
+    assert len({r[0] for r in expected_actions}) == 6 and all(r[0] > 0 for r in expected_actions), 'Action IDs must be distinct and generated'
+    db.execute(query('clearFindings'))
+    assert db.execute(query('findingsOnce')).fetchall() == []
+    db.execute(query('clearAll', 'SessionDao'))
+    db.execute(query('clearSnapshots'))
+    assert db.execute('SELECT COUNT(*) FROM snapshot_device_wakers').fetchone()[0] == 0
+    assert expected_actions == [tuple(r) for r in db.execute(query('actionsOnce'))], 'Action journal must survive finding/history deletion'
+print('PASS actual v7 DAO SQL: inclusive closed/day ranges, collection selection/order, waker FK/cascades, finding status/feedback/retention, action reconciliation and independent journal')
