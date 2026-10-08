@@ -31,4 +31,4 @@
 -keep class androidx.core.content.FileProvider { *; }
 
 -keepclassmembers class rikka.shizuku.Shizuku { *; }
--keep class app.batstats.battery.shizuku.ShellUserService { *; }
+-keep class com.akane.voltwise.battery.shizuku.ShellUserService { *; }

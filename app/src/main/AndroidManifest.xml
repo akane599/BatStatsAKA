@@ -84,7 +84,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_level"/>
         </receiver>
@@ -94,7 +94,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_temp"/>
         </receiver>
@@ -104,7 +104,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_time"/>
         </receiver>
@@ -113,8 +113,8 @@
             android:name=".battery.drain.DrainNotificationReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="app.batstats.battery.drain.ACTION_RESET" />
-                <action android:name="app.batstats.battery.drain.ACTION_STOP" />
+                <action android:name="com.akane.voltwise.battery.drain.ACTION_RESET" />
+                <action android:name="com.akane.voltwise.battery.drain.ACTION_STOP" />
             </intent-filter>
         </receiver>
     </application>

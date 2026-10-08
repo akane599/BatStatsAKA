@@ -118,7 +118,7 @@ android {
         compose = true
     }
 
-    namespace = "app.batstats"
+    namespace = "com.akane.voltwise"
 
     testOptions {
         // Required by the screenshot suite: layoutlib resolves themes/layouts from compiled resources.

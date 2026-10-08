@@ -6,8 +6,8 @@ import re
 import sqlite3
 
 root = Path(__file__).resolve().parents[1]
-dao = (root / 'app/src/main/java/app/batstats/battery/data/db/Dao.kt').read_text()
-schemas = (root / 'app/schemas/app.batstats.battery.data.db.BatteryDatabase').glob('*.json')
+dao = (root / 'app/src/main/java/com/akane/voltwise/battery/data/db/Dao.kt').read_text()
+schemas = (root / 'app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase').glob('*.json')
 schema = json.loads(max(schemas, key=lambda p: int(p.stem)).read_text())['database']  # newest version
 
 def query(method, interface=None):
