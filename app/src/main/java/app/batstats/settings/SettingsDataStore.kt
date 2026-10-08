@@ -15,12 +15,14 @@ import java.io.IOException
 internal fun createSettingsDataStore(
     file: File,
     scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
-): DataStore<Preferences> {
-    val store = PreferenceDataStoreFactory.create(
-        corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
-        scope = scope,
-        produceFile = { file },
-    )
+): DataStore<Preferences> = PreferenceDataStoreFactory.create(
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    scope = scope,
+    produceFile = { file },
+)
+
+internal fun DataStore<Preferences>.withDefaultsOnReadFailure(): DataStore<Preferences> {
+    val store = this
     return object : DataStore<Preferences> by store {
         override val data = store.data.catch { failure ->
             if (failure is IOException) emit(emptyPreferences()) else throw failure
