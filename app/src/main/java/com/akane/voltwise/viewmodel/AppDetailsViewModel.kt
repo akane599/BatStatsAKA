@@ -12,11 +12,21 @@ import com.akane.voltwise.battery.data.db.BatteryDatabase
 import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.data.db.SessionAppUsage
 import com.akane.voltwise.battery.data.db.SessionType
+import com.akane.voltwise.battery.insights.model.Direction
+import com.akane.voltwise.battery.insights.model.Finding
+import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.InsightReport
+import com.akane.voltwise.battery.insights.model.Severity
+import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.util.BatteryStatsParser
+import java.util.Collections
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +42,9 @@ data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMa
 
 /** [AppStatsReader] plus this app's history across stored sessions. */
 interface AppDetailsRepository : AppStatsReader {
+    /** InsightRepository.report owns status filtering: DISMISSED and RESOLVED never reach this flow. */
+    fun findingsFor(packageName: String): Flow<List<Finding>>
+
     /**
      * The sessions overlapping [fromMs]..[toMs] that [inAppHistory] keeps, oldest first, each with this app's row
      * ([isSameApp]) when the session listed it.
@@ -60,7 +73,11 @@ internal fun SessionAppUsage.isSameApp(uid: Int, packageName: String): Boolean =
 class DefaultAppDetailsRepository(
     reader: AppStatsReader,
     private val database: BatteryDatabase,
+    // whittle: transitional default until T9a (SQ-144) passes InsightRepository.report; remove the default then.
+    private val insights: Flow<InsightReport?> = flowOf(null),
 ) : AppDetailsRepository, AppStatsReader by reader {
+    override fun findingsFor(packageName: String): Flow<List<Finding>> = insights.map { it.appFindings(packageName) }
+
     override suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
         val sessions = database.sessionDao().sessionsBetween(fromMs, toMs)
             .filter { it.inAppHistory() }
@@ -71,6 +88,13 @@ class DefaultAppDetailsRepository(
         sessions.map { AppSessionUsage(it.sessionId, it.startTime, rows[it.sessionId]?.powerMah) }
     }
 }
+
+/** Selects an app from the active-only report; a shared uid is not a package match. */
+internal fun InsightReport?.appFindings(packageName: String): List<Finding> =
+    this?.findings?.filter { (it.subject as? Subject.App)?.packageName == packageName }.orEmpty()
+
+@Immutable
+data class AppFinding(val key: String, val type: FindingType, val severity: Severity, val direction: Direction?)
 
 /** A wakelock's effect: [CPU] keeps the processor awake (partial); [SCREEN] keeps the display on. */
 enum class WakelockKind { CPU, SCREEN }
@@ -161,6 +185,8 @@ data class AppDetailsUiState(
     val startedAtMs: Long? = null,
     val usage: AppUsageDetails? = null,
     val history: AppHistoryState = AppHistoryState.Loading,
+    /** An unmodifiable snapshot of this package's active findings. */
+    val findings: List<AppFinding> = emptyList(),
 )
 
 sealed interface AppDetailsEvent {
@@ -204,8 +230,8 @@ class AppDetailsViewModel(
         combine(info, infoLoaded, ::Pair),
         loader.loading,
         loader.problem,
-        history,
-    ) { snapshot, (info, loaded), loading, problem, history ->
+        combine(history, source.findingsFor(packageName), ::Pair),
+    ) { snapshot, (info, loaded), loading, problem, (history, findings) ->
         AppDetailsUiState(
             uid = uid,
             packageName = packageName,
@@ -218,6 +244,7 @@ class AppDetailsViewModel(
             startedAtMs = snapshot?.startedAt,
             usage = snapshot?.let { details(it, uid, packageName) },
             history = history,
+            findings = Collections.unmodifiableList(findings.map { AppFinding(it.key, it.type, it.severity, it.direction) }),
         )
     }.flowOn(computeDispatcher).stateIn(
         viewModelScope,

@@ -13,11 +13,13 @@ import com.akane.voltwise.battery.data.db.BatterySample
 import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.data.db.DailySummary
 import com.akane.voltwise.battery.data.db.SessionType
+import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.measurement.CalibrationState
 import com.akane.voltwise.settings.AppSettings
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -29,6 +31,8 @@ interface NowRepository {
     val realtime: StateFlow<BatteryRepository.Realtime>
     val calibration: StateFlow<CalibrationState>
     val settings: Flow<AppSettings>
+    /** InsightRepository.report: active findings only; reading never starts analysis. */
+    val insights: Flow<InsightReport?>
 
     /**
      * The app-wide design capacity shared with Health, only when already known (the Settings override, or a root
@@ -68,6 +72,8 @@ class DefaultNowRepository(
     private val snapshots: SessionSnapshotStore,
     settingsRepository: SettingsRepository<AppSettings>,
     designCapacity: DesignCapacitySource,
+    // whittle: transitional default until T9a (SQ-144) passes InsightRepository.report; remove the default then.
+    override val insights: Flow<InsightReport?> = flowOf(null),
 ) : NowRepository {
     override val realtime = repository.realtimeFlow
     override val calibration = calibrationStore.state

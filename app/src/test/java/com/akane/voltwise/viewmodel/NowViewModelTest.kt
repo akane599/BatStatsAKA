@@ -1,6 +1,7 @@
 package com.akane.voltwise.viewmodel
 
 import android.graphics.Bitmap
+import com.akane.voltwise.battery.insights.model.*
 import androidx.lifecycle.SavedStateHandle
 import com.akane.voltwise.battery.apps.AppInfo
 import com.akane.voltwise.battery.apps.AppInfoSource
@@ -68,6 +69,38 @@ class NowViewModelTest {
         runCurrent()
         return vm to { vm.state.value }
     }
+
+    @Test fun insightsDistinguishNotAnalyzedFromAllGoodAndIgnoreInformationalFindings() = runTest {
+        val (_, state) = start()
+        assertNull(state().insightsSummary)
+        repo.insights.value = InsightReport(T0, emptyList(), null)
+        runCurrent()
+        assertEquals(InsightsSummary(null, 0), state().insightsSummary)
+        assertTrue(state().insightsSummary!!.allGood)
+        repo.insights.value = InsightReport(T0, listOf(finding(Severity.INFO)), null)
+        runCurrent()
+        assertTrue(state().insightsSummary!!.allGood)
+        assertEquals(0, state().insightsSummary!!.activeFindingCount)
+    }
+
+    @Test fun insightsMapHeadlineIdentityAndCountOnlyActiveNonInformationalFindings() = runTest {
+        val headline = finding(Severity.HIGH)
+        repo.insights.value = InsightReport(T0, listOf(headline, finding(Severity.LOW), finding(Severity.INFO)), headline)
+        val (_, state) = start()
+        assertEquals(InsightsSummary(InsightHeadline(headline.key, headline.type, Severity.HIGH, CHROME), 2), state().insightsSummary)
+        assertFalse(state().insightsSummary!!.allGood)
+        val device = headline.copy(subject = Subject.Device)
+        repo.insights.value = InsightReport(T0, listOf(device), device)
+        runCurrent()
+        assertNull(state().insightsSummary!!.headline!!.packageName)
+    }
+
+    private fun finding(severity: Severity) = Finding(
+        key = "APP_DRAIN_ANOMALY:$CHROME:$severity", type = FindingType.APP_DRAIN_ANOMALY,
+        severity = severity, confidence = Confidence.HIGH, score = 1.0,
+        subject = Subject.App(10_001, CHROME), direction = Direction.UP,
+        evidence = emptyList(), series = emptyList(), recommendations = emptyList(),
+    )
 
     @Test fun heroAndReadoutsUseTheCalibratedReadingAndHoldTheEtaAcrossACaptureWithoutIt() = runTest {
         monitoring.isMonitoring.value = true
@@ -466,6 +499,7 @@ class NowViewModelTest {
         override val realtime = MutableStateFlow(BatteryRepository.Realtime())
         override val calibration = MutableStateFlow(CalibrationState())
         override val settings = MutableStateFlow(AppSettings())
+        override val insights = MutableStateFlow<InsightReport?>(null)
         override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = cached
