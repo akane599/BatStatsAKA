@@ -38,13 +38,13 @@ class NotificationInputsTest {
             session(SessionType.UNKNOWN).copy(capacityEstimateMah = 9_000, capacityConfidence = "unknown"),
         ))
         val inputs = NotificationInputs.of(realtime, flowOf(null), flowOf(AppSettings()), flowOf(null), stored)
-        assertEquals(4_000_000L, inputs.first().fullUah)
+        assertEquals(4_000_000L, inputs.first().input.fullUah)
         realtime.value = BatteryRepository.Realtime(sample().copy(chargeCounterUah = 400_000, levelPercent = 9))
-        assertEquals("Low level uses the confidence-weighted stored median", 5_000_000L, inputs.first().fullUah)
+        assertEquals("Low level uses the confidence-weighted stored median", 5_000_000L, inputs.first().input.fullUah)
         realtime.value = BatteryRepository.Realtime(sample().copy(chargeCounterUah = 10_000))
-        assertEquals(5_000_000L, inputs.first().fullUah)
+        assertEquals(5_000_000L, inputs.first().input.fullUah)
         stored.value = emptyList()
-        assertNull(inputs.first().fullUah)
+        assertNull(inputs.first().input.fullUah)
     }
 
     @Test fun onlyAnOpenDischargeSessionReachesTheContent() = runTest {

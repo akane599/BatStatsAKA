@@ -57,8 +57,10 @@ class NotificationContentTest {
         assertEquals("78%", content.level)
         // "−0.612 A" is no shorter than "−612 mA", so it isn't offered.
         assertEquals(listOf("−612 mA · 2.4 W"), content.headline)
+        // No full capacity known: the screen rates fall back to the average mA, as Now's DrainCell does.
         assertEquals(
-            listOf("On 420 mA · Off 38 mA · 5 h 10 min left", "On 420 mA · Off 38 mA · 5:10 h left", "On 420 mA · Off 38 mA", "5:10 h left"),
+            listOf("On 420 mA · Off 38 mA · 5 h 10 min left", "On 420 mA · Off 38 mA · 5:10 h left",
+                "On 420 · Off 38 mA · 5:10 h left", "On 420 mA · Off 38 mA", "On 420 · Off 38 mA", "5:10 h left"),
             content.summary,
         )
         assertEquals(listOf("On battery"), content.state)
@@ -76,6 +78,37 @@ class NotificationContentTest {
         assertEquals("78", content.statusIcon)
     }
 
+    @Test fun knownCapacityShowsTheScreenRatesAsPercentPerHour() {
+        // 420 mA and 38 mA of a 4,000 mAh battery: 10.5 %/h and 0.95 %/h (two decimals below 1, as in the app).
+        val content = build(NotificationInput(reading(sample(etaMs = 18_600_000)), session(), fullUah = FULL_UAH))
+        assertEquals(
+            listOf("On 10.5 %/h · Off 0.95 %/h · 5 h 10 min left", "On 10.5 %/h · Off 0.95 %/h · 5:10 h left",
+                "On 10.5 · Off 0.95 %/h · 5:10 h left", "On 10.5 %/h · Off 0.95 %/h", "On 10.5 · Off 0.95 %/h", "5:10 h left"),
+            content.summary,
+        )
+        assertEquals(listOf("10.5 %/h"), content.cell("Screen on"))
+        assertEquals(listOf("0.95 %/h"), content.cell("Screen off"))
+        // The unit stays apart so the grid draws it smaller.
+        assertEquals(Quantity("10.5", "%/h"), content.cells.single { it.label == "Screen on" }.values.single())
+        // Instantaneous values and the session total keep their units.
+        assertEquals(listOf("−612 mA · 2.4 W"), content.headline)
+        assertEquals("−612 mA", content.value("Current"))
+        assertEquals("496 mAh", content.value("Session"))
+        assertEquals("94%", content.value("Deep sleep"))
+    }
+
+    @Test fun eachScreenRateNeedsItsOwnMinuteOfCounterCoverage() {
+        // SQ-96's per-bucket rule: screen on is measured, screen off has only 30 s of counter data.
+        val partial = session(counterCoveredMs = 90 * 60_000L).copy(screenOnCoveredMs = hour, screenOffCoveredMs = 30_000L)
+        val withCapacity = build(NotificationInput(reading(sample()), partial, fullUah = FULL_UAH))
+        assertEquals(listOf("On 10.5 %/h · Off —"), withCapacity.summary)
+        assertEquals(listOf("10.5 %/h"), withCapacity.cell("Screen on"))
+        assertEquals(listOf("—"), withCapacity.cell("Screen off"))
+        val withoutCapacity = build(NotificationInput(reading(sample()), partial))
+        assertEquals(listOf("On 420 mA · Off —"), withoutCapacity.summary)
+        assertEquals(listOf("—"), withoutCapacity.cell("Screen off"))
+    }
+
     @Test fun largeReadingsHaveACompactFormInTheLargerUnitNeverAClippedOne() {
         val big = sample(currentUa = -12_345_000, voltageMv = 4_480)
         val content = build(NotificationInput(reading(big), session(deltaUah = 12_345_000)))
@@ -91,6 +124,7 @@ class NotificationContentTest {
             NotificationInput(reading(sample(etaMs = 18_600_000)), session(start = at("2026-09-27T22:40:00Z")), issue = NotificationIssue.COLLECTION),
             NotificationInput(reading(sample(level = 80, status = 4, plugged = 4, currentUa = 0)), issue = NotificationIssue.ADVANCED),
             NotificationInput(reading(sample(status = 2, plugged = 1, currentUa = 1_240_000, etaMs = 4_800_000))),
+            NotificationInput(reading(sample(etaMs = 18_600_000)), session(), fullUah = FULL_UAH),
         )
         inputs.map { build(it) }.forEach { content ->
             (listOf(content.headline, content.summary, content.state, content.footer, content.issue) +
@@ -113,7 +147,8 @@ class NotificationContentTest {
     }
 
     @Test fun partialCoverageShowsUnavailableScreenRatesNotNumbers() {
-        val content = build(NotificationInput(reading(sample()), session(counterCoveredMs = 90 * 60_000L)))
+        // A legacy row (no per-screen coverage) with partial session coverage: unavailable even with the capacity known.
+        val content = build(NotificationInput(reading(sample()), session(counterCoveredMs = 90 * 60_000L), fullUah = FULL_UAH))
         assertEquals(listOf("On — · Off —"), content.summary)
         assertEquals(listOf("—"), content.cell("Screen on"))
         assertEquals(listOf("—"), content.cell("Screen off"))
@@ -204,5 +239,9 @@ class NotificationContentTest {
         val content = build(NotificationInput(capture, session()))
         assertEquals("On 420 mA · Off 38 mA · 5 h 9 min left", content.summary.first())
         assertEquals(PowerState.DISCHARGING, capture.reading.powerState)
+    }
+
+    private companion object {
+        const val FULL_UAH = 4_000_000L
     }
 }

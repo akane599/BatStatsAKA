@@ -42,7 +42,7 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
     private fun leadPx(level: String) = contentPx - Layout.getDesiredWidth(level, title) - levelGapPx
 
     private fun <T : CharSequence> pick(forms: List<T>, paint: TextPaint, widthPx: Float): T? =
-        forms.firstOrNull { Layout.getDesiredWidth(it, paint) <= widthPx - slackPx } ?: forms.lastOrNull()
+        fit(forms, widthPx - slackPx) { Layout.getDesiredWidth(it, paint) }
 
     /** The rows the custom views can drop when the font is too large for the shade's fixed heights. */
     enum class Row { SUMMARY, FOOTER, ISSUE }
@@ -58,6 +58,10 @@ class NotificationFitter(context: Context, contentWidthDp: Float = contentWidthD
         /** Card inset from the screen edges (both sides) and, on API 31+, the content's start/end margins (52 + 16). */
         private const val SHADE_MARGINS_DP = 32
         private const val CONTENT_MARGINS_DP = 68
+
+        /** The first of [forms] (longest first) whose [measure] fits [widthPx], else the shortest; null for none. */
+        fun <T> fit(forms: List<T>, widthPx: Float, measure: (T) -> Float): T? =
+            forms.firstOrNull { measure(it) <= widthPx } ?: forms.lastOrNull()
 
         /** "−1,240" with " mA" at [UNIT_SCALE], as the grid shows it. */
         fun styled(quantity: Quantity): CharSequence {

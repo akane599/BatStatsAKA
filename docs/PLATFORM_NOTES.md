@@ -62,6 +62,8 @@ Android notification-channel sound and vibration are controlled by the user afte
 
 The monitoring notification's status-bar icon is a small rendered bitmap (a short number of glyphs); SystemUI tints it and uses only its alpha, so its own colour does not matter. Some OEM skins — MIUI in particular — ignore bitmap small icons in the status bar and show the launcher icon instead; on those skins the static `ic_stat_battery` icon is effectively always what's shown, not the live reading. This is OEM behavior BatStats cannot override.
 
+The monitoring notification is updated in place (same id and channel, no cancel between updates). Every notification of one monitoring session — the startup placeholder, each update and a re-promotion — carries the same nonzero `when`, taken when monitoring starts and renewed only by the next start, and hides it (`setShowWhen(false)`). AOSP 16 reads `when` = 0 as the post's fresh creation time (`Notification.getWhen`), so shades that order by time moved the notification to the top on every refresh. Stock ranking may already hold its position; the fix is aimed at the time-ordered shades of some Android 16 / OEM builds and still needs confirming on such a device.
+
 The high-discharge alert requires at least 3 qualifying readings spanning at least 1 minute before it fires, to avoid firing on a single noisy sample. With the screen off, the sampler only polls every 300 seconds (5 minutes; see [measurement guide](MEASUREMENTS.md)), so in the worst case the alert can lag the actual onset of high discharge by roughly 10–15 minutes (up to two or three poll intervals) rather than the ~1 minute a screen-on user would see.
 
 ## Local diagnostics and sharing

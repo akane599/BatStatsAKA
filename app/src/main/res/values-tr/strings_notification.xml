@@ -19,8 +19,10 @@
 
     <string name="notification_summary_drain">Açık %1$s · Kapalı %2$s</string>
     <string name="notification_summary_drain_short">Açık %1$s · Kapalı %2$s</string>
+    <string name="notification_summary_drain_shared">Açık %1$s · Kapalı %2$s %3$s</string>
     <string name="notification_summary_drain_left">Açık %1$s · Kapalı %2$s · %3$s kaldı</string>
     <string name="notification_summary_drain_left_short">Açık %1$s · Kapalı %2$s · %3$s kaldı</string>
+    <string name="notification_summary_drain_left_shared">Açık %1$s · Kapalı %2$s %3$s · %4$s kaldı</string>
     <string name="notification_summary_left">%1$s kaldı</string>
     <string name="notification_summary_to_full">Dolmasına %1$s · %2$s</string>
     <string name="notification_summary_state">%1$s · %2$s</string>

@@ -72,7 +72,11 @@ class DrainNotificationManager(private val context: Context, private val reposit
         }
     }
 
-    private var lastPostedNotification: Notification? = null
+    private val posts = OngoingPosts(System::currentTimeMillis, object : OngoingPosts.Poster<Notification> {
+        override fun show(notification: Notification) =
+            context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
+        override fun cancel() = context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+    })
     private val contentBuilder = NotificationContent.Builder(context)
     private val icons = StatusIconRenderer.of(context)
     init { ensureChannel(context) }
@@ -95,13 +99,16 @@ class DrainNotificationManager(private val context: Context, private val reposit
     /** The first notification, for `startForeground`: the latest reading; [run] adds the session at once. */
     fun getNotification(): Notification = build(content(NotificationInput(EtaHold.next(EtaHold.Reading(), repository.realtimeFlow.value))))
 
-    /** Re-promoting a running service must not replace the gated live content with startup defaults. */
-    fun promotionNotification(): Notification = promotionNotification(lastPostedNotification, ::getNotification)
+    /**
+     * Starts a monitoring session and returns its `when`: every notification until the next start, the service's
+     * placeholder included, is built with it so time-sorted shades keep the notification in place ([OngoingPosts]).
+     */
+    fun startSession(): Long = posts.start()
 
-    fun post(notification: Notification) {
-        context.getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification)
-        lastPostedNotification = notification
-    }
+    /** Re-promoting a running service must not replace the gated live content with startup defaults. */
+    fun promotionNotification(): Notification = posts.promotion(::getNotification)
+
+    fun post(notification: Notification) = posts.post(notification)
 
     /**
      * Keeps the notification current until cancelled: the calibrated reading (with its held estimate), the open
@@ -144,7 +151,7 @@ class DrainNotificationManager(private val context: Context, private val reposit
             .setCustomContentView(collapsed(content, fitter))
             .setCustomBigContentView(expanded(content, fitter))
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
-            .setWhen(0L).setShowWhen(false).setSilent(true)
+            .setWhen(posts.whenMs).setShowWhen(false).setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_STATUS).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             // Action icons are not drawn by the Android 7+ templates.
             .addAction(action(context.getString(R.string.notification_action_stop), DrainNotificationReceiver.ACTION_STOP, REQUEST_STOP))
@@ -196,8 +203,5 @@ class DrainNotificationManager(private val context: Context, private val reposit
         setViewVisibility(id, if (text == null) View.GONE else View.VISIBLE)
     }
 
-    fun stopNotification() {
-        lastPostedNotification = null
-        context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
-    }
+    fun stopNotification() = posts.stop()
 }
