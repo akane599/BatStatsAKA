@@ -90,6 +90,10 @@ interface SessionDao {
     @Query("SELECT * FROM charge_sessions WHERE startTime <= :to AND COALESCE(endTime, lastSampleTime, startTime) >= :from ORDER BY startTime")
     suspend fun sessionsBetween(from: Long, to: Long): List<ChargeSession>
 
+    /** Closed sessions of every type whose endpoint is in the inclusive analysis window. */
+    @Query("SELECT * FROM charge_sessions WHERE endTime BETWEEN :from AND :to ORDER BY endTime, sessionId")
+    suspend fun closedSessionsBetween(from: Long, to: Long): List<ChargeSession>
+
     /** Closed local discharge sessions whose endpoints fall in the ETA seed's seven-day window. */
     @Query("SELECT * FROM charge_sessions WHERE type = 'DISCHARGE' AND endTime BETWEEN :from AND :to AND substr(source, 1, 7) != 'import:'")
     suspend fun closedDischargeSessionsBetween(from: Long, to: Long): List<ChargeSession>
@@ -187,6 +191,9 @@ interface DailySummaryDao {
     @Query("SELECT * FROM daily_summaries WHERE epochDay BETWEEN :fromDay AND :toDay ORDER BY epochDay")
     fun between(fromDay: Long, toDay: Long): Flow<List<DailySummary>>
 
+    @Query("SELECT * FROM daily_summaries WHERE epochDay BETWEEN :fromDay AND :toDay ORDER BY epochDay")
+    suspend fun range(fromDay: Long, toDay: Long): List<DailySummary>
+
     @Query("SELECT COUNT(*) FROM daily_summaries")
     suspend fun count(): Int
 
@@ -205,6 +212,32 @@ interface AppUsageDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSnapshotUids(rows: List<AppSnapshotUid>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSnapshotWakers(rows: List<SnapshotDeviceWaker>)
+
+    @Query("SELECT * FROM snapshot_device_wakers WHERE snapshotId = :snapshotId ORDER BY totalMs DESC, kind, name")
+    suspend fun snapshotWakers(snapshotId: Long): List<SnapshotDeviceWaker>
+
+    @Query("SELECT * FROM session_device_wakers WHERE sessionId IN (:sessionIds) ORDER BY sessionId, rank, kind, name")
+    suspend fun sessionWakers(sessionIds: List<String>): List<SessionDeviceWaker>
+
+    @Query("SELECT * FROM session_app_usage WHERE sessionId IN (:sessionIds) ORDER BY sessionId, rank")
+    suspend fun usageRowsForSessions(sessionIds: List<String>): List<SessionAppUsage>
+
+    @Query("DELETE FROM session_device_wakers WHERE sessionId = :sessionId")
+    suspend fun deleteSessionWakers(sessionId: String)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSessionWakerRows(rows: List<SessionDeviceWaker>)
+
+    /** Replaces the entire session set, including when the new set is empty. */
+    @Transaction
+    suspend fun insertSessionWakers(sessionId: String, rows: List<SessionDeviceWaker>) {
+        require(rows.all { it.sessionId == sessionId }) { "Invalid session waker rows" }
+        deleteSessionWakers(sessionId)
+        insertSessionWakerRows(rows)
+    }
 
     /** Stores a snapshot and its per-uid rows, then prunes to the open session's baseline plus the last [SNAPSHOTS_KEPT]. */
     @Transaction
@@ -261,7 +294,7 @@ interface AppUsageDao {
     suspend fun setAppUsageStatus(sessionId: String, status: AppUsageStatus, basis: AppUsageBasis?): Int
 
     /**
-     * Replaces the session's breakdown with [rows] in the given order (rank = index: top 30, then "others") and
+     * Replaces the session's breakdown with [rows] in the given order (rank = index: top apps, waker candidates, then "others") and
      * marks the session READY with [basis], atomically. The session row must exist (FK).
      */
     @Transaction
@@ -273,4 +306,43 @@ interface AppUsageDao {
     companion object {
         const val SNAPSHOTS_KEPT = 3
     }
+}
+
+@Dao
+interface InsightDao {
+    @Query("SELECT * FROM insight_findings ORDER BY score DESC, key")
+    fun findings(): Flow<List<InsightFindingEntity>>
+
+    @Query("SELECT * FROM insight_findings ORDER BY score DESC, key")
+    suspend fun findingsOnce(): List<InsightFindingEntity>
+
+    @Upsert
+    suspend fun upsertFindings(list: List<InsightFindingEntity>)
+
+    @Query("UPDATE insight_findings SET status = :status WHERE `key` = :key")
+    suspend fun setStatus(key: String, status: InsightFindingStatus)
+
+    @Query("UPDATE insight_findings SET feedbackMultiplier = :multiplier WHERE `key` = :key")
+    suspend fun setFeedback(key: String, multiplier: Double)
+
+    @Query("DELETE FROM insight_findings")
+    suspend fun clearFindings()
+
+    @Query("DELETE FROM insight_findings WHERE lastSeenAt < :ms")
+    suspend fun purgeFindingsSeenBefore(ms: Long)
+
+    @Query("SELECT * FROM insight_actions ORDER BY createdAt DESC, id DESC")
+    fun actions(): Flow<List<InsightActionEntity>>
+
+    @Query("SELECT * FROM insight_actions ORDER BY createdAt DESC, id DESC")
+    suspend fun actionsOnce(): List<InsightActionEntity>
+
+    @Query("SELECT * FROM insight_actions WHERE status IN (:statuses) ORDER BY createdAt DESC, id DESC")
+    suspend fun actionsWithStatus(statuses: List<InsightActionStatus>): List<InsightActionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAction(entity: InsightActionEntity): Long
+
+    @Update
+    suspend fun updateAction(entity: InsightActionEntity)
 }

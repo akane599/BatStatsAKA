@@ -71,8 +71,104 @@ class DatabaseMigrationTest {
         }
     }
 
+    @Test fun versionSixKeepsHistoryAndAddsUnknownInsightMeasurements() = runBlocking {
+        val name = "migration-${UUID.randomUUID()}.db"
+        val path = context.getDatabasePath(name)
+        path.parentFile!!.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(path, null).use { v6 ->
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `battery_samples` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `levelPercent` INTEGER, `status` INTEGER NOT NULL, `plugged` INTEGER, `currentNowUa` INTEGER, `chargeCounterUah` INTEGER, `voltageMv` INTEGER, `temperatureDeciC` INTEGER, `health` INTEGER, `screenOn` INTEGER NOT NULL, `elapsedMs` INTEGER, `uptimeMs` INTEGER, `observationId` TEXT, `sessionId` TEXT, `currentAverageUa` INTEGER, `energyNwh` INTEGER, `cycleCount` INTEGER, `etaMs` INTEGER, `etaBasis` TEXT, `source` TEXT NOT NULL DEFAULT 'legacy', `boundaryReason` TEXT)")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_battery_samples_timestamp` ON `battery_samples` (`timestamp`)")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_battery_samples_sessionId` ON `battery_samples` (`sessionId`)")
+            v6.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_battery_samples_observationId_elapsedMs` ON `battery_samples` (`observationId`, `elapsedMs`)")
+            v6.execSQL("INSERT INTO `battery_samples` (`id`, `timestamp`, `levelPercent`, `status`, `plugged`, `currentNowUa`, `chargeCounterUah`, `voltageMv`, `temperatureDeciC`, `health`, `screenOn`, `elapsedMs`, `uptimeMs`, `observationId`, `sessionId`, `currentAverageUa`, `energyNwh`, `cycleCount`, `etaMs`, `etaBasis`, `source`, `boundaryReason`) VALUES (1, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 'seed-observationId', 'v6', 123, 123, 123, 123, 'seed-etaBasis', 'seed-source', 'seed-boundaryReason')")
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `charge_sessions` (`sessionId` TEXT NOT NULL, `type` TEXT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `startLevel` INTEGER, `endLevel` INTEGER, `deltaUah` INTEGER, `avgCurrentUa` INTEGER, `estCapacityMah` INTEGER, `activeKey` INTEGER, `observationId` TEXT, `lastSampleTime` INTEGER, `observedMs` INTEGER NOT NULL DEFAULT 0, `counterCoveredMs` INTEGER NOT NULL DEFAULT 0, `screenOnMs` INTEGER NOT NULL DEFAULT 0, `screenOffMs` INTEGER NOT NULL DEFAULT 0, `screenOnUah` INTEGER, `screenOffUah` INTEGER, `cpuSuspendMs` INTEGER, `closeReason` TEXT, `source` TEXT NOT NULL DEFAULT 'legacy', `chargerType` TEXT, `energyNwh` INTEGER, `peakPowerMw` INTEGER, `peakTemperatureDeciC` INTEGER, `screenOffSuspendMs` INTEGER, `capacityEstimateMah` INTEGER, `capacityConfidence` TEXT, `capacityBasis` TEXT, `appUsageStatus` TEXT, `appUsageBasis` TEXT, `screenOnCoveredMs` INTEGER, `screenOffCoveredMs` INTEGER, PRIMARY KEY(`sessionId`))")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_sessions_startTime` ON `charge_sessions` (`startTime`)")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_sessions_type` ON `charge_sessions` (`type`)")
+            v6.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_charge_sessions_activeKey` ON `charge_sessions` (`activeKey`)")
+            v6.execSQL("INSERT INTO `charge_sessions` (`sessionId`, `type`, `startTime`, `endTime`, `startLevel`, `endLevel`, `deltaUah`, `avgCurrentUa`, `estCapacityMah`, `activeKey`, `observationId`, `lastSampleTime`, `observedMs`, `counterCoveredMs`, `screenOnMs`, `screenOffMs`, `screenOnUah`, `screenOffUah`, `cpuSuspendMs`, `closeReason`, `source`, `chargerType`, `energyNwh`, `peakPowerMw`, `peakTemperatureDeciC`, `screenOffSuspendMs`, `capacityEstimateMah`, `capacityConfidence`, `capacityBasis`, `appUsageStatus`, `appUsageBasis`, `screenOnCoveredMs`, `screenOffCoveredMs`) VALUES ('v6', 'DISCHARGE', 123, 123, 123, 123, 123, 123, 123, NULL, 'seed-observationId', 123, 123, 123, 123, 123, 123, 123, 123, 'seed-closeReason', 'seed-source', 'seed-chargerType', 123, 123, 123, 123, 123, 'seed-capacityConfidence', 'seed-capacityBasis', 'READY', 'DELTA', 123, 123)")
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `daily_summaries` (`epochDay` INTEGER NOT NULL, `screenOnMs` INTEGER NOT NULL, `screenOffMs` INTEGER NOT NULL, `screenOnDischargeUah` INTEGER NOT NULL, `screenOffDischargeUah` INTEGER NOT NULL, `chargedUah` INTEGER NOT NULL, `cpuSuspendMs` INTEGER, `minLevel` INTEGER, `maxLevel` INTEGER, `peakTemperatureDeciC` INTEGER, `updatedAt` INTEGER NOT NULL, `screenOnCoveredMs` INTEGER, `screenOffCoveredMs` INTEGER, PRIMARY KEY(`epochDay`))")
+            v6.execSQL("INSERT INTO `daily_summaries` (`epochDay`, `screenOnMs`, `screenOffMs`, `screenOnDischargeUah`, `screenOffDischargeUah`, `chargedUah`, `cpuSuspendMs`, `minLevel`, `maxLevel`, `peakTemperatureDeciC`, `updatedAt`, `screenOnCoveredMs`, `screenOffCoveredMs`) VALUES (20000, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123, 123)")
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshots` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` TEXT, `kind` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `windowStartedAt` INTEGER, `windowStartCount` INTEGER)")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_app_snapshots_sessionId` ON `app_snapshots` (`sessionId`)")
+            v6.execSQL("INSERT INTO `app_snapshots` (`id`, `sessionId`, `kind`, `capturedAt`, `windowStartedAt`, `windowStartCount`) VALUES (1, 'v6', 'END', 123, 123, 123)")
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshot_uids` (`snapshotId` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, PRIMARY KEY(`snapshotId`, `uid`), FOREIGN KEY(`snapshotId`) REFERENCES `app_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+            v6.execSQL("INSERT INTO `app_snapshot_uids` (`snapshotId`, `uid`, `packageName`, `powerMah`, `cpuTimeMs`, `foregroundTimeMs`, `backgroundTimeMs`, `wakelockTimeMs`, `mobileBytes`, `wifiBytes`) VALUES (1, 123, 'seed-packageName', 12.5, 123, 123, 123, 123, 123, 123)")
+            v6.execSQL("CREATE TABLE IF NOT EXISTS `session_app_usage` (`sessionId` TEXT NOT NULL, `rank` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, `isOthers` INTEGER NOT NULL, `basis` TEXT NOT NULL, PRIMARY KEY(`sessionId`, `rank`), FOREIGN KEY(`sessionId`) REFERENCES `charge_sessions`(`sessionId`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+            v6.execSQL("CREATE INDEX IF NOT EXISTS `index_session_app_usage_sessionId` ON `session_app_usage` (`sessionId`)")
+            v6.execSQL("INSERT INTO `session_app_usage` (`sessionId`, `rank`, `uid`, `packageName`, `powerMah`, `cpuTimeMs`, `foregroundTimeMs`, `backgroundTimeMs`, `wakelockTimeMs`, `mobileBytes`, `wifiBytes`, `isOthers`, `basis`) VALUES ('v6', 0, 123, 'seed-packageName', 12.5, 123, 123, 123, 123, 123, 123, 0, 'DELTA')")
+            v6.version = 6
+        }
+        val db = open(name)
+        try {
+            val session = db.sessionDao().byId("v6")!!
+            assertEquals(123L, session.screenOnCoveredMs)
+            assertEquals(123L, session.screenOffCoveredMs)
+            assertNull(session.dozeMs); assertNull(session.screenOffDozeMs)
+            assertNull(session.appCaptureStartMs); assertNull(session.appCaptureEndMs)
+            val day = db.dailySummaryDao().byDay(20_000)!!
+            assertEquals(123L, day.screenOnDischargeUah)
+            assertNull(day.dozeMs); assertNull(day.screenOffDozeMs); assertNull(day.screenOffSuspendMs)
+            val usage = db.appUsageDao()
+            val snapshot = usage.snapshots().single()
+            assertNull(snapshot.deepIdleMs); assertNull(snapshot.deepIdleCount)
+            assertNull(snapshot.lightIdleMs); assertNull(snapshot.lightIdleCount)
+            assertNull(snapshot.screenOffMs); assertNull(snapshot.wakersComplete)
+            assertNull(usage.snapshotUids(1).single().wakeupAlarms)
+            assertNull(usage.sessionUsageRows("v6").single().topJobName)
+            val updated = session.copy(dozeMs = 20, screenOffDozeMs = 10, appCaptureStartMs = 1, appCaptureEndMs = 100)
+            db.sessionDao().upsert(updated)
+            assertEquals(updated, db.sessionDao().byId("v6"))
+            val updatedDay = day.copy(dozeMs = 20, screenOffDozeMs = 10, screenOffSuspendMs = 30)
+            db.dailySummaryDao().upsert(updatedDay)
+            assertEquals(listOf(updatedDay), db.dailySummaryDao().range(20_000, 20_000))
+            assertEquals(listOf(updated), db.sessionDao().closedSessionsBetween(123, 123))
+
+            val waker = SessionDeviceWaker("v6", "WAKEUP_REASON", "alarm", 2, 20, 0)
+            usage.insertSessionWakers("v6", listOf(waker))
+            usage.insertSessionWakers("v6", listOf(waker.copy(name = "replacement")))
+            assertEquals(listOf(waker.copy(name = "replacement")), usage.sessionWakers(listOf("v6")))
+            try {
+                usage.insertSessionWakers("v6", listOf(waker, waker))
+                fail("Duplicate waker must roll back the whole replacement")
+            } catch (_: SQLiteConstraintException) { }
+            assertEquals(listOf(waker.copy(name = "replacement")), usage.sessionWakers(listOf("v6")))
+            usage.insertSessionWakers("v6", emptyList())
+            assertTrue(usage.sessionWakers(listOf("v6")).isEmpty())
+            usage.insertSnapshotWakers(listOf(SnapshotDeviceWaker(1, "WAKEUP_REASON", "alarm", 2, 20)))
+            assertEquals(1, usage.snapshotWakers(1).size)
+            usage.clearSnapshots()
+            assertTrue(usage.snapshotWakers(1).isEmpty())
+
+            val insights = db.insightDao()
+            val finding = InsightFindingEntity("key", "TREND", severity = "LOW", confidence = "HIGH",
+                score = 2.0, firstSeenAt = 1, lastSeenAt = 2, status = InsightFindingStatus.ACTIVE,
+                evidenceVersion = 1, evidenceJson = "{}")
+            insights.upsertFindings(listOf(finding))
+            insights.upsertFindings(listOf(finding.copy(score = 3.0)))
+            insights.setStatus("key", InsightFindingStatus.DISMISSED)
+            insights.setFeedback("key", 2.0)
+            assertEquals(listOf(finding.copy(score = 3.0, status = InsightFindingStatus.DISMISSED, feedbackMultiplier = 2.0)), insights.findingsOnce())
+            assertEquals(insights.findingsOnce(), insights.findings().first())
+            val action = InsightActionEntity(findingKey = "key", type = "RESTRICT_BACKGROUND", userId = 0,
+                status = InsightActionStatus.PREPARED, priorStateVersion = 1, createdAt = 1)
+            val id = insights.insertAction(action)
+            assertTrue(id > 0)
+            val applied = action.copy(id = id, status = InsightActionStatus.APPLIED, appliedAt = 2)
+            insights.updateAction(applied)
+            assertEquals(listOf(applied), insights.actionsWithStatus(listOf(InsightActionStatus.APPLIED)))
+            insights.clearFindings()
+            assertTrue(insights.findingsOnce().isEmpty())
+            db.sessionDao().clearAll()
+            assertEquals(listOf(applied), insights.actionsOnce())
+            assertEquals(insights.actionsOnce(), insights.actions().first())
+        } finally {
+            db.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     private fun open(name: String) = Room.databaseBuilder(context, BatteryDatabase::class.java, name)
-        .addMigrations(BatteryDatabase.MIGRATION_1_2, BatteryDatabase.MIGRATION_2_3, BatteryDatabase.MIGRATION_3_4, BatteryDatabase.MIGRATION_4_5, BatteryDatabase.MIGRATION_5_6).build()
+        .addMigrations(BatteryDatabase.MIGRATION_1_2, BatteryDatabase.MIGRATION_2_3, BatteryDatabase.MIGRATION_3_4, BatteryDatabase.MIGRATION_4_5, BatteryDatabase.MIGRATION_5_6, BatteryDatabase.MIGRATION_6_7).build()
 
     private fun BatteryDatabase.names(type: String): Set<String> =
         openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type = ?", arrayOf(type)).use { cursor ->
