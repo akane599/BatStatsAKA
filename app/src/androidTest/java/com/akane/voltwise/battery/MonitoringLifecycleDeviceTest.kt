@@ -67,7 +67,9 @@ class MonitoringLifecycleDeviceTest {
             await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.contains(noOffDrain) == true &&
                 notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)
                     ?.contains(context.getString(R.string.notification_state_discharging)) == true }
-            assertEquals(0L, notification()!!.notification.`when`)
+            // US-4 (PROGRESS.md): one nonzero monitoring-start timestamp keeps shade updates in place.
+            val sessionWhen = notification()!!.notification.`when`
+            assertNotEquals("Monitoring notifications need a nonzero session timestamp", 0L, sessionWhen)
             assertTrue(notification()!!.notification.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0)
             val notificationKey = notification()!!.key
             DeviceEnvironment.screenshot("monitoring-screen-on-simulated-battery")
@@ -87,7 +89,7 @@ class MonitoringLifecycleDeviceTest {
             val charging = context.getString(R.string.notification_state_charging)
             await { notification()?.notification?.extras?.getCharSequence(Notification.EXTRA_TITLE)?.contains(charging) == true }
             assertEquals(notificationKey, notification()!!.key)
-            assertEquals(0L, notification()!!.notification.`when`)
+            assertEquals("Charging updates retain the monitoring session timestamp", sessionWhen, notification()!!.notification.`when`)
             phase = "notification tap opens Now"
             assertTrue("Notification shade did not open", device.openNotification())
             // The custom views show the headline ("+1,240 mA · 5.2 W", collapsed) or the state ("Charging · AC charger", expanded).
