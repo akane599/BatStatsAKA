@@ -1,37 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Themed-icon (Android 13+) layer: the ic_launcher_foreground silhouette in one solid color; the system tints it. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
-    android:viewportWidth="1024"
-    android:viewportHeight="1024">
-
+    android:viewportWidth="108"
+    android:viewportHeight="108">
     <path
-        android:fillColor="#FF000000"
-        android:fillType="evenOdd"
-        android:pathData="
-            M425.28996,216.20355
-            H598.71003
-            A92.490738,92.490738 0 0 1 691.20077,308.69429
-            V755.73271
-            A92.490738,92.490738 0 0 1 598.71003,848.22345
-            H425.28996
-            A92.490738,92.490738 0 0 1 332.79922,755.73271
-            V308.69429
-            A92.490738,92.490738 0 0 1 425.28996,216.20355 Z
-
-            M445.26476,647.33181
-            L582.072,555.57085
-            506.99486,480.49371
-            577.06686,408.75333
-            441.928,475.48857
-            520.34191,567.24952 Z
-
-            M475.145587,177.51161
-            H557.582233
-            A11.335677,11.335677 0 0 1 568.91791,188.847287
-            V208.867866
-            A11.335677,11.335677 0 0 1 557.582233,220.203543
-            H475.145587
-            A11.335677,11.335677 0 0 1 463.80991,208.867866
-            V188.847287
-            A11.335677,11.335677 0 0 1 475.145587,177.51161 Z"/>
+        android:pathData="M34.5,38H68.5A7,7 0,0 1,75.5 45V63A7,7 0,0 1,68.5 70H34.5A7,7 0,0 1,27.5 63V45A7,7 0,0 1,34.5 38Z"
+        android:strokeWidth="5.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M75.5,47.5H81A2.5,2.5 0,0 1,83.5 50V58A2.5,2.5 0,0 1,81 60.5H75.5Z" />
+    <path
+        android:pathData="M35,49L42,53L47,47.5L55,61L61,55.5L68,59.5"
+        android:strokeWidth="5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
 </vector>
