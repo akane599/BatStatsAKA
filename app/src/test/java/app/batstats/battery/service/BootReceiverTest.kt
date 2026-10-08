@@ -7,6 +7,25 @@ import org.junit.Test
 
 class BootReceiverTest {
     @Test
+    fun ownPackageReplacementDoesNotRestartStoppedMonitoring() {
+        assertFalse(resumesMonitoring(Intent.ACTION_MY_PACKAGE_REPLACED, autoStart = true, monitoringWanted = false))
+    }
+
+    @Test
+    fun bootCompletedStillStartsAfterUserStoppedMonitoring() {
+        assertTrue(resumesMonitoring(Intent.ACTION_BOOT_COMPLETED, autoStart = true, monitoringWanted = false))
+    }
+
+    @Test
+    fun autoStartDisabledDoesNotResumeEitherAction() {
+        for (action in listOf(Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_MY_PACKAGE_REPLACED)) {
+            for (wanted in listOf(false, true)) {
+                assertFalse(resumesMonitoring(action, autoStart = false, monitoringWanted = wanted))
+            }
+        }
+    }
+
+    @Test
     fun bootCompletedResumesMonitoring() {
         assertTrue(resumesMonitoring(Intent.ACTION_BOOT_COMPLETED))
     }

@@ -14,10 +14,17 @@ import kotlinx.coroutines.withTimeout
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-internal fun resumesMonitoring(action: String?): Boolean =
-    action == Intent.ACTION_BOOT_COMPLETED || action == Intent.ACTION_MY_PACKAGE_REPLACED
+internal fun resumesMonitoring(
+    action: String?,
+    autoStart: Boolean = true,
+    monitoringWanted: Boolean = true,
+): Boolean = autoStart && when (action) {
+    Intent.ACTION_BOOT_COMPLETED -> true
+    Intent.ACTION_MY_PACKAGE_REPLACED -> monitoringWanted
+    else -> false
+}
 
-/** Resumes monitoring after a reboot or app update when auto-start is on; if refused, offers a start notification. */
+/** Resumes after reboot or a wanted app-update restart when auto-start is on; offers a prompt if refused. */
 class BootReceiver : BroadcastReceiver(), KoinComponent {
     private val monitoring: MonitoringControl by inject()
 
@@ -27,7 +34,9 @@ class BootReceiver : BroadcastReceiver(), KoinComponent {
         CoroutineScope(Dispatchers.Default).launch {
             try {
                 val settings = withTimeout(8_000) { BatteryGraph.settings.flow.first() }
-                if (settings.autoStartOnBoot && monitoring.start() == MonitoringControl.StartResult.BLOCKED) {
+                if (resumesMonitoring(intent.action, settings.autoStartOnBoot, monitoring.monitoringWanted) &&
+                    monitoring.start() == MonitoringControl.StartResult.BLOCKED
+                ) {
                     Notifier.promptStartOnBoot(context)
                 }
             } catch (e: Exception) {

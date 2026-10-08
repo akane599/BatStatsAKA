@@ -5,33 +5,50 @@ import android.content.Intent
 import android.util.Log
 import androidx.core.content.ContextCompat
 import app.batstats.battery.data.BatteryRepository
+import app.batstats.battery.data.sampling.KeyValueStore
+import app.batstats.battery.data.sampling.SharedPreferencesStore
 import app.batstats.battery.drain.DrainNotificationManager
 import kotlinx.coroutines.flow.StateFlow
 
 /** Starts and stops [BatteryMonitorService]; the service itself starts and stops the sampler. */
-class MonitoringController(
-    private val context: Context,
-    repository: BatteryRepository,
+class MonitoringController internal constructor(
+    override val isMonitoring: StateFlow<Boolean>,
+    private val store: KeyValueStore,
+    private val startService: () -> MonitoringControl.StartResult,
+    private val stopService: () -> Unit,
 ) : MonitoringControl {
-    override val isMonitoring: StateFlow<Boolean> = repository.isMonitoringFlow
+    constructor(context: Context, repository: BatteryRepository) : this(
+        isMonitoring = repository.isMonitoringFlow,
+        store = SharedPreferencesStore(context.getSharedPreferences("monitoring_state", Context.MODE_PRIVATE)),
+        startService = {
+            DrainNotificationManager.ensureChannel(context)
+            try {
+                ContextCompat.startForegroundService(context, Intent(context, BatteryMonitorService::class.java))
+                MonitoringControl.StartResult.STARTED
+            } catch (e: IllegalStateException) {
+                // ForegroundServiceStartNotAllowedException (API 31+) is an IllegalStateException, as is
+                // any other "not allowed to start service" refusal from the background.
+                Log.w("MonitoringController", "Foreground service start refused (${e.javaClass.simpleName})")
+                MonitoringControl.StartResult.BLOCKED
+            }
+        },
+        stopService = { context.stopService(Intent(context, BatteryMonitorService::class.java)) },
+    )
+
+    // whittle: absent flags preserve pre-upgrade auto-resume; an explicit stop opts out of update resumes.
+    override val monitoringWanted: Boolean
+        get() = store.getString("monitoring_wanted") != "false"
 
     override fun start(): MonitoringControl.StartResult {
-        if (isMonitoring.value) return MonitoringControl.StartResult.ALREADY_RUNNING
-        DrainNotificationManager.ensureChannel(context)
-        return try {
-            ContextCompat.startForegroundService(context, service())
-            MonitoringControl.StartResult.STARTED
-        } catch (e: IllegalStateException) {
-            // ForegroundServiceStartNotAllowedException (API 31+) is an IllegalStateException, as is
-            // any other "not allowed to start service" refusal from the background.
-            Log.w("MonitoringController", "Foreground service start refused (${e.javaClass.simpleName})")
-            MonitoringControl.StartResult.BLOCKED
+        val result = if (isMonitoring.value) MonitoringControl.StartResult.ALREADY_RUNNING else startService()
+        if (result != MonitoringControl.StartResult.BLOCKED) {
+            store.edit(mapOf("monitoring_wanted" to "true"))
         }
+        return result
     }
 
     override fun stop() {
-        context.stopService(service())
+        store.edit(mapOf("monitoring_wanted" to "false"))
+        stopService()
     }
-
-    private fun service() = Intent(context, BatteryMonitorService::class.java)
 }
