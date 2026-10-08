@@ -11,9 +11,9 @@ import re
 import sqlite3
 
 root = Path(__file__).resolve().parents[1]
-source = (root / 'app/src/main/java/app/batstats/battery/data/db/BatteryDatabase.kt').read_text()
-fixture = (root / 'app/src/androidTest/java/app/batstats/battery/data/DatabaseMigrationTest.kt').read_text()
-schema_files = {int(p.stem): p for p in (root / 'app/schemas/app.batstats.battery.data.db.BatteryDatabase').glob('*.json')}
+source = (root / 'app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt').read_text()
+fixture = (root / 'app/src/androidTest/java/com/akane/voltwise/battery/data/DatabaseMigrationTest.kt').read_text()
+schema_files = {int(p.stem): p for p in (root / 'app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase').glob('*.json')}
 latest = max(schema_files)
 schemas = {v: json.loads(p.read_text())['database'] for v, p in schema_files.items()}
 schema = schemas[latest]

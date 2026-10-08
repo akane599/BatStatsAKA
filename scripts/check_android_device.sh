@@ -87,9 +87,9 @@ if "$batstats_prebuilt"; then
   # Build immediately before this command; existing APKs are intentionally not rebuilt here.
   adb install -r app/build/outputs/apk/debug/app-universal-debug.apk
   adb install -r -t app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-  run_prebuilt_phase ordinary -e notAnnotation app.batstats.test.RequiresShizuku || batstats_ordinary_result=$?
+  run_prebuilt_phase ordinary -e notAnnotation com.akane.voltwise.test.RequiresShizuku || batstats_ordinary_result=$?
 else
-  run_gradle_phase -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku || batstats_ordinary_result=$?
+  run_gradle_phase -Pandroid.testInstrumentationRunnerArguments.notAnnotation=com.akane.voltwise.test.RequiresShizuku || batstats_ordinary_result=$?
 fi
 collect_screenshots
 [[ "$batstats_ordinary_result" == 0 ]] || collect_logcat
@@ -101,9 +101,9 @@ adb shell rm -rf /sdcard/Download/batstats-validation-screenshots
 batstats_phase=shizuku
 if python3 scripts/prepare_shizuku.py --serial "$batstats_serial"; then
   if "$batstats_prebuilt"; then
-    run_prebuilt_phase shizuku -e class app.batstats.battery.shizuku.ShizukuDeviceTest || batstats_shizuku_result=$?
+    run_prebuilt_phase shizuku -e class com.akane.voltwise.battery.shizuku.ShizukuDeviceTest || batstats_shizuku_result=$?
   else
-    run_gradle_phase -Pandroid.testInstrumentationRunnerArguments.class=app.batstats.battery.shizuku.ShizukuDeviceTest || batstats_shizuku_result=$?
+    run_gradle_phase -Pandroid.testInstrumentationRunnerArguments.class=com.akane.voltwise.battery.shizuku.ShizukuDeviceTest || batstats_shizuku_result=$?
   fi
 else
   batstats_shizuku_result=1
