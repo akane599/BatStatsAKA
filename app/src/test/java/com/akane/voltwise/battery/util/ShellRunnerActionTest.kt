@@ -23,6 +23,7 @@ class ShellRunnerActionTest {
                 elapsedMs = { 0L },
             )
             assertEquals(Outcome.NoAccess(mode, "Actions require Shizuku or root"), runner.execAction(command))
+            assertNull(runner.lastError.value)
         }
     }
 
@@ -86,6 +87,36 @@ class ShellRunnerActionTest {
             assertTrue(second.await() is Outcome.Success)
             val expected = listOf(command.argv.joinToString(" "), "dumpsys battery")
             assertEquals(if (actionFirst) expected else expected.reversed(), calls)
+        }
+    }
+
+    @Test fun actionOutcomesPreserveDiagnosticErrorUntilAccessLoss() = runTest {
+        for (mode in listOf(Mode.ROOT, Mode.SHIZUKU)) {
+            var result = CommandOutput.Result(error = "Diagnostic failed")
+            val runner = ShellRunner(
+                probeMode = { mode },
+                runShizuku = { _, _ ->
+                    if (result.error == null) ShizukuBridge.RunResult.Success(result.output)
+                    else ShizukuBridge.RunResult.Error(
+                        result.error.orEmpty(),
+                        if (result.accessFailure == null) ShizukuBridge.Failure.COMMAND else ShizukuBridge.Failure.NO_PERMISSION,
+                    )
+                },
+                runRoot = { _, _ -> result },
+                shizukuRunning = { true },
+                elapsedMs = { 0L },
+            )
+            assertEquals(Outcome.Failure(mode, "Diagnostic failed"), runner.exec("dumpsys battery"))
+            result = CommandOutput.Result("")
+            assertEquals(Outcome.Success("", mode), runner.execAction(command))
+            assertEquals("Diagnostic failed", runner.lastError.value)
+            result = CommandOutput.Result(error = "Action failed")
+            assertEquals(Outcome.Failure(mode, "Action failed"), runner.execAction(command))
+            assertEquals("Diagnostic failed", runner.lastError.value)
+            result = CommandOutput.Result(error = "Access lost", accessFailure = CommandOutput.AccessFailure.DENIED)
+            assertTrue(runner.execAction(command) is Outcome.NoAccess)
+            assertEquals(Mode.NONE, runner.access.value)
+            assertEquals(if (mode == Mode.ROOT) "Root access unavailable" else "Access lost", runner.lastError.value)
         }
     }
 

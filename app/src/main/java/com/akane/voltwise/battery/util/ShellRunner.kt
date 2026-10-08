@@ -88,7 +88,6 @@ class ShellRunner internal constructor(
             val mode = detectMode()
             if (action && mode != Mode.SHIZUKU && mode != Mode.ROOT) {
                 val message = "Actions require Shizuku or root"
-                _lastError.value = message
                 return@withContext Outcome.NoAccess(mode, message)
             }
             val result = when (mode) {
@@ -124,7 +123,8 @@ class ShellRunner internal constructor(
                 DumpOutput.failure(result.output) != null -> DumpOutput.failure(result.output)
                 else -> null
             }
-            _lastError.value = error
+            // Action outcomes belong to their journal; preserve diagnostic errors unless access is lost.
+            if (!action) _lastError.value = error
             if (error == null) Outcome.Success(result.output, mode) else Outcome.Failure(mode, error)
         }
     }

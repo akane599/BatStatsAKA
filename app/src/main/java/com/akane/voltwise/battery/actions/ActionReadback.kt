@@ -17,7 +17,7 @@ sealed interface WhitelistChange {
 /** Unknown or ambiguous output is never interpreted as the requested state. */
 object ActionReadback {
     private val appOp = Regex(
-        "(?:Uid mode: )?(?:(RUN_ANY_IN_BACKGROUND|RUN_IN_BACKGROUND): )?(?:mode: )?" +
+        "(?:Uid mode: )?(RUN_ANY_IN_BACKGROUND|RUN_IN_BACKGROUND): (?:mode: )?" +
             "(allow|ignore|default|deny)(; (?:time|rejectTime|duration)=[^;\\r\\n]+)*",
     )
 
@@ -29,11 +29,19 @@ object ActionReadback {
         return bucket?.let { Readback.Recognized(it) } ?: Readback.Unrecognized
     }
 
-    fun backgroundOp(output: String): Readback<AppOpMode> {
+    private val noOperations = Regex("No operations\\.(?:\\r?\\nDefault mode: (?:allow|ignore|default|deny))?")
+
+    /**
+     * Reads only `cmd appops get --user 0 <pkg> <op>` for [op], not an all-op dump.
+     * Exactly "No operations." (optionally followed by a Default mode line) preserves DEFAULT
+     * as the prior state for Undo's `set default`, not the effective mode named by that line.
+     * Wrong-op, multiple/conflicting records and unexpected text remain unrecognized.
+     */
+    fun backgroundOp(output: String, op: BackgroundOp): Readback<AppOpMode> {
         val value = output.trim()
+        if (noOperations.matches(value)) return Readback.Recognized(AppOpMode.DEFAULT)
         val match = appOp.matchEntire(value) ?: return Readback.Unrecognized
-        // A bare mode word is not an appops record (nor is "No operations.").
-        if (match.groupValues[1].isEmpty() && !value.startsWith("mode: ")) return Readback.Unrecognized
+        if (match.groupValues[1] != op.name) return Readback.Unrecognized
         return Readback.Recognized(AppOpMode.entries.single { it.token == match.groupValues[2] })
     }
 
@@ -52,10 +60,15 @@ object ActionReadback {
             val uid = fields[2].toIntOrNull() ?: return Readback.Unrecognized
             entries += WhitelistEntry(fields[1], uid, kind)
         }
-        // An empty whitelist is a valid list, not evidence that an add/remove succeeded.
-        return Readback.Recognized(entries)
+        // Real lists contain system entries; empty transport output cannot establish membership.
+        return if (entries.isEmpty()) Readback.Unrecognized else Readback.Recognized(entries)
     }
 
+    /**
+     * Parses acknowledgements only; confirm membership with [dozeWhitelist] after every mutation.
+     * UnknownPackage can also mean already whitelisted, not proof the package is uninstalled;
+     * a silent removal is unrecognized here, not evidence that membership changed.
+     */
     fun whitelistChange(output: String): Readback<WhitelistChange> {
         val value = output.trim()
         val prefix = listOf("Added: ", "Removed: ", "Unknown package: ").firstOrNull(value::startsWith)

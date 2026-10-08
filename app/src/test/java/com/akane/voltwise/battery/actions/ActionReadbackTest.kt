@@ -21,23 +21,46 @@ class ActionReadbackTest {
     }
 
     @Test fun appOpsKnownRecordsIncludingReadOnlyDeny() {
-        for (mode in AppOpMode.entries) {
+        for (op in BackgroundOp.entries) for (mode in AppOpMode.entries) {
             for (text in listOf(
-                "mode: ${mode.token}",
-                "RUN_IN_BACKGROUND: mode: ${mode.token}",
-                "RUN_ANY_IN_BACKGROUND: ${mode.token}; time=+1h2m ago; rejectTime=+2h ago; duration=+1s",
-                "Uid mode: RUN_ANY_IN_BACKGROUND: ${mode.token}\n",
-            )) assertEquals(text, Readback.Recognized(mode), ActionReadback.backgroundOp(text))
+                "${op.name}: mode: ${mode.token}",
+                "${op.name}: ${mode.token}; time=+1h2m ago; rejectTime=+2h ago; duration=+1s",
+                "Uid mode: ${op.name}: ${mode.token}\n",
+            )) assertEquals(text, Readback.Recognized(mode), ActionReadback.backgroundOp(text, op))
         }
+    }
+
+    @Test fun appOpsRequireTheQueriedOpRecord() {
+        for (op in BackgroundOp.entries) {
+            val other = BackgroundOp.entries.single { it != op }
+            for (text in listOf("mode: allow", "${other.name}: allow", "Uid mode: ${other.name}: ignore")) {
+                assertEquals(text, Readback.Unrecognized, ActionReadback.backgroundOp(text, op))
+            }
+        }
+    }
+
+    @Test fun appOpsNoOperationsPreservesDefaultPriorState() {
+        for (text in listOf("No operations.", "  No operations.\n") + AppOpMode.entries.map {
+            "No operations.\nDefault mode: ${it.token}"
+        }) {
+            assertEquals(text, Readback.Recognized(AppOpMode.DEFAULT), ActionReadback.backgroundOp(text, BackgroundOp.RUN_ANY_IN_BACKGROUND))
+        }
+        assertEquals(
+            listOf("cmd", "appops", "set", "--user", "0", "com.example", "RUN_ANY_IN_BACKGROUND", "default"),
+            PrivilegedCommand.SetBackgroundOp("com.example", BackgroundOp.RUN_ANY_IN_BACKGROUND, AppOpMode.DEFAULT).argv,
+        )
     }
 
     @Test fun appOpsUnknownAmbiguousAndOemOutputDoesNotImplyDefaultOrSuccess() {
         for (text in listOf(
-            "", "No operations.", "Default mode: default", "allow", "mode: allowed", "mode: foreground",
+            "", "Default mode: default", "allow", "mode: allowed", "mode: foreground",
+            "No operations.\nDefault mode: foreground", "No operations.\nDefault mode: allow\nError: denied",
+            "No operations.\nDefault mode: allow\nDefault mode: ignore", "No operations.\nRUN_ANY_IN_BACKGROUND: allow",
+            "Uid mode: RUN_ANY_IN_BACKGROUND: ignore\nNo operations.",
             "RUN_ANY_IN_BACKGROUND: allow OEM custom", "MODE_ALLOWED", "CAMERA: allow", "mode=allow",
             "RUN_ANY_IN_BACKGROUND: allow\nRUN_ANY_IN_BACKGROUND: ignore", "mode: allow\nError: denied",
             "Uid mode: RUN_ANY_IN_BACKGROUND: ignore\nRUN_ANY_IN_BACKGROUND: allow", "mode: allow; vendor=1",
-        )) assertEquals(text, Readback.Unrecognized, ActionReadback.backgroundOp(text))
+        )) assertEquals(text, Readback.Unrecognized, ActionReadback.backgroundOp(text, BackgroundOp.RUN_ANY_IN_BACKGROUND))
     }
 
     @Test fun whitelistKeepsUserAndSystemEntriesDistinct() {
@@ -49,12 +72,21 @@ class ActionReadbackTest {
             )),
             ActionReadback.dozeWhitelist("user,com.example,10001\nsystem,android,1000\nsystem-excidle,com.android.phone,1001\n"),
         )
-        assertEquals(Readback.Recognized(emptyList<WhitelistEntry>()), ActionReadback.dozeWhitelist("\n"))
+        assertEquals(
+            Readback.Recognized(listOf(WhitelistEntry("android", 1000, WhitelistKind.SYSTEM))),
+            ActionReadback.dozeWhitelist("system,android,1000\n"),
+        )
         for (text in listOf(
             "user,com.example,-1", "user,com.example,+10001", "user,com.example,999999999999",
             "user,com.example,", "user,com.example", "vendor,com.example,10001", "user,com.exаmple,10001",
             "Whitelist: com.example", "user,com.example,10001\nError: no access",
         )) assertEquals(text, Readback.Unrecognized, ActionReadback.dozeWhitelist(text))
+    }
+
+    @Test fun whitelistWithoutEntriesIsUnrecognized() {
+        for (text in listOf("", "\n", " \t\n", "Whitelist: com.example", "Error: no access")) {
+            assertEquals(text, Readback.Unrecognized, ActionReadback.dozeWhitelist(text))
+        }
     }
 
     @Test fun whitelistMutationAcknowledgementIsTypedAndUnknownIsNotSuccess() {
