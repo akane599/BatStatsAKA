@@ -19,11 +19,15 @@
     <string name="notification_charger_wireless">Wireless</string>
     <string name="notification_charger_dock">Dock</string>
 
-    <!-- Collapsed line 2: screen on/off drain (+ time left) on battery; time to full · temperature otherwise -->
+    <!-- Collapsed line 2: screen on/off drain (+ time left) on battery; time to full · temperature otherwise.
+         The drain values carry their unit ("10.5 %/h", or "420 mA" when the capacity is unknown); the _shared forms
+         write both numbers and then their common unit (%3$s): "On 10.5 · Off 0.95 %/h". -->
     <string name="notification_summary_drain">On %1$s · Off %2$s</string>
     <string name="notification_summary_drain_short">On %1$s · Off %2$s</string>
+    <string name="notification_summary_drain_shared">On %1$s · Off %2$s %3$s</string>
     <string name="notification_summary_drain_left">On %1$s · Off %2$s · %3$s left</string>
     <string name="notification_summary_drain_left_short">On %1$s · Off %2$s · %3$s left</string>
+    <string name="notification_summary_drain_left_shared">On %1$s · Off %2$s %3$s · %4$s left</string>
     <string name="notification_summary_left">%1$s left</string>
     <string name="notification_summary_to_full">%1$s to full · %2$s</string>
     <string name="notification_summary_state">%1$s · %2$s</string>

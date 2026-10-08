@@ -45,13 +45,17 @@ class BatteryMonitorService : Service() {
         else startForeground(DrainNotificationManager.NOTIFICATION_ID, notification)
     }
 
-    /** A minimal notification that is cheap to build; the full one replaces it right after [startForegroundWith]. */
-    private fun placeholder(): Notification {
+    /**
+     * A minimal notification that is cheap to build; the full one replaces it right after [startForegroundWith].
+     * It carries the monitoring session's `when`, as every full post does, so the replacement doesn't move it.
+     */
+    private fun placeholder(sessionWhen: Long): Notification {
         DrainNotificationManager.ensureChannel(this)
         return NotificationCompat.Builder(this, DrainNotificationManager.CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_battery)
             .setContentTitle(getString(R.string.monitor_channel))
-            .setOngoing(true).setSilent(true).setShowWhen(false)
+            .setOngoing(true).setSilent(true).setOnlyAlertOnce(true)
+            .setWhen(sessionWhen).setShowWhen(false)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build()
     }
@@ -59,9 +63,10 @@ class BatteryMonitorService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // After startForegroundService(), Android crashes the app unless startForeground() comes promptly and before
         // any stopSelf() (ForegroundServiceDidNotStartInTimeException). So promote first, with a cheap notification
-        // when not yet running: building the full one can be slow while the main thread is busy.
+        // when not yet running: building the full one can be slow while the main thread is busy. Not yet running
+        // starts a monitoring session: one `when` for all its notifications.
         val promoted = try {
-            startForegroundWith(if (started) notifications.promotionNotification() else placeholder())
+            startForegroundWith(if (started) notifications.promotionNotification() else placeholder(notifications.startSession()))
             true
         } catch (e: CancellationException) {
             throw e

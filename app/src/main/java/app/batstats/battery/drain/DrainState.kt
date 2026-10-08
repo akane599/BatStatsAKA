@@ -1,5 +1,6 @@
 package app.batstats.battery.drain
 
+import app.batstats.ui.format.formatRate
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.abs
@@ -74,6 +75,10 @@ private fun smallOrGrouped(value: Double, smallBelow: Double, pattern: String, d
 
 fun drainRateQuantity(rate: Double?, locale: Locale = Locale.getDefault()): Quantity? =
     rate.finite()?.let { Quantity(smallOrGrouped(it, 1.0, "%.2g", 0, locale), "mA") }
+
+/** A drain as a share of the full charge per hour, in the app's rate format (Now's DrainCell): "10.5 %/h", "0.95 %/h". */
+fun percentPerHourQuantity(perHour: Double?, locale: Locale = Locale.getDefault()): Quantity? =
+    perHour.finite()?.let { Quantity(formatRate(it, locale), "%/h") }
 
 fun chargeQuantity(mah: Double?, locale: Locale = Locale.getDefault()): Quantity? =
     mah.finite()?.let { Quantity(smallOrGrouped(it, 0.1, "%.1g", 1, locale), "mAh") }

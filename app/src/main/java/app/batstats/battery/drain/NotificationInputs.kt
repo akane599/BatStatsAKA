@@ -18,8 +18,8 @@ import kotlinx.coroutines.flow.scan
 
 /** The ongoing notification's update stream, before formatting: [DrainNotificationManager.run] gates and posts it. */
 object NotificationInputs {
-    /** What the notification shows, the update gate's screen state, and capacity reserved for drain conversion. */
-    data class Update(val input: NotificationInput, val screenOn: Boolean, val fullUah: Long? = null)
+    /** What the notification shows (with the full capacity for its %/h rates) and the update gate's screen state. */
+    data class Update(val input: NotificationInput, val screenOn: Boolean)
 
     /**
      * Each reading carries its held estimate ([EtaHold]); only an open DISCHARGE session counts (Now's "since unplug"
@@ -39,9 +39,9 @@ object NotificationInputs {
         val storedEstimate = recentSessions.map(::storedFullUah).distinctUntilChanged()
         return combine(readings, session, options, issue.distinctUntilChanged(), storedEstimate) { reading, open, (icon, fahrenheit), problem, stored ->
             Update(
-                input = NotificationInput(reading, open, icon, fahrenheit, problem),
+                input = NotificationInput(reading, open, icon, fahrenheit, problem,
+                    fullUah = resolveFullUah(reading.reading.sample?.chargeCounterUah, reading.reading.level, stored)),
                 screenOn = reading.reading.sample?.screenOn != false,
-                fullUah = resolveFullUah(reading.reading.sample?.chargeCounterUah, reading.reading.level, stored),
             )
         }
     }

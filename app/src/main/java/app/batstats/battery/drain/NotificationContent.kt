@@ -2,6 +2,7 @@ package app.batstats.battery.drain
 
 import android.content.Context
 import app.batstats.R
+import app.batstats.battery.data.DrainRate
 import app.batstats.battery.data.SessionDrain
 import app.batstats.battery.data.db.ChargeSession
 import app.batstats.battery.data.db.SessionType
@@ -44,6 +45,8 @@ data class NotificationInput(
     val statusIcon: StatusIconValue = StatusIconValue.STATIC,
     val fahrenheit: Boolean = false,
     val issue: NotificationIssue? = null,
+    /** The battery's full charge (counter, else the stored estimate): the screen rates show as %/h when known. */
+    val fullUah: Long? = null,
 )
 
 /**
@@ -88,29 +91,34 @@ data class NotificationContent(
             val sample = realtime.sample
             val power = realtime.powerState
             val session = input.session?.takeIf { it.type == SessionType.DISCHARGE }
-            val drain = session?.let { SessionDrain.of(it, fullUah = null) }
+            val drain = session?.let { SessionDrain.of(it, input.fullUah) }
             val eta = input.reading.remainingMs
             val stateText = text(stateLabel(power, realtime.level))
             val charger = if (power == PowerState.DISCHARGING) null else ChargerType.of(realtime.plugged)
             val level = realtime.level?.let { percent(it.toDouble(), locale) } ?: NO_VALUE
             val powerValue = powerQuantity(realtime.powerMw, locale)
             val temperature = formatTemperature(realtime.temperatureC?.toDouble(), input.fahrenheit, locale)
-            val onMa = drain?.screenOn?.currentMa
-            val offMa = drain?.screenOff?.currentMa
-            val screenOn = formatDrainRate(onMa, locale)
-            val screenOff = formatDrainRate(offMa, locale)
+            val onForms = drainForms(drain?.screenOn, locale)
+            val offForms = drainForms(drain?.screenOff, locale)
+            val on = onForms.firstOrNull()
+            val off = offForms.firstOrNull()
+            val screenOn = on?.toString() ?: NO_VALUE
+            val screenOff = off?.toString() ?: NO_VALUE
             val summary = when {
                 sample == null -> emptyList()
-                power == PowerState.DISCHARGING && eta != null -> listOf(
+                power == PowerState.DISCHARGING && eta != null -> listOfNotNull(
                     text(R.string.notification_summary_drain_left, screenOn, screenOff, duration(eta, locale)),
                     text(R.string.notification_summary_drain_left, screenOn, screenOff, compactDuration(eta, locale).toString()),
                     text(R.string.notification_summary_drain_left_short, screenOn, screenOff, compactDuration(eta, locale).toString()),
+                    sharedUnit(R.string.notification_summary_drain_left_shared, on, off, compactDuration(eta, locale).toString()),
                     text(R.string.notification_summary_drain_short, screenOn, screenOff),
+                    sharedUnit(R.string.notification_summary_drain_shared, on, off),
                     text(R.string.notification_summary_left, compactDuration(eta, locale).toString()),
                 )
-                power == PowerState.DISCHARGING -> listOf(
+                power == PowerState.DISCHARGING -> listOfNotNull(
                     text(R.string.notification_summary_drain, screenOn, screenOff),
                     text(R.string.notification_summary_drain_short, screenOn, screenOff),
+                    sharedUnit(R.string.notification_summary_drain_shared, on, off),
                 )
                 power == PowerState.CHARGING && eta != null -> listOf(
                     text(R.string.notification_summary_to_full, duration(eta, locale), temperature),
@@ -132,8 +140,8 @@ data class NotificationContent(
                 cell(R.string.notification_label_power, powerValue),
                 cell(R.string.notification_label_temperature, temperatureQuantity(realtime.temperatureC?.toDouble(), input.fahrenheit, locale)),
                 cell(R.string.notification_label_voltage, voltageQuantity(realtime.voltageMv, locale)),
-                cell(R.string.notification_label_screen_on, drainRateQuantity(onMa, locale), drainAmpsQuantity(onMa, locale)),
-                cell(R.string.notification_label_screen_off, drainRateQuantity(offMa, locale), drainAmpsQuantity(offMa, locale)),
+                cell(R.string.notification_label_screen_on, *onForms.toTypedArray()),
+                cell(R.string.notification_label_screen_off, *offForms.toTypedArray()),
                 cell(R.string.notification_label_deep_sleep, drain?.deepSleepPercent?.let { Quantity(percent(it, locale)) }),
                 cell(R.string.notification_label_session, sessionChargeQuantity(sessionMah, locale), sessionChargeAhQuantity(sessionMah, locale)),
                 cell(
@@ -175,6 +183,20 @@ data class NotificationContent(
                 }.map { text(it) }.shorterForms(),
                 statusIcon = StatusIconText.of(input.statusIcon, realtime, input.fahrenheit, locale),
             )
+        }
+
+        /**
+         * A screen state's drain as Now's DrainCell shows it: %/h when the full capacity is known, else the average
+         * mA (and its A form). The live current and the session total stay in their units: neither is a rate.
+         */
+        private fun drainForms(rate: DrainRate?, locale: Locale): List<Quantity> =
+            percentPerHourQuantity(rate?.percentPerHour, locale)?.let(::listOf)
+                ?: listOfNotNull(drainRateQuantity(rate?.currentMa, locale), drainAmpsQuantity(rate?.currentMa, locale))
+
+        /** "On 10.5 · Off 0.95 %/h": one unit for both rates, so the time left still fits a narrow shade. */
+        private fun sharedUnit(template: Int, on: Quantity?, off: Quantity?, vararg rest: Any): String? {
+            if (on?.unit == null || off == null || off.unit != on.unit) return null
+            return text(template, on.number, off.number, on.unit, *rest)
         }
 
         /** A cell with its value's forms, longest first; a missing value is "—". */
