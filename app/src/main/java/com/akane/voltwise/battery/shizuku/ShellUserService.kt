@@ -3,21 +3,20 @@ package com.akane.voltwise.battery.shizuku
 import android.os.Binder
 import android.os.Parcel
 import android.os.ParcelFileDescriptor
+import com.akane.voltwise.battery.actions.CommandPolicy
 import com.akane.voltwise.battery.util.CommandOutput
 import com.akane.voltwise.battery.util.CommandProtocol
 import java.util.concurrent.Semaphore
 import java.util.concurrent.ConcurrentHashMap
 
-/** Only the app's fixed diagnostic commands are exposed by the privileged helper. */
+/** Only CommandPolicy's diagnostic and action templates are exposed by the privileged helper. */
 class ShellUserService : Binder() {
     companion object {
         const val TRANSACTION_RUN_PIPE = 2
         const val TRANSACTION_CANCEL = 3
         // Shizuku's USER_SERVICE_TRANSACTION_destroy (restricted to its library group; ShellUserServiceTest pins it).
         const val TRANSACTION_DESTROY = 16777115
-        private val COMMANDS = setOf(
-            "dumpsys batterystats -c --charged", "dumpsys battery"
-        )
+        internal fun allows(command: String): Boolean = CommandPolicy.allows(command.split(' '))
     }
 
     private val permits = Semaphore(1)
@@ -38,7 +37,7 @@ class ShellUserService : Binder() {
                         val acquired = permits.tryAcquire()
                         try {
                             val result = when {
-                                command !in COMMANDS -> CommandOutput.Result(error = "Unsupported command")
+                                !allows(command) -> CommandOutput.Result(error = "Unsupported command")
                                 !acquired -> CommandOutput.Result(error = "Helper busy; retry later")
                                 else -> CommandOutput.run(command.split(' '), timeout)
                             }

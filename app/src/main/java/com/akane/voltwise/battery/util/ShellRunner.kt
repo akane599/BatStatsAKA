@@ -2,6 +2,8 @@ package com.akane.voltwise.battery.util
 
 import android.content.Context
 import android.os.SystemClock
+import com.akane.voltwise.battery.actions.CommandPolicy
+import com.akane.voltwise.battery.actions.PrivilegedCommand
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -65,12 +67,29 @@ class ShellRunner internal constructor(
     @Volatile
     private var cachedModeAt = 0L
 
-    suspend fun exec(cmd: String, allowEmpty: Boolean = false): Outcome = commandLock.withLock {
+    suspend fun exec(cmd: String, allowEmpty: Boolean = false): Outcome = execute(cmd, allowEmpty, action = false)
+
+    suspend fun execAction(command: PrivilegedCommand): Outcome {
+        val argv = command.argv.toList()
+        require(CommandPolicy.allows(argv)) { "Unsupported action command" }
+        // su -c interprets shell text. These validated tokens contain no shell syntax or whitespace;
+        // single-space joining is lossless and needs no quoting. Keep this invariant executable.
+        check(argv.all { token -> token.isNotEmpty() && token.all {
+            it in 'A'..'Z' || it in 'a'..'z' || it in '0'..'9' || it in "_.+-"
+        } }) { "Unsafe action token" }
+        return execute(argv.joinToString(" "), allowEmpty = true, action = true)
+    }
+
+    private suspend fun execute(cmd: String, allowEmpty: Boolean, action: Boolean): Outcome = commandLock.withLock {
         withContext(Dispatchers.IO) {
             // Select one backend for this read. A failure never falls through to another source.
             // Use the cached mode (detectMode() probes only when nothing is cached yet); callers
             // that need a fresh probe use detectMode(forceRefresh = true) explicitly.
             val mode = detectMode()
+            if (action && mode != Mode.SHIZUKU && mode != Mode.ROOT) {
+                val message = "Actions require Shizuku or root"
+                return@withContext Outcome.NoAccess(mode, message)
+            }
             val result = when (mode) {
                 Mode.SHIZUKU -> when (val result = runShizuku(cmd, TimeUnit.SECONDS.toMillis(CMD_TIMEOUT_SEC))) {
                     is ShizukuBridge.RunResult.Success -> CommandOutput.Result(result.output)
@@ -104,7 +123,8 @@ class ShellRunner internal constructor(
                 DumpOutput.failure(result.output) != null -> DumpOutput.failure(result.output)
                 else -> null
             }
-            _lastError.value = error
+            // Action outcomes belong to their journal; preserve diagnostic errors unless access is lost.
+            if (!action) _lastError.value = error
             if (error == null) Outcome.Success(result.output, mode) else Outcome.Failure(mode, error)
         }
     }
