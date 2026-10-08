@@ -325,6 +325,8 @@ class BatteryRepository(
         try {
             db.withTransaction {
                 batteryDao.clearAll(); sessionDao.clearAll(); dailySummaryDao.clearAll(); db.appUsageDao().clearSnapshots()
+                // Actions are Undo authority for real system changes, not disposable history.
+                db.insightDao().clearFindings()
             }
             // Calibration and learned charge tapers describe the device, not history: kept.
             session = null

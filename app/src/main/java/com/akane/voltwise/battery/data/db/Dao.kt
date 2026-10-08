@@ -343,6 +343,10 @@ interface InsightDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAction(entity: InsightActionEntity): Long
 
+    /** Never delete Undo/reconciliation authority, including unrecognized future statuses. */
+    @Query("DELETE FROM insight_actions WHERE status IN ('REVERTED', 'FAILED', 'ONE_SHOT') AND COALESCE(revertedAt, appliedAt, createdAt) < :ms")
+    suspend fun purgeTerminalActionsBefore(ms: Long)
+
     @Update
     suspend fun updateAction(entity: InsightActionEntity)
 }

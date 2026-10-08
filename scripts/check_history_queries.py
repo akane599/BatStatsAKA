@@ -231,3 +231,54 @@ with sqlite3.connect(':memory:') as db:
     assert db.execute('SELECT COUNT(*) FROM snapshot_device_wakers').fetchone()[0] == 0
     assert expected_actions == [tuple(r) for r in db.execute(query('actionsOnce'))], 'Action journal must survive finding/history deletion'
 print('PASS actual v7 DAO SQL: inclusive closed/day ranges, collection selection/order, waker FK/cascades, finding status/feedback/retention, action reconciliation and independent journal')
+
+# Execute the DAO mutation calls in the real repository/retention transaction bodies, not a
+# separately maintained clear list. Host SQLite exercises the SQL/cascades, not Android Room.
+repository = (root / 'app/src/main/java/com/akane/voltwise/battery/data/BatteryRepository.kt').read_text()
+policy = (root / 'app/src/main/java/com/akane/voltwise/battery/data/HistoryPolicy.kt').read_text()
+clear_body = repository.split('private suspend fun clear(result:')[1].split('// Calibration')[0]
+retention_body = policy.split('suspend fun purgeExpired(')[1]
+
+def history_mutations(db, body, args):
+    calls = re.findall(r'(?:db\.)?(batteryDao|sessionDao|dailySummaryDao|appUsageDao|insightDao)(?:\(\))?\.(\w+)\(', body)
+    assert calls, 'History transaction has no DAO mutations'
+    for owner, method in calls:
+        interface = owner[0].upper() + owner[1:]
+        db.execute(query(method, interface), args)
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for status in ('PREPARED', 'APPLIED', 'UNKNOWN', 'REVERTED', 'FAILED', 'ONE_SHOT', 'FUTURE_STATUS'):
+        for at in (99, 100, 101):
+            db.execute("INSERT INTO insight_actions(findingKey,type,userId,status,priorStateVersion,createdAt) VALUES('f','FORCE_STOP',0,?,1,?)", (status, at))
+    # A recently undone action is not old just because its application was old.
+    db.execute("INSERT INTO insight_actions(findingKey,type,userId,status,priorStateVersion,createdAt,appliedAt,revertedAt) VALUES('recent_undo','RESTRICT_BACKGROUND',0,'REVERTED',1,1,2,100)")
+    db.execute("INSERT INTO insight_actions(findingKey,type,userId,status,priorStateVersion,createdAt,appliedAt) VALUES('recent_one_shot','FORCE_STOP',0,'ONE_SHOT',1,1,100)")
+    for seen in (99, 100, 101):
+        db.execute("INSERT INTO insight_findings(key,type,severity,confidence,score,firstSeenAt,lastSeenAt,status,evidenceVersion,evidenceJson) VALUES(?,'TREND','LOW','HIGH',1,1,?,'ACTIVE',1,'{}')", (str(seen), seen))
+    for session, end in [('old', 99), ('boundary', 100)]:
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime) VALUES(?,'DISCHARGE',0,?)", (session, end))
+        db.execute("INSERT INTO session_device_wakers VALUES(?,'WAKEUP_REASON','alarm',1,20,0)", (session,))
+        sid = db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES(?,'END',1)", (session,)).lastrowid
+        db.execute("INSERT INTO snapshot_device_wakers VALUES(?,'KERNEL_WAKELOCK','kernel',1,20)", (sid,))
+    history_mutations(db, retention_body, {'ms': 100, 'olderThan': 100, 'epochDay': 0})
+    expected = {(status, at) for status in ('PREPARED', 'APPLIED', 'UNKNOWN', 'REVERTED', 'FAILED', 'ONE_SHOT', 'FUTURE_STATUS')
+                for at in (99, 100, 101) if at >= 100 or status not in ('REVERTED', 'FAILED', 'ONE_SHOT')}
+    actual = {(r['status'], r['createdAt']) for r in db.execute(query('actionsOnce')) if r['findingKey'] == 'f'}
+    assert actual == expected, 'Retention must purge only expired terminal actions, keeping Undo/reconciliation authority and cutoff boundary'
+    assert db.execute("SELECT COUNT(*) FROM insight_actions WHERE findingKey LIKE 'recent_%'").fetchone()[0] == 2, 'Retention discarded a recently completed terminal action'
+    assert [r['key'] for r in db.execute(query('findingsOnce'))] == ['100', '101'], 'Repository retention must purge findings by lastSeenAt with an exclusive cutoff'
+    for table in ('session_device_wakers', 'snapshot_device_wakers'):
+        assert db.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0] == 1, 'Retention must cascade expired wakers, preserving boundary session'
+    actions_before = [tuple(r) for r in db.execute(query('actionsOnce'))]
+    history_mutations(db, clear_body, {})
+    assert db.execute(query('findingsOnce')).fetchall() == [], 'Clear history must delete insight findings'
+    assert [tuple(r) for r in db.execute(query('actionsOnce'))] == actions_before, 'Clear history must preserve all insight actions byte-for-byte'
+    for table in ('charge_sessions', 'app_snapshots', 'session_device_wakers', 'snapshot_device_wakers'):
+        assert db.execute('SELECT COUNT(*) FROM ' + table).fetchone()[0] == 0, 'Clear history must delete history and cascade both waker tables'
+print('PASS history orchestration: Clear deletes findings/wakers but preserves actions; retention keeps PREPARED/APPLIED/UNKNOWN/future statuses and cutoff boundaries')
