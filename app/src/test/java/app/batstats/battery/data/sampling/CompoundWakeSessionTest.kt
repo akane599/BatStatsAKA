@@ -30,6 +30,49 @@ class CompoundWakeSessionTest {
         source = DailySummaryReplay.SAMPLE_SOURCE,
     )
 
+    @Test fun stagedDozeFirstWakeKeepsOneContinuousDischargeSession() {
+        val gate = StateEventSequencer<BatterySample>()
+        val engine = ObservationEngine()
+        val first = point()
+        val open = SessionReport.open(first, sample(first))
+        var report = open
+        var last: PersistPolicy.State? = null
+        val saved = mutableListOf<BatterySample>()
+        val replay = DailySummaryReplay(ZoneOffset.UTC, 5_000_000)
+        val points = listOf(
+            first, point(0).copy(dozing = true), point(300, Boundary.DOZE),
+            point(600, Boundary.SCREEN), point(3_000),
+        )
+        for (p in points) {
+            for (capture in gate.offer(sample(p), p)) {
+                val before = engine.summary
+                val after = engine.accept(capture.point)
+                assertEquals("Doze-first wake must not trigger gap closure", before.gaps, after.gaps)
+                assertEquals("Doze-first wake must not trigger power closure", first.power, capture.point.power)
+                assertEquals(open.type, SessionReport.sessionType(capture.point.power))
+                val state = PersistPolicy.State(capture.point.elapsedMs, 3, 0, 80, "run")
+                if (PersistPolicy.decide(last, state, capture.point.boundary, capture.point.interactive,
+                        poll = p.boundary == Boundary.SAMPLE) != null) {
+                    report = SessionReport.report(report, capture.value, after, SessionExtremes())
+                    saved += capture.value
+                    replay.add(capture.value)
+                    last = state
+                }
+            }
+        }
+        assertEquals(open.sessionId, report.sessionId)
+        assertEquals(open.startTime, report.startTime)
+        assertNull(report.endTime)
+        assertEquals(1, report.activeKey)
+        assertEquals(3_600_300L, report.screenOffMs)
+        assertEquals(100_000L, report.screenOffUah)
+        assertTrue("The newer actual endpoint is saved", saved.any { it.elapsedMs == 3_600_300L })
+        assertEquals(saved.size, saved.map { it.elapsedMs }.distinct().size)
+        assertTrue(saved.all { it.boundaryReason == null })
+        assertEquals(3_600_300L, replay.result.single().screenOffMs)
+        assertEquals(100_000L, replay.result.single().screenOffDischargeUah)
+    }
+
     @Test fun confirmedWakeKeepsTheOpenSessionAndPersistedOffIntervalInEitherOrderOrStages() {
         val scenarios = listOf(
             listOf(point(), point(0), point(100, Boundary.SCREEN), point(200, Boundary.DOZE), point(3_000)),
