@@ -1,6 +1,6 @@
 # Onboarding
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 ## Environment
 - JDK 21: `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64`. The SDK comes from `ANDROID_HOME`; never create
@@ -14,12 +14,12 @@
 | --- | --- |
 | Build debug | `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew :app:assembleDebug --console=plain -q` |
 | Gradle with log + exit code | `bash .claude/kit/gradle-check.sh <tasks>` |
-| Unit tests | `./gradlew :app:testDebugUnitTest --console=plain -q` (add `--tests 'app.batstats.…Test'`) |
+| Unit tests | `./gradlew :app:testDebugUnitTest --console=plain -q` (add `--tests 'com.akane.voltwise.…Test'`) |
 | Lint | `./gradlew :app:lintDebug --console=plain -q` |
 | Screenshot tests | `bash .claude/scripts/run_screenshot_tests.sh` |
 | Resource/migration/SQL checks | `python3 scripts/check_resources.py`, `python3 scripts/check_migrations.py`, `python3 scripts/check_history_queries.py` |
-| Instrumented | `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku --console=plain -q` |
-| Install + launch | `./gradlew :app:installDebug --console=plain -q && adb shell am start -n org.mlm.batstats.debug/app.batstats.battery.BatteryMainActivity` |
+| Instrumented | `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=com.akane.voltwise.test.RequiresShizuku --console=plain -q` |
+| Install + launch | `./gradlew :app:installDebug --console=plain -q && adb shell am start -n com.akane.voltwise.debug/com.akane.voltwise.battery.BatteryMainActivity` |
 
 Gradle is heavy here (`org.gradle.workers.max=2`). Run one Gradle job at a time.
 

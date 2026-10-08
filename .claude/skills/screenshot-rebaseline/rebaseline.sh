@@ -56,5 +56,5 @@ echo "references: $(find "$refs" -name '*.png' | wc -l) PNGs"
 echo "added:   $(count '^??')"
 echo "changed: $(count '^ M')"
 echo "removed: $(count '^ D')"
-if [ -n "$changes" ]; then sed "s|$refs/app/batstats/ui/||" <<<"$changes" | head -60; fi
+if [ -n "$changes" ]; then sed "s|$refs/com/akane/voltwise/ui/||" <<<"$changes" | head -60; fi
 exit 0

@@ -1,21 +1,21 @@
 # new-screen templates
 
 Replace `Xxx`/`xxx`. Imports shown are the non-obvious ones; let the compiler tell you the rest.
-State is named `XxxUiState`, usually declared at package level in the ViewModel file (for example, `app.batstats.viewmodel.HistoryUiState`); expose it as `StateFlow<XxxUiState>` named `state`. If the wrapper combines several flows, declare an `@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
+State is named `XxxUiState`, usually declared at package level in the ViewModel file (for example, `com.akane.voltwise.viewmodel.HistoryUiState`); expose it as `StateFlow<XxxUiState>` named `state`. If the wrapper combines several flows, declare an `@Immutable data class XxxUiState` in the screen file and build it in the wrapper.
 
 ## `ui/screens/XxxScreen.kt`
 
 ```kotlin
-package app.batstats.ui.screens
+package com.akane.voltwise.ui.screens
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import app.batstats.R
+import com.akane.voltwise.R
 import androidx.compose.material3.MaterialTheme
-import app.batstats.ui.theme.spacing
-import app.batstats.viewmodel.XxxUiState
-import app.batstats.viewmodel.XxxViewModel
+import com.akane.voltwise.ui.theme.spacing
+import com.akane.voltwise.viewmodel.XxxUiState
+import com.akane.voltwise.viewmodel.XxxViewModel
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -61,7 +61,7 @@ fun XxxContent(
 ## `viewmodel/XxxViewModel.kt` (only if the screen has data)
 
 ```kotlin
-package app.batstats.viewmodel
+package com.akane.voltwise.viewmodel
 
 @Immutable
 data class XxxUiState(
@@ -71,7 +71,7 @@ data class XxxUiState(
 )
 
 class XxxViewModel(private val source: XxxSource) : ViewModel() {
-    /** Everything [app.batstats.ui.screens.XxxContent] renders; plain values, so screenshot tests can build it. */
+    /** Everything [com.akane.voltwise.ui.screens.XxxContent] renders; plain values, so screenshot tests can build it. */
     private val _state = MutableStateFlow(XxxUiState(loading = true))
     val state: StateFlow<XxxUiState> = _state.asStateFlow()
 
@@ -82,7 +82,7 @@ class XxxViewModel(private val source: XxxSource) : ViewModel() {
 ```
 Register in `di/AppModules.kt`: `viewModel { XxxViewModel(get()) }`.
 
-## `src/test/java/app/batstats/viewmodel/XxxViewModelTest.kt`
+## `src/test/java/com/akane/voltwise/viewmodel/XxxViewModelTest.kt`
 
 ```kotlin
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -104,11 +104,11 @@ class XxxViewModelTest {
 ## `ui/NavGraph.kt`
 
 ```kotlin
-// in sealed interface Routes (app/src/main/java/app/batstats/ui/navigation/Routes.kt)
+// in sealed interface Routes (app/src/main/java/com/akane/voltwise/ui/navigation/Routes.kt)
 @Serializable
 data object Xxx : Routes
 
-// in entryProvider { … } (app/src/main/java/app/batstats/ui/NavGraph.kt)
+// in entryProvider { … } (app/src/main/java/com/akane/voltwise/ui/NavGraph.kt)
 entry<Routes.Xxx> {
     XxxScreen(onBack = popBack)
 }
@@ -117,21 +117,21 @@ entry<Routes.Xxx> {
 onOpenXxx = { topLevelBackStack.navigate(Routes.Xxx) },
 ```
 
-## `src/screenshotTest/kotlin/app/batstats/ui/screens/XxxScreenshotTest.kt`
+## `src/screenshotTest/kotlin/com/akane/voltwise/ui/screens/XxxScreenshotTest.kt`
 
 ```kotlin
-package app.batstats.ui.screens
+package com.akane.voltwise.ui.screens
 
 import androidx.compose.runtime.Composable
-import app.batstats.ui.PhonePreview
-import app.batstats.ui.ScreenPreviews
-import app.batstats.ui.ScreenshotTheme
+import com.akane.voltwise.ui.PhonePreview
+import com.akane.voltwise.ui.ScreenPreviews
+import com.akane.voltwise.ui.ScreenshotTheme
 import androidx.compose.material3.MaterialTheme
-import app.batstats.ui.theme.spacing
-import app.batstats.viewmodel.XxxUiState
+import com.akane.voltwise.ui.theme.spacing
+import com.akane.voltwise.viewmodel.XxxUiState
 import com.android.tools.screenshot.PreviewTest
 
-// Any timestamps: FIXED_TIME_MS ± offsets (import app.batstats.ui.FIXED_TIME_MS), never the real clock.
+// Any timestamps: FIXED_TIME_MS ± offsets (import com.akane.voltwise.ui.FIXED_TIME_MS), never the real clock.
 private val populated = XxxUiState(items = listOf("First", "Second", "Third"))
 
 @Composable

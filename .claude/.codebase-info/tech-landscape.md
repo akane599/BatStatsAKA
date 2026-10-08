@@ -1,13 +1,13 @@
 # Tech Landscape
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 | Area | Choice | Source of truth |
 | --- | --- | --- |
 | Language | Kotlin only (`kotlin.code.style=official`), JVM toolchain 21 | `app/build.gradle.kts`, `gradle.properties` |
 | Build | Gradle wrapper 9.7.1, AGP `9.5.0-alpha07`, Kotlin `2.4.20`, KSP `2.3.12`, configuration cache on, `org.gradle.workers.max=2` | `gradle/libs.versions.toml`, `gradle/wrapper/gradle-wrapper.properties`, `gradle.properties` |
 | SDK | compileSdk 37, targetSdk 36, minSdk 26; core library desugaring | `app/build.gradle.kts` |
-| App id / namespace | `org.mlm.batstats` (`.debug`, `.preview` suffixes) / `app.batstats` | `app/build.gradle.kts` |
+| App id / namespace | `com.akane.voltwise` (`.debug`, `.preview` suffixes) / `com.akane.voltwise` | `app/build.gradle.kts` |
 | UI | Jetpack Compose (BOM `2026.09.00`, enforced platform), Material 3 + Expressive opt-ins, material-icons-extended | `app/build.gradle.kts` |
 | Navigation | Navigation 3 (`navigation3-runtime/ui` 1.1.5, `lifecycle-viewmodel-navigation3`) | `ui/navigation/`, `ui/NavGraph.kt` |
 | DI | Koin BOM 4.2.2 (`koin-android`, `koin-androidx-compose`) | `di/AppModules.kt` |

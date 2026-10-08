@@ -1,9 +1,9 @@
 # Privileged Shell and Per-App Stats
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 Per-app battery use needs `dumpsys batterystats`, which normal apps can't run. Everything that needs
-privilege goes through one path. Paths below are under `app/src/main/java/app/batstats/battery/`.
+privilege goes through one path. Paths below are under `app/src/main/java/com/akane/voltwise/battery/`.
 
 ```
 AppsViewModel / AppDetailsViewModel / SessionSnapshotCollector
@@ -42,6 +42,6 @@ BatteryStatsParser (util/BatteryStatsParser.kt) → FullSnapshot / AppPowerStats
   already `_`), `sy`/`jb` names are framed between 4 header and 4 tail fields, `pr`/`kwl` names are unquoted.
   Malformed rows count as `rejected`.
 - `ShizukuBridge.readPipeResult` reports a helper call the service refused as a refusal, not a timeout.
-- Instrumented Shizuku tests are annotated `app.batstats.test.RequiresShizuku` and run as a separate
+- Instrumented Shizuku tests are annotated `com.akane.voltwise.test.RequiresShizuku` and run as a separate
   phase (see `scripts/prepare_shizuku.py`, `scripts/test_device_phases.py`).
 - Background: `docs/PLATFORM_NOTES.md`, `docs/MEASUREMENTS.md`.

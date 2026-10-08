@@ -40,6 +40,9 @@ actually does.
   `IOException` yields defaults through `withDefaultsOnReadFailure()` (the unqualified Koin `DataStore`), so settings
   collectors never crash the service; settings export uses the raw store (`named("rawSettingsDataStore")`) so it
   fails instead of writing an empty backup.
+- Renamed from BatStats (2026-10-08): applicationId and namespace are `com.akane.voltwise`, but the settings-export
+  `appId = "app.batstats"` (`di/AppModules.kt`), `DiagnosticLog.HEADER = "BatStatsDiagnostics1"`, the history export
+  format and the DataStore/SharedPreferences file names keep their old values on purpose, so old backups still import.
 
 ## UI conventions
 - Dark-only (`MainTheme(oled, dynamicColor)`). Dynamic color is opt-in on API 31+ and changes accents only.
@@ -56,13 +59,13 @@ actually does.
 ## Testing
 | Kind | Location | Run |
 | --- | --- | --- |
-| JVM unit (JUnit4, coroutines-test, hand-written fakes; no mocking library) | `app/src/test/java/app/batstats/**` | `./gradlew :app:testDebugUnitTest --console=plain -q` (narrow with `--tests '<Class>'`) |
-| Screenshot (`@PreviewTest`, layoutlib, UTC/en-US pinned, 2 GB heap) | previews in `app/src/screenshotTest/kotlin/app/batstats/ui/**` (`ScreenshotPreviews.kt`, `screens/*ScreenshotTest.kt`, `components/…`); references in `app/src/screenshotTestDefaultDebug/reference/app/batstats/ui/**/<File>Kt/` | `bash .claude/scripts/run_screenshot_tests.sh` (wraps `:app:testDebugScreenshotTestDefaultTestSuite --rerun`) |
-| Instrumented (device) | `app/src/androidTest/java/app/batstats/**`; Shizuku tests are marked `@RequiresShizuku` (`app/src/androidTest/java/app/batstats/test/`) | `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=app.batstats.test.RequiresShizuku` |
+| JVM unit (JUnit4, coroutines-test, hand-written fakes; no mocking library) | `app/src/test/java/com/akane/voltwise/**` | `./gradlew :app:testDebugUnitTest --console=plain -q` (narrow with `--tests '<Class>'`) |
+| Screenshot (`@PreviewTest`, layoutlib, UTC/en-US pinned, 2 GB heap) | previews in `app/src/screenshotTest/kotlin/com/akane/voltwise/ui/**` (`ScreenshotPreviews.kt`, `screens/*ScreenshotTest.kt`, `components/…`); references in `app/src/screenshotTestDefaultDebug/reference/com/akane/voltwise/ui/**/<File>Kt/` | `bash .claude/scripts/run_screenshot_tests.sh` (wraps `:app:testDebugScreenshotTestDefaultTestSuite --rerun`) |
+| Instrumented (device) | `app/src/androidTest/java/com/akane/voltwise/**`; Shizuku tests are marked `@RequiresShizuku` (`app/src/androidTest/java/com/akane/voltwise/test/`) | `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=com.akane.voltwise.test.RequiresShizuku` |
 | Host scripts | `scripts/check_resources.py`, `check_migrations.py`, `check_history_queries.py` | `python3 scripts/<name>.py` |
 
 - VM tests: `StandardTestDispatcher` + `Dispatchers.setMain`, a private `Fake<X>Repository` inside the test.
-- `app/src/test/java/app/batstats/support/EnglishStrings.kt` resolves real English templates from
+- `app/src/test/java/com/akane/voltwise/support/EnglishStrings.kt` resolves real English templates from
   `res/values/strings*.xml` in JVM tests.
 - `testOptions.unitTests.isIncludeAndroidResources = true` (needed by the screenshot suite).
 - Failing screenshots: the `screenshot-diff-triager` agent (`.claude/agents/`) and the

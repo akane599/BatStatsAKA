@@ -2,7 +2,7 @@
 
 *Last Updated: 2026-10-08*
 
-BatStats is a single-module (`:app`) Android app. It reads battery state, records observed
+Voltwise (formerly BatStats) is a single-module (`:app`) Android app. It reads battery state, records observed
 charge/discharge **sessions** into Room, and, when it has privileged access (Shizuku, root or ADB-granted
 `DUMP`), shows per-app battery use parsed from `dumpsys batterystats`. The UI is Compose Material 3
 (dark-only, with an optional OLED theme). Code is MVVM with Koin DI, and coroutines/Flow throughout.

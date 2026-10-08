@@ -2,8 +2,8 @@
 
 *Last Updated: 2026-10-08*
 
-There is one Gradle module, `:app`. The packages below are under `app/src/main/java/app/batstats/`, and
-unit tests mirror them under `app/src/test/java/app/batstats/`.
+There is one Gradle module, `:app`. The packages below are under `app/src/main/java/com/akane/voltwise/`, and
+unit tests mirror them under `app/src/test/java/com/akane/voltwise/`.
 
 | Package | Purpose | Key files |
 | --- | --- | --- |

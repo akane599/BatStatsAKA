@@ -3,10 +3,10 @@
 *Last Updated: 2026-10-08*
 
 Room database `battery.db`, **version 6**, `exportSchema = true`.
-- Definition and migrations: `app/src/main/java/app/batstats/battery/data/db/BatteryDatabase.kt`
+- Definition and migrations: `app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt`
 - Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`
 - DAOs: `data/db/Dao.kt`
-- Exported schemas: `app/schemas/app.batstats.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`
+- Exported schemas: `app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`
   (KSP arg `room.schemaLocation` in `app/build.gradle.kts`)
 
 ## Tables
@@ -44,9 +44,9 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 ## Checks
 - Host-side: `python3 scripts/check_migrations.py` (replays migrations on SQLite against the newest
   exported schema) and `python3 scripts/check_history_queries.py` (DAO SQL on host SQLite).
-- Device: `app/src/androidTest/java/app/batstats/battery/data/DatabaseMigrationTest.kt`,
+- Device: `app/src/androidTest/java/com/akane/voltwise/battery/data/DatabaseMigrationTest.kt`,
   `HistoryBrowseTest.kt`, `HistoryImportTest.kt`, `RepositoryRecoveryTest.kt`.
-- JVM: `app/src/test/java/app/batstats/battery/data/db/EnumConvertersTest.kt`.
+- JVM: `app/src/test/java/com/akane/voltwise/battery/data/db/EnumConvertersTest.kt`.
 
 ## Other persistence
 - Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`).
