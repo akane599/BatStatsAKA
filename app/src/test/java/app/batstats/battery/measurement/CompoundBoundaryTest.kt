@@ -35,6 +35,64 @@ class CompoundBoundaryTest {
         }
     }
 
+    @Test fun screenEventConfirmsHeldWakeBeforeDozeExitIsConfirmed() {
+        val gate = StateEventSequencer<String>()
+        val engine = ObservationEngine()
+        gate.offer("baseline", baseline()).forEach { engine.accept(it.point) }
+        assertTrue(gate.offer("screen reading", wake().copy(dozing = true)).isEmpty())
+        val screen = gate.offer("doze reading", wake(300, Boundary.SCREEN))
+        screen.forEach { engine.accept(it.point) }
+        assertEquals("Confirmed screen endpoint must not become a gap", 0, engine.summary.gaps)
+        assertEquals(listOf("screen reading"), screen.map { it.value })
+        assertEquals(Boundary.SCREEN, screen.single().point.boundary)
+        assertEquals(setOf(Boundary.SAMPLE, Boundary.SCREEN), screen.single().point.confirmedBoundaries)
+        assertEquals(3_600_000L, engine.summary.screenOff.durationMs)
+        assertEquals(100_000L, engine.summary.screenOff.chargeChangeUah)
+        val doze = gate.offer("doze event", wake(600, Boundary.DOZE))
+        assertEquals(listOf("doze reading", "doze event"), doze.map { it.value })
+        doze.forEach { engine.accept(it.point) }
+        assertEquals(0, engine.summary.gaps)
+        assertEquals(3_600_300L, engine.summary.dozeMs)
+        assertEquals(600L, engine.summary.screenOn.durationMs)
+    }
+
+    @Test fun stagedWakeWithoutTimelyScreenEventStillLeavesAGap() {
+        for (event in listOf(wake(300, Boundary.DOZE), wake(2_001, Boundary.SCREEN))) {
+            val gate = StateEventSequencer<Unit>()
+            val engine = ObservationEngine()
+            listOf(baseline(), wake().copy(dozing = true), event, wake(2_600, Boundary.DOZE)).forEach { p ->
+                gate.offer(Unit, p).forEach { engine.accept(it.point) }
+            }
+            assertEquals(1, engine.summary.gaps)
+            assertEquals(0L, engine.summary.screenOff.durationMs)
+        }
+    }
+
+    @Test fun stagedWakeStillRequiresTheLaterDozeEvent() {
+        val gate = StateEventSequencer<Unit>()
+        val engine = ObservationEngine()
+        listOf(baseline(), wake().copy(dozing = true), wake(300, Boundary.SCREEN), wake(2_301)).forEach { p ->
+            gate.offer(Unit, p).forEach { engine.accept(it.point) }
+        }
+        assertEquals(1, engine.summary.gaps)
+        assertEquals("Only the confirmed screen interval is retained", 3_600_000L, engine.summary.screenOff.durationMs)
+        assertEquals(3_600_000L, engine.summary.dozeMs)
+    }
+
+    @Test fun stagedWakeAtEqualTimestampWaitsForAllEventsWithoutDuplicateRows() {
+        val gate = StateEventSequencer<String>()
+        val engine = ObservationEngine()
+        gate.offer("baseline", baseline()).forEach { engine.accept(it.point) }
+        assertTrue(gate.offer("screen reading", wake().copy(dozing = true)).isEmpty())
+        assertTrue(gate.offer("doze reading", wake(boundary = Boundary.SCREEN)).isEmpty())
+        val confirmed = gate.offer("doze event", wake(300, Boundary.DOZE))
+        assertEquals(listOf("doze reading", "doze event"), confirmed.map { it.value })
+        assertEquals(confirmed.size, confirmed.map { it.point.elapsedMs }.distinct().size)
+        confirmed.forEach { engine.accept(it.point) }
+        assertEquals(0, engine.summary.gaps)
+        assertEquals(3_600_000L, engine.summary.screenOff.durationMs)
+    }
+
     @Test fun eitherMissingWakeEventStillLeavesAGap() {
         for (event in listOf(Boundary.SCREEN, Boundary.DOZE)) {
             val gate = StateEventSequencer<Unit>()
@@ -60,14 +118,31 @@ class CompoundBoundaryTest {
         assertEquals(3_600_000L, engine.summary.screenOff.durationMs)
     }
 
-    @Test fun contradictoryOrLateWakeEventCannotCompleteConfirmation() {
-        for (last in listOf(wake(200, Boundary.GAP), wake(200, Boundary.DOZE).copy(interactive = false), wake(2_001, Boundary.DOZE))) {
+    @Test fun unconfirmedStateChangeOrLateWakeEventCannotCompleteConfirmation() {
+        for (last in listOf(wake(200, Boundary.GAP), wake(200).copy(interactive = false), wake(2_001, Boundary.DOZE))) {
             val gate = StateEventSequencer<Unit>()
             gate.offer(Unit, baseline())
             gate.offer(Unit, wake())
             gate.offer(Unit, wake(100, Boundary.SCREEN))
             assertEquals(Boundary.GAP, gate.offer(Unit, last).first().point.boundary)
         }
+    }
+
+    @Test fun confirmingEventCanExposeAnUnconfirmedReverseTransition() {
+        val gate = StateEventSequencer<Unit>()
+        val engine = ObservationEngine()
+        listOf(baseline(), wake(), wake(100, Boundary.SCREEN)).forEach { p ->
+            gate.offer(Unit, p).forEach { engine.accept(it.point) }
+        }
+        val confirmed = gate.offer(Unit, wake(200, Boundary.DOZE).copy(interactive = false))
+        assertEquals(listOf(Boundary.SCREEN), confirmed.map { it.point.boundary })
+        confirmed.forEach { engine.accept(it.point) }
+        assertEquals(0, engine.summary.gaps)
+        assertEquals(3_600_000L, engine.summary.screenOff.durationMs)
+        val unconfirmed = gate.offer(Unit, wake(2_201).copy(interactive = false))
+        assertEquals(Boundary.GAP, unconfirmed.first().point.boundary)
+        unconfirmed.forEach { engine.accept(it.point) }
+        assertEquals("Earlier SCREEN must not confirm the later reversal", 1, engine.summary.gaps)
     }
 
     @Test fun explicitGapOverridesCompoundEvidenceAndRawOneKindIsInsufficient() {
