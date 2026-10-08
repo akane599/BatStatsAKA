@@ -66,7 +66,8 @@ class SessionCloseSuspendTest {
     @Test fun screenOffPowerBoundaryExcludesClosingSuspendWithoutChangingCpuSuspend() {
         val closing = closeAtPowerBoundary(screenOn = false)
         assertEquals(3_600_000L, closing.observedMs)
-        assertEquals(0L, closing.screenOffMs)
+        assertEquals(3_600_000L, closing.screenOffMs)
+        assertEquals(0L, closing.screenOffCoveredMs)
         assertEquals(0L, closing.screenOnMs)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
         assertEquals(0L, closing.screenOffSuspendMs)
@@ -75,7 +76,8 @@ class SessionCloseSuspendTest {
     @Test fun screenOnPowerBoundaryDoesNotAddScreenOffSuspend() {
         val closing = closeAtPowerBoundary(screenOn = true)
         assertEquals(3_600_000L, closing.observedMs)
-        assertEquals(0L, closing.screenOnMs)
+        assertEquals(3_600_000L, closing.screenOnMs)
+        assertEquals(0L, closing.screenOnCoveredMs)
         assertEquals(0L, closing.screenOffMs)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
         assertEquals(0L, closing.screenOffSuspendMs)
@@ -100,7 +102,8 @@ class SessionCloseSuspendTest {
         val closing = SessionReport.reportPowerBoundary(current, sample(boundary), boundary, engine, extremes)
         assertEquals(3_599_000L, closing.cpuSuspendMs)
         assertEquals(1_799_500L, closing.screenOffSuspendMs)
-        assertEquals(1_800_000L, closing.screenOffMs)
+        assertEquals(3_600_000L, closing.screenOffMs)
+        assertEquals(1_800_000L, closing.screenOffCoveredMs)
         assertEquals(1_799_500L, extremes.screenOffSuspendMs)
     }
 }
