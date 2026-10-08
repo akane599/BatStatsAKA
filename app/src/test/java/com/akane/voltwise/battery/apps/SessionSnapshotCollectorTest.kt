@@ -44,6 +44,8 @@ class SessionSnapshotCollectorTest {
         val ends = mutableMapOf<String, AppUsageSnapshot>()
         val usage = mutableMapOf<String, List<AppUsageRow>>()
         var failWrites = false
+        var statusGate: CompletableDeferred<Unit>? = null
+        val captureWindows = mutableMapOf<String, Pair<Long?, Long?>>()
         var openSessionError: Exception? = null
         var openSessionFailures = 0
 
@@ -68,10 +70,15 @@ class SessionSnapshotCollectorTest {
             usage[sessionId] = result.rows
             row.status = AppUsageStatus.READY
             row.basis = result.basis
+            captureWindows[sessionId] = result.captureStartMs to result.captureEndMs
             return true
         }
-        override suspend fun setStatus(sessionId: String, status: AppUsageStatus) {
-            sessions[sessionId]?.status = status
+        override suspend fun setStatus(sessionId: String, status: AppUsageStatus): Boolean {
+            check(!failWrites) { "disk I/O error" }
+            statusGate?.await()
+            val row = sessions[sessionId] ?: return false
+            row.status = status
+            return true
         }
         override suspend fun pendingClosedDischarges() = sessions.entries
             .filter { (_, row) -> row.type == SessionType.DISCHARGE && row.closed && row.status == AppUsageStatus.PENDING }
@@ -95,8 +102,9 @@ class SessionSnapshotCollectorTest {
     private val transitions = MutableSharedFlow<PowerTransition>(extraBufferCapacity = 16)
     private val warnings = mutableListOf<String>()
 
+    private val collector = SessionSnapshotCollector(stats, store, transitions, log = {}, warn = { warnings += it })
     private fun TestScope.start() {
-        backgroundScope.launch { SessionSnapshotCollector(stats, store, transitions, log = {}, warn = { warnings += it }).run() }
+        backgroundScope.launch { collector.run() }
         runCurrent()
     }
 
@@ -356,6 +364,86 @@ class SessionSnapshotCollectorTest {
         listOf(SessionType.CHARGE, SessionType.PLUGGED, SessionType.UNKNOWN).forEach {
             assertEquals(AppUsageStatus.NOT_APPLICABLE, SessionSnapshotCollector.initialStatus(it))
         }
+    }
+
+    @Test fun readyFinalizationEmitsOnceAfterUsageAndCaptureWindowPersisted() = runTest {
+        store.openDischarge("A")
+        store.baselines["A"] = baseline(100, 1 to 1.0).copy(capturedAt = 123)
+        val events = mutableListOf<String>()
+        backgroundScope.launch { collector.finalizedSessions.collect { id ->
+            assertEquals(AppUsageStatus.READY, store.status(id))
+            assertEquals(123L to 456L, store.captureWindows[id])
+            assertEquals(2.0, store.usage.getValue(id).single().powerMah, 0.0)
+            events += id
+        } }
+        start()
+        stats.gate = CompletableDeferred()
+        stats.results += AppStatsResult.Ready(full(100, 1 to 3.0).copy(capturedAt = 456))
+        plugIn("A", "C")
+        advance(END_DEBOUNCE_MS)
+        assertTrue(events.isEmpty())
+        stats.gate?.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("A"), events)
+        assertTrue(collector.finalizedSessions.replayCache.isEmpty())
+        stats.results += AppStatsResult.Ready(full(100, 1 to 3.0).copy(capturedAt = 456))
+        plugIn("A", "C2")
+        advance(END_DEBOUNCE_MS)
+        assertEquals(listOf("A"), events)
+    }
+
+    @Test fun noAccessFinalizationEmitsAfterStatusPersistence() = runTest {
+        assertStatusFinalization(AppStatsResult.NoAccess, AppUsageStatus.NO_ACCESS)
+    }
+
+    @Test fun failedFinalizationEmitsAfterStatusPersistence() = runTest {
+        assertStatusFinalization(AppStatsResult.Failed("no dump"), AppUsageStatus.FAILED)
+    }
+
+    private suspend fun TestScope.assertStatusFinalization(result: AppStatsResult, expected: AppUsageStatus) {
+        store.openDischarge("A")
+        val events = mutableListOf<String>()
+        backgroundScope.launch { collector.finalizedSessions.collect { id ->
+            assertEquals(expected, store.status(id))
+            events += id
+        } }
+        start()
+        store.statusGate = CompletableDeferred()
+        stats.results += result
+        plugIn("A", "C")
+        advance(END_DEBOUNCE_MS)
+        assertTrue(events.isEmpty())
+        assertEquals(AppUsageStatus.PENDING, store.status("A"))
+        store.statusGate?.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("A"), events)
+        advance(STARTUP_SWEEP_DELAY_MS)
+        assertEquals(listOf("A"), events)
+    }
+
+    @Test fun failedPersistenceDoesNotEmitFinalization() = runTest {
+        store.openDischarge("A")
+        val events = mutableListOf<String>()
+        backgroundScope.launch { collector.finalizedSessions.collect { events += it } }
+        start()
+        store.failWrites = true
+        stats.results += ready(100, 1 to 3.0)
+        plugIn("A", "C")
+        advance(END_DEBOUNCE_MS)
+        assertTrue(events.isEmpty())
+        assertEquals(AppUsageStatus.PENDING, store.status("A"))
+    }
+
+    @Test fun deletedSessionDoesNotEmitFinalization() = runTest {
+        store.openDischarge("A")
+        val events = mutableListOf<String>()
+        backgroundScope.launch { collector.finalizedSessions.collect { events += it } }
+        start()
+        stats.results += AppStatsResult.NoAccess
+        plugIn("A", "C")
+        store.sessions.remove("A")
+        advance(END_DEBOUNCE_MS)
+        assertTrue(events.isEmpty())
     }
 
     @Test fun rowsCollapseToOnePerUid() {

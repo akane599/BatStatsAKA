@@ -1,7 +1,13 @@
 package com.akane.voltwise.battery.apps
 
 /** Result of comparing a discharge session's start/end app-usage snapshots. */
-data class AppUsageDeltaResult(val basis: AppUsageBasis, val rows: List<AppUsageRow>)
+data class AppUsageDeltaResult(
+    val basis: AppUsageBasis,
+    val rows: List<AppUsageRow>,
+    val deviceWakers: List<DeviceWaker> = emptyList(),
+    val captureStartMs: Long? = null,
+    val captureEndMs: Long? = null,
+)
 
 /** Turns two `AppUsageSnapshot`s (or just the ended one) into the per-app rows a session shows. */
 object AppUsageDelta {
@@ -14,7 +20,12 @@ object AppUsageDelta {
                 AppUsageBasis.WINDOW_RESET to end.rows
             else -> AppUsageBasis.DELTA to clampedDelta(baseline.rows, end.rows)
         }
-        return AppUsageDeltaResult(basis, foldTopN(rawRows, topN))
+        val selected = TopApps.selectSessionRows(rawRows, topN)
+        val rows = selected.map { row ->
+            val hints = end.tagHints[row.uid]?.takeUnless { row.isOthers }
+            row.copy(topWakelockTag = hints?.wakelock, topAlarmTag = hints?.alarm, topJobName = hints?.job)
+        }
+        return AppUsageDeltaResult(basis, rows, wakerDelta(baseline, end, basis), baseline?.capturedAt, end.capturedAt)
     }
 
     private fun sameWindow(baseline: AppUsageSnapshot, end: AppUsageSnapshot): Boolean =
@@ -53,6 +64,17 @@ object AppUsageDelta {
                 wakelockTimeMs = clampField(end.wakelockTimeMs, base?.wakelockTimeMs),
                 mobileBytes = clampField(end.mobileBytes, base?.mobileBytes),
                 wifiBytes = clampField(end.wifiBytes, base?.wifiBytes),
+                wakeupAlarms = nullableDelta(end.wakeupAlarms, base?.wakeupAlarms, base == null),
+                partialWakelockCount = nullableDelta(end.partialWakelockCount, base?.partialWakelockCount, base == null),
+                partialWakelockBgMs = nullableDelta(end.partialWakelockBgMs, base?.partialWakelockBgMs, base == null),
+                jobCount = nullableDelta(end.jobCount, base?.jobCount, base == null),
+                jobMs = nullableDelta(end.jobMs, base?.jobMs, base == null),
+                syncCount = nullableDelta(end.syncCount, base?.syncCount, base == null),
+                fgServiceMs = nullableDelta(end.fgServiceMs, base?.fgServiceMs, base == null),
+                topMs = nullableDelta(end.topMs, base?.topMs, base == null),
+                mobileActiveMs = nullableDelta(end.mobileActiveMs, base?.mobileActiveMs, base == null),
+                gpsMs = nullableDelta(end.gpsMs, base?.gpsMs, base == null),
+                sensorMs = nullableDelta(end.sensorMs, base?.sensorMs, base == null),
             )
         }
     }
@@ -63,32 +85,20 @@ object AppUsageDelta {
         else -> ((end ?: 0L) - (base ?: 0L)).coerceAtLeast(0L)
     }
 
-    private fun hasUsage(row: AppUsageRow): Boolean =
-        row.powerMah > 0.0 || (row.cpuTimeMs ?: 0L) > 0L || (row.foregroundTimeMs ?: 0L) > 0L ||
-            (row.backgroundTimeMs ?: 0L) > 0L || (row.wakelockTimeMs ?: 0L) > 0L ||
-            (row.mobileBytes ?: 0L) > 0L || (row.wifiBytes ?: 0L) > 0L
-
-    private fun foldTopN(rows: List<AppUsageRow>, topN: Int): List<AppUsageRow> {
-        val sorted = rows.filter(::hasUsage).sortedByDescending { it.powerMah }
-        val top = sorted.take(topN)
-        val rest = sorted.drop(topN)
-        if (rest.isEmpty()) return top
-        val others = AppUsageRow(
-            uid = -1,
-            packageName = "",
-            powerMah = rest.sumOf { it.powerMah },
-            cpuTimeMs = foldLong(rest, AppUsageRow::cpuTimeMs),
-            foregroundTimeMs = foldLong(rest, AppUsageRow::foregroundTimeMs),
-            backgroundTimeMs = foldLong(rest, AppUsageRow::backgroundTimeMs),
-            wakelockTimeMs = foldLong(rest, AppUsageRow::wakelockTimeMs),
-            mobileBytes = foldLong(rest, AppUsageRow::mobileBytes),
-            wifiBytes = foldLong(rest, AppUsageRow::wifiBytes),
-            isOthers = true,
-        )
-        return top + others
+    /** Unsupported endpoints or a per-counter reset stay unknown; a new UID starts at zero. */
+    private fun nullableDelta(end: Long?, base: Long?, newUid: Boolean): Long? = when {
+        end == null || (base == null && !newUid) -> null
+        else -> (end - (base ?: 0L)).takeIf { it >= 0L }
     }
 
-    /** Sum of the non-null values, or null when none of the folded rows reported this field. */
-    private fun foldLong(rows: List<AppUsageRow>, field: (AppUsageRow) -> Long?): Long? =
-        rows.mapNotNull(field).takeIf { it.isNotEmpty() }?.sum()
+    private fun wakerDelta(baseline: AppUsageSnapshot?, end: AppUsageSnapshot, basis: AppUsageBasis): List<DeviceWaker> {
+        if (baseline == null || basis != AppUsageBasis.DELTA) return emptyList()
+        val byName = baseline.deviceWakers.associateBy { it.kind to it.name }
+        return end.deviceWakers.mapNotNull { waker ->
+            val base = byName[waker.kind to waker.name]
+            if (base == null && baseline.wakersComplete != true) return@mapNotNull null
+            waker.copy(count = (waker.count - (base?.count ?: 0L)).coerceAtLeast(0L),
+                totalMs = (waker.totalMs - (base?.totalMs ?: 0L)).coerceAtLeast(0L))
+        }.filter { it.count > 0 || it.totalMs > 0 }.rankedWakers().take(10)
+    }
 }
