@@ -15,6 +15,7 @@ import com.akane.voltwise.battery.apps.AppUsageSnapshot
 import com.akane.voltwise.battery.data.DesignCapacityReading
 import com.akane.voltwise.battery.data.RepositoryRecoveryTest
 import com.akane.voltwise.battery.data.db.SessionType
+import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.service.MonitoringController
 import com.akane.voltwise.test.DeviceEnvironment
 import com.akane.voltwise.ui.screens.now.NowScreen
@@ -50,6 +51,7 @@ class NowRecoveryDeviceTest {
         override val settings = fixture.settings.flow
         override val design: Flow<DesignCapacityReading> = flowOf(DesignCapacityReading.Unknown)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = flowOf(null)
+        override val insights: Flow<InsightReport?> = flowOf(null)
         override val activeSession = repo.activeSessionFlow
         override fun samplesSince(fromMs: Long) = repo.samplesBetween(fromMs, Long.MAX_VALUE)
         override fun day(epochDay: Long) = fixture.database.dailySummaryDao().day(epochDay)
