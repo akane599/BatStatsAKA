@@ -14,13 +14,33 @@ class DailySummaryAggregatorTest {
     private fun apply(interval: DayInterval, rows: Map<Long, DailySummary> = emptyMap()) =
         DailySummaryAggregator.apply(rows, interval, berlin, updatedAt = 42).associateBy { it.epochDay }
 
+    @Test fun partialCoverageAcrossDaysPreservesTotalsAndNeverExceedsDuration() {
+        val rows = apply(DayInterval(at("2026-06-10T00:00+02:00"), at("2026-06-13T00:00+02:00"),
+            screenOnMs = 3, screenOnCoveredMs = 2, screenOnDischargeUah = 0)).values.toList()
+        assertEquals(2L, rows.sumOf { it.screenOnCoveredMs!! })
+        assertTrue(rows.all { it.screenOnCoveredMs!! in 0..it.screenOnMs })
+        assertEquals(0L, rows.last().screenOnCoveredMs)
+    }
+
+    @Test fun knownCoverageAccumulatesButLegacyCoverageStaysUnknown() {
+        val d = day("2026-06-10")
+        val interval = DayInterval(at("2026-06-10T10:00+02:00"), at("2026-06-10T10:02+02:00"),
+            screenOnMs = 120_000, screenOnCoveredMs = 60_000, screenOnDischargeUah = 1000)
+        val first = apply(interval).getValue(d)
+        assertEquals(60_000L, first.screenOnCoveredMs)
+        assertEquals(120_000L, apply(interval, mapOf(d to first)).getValue(d).screenOnCoveredMs)
+        val legacy = first.copy(screenOnCoveredMs = null)
+        assertNull(apply(interval, mapOf(d to legacy)).getValue(d).screenOnCoveredMs)
+    }
+
     @Test fun intervalWithinOneDayAddsToThatDay() {
         val june10 = day("2026-06-10")
         val rows = apply(DayInterval(at("2026-06-10T10:00+02:00"), at("2026-06-10T10:30+02:00"),
             screenOnMs = 1_800_000, screenOnDischargeUah = 90_000, cpuSuspendMs = 0,
             endLevelPercent = 64, endTemperatureDeciC = 312))
         val expected = DailySummary(june10, screenOnMs = 1_800_000, screenOnDischargeUah = 90_000, cpuSuspendMs = 0,
-            minLevel = 64, maxLevel = 64, peakTemperatureDeciC = 312, updatedAt = 42)
+            minLevel = 64, maxLevel = 64, peakTemperatureDeciC = 312, updatedAt = 42,
+            screenOnCoveredMs = 0, screenOffCoveredMs = 0)
         assertEquals(mapOf(june10 to expected), rows)
         assertEquals(june10, DailySummaryAggregator.epochDay(at("2026-06-10T23:59:59+02:00"), berlin))
         assertEquals(june10 + 1, DailySummaryAggregator.epochDay(at("2026-06-10T22:00:00Z"), berlin))
@@ -79,7 +99,7 @@ class DailySummaryAggregatorTest {
         // The local day is 25 h long and all of it stays on the 25th.
         val whole = apply(DayInterval(at("2026-10-25T00:00+02:00"), at("2026-10-26T00:00+01:00"), screenOffMs = 90_000_000))
         assertEquals(90_000_000L, whole.getValue(day("2026-10-25")).screenOffMs)
-        assertEquals(DailySummary(day("2026-10-26"), updatedAt = 42), whole[day("2026-10-26")])
+        assertEquals(DailySummary(day("2026-10-26"), updatedAt = 42, screenOnCoveredMs = 0, screenOffCoveredMs = 0), whole[day("2026-10-26")])
     }
 
     @Test fun readingsTrackMinMaxLevelAndPeakTemperature() {
@@ -112,7 +132,7 @@ class DailySummaryAggregatorTest {
             DailySummaryAggregator.interval(ObservationSummary(), a, endTemperatureDeciC = null))
         val b = engine.accept(obs(60_000, 3_999_000, PowerState.DISCHARGING, uptime = 20_000))
         assertEquals(DayInterval(start, start + 60_000, screenOffMs = 60_000, screenOffDischargeUah = 1_000,
-            cpuSuspendMs = 40_000, endLevelPercent = 70, endTemperatureDeciC = 301),
+            cpuSuspendMs = 40_000, endLevelPercent = 70, endTemperatureDeciC = 301, screenOffCoveredMs = 60_000),
             DailySummaryAggregator.interval(a, b, endTemperatureDeciC = 301))
         val c = engine.accept(obs(120_000, 3_999_000, PowerState.CHARGING, uptime = 80_000, boundary = Boundary.POWER))
         val d = engine.accept(obs(180_000, 4_009_000, PowerState.CHARGING, uptime = 140_000))

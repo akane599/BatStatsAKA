@@ -38,6 +38,10 @@ assert {f'MIGRATION_{v}_{v + 1}' for v in migrations} == {n.strip() for n in reg
 newest = migrations[latest - 1]
 if latest == 5:
     assert all(re.match(r'(CREATE|DROP|ALTER) ', sql) for sql in newest), 'MIGRATION_4_5 must be DDL only'
+if latest == 6:
+    assert len(newest) == 4 and all(re.fullmatch(
+        r'ALTER TABLE `(charge_sessions|daily_summaries)` ADD COLUMN `screen(On|Off)CoveredMs` INTEGER', sql
+    ) for sql in newest), 'MIGRATION_5_6 must only add four nullable coverage columns'
 before = {e['tableName']: e for e in schemas[latest - 1]['entities']}
 for entity in schema['entities']:
     table = entity['tableName']
@@ -128,4 +132,7 @@ for version, statements in sorted(seeds.items()):
         for t in kept:
             width = len(snapshot[t][0]) if snapshot[t] else 0
             assert [r[:width] for r in db.execute(f'SELECT * FROM {t} ORDER BY 1')] == snapshot[t], ('Row values changed', t)
+        if version == 5:
+            for table in ('charge_sessions', 'daily_summaries'):
+                assert db.execute(f'SELECT screenOnCoveredMs, screenOffCoveredMs FROM {table}').fetchall() == [(None, None)]
         print(f'PASS SQLite schema, foreign keys, createSql-identical DDL and unchanged rows: {version} → {latest}')

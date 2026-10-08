@@ -69,6 +69,20 @@ class DailySummaryReplayTest {
         assertEquals(listOf(50, 52), rows.map { it.maxLevel })
     }
 
+    @Test fun `unlabelled row with screen+power change is not a gap`() {
+        val row = replay(sample(0, 80, 4_000_000),
+            sample(60_000, 80, 3_990_000, screenOn = false, status = 2, plugged = 1)).single()
+        assertEquals(60_000L, row.screenOnMs)
+        assertEquals(0L, row.screenOnDischargeUah)
+    }
+
+    @Test fun labelledCompoundBoundaryRemainsAGap() {
+        val row = replay(sample(0, 80, 4_000_000),
+            sample(60_000, 80, 3_990_000, screenOn = false, status = 2, plugged = 1,
+                boundaryReason = "Collection interrupted")).single()
+        assertEquals(0L, row.screenOnMs)
+    }
+
     @Test fun nothingToReplayGivesNoRows() {
         assertTrue(replay().isEmpty())
         assertTrue(replay(sample(0, 50, 1, observation = null)).isEmpty())

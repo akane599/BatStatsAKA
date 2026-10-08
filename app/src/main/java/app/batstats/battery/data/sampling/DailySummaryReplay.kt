@@ -51,11 +51,15 @@ class DailySummaryReplay(private val zone: ZoneId, private val updatedAt: Long) 
             before.power != power -> Boundary.POWER
             else -> Boundary.SAMPLE
         }
+        val confirmed = if (sample.boundaryReason == null && before != null) buildSet {
+            if (before.interactive != sample.screenOn) add(Boundary.SCREEN)
+            if (before.power != power) add(Boundary.POWER)
+        } else emptySet()
         // Stored rows do not say which cadence they came from: the longest one keeps a sparse
         // screen-off run from reading as a gap.
         return Observation(sample.timestamp, elapsed, uptime, sample.levelPercent, sample.chargeCounterUah,
             sample.currentNowUa, sample.voltageMv, power, sample.screenOn, false, generation,
-            SamplingPolicy.SCREEN_OFF_INTERVAL_MS, boundary)
+            SamplingPolicy.SCREEN_OFF_INTERVAL_MS, boundary, confirmed)
     }
 
     companion object {

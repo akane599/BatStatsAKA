@@ -35,8 +35,8 @@ data class BatteryExport(
     val appUsage: List<SessionAppUsage> = emptyList(),  // format 3+: per-app rows of the exported sessions
 )
 
-/** 3: v5 session columns and `appUsage`. Files of formats 1 and 2 still import; missing fields stay null. */
-internal const val HISTORY_FORMAT_VERSION = 3
+/** 4: v6 screen counter coverage. Formats 1–3 still import; missing coverage stays null. */
+internal const val HISTORY_FORMAT_VERSION = 4
 private const val MAX_APP_USAGE_ROWS = HistoryLimits.MAX_SESSIONS * SessionAppUsage.MAX_ROWS
 internal const val CURRENT_NOW_UA_EXPORT_DESCRIPTION =
     "Raw BatteryManager current as reported by the device; unit and sign are device-dependent, and detected calibration is not applied"

@@ -16,21 +16,22 @@ data class SessionDrain(val screenOn: DrainRate, val screenOff: DrainRate, val d
 
         /**
          * The row keeps each screen state's charge (`screenOnUah`/`screenOffUah`, null without counter data) and
-         * duration, but only the session's overall counter coverage (`counterCoveredMs` of the discharge time), so
-         * per-screen rates require complete coverage and divide charge by the exact bucket duration. %/h needs
+         * duration and matched counter coverage. Each screen rate uses its own covered time; legacy rows with
+         * null coverage retain the complete-session-coverage rule and exact bucket duration. %/h needs
          * [fullUah] (the counter's full charge, or the Health estimate). Deep sleep = `cpuSuspendMs` ÷ `observedMs`.
          */
         fun of(session: ChargeSession, fullUah: Long?): SessionDrain {
             val dischargeMs = session.screenOnMs + session.screenOffMs
             val completeCoverage = session.counterCoveredMs >= dischargeMs
-            fun rate(durationMs: Long, uah: Long?): DrainRate {
-                val milliamps = if (completeCoverage && uah != null && durationMs >= MIN_RATE_MS) uah * 3_600.0 / durationMs else null
+            fun rate(durationMs: Long, uah: Long?, coveredMs: Long?): DrainRate {
+                val measuredMs = coveredMs ?: durationMs.takeIf { completeCoverage }
+                val milliamps = if (uah != null && measuredMs != null && measuredMs >= MIN_RATE_MS) uah * 3_600.0 / measuredMs else null
                 val perHour = if (milliamps != null && fullUah != null && fullUah > 0) milliamps * 100_000 / fullUah else null
                 return DrainRate(durationMs, milliamps, perHour)
             }
             return SessionDrain(
-                screenOn = rate(session.screenOnMs, session.screenOnUah),
-                screenOff = rate(session.screenOffMs, session.screenOffUah),
+                screenOn = rate(session.screenOnMs, session.screenOnUah, session.screenOnCoveredMs),
+                screenOff = rate(session.screenOffMs, session.screenOffUah, session.screenOffCoveredMs),
                 deepSleepPercent = session.cpuSuspendMs?.takeIf { session.observedMs > 0 }?.let { it * 100.0 / session.observedMs },
             )
         }
