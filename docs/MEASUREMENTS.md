@@ -1,6 +1,6 @@
-# Understanding BatStats readings
+# Understanding Voltwise readings
 
-BatStats reports Android and vendor data. It is not an independent electrical meter. Open **Sources and diagnostics** to inspect the source, units, capture time, coverage and failures behind a reading.
+Voltwise reports Android and vendor data. It is not an independent electrical meter. Open **Sources and diagnostics** to inspect the source, units, capture time, coverage and failures behind a reading.
 
 ## Ordinary readings
 
@@ -17,7 +17,7 @@ BatStats reports Android and vendor data. It is not an independent electrical me
 
 ## Automatic calibration
 
-Some devices report `CURRENT_NOW` in the wrong unit (mA instead of µA) or with the sign inverted. BatStats can detect this by comparing the integral of raw current against the charge counter's own change over matching stretches of time (a "window": at least 20 mAh of counter movement over at least 10 minutes, on one charging or discharging direction, with the CPU awake for at least 90% of it). A correction is only applied when the evidence is consistent — 3 of the last 4 windows agree on the same unit and sign, and none of the kept windows contradicts it — never from a single window and never scaled to fit; a value that fits neither unit is treated as inconclusive.
+Some devices report `CURRENT_NOW` in the wrong unit (mA instead of µA) or with the sign inverted. Voltwise can detect this by comparing the integral of raw current against the charge counter's own change over matching stretches of time (a "window": at least 20 mAh of counter movement over at least 10 minutes, on one charging or discharging direction, with the CPU awake for at least 90% of it). A correction is only applied when the evidence is consistent — 3 of the last 4 windows agree on the same unit and sign, and none of the kept windows contradicts it — never from a single window and never scaled to fit; a value that fits neither unit is treated as inconclusive.
 
 A faster, narrower check runs alongside it: 20 or more consecutive unplugged readings that are all positive (with a falling counter, when one is available) mark the sign as inverted, without deciding the unit. This fast path only fires while no window evidence says the sign is already normal.
 
@@ -25,7 +25,7 @@ A detected correction that changes what the app actually uses shows a notice wit
 
 ## Observed periods
 
-Live totals start when BatStats begins observing or when **Reset observation** is selected. Starting midway through an unplugged period does not claim earlier consumption. The dashboard, details and monitoring notification use the same observation model and identify the last observed endpoint; notification refresh may lag live readings by its update cadence.
+Live totals start when Voltwise begins observing or when **Reset observation** is selected. Starting midway through an unplugged period does not claim earlier consumption. The dashboard, details and monitoring notification use the same observation model and identify the last observed endpoint; notification refresh may lag live readings by its update cadence.
 
 Durations use monotonic clocks. Screen on means interactive; screen off includes noninteractive Always On Display. Locking the device alone does not establish screen-off or sleep. Screen-on/off drain buckets contain discharging intervals only. CPU suspend is derived from the difference between elapsed-time and uptime changes over observed intervals; Android Doze is separately observed. The two clocks are read together after battery-property reads to avoid counting collection latency as sleep. Neither screen-off time nor Doze proves CPU deep sleep.
 
@@ -43,9 +43,9 @@ Charge totals use valid counter differences. Average drain uses only intervals c
 
 ## Advanced access
 
-Shizuku is used when running and authorized. Otherwise, BatStats probes root and then ADB; a failed read does not silently fall through to another backend. A persistent ADB grant is not a capability guarantee: on Android 16/API 36, cross-user refusal prevents ADB-only access to per-app batterystats, which requires Shizuku or root. Ordinary battery readings continue without advanced access.
+Shizuku is used when running and authorized. Otherwise, Voltwise probes root and then ADB; a failed read does not silently fall through to another backend. A persistent ADB grant is not a capability guarantee: on Android 16/API 36, cross-user refusal prevents ADB-only access to per-app batterystats, which requires Shizuku or root. Ordinary battery readings continue without advanced access.
 
-Android batterystats has its own since-charge/reset window, distinct from BatStats history. App charge values are Android estimates. A UID can include multiple packages or system services; consumption cannot be reliably split among them. Package mappings may include removed apps or profiles. Wakelocks, jobs, alarms, network bytes and CPU activity indicate work, not proof of excessive energy use. Comparisons use one report window. The proportional attributed total is an alternative total and must not be added to the UID total.
+Android batterystats has its own since-charge/reset window, distinct from Voltwise history. App charge values are Android estimates. A UID can include multiple packages or system services; consumption cannot be reliably split among them. Package mappings may include removed apps or profiles. Wakelocks, jobs, alarms, network bytes and CPU activity indicate work, not proof of excessive energy use. Comparisons use one report window. The proportional attributed total is an alternative total and must not be added to the UID total.
 
 Kernel readings require supported files and permissions, generally Root. Full-charge/design capacity ratio is a fuel-gauge estimate dependent on calibration and vendor units (see **Capacity and health** below). Cycle count alone does not determine battery health. Unsupported fields stay unavailable.
 
