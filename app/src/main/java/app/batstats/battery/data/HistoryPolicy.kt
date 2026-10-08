@@ -83,16 +83,19 @@ object HistoryPolicy {
         val counter = duration(input.counterCoveredMs)
         val screenOn = duration(input.screenOnMs)
         val screenOff = duration(input.screenOffMs).coerceAtMost(span - screenOn)
+        val screenOnCovered = input.screenOnCoveredMs?.let(::duration)?.coerceAtMost(screenOn)
+        val screenOffCovered = input.screenOffCoveredMs?.let(::duration)?.coerceAtMost(screenOff)
         // Keep bucket rates tied to their rounded durations; the measured session total stays intact.
         fun bucketCharge(uah: Long?, originalMs: Long, normalizedMs: Long): Long? =
             uah?.takeUnless { normalizedMs == 0L }?.let { (it.toDouble() / originalMs * normalizedMs).toLong() }
         return input.copy(observedMs = span, counterCoveredMs = counter,
             screenOnMs = screenOn, screenOffMs = screenOff,
+            screenOnCoveredMs = screenOnCovered, screenOffCoveredMs = screenOffCovered,
             cpuSuspendMs = input.cpuSuspendMs?.let(::duration),
             screenOffSuspendMs = input.screenOffSuspendMs?.let(::duration),
             deltaUah = input.deltaUah.takeUnless { counter == 0L },
-            screenOnUah = bucketCharge(input.screenOnUah, input.screenOnMs, screenOn),
-            screenOffUah = bucketCharge(input.screenOffUah, input.screenOffMs, screenOff))
+            screenOnUah = bucketCharge(input.screenOnUah, input.screenOnCoveredMs ?: input.screenOnMs, screenOnCovered ?: screenOn),
+            screenOffUah = bucketCharge(input.screenOffUah, input.screenOffCoveredMs ?: input.screenOffMs, screenOffCovered ?: screenOff))
     }
 
     fun session(input: ChargeSession): ChargeSession {
@@ -123,7 +126,13 @@ object HistoryPolicy {
         require(input.peakTemperatureDeciC == null || BatteryReading.temperatureDeciC(input.peakTemperatureDeciC) != null) { "Invalid peak temperature; expected tenths Celsius" }
         require(input.screenOffSuspendMs == null || input.screenOffSuspendMs in 0..input.observedMs) { "Invalid screen-off suspend interval" }
         require(input.lastSampleTime == null || sampleInSessionWindow(input.lastSampleTime, input, end)) { "Invalid session sample time" }
-        return normalizeCoverage(input, span).copy(sessionId = requiredIdentity(input.sessionId), observationId = identity(input.observationId),
+        require(input.screenOnCoveredMs == null || input.screenOnCoveredMs >= 0) { "Invalid screen-on counter coverage" }
+        require(input.screenOffCoveredMs == null || input.screenOffCoveredMs >= 0) { "Invalid screen-off counter coverage" }
+        val covered = input.copy(
+            screenOnCoveredMs = input.screenOnCoveredMs?.coerceAtMost(input.screenOnMs),
+            screenOffCoveredMs = input.screenOffCoveredMs?.coerceAtMost(input.screenOffMs),
+        )
+        return normalizeCoverage(covered, span).copy(sessionId = requiredIdentity(input.sessionId), observationId = identity(input.observationId),
             lastSampleTime = input.lastSampleTime?.coerceAtMost(end),
             endTime = end, activeKey = null, source = source(requiredText(input.source)), avgCurrentUa = current(input.avgCurrentUa),
             closeReason = if (input.endTime == null) "Imported snapshot; monitoring was not resumed" else text(input.closeReason),

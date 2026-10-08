@@ -66,6 +66,7 @@ object SessionReport {
         return ChargeSession(
             UUID.randomUUID().toString(), type, sample.timestamp, null, sample.levelPercent, null, null, null, null,
             observationId = point.generation, source = SOURCE,
+            screenOnCoveredMs = 0, screenOffCoveredMs = 0,
             chargerType = if (plugged) ChargerType.of(sample.plugged)?.name else null,
         )
     }
@@ -78,15 +79,10 @@ object SessionReport {
         engine: ObservationEngine,
         extremes: SessionExtremes,
     ): ChargeSession {
-        val before = engine.summary
         val summary = engine.accept(point)
-        // The cross-power interval has no counter charge. Keep the screen buckets, screen-off
-        // suspend and estimate whose charge and level span end at the last same-state sample.
+        // Keep the observed boundary duration; the engine excludes its cross-power charge.
+        // The capacity estimate still ends at the last same-state sample.
         return report(current, sample, summary, extremes).copy(
-            screenOnMs = before.screenOn.durationMs,
-            screenOffMs = before.screenOff.durationMs,
-            screenOnUah = before.screenOn.chargeChangeUah.takeIf { before.screenOn.chargeCoveredMs > 0 },
-            screenOffUah = before.screenOff.chargeChangeUah.takeIf { before.screenOff.chargeCoveredMs > 0 },
             capacityEstimateMah = current.capacityEstimateMah,
             capacityConfidence = current.capacityConfidence,
             capacityBasis = current.capacityBasis,
@@ -111,6 +107,7 @@ object SessionReport {
             deltaUah = deltaUah,
             avgCurrentUa = bucket.rateMa?.times(if (charging) 1000 else -1000)?.toLong(),
             screenOnMs = summary.screenOn.durationMs, screenOffMs = summary.screenOff.durationMs,
+            screenOnCoveredMs = summary.screenOn.chargeCoveredMs, screenOffCoveredMs = summary.screenOff.chargeCoveredMs,
             screenOnUah = summary.screenOn.chargeChangeUah.takeIf { summary.screenOn.chargeCoveredMs > 0 },
             screenOffUah = summary.screenOff.chargeChangeUah.takeIf { summary.screenOff.chargeCoveredMs > 0 },
             cpuSuspendMs = summary.cpuSuspendMs,

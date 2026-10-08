@@ -39,7 +39,7 @@ class SessionDrainTest {
         assertEquals(50.0, drain.deepSleepPercent!!, 1e-9)
     }
 
-    @Test fun asymmetricCounterCoverageWithholdsScreenRatesButPreservesOverallRate() {
+    @Test fun asymmetricCounterCoverageKeepsMeasuredScreenRateAndOverallRate() {
         val first = Observation(
             wallMs = 0, elapsedMs = 0, uptimeMs = 0, level = 90, chargeUah = 4_000_000,
             currentUa = -600_000, voltageMv = 4_000, power = PowerState.DISCHARGING,
@@ -64,16 +64,16 @@ class SessionDrainTest {
         assertEquals(20_000L, report.deltaUah)
         assertEquals(-600_000L, report.avgCurrentUa)
         val drain = SessionDrain.of(report, fullUah = 4_000_000)
-        assertEquals(DrainRate(120_000, null, null), drain.screenOn)
+        assertEquals(DrainRate(120_000, 600.0, 15.0), drain.screenOn)
         assertEquals(DrainRate(120_000, null, null), drain.screenOff)
         val now = NowMapping.sinceUnplug(report, monitoring = true, fullUah = 4_000_000)!!
-        assertNull(now.screenOn.currentMa)
-        assertNull(now.screenOn.percentPerHour)
+        assertEquals(600.0, now.screenOn.currentMa!!, 0.0)
+        assertEquals(15.0, now.screenOn.percentPerHour!!, 0.0)
         assertNull(now.screenOff.currentMa)
         assertNull(now.screenOff.percentPerHour)
     }
 
-    @Test fun evenOneMillisecondOfMissingCoverageWithholdsScreenRates() {
+    @Test fun legacyNullCoverageStillRequiresBothBucketsFullyCovered() {
         val drain = SessionDrain.of(session(counterCoveredMs = 3 * hour - 1), fullUah = 4_000_000)
         assertEquals(DrainRate(hour, null, null), drain.screenOn)
         assertEquals(DrainRate(2 * hour, null, null), drain.screenOff)

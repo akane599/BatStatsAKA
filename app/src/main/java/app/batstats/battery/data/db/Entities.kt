@@ -75,6 +75,9 @@ data class ChargeSession(
     val capacityBasis: String? = null,       // measurement basis enum name
     val appUsageStatus: AppUsageStatus? = null,
     val appUsageBasis: AppUsageBasis? = null,
+    // v6: null means legacy coverage is unknown.
+    val screenOnCoveredMs: Long? = null,
+    val screenOffCoveredMs: Long? = null,
 )
 
 enum class SessionType { CHARGE, DISCHARGE, PLUGGED, UNKNOWN }

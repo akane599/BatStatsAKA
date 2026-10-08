@@ -21,6 +21,8 @@ data class DayInterval(
     val cpuSuspendMs: Long? = null,
     val endLevelPercent: Int? = null,
     val endTemperatureDeciC: Int? = null,
+    val screenOnCoveredMs: Long = 0,
+    val screenOffCoveredMs: Long = 0,
 )
 
 /**
@@ -49,6 +51,8 @@ object DailySummaryAggregator {
             endWallMs = end.wallMs,
             screenOnMs = grew(after.screenOn.durationMs, before.screenOn.durationMs),
             screenOffMs = grew(after.screenOff.durationMs, before.screenOff.durationMs),
+            screenOnCoveredMs = grew(after.screenOn.chargeCoveredMs, before.screenOn.chargeCoveredMs),
+            screenOffCoveredMs = grew(after.screenOff.chargeCoveredMs, before.screenOff.chargeCoveredMs),
             screenOnDischargeUah = grew(after.screenOn.chargeChangeUah, before.screenOn.chargeChangeUah),
             screenOffDischargeUah = grew(after.screenOff.chargeChangeUah, before.screenOff.chargeChangeUah),
             chargedUah = grew(after.charging.chargeChangeUah, before.charging.chargeChangeUah),
@@ -70,16 +74,21 @@ object DailySummaryAggregator {
         val weights = segments.map { it.second }
         val screenOn = apportion(interval.screenOnMs, weights)
         val screenOff = apportion(interval.screenOffMs, weights)
+        val screenOnCovered = apportionCoverage(interval.screenOnCoveredMs, screenOn)
+        val screenOffCovered = apportionCoverage(interval.screenOffCoveredMs, screenOff)
         val screenOnUah = apportion(interval.screenOnDischargeUah, weights)
         val screenOffUah = apportion(interval.screenOffDischargeUah, weights)
         val charged = apportion(interval.chargedUah, weights)
         val suspend = interval.cpuSuspendMs?.let { apportion(it, weights) }
         val endDay = segments.last().first
         return segments.mapIndexed { i, (day, _) ->
-            val row = rows[day] ?: DailySummary(epochDay = day)
+            val row = rows[day] ?: DailySummary(epochDay = day, screenOnCoveredMs = 0, screenOffCoveredMs = 0)
             val added = row.copy(
                 screenOnMs = row.screenOnMs + screenOn[i],
                 screenOffMs = row.screenOffMs + screenOff[i],
+                // Unknown historical coverage stays unknown: its charge cannot be divided by only new time.
+                screenOnCoveredMs = row.screenOnCoveredMs?.plus(screenOnCovered[i]),
+                screenOffCoveredMs = row.screenOffCoveredMs?.plus(screenOffCovered[i]),
                 screenOnDischargeUah = row.screenOnDischargeUah + screenOnUah[i],
                 screenOffDischargeUah = row.screenOffDischargeUah + screenOffUah[i],
                 chargedUah = row.chargedUah + charged[i],
@@ -118,6 +127,19 @@ object DailySummaryAggregator {
         }
         if (segments.last().first != epochDay(end, zone)) segments += epochDay(end, zone) to 0L
         return segments
+    }
+
+    /** Distribute rounding across nonempty buckets, never spilling coverage into a zero-time day. */
+    private fun apportionCoverage(value: Long, durations: List<Long>): List<Long> {
+        var remainingMs = durations.sum()
+        var remainingCovered = value
+        return durations.map { duration ->
+            val share = if (remainingMs == 0L) 0L
+                else (remainingCovered.toDouble() * duration / remainingMs).toLong().coerceAtMost(duration)
+            remainingMs -= duration
+            remainingCovered -= share
+            share
+        }
     }
 
     /** Splits [value] by [weights], flooring each share; the last share takes the remainder. */

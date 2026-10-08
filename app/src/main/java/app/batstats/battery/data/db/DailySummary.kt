@@ -22,4 +22,7 @@ data class DailySummary(
     val maxLevel: Int? = null,
     val peakTemperatureDeciC: Int? = null,
     val updatedAt: Long = 0,
+    // v6: null means legacy coverage is unknown; zero means no measured counter interval.
+    val screenOnCoveredMs: Long? = null,
+    val screenOffCoveredMs: Long? = null,
 )

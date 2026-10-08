@@ -27,8 +27,52 @@ class DatabaseMigrationTest {
     @Test fun versionTwoKeepsHistory() = migrate(2)
     @Test fun versionThreeKeepsHistoryAndRejectsDuplicateActiveSessions() = migrate(3)
 
+    @Test fun versionFiveKeepsHistoryAndAddsUnknownCoverage() = runBlocking {
+        val name = "migration-${UUID.randomUUID()}.db"
+        val path = context.getDatabasePath(name)
+        path.parentFile!!.mkdirs()
+        SQLiteDatabase.openOrCreateDatabase(path, null).use { v5 ->
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `battery_samples` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `levelPercent` INTEGER, `status` INTEGER NOT NULL, `plugged` INTEGER, `currentNowUa` INTEGER, `chargeCounterUah` INTEGER, `voltageMv` INTEGER, `temperatureDeciC` INTEGER, `health` INTEGER, `screenOn` INTEGER NOT NULL, `elapsedMs` INTEGER, `uptimeMs` INTEGER, `observationId` TEXT, `sessionId` TEXT, `currentAverageUa` INTEGER, `energyNwh` INTEGER, `cycleCount` INTEGER, `etaMs` INTEGER, `etaBasis` TEXT, `source` TEXT NOT NULL DEFAULT 'legacy', `boundaryReason` TEXT)")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_battery_samples_timestamp` ON `battery_samples` (`timestamp`)")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_battery_samples_sessionId` ON `battery_samples` (`sessionId`)")
+            v5.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_battery_samples_observationId_elapsedMs` ON `battery_samples` (`observationId`, `elapsedMs`)")
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `charge_sessions` (`sessionId` TEXT NOT NULL, `type` TEXT NOT NULL, `startTime` INTEGER NOT NULL, `endTime` INTEGER, `startLevel` INTEGER, `endLevel` INTEGER, `deltaUah` INTEGER, `avgCurrentUa` INTEGER, `estCapacityMah` INTEGER, `activeKey` INTEGER, `observationId` TEXT, `lastSampleTime` INTEGER, `observedMs` INTEGER NOT NULL DEFAULT 0, `counterCoveredMs` INTEGER NOT NULL DEFAULT 0, `screenOnMs` INTEGER NOT NULL DEFAULT 0, `screenOffMs` INTEGER NOT NULL DEFAULT 0, `screenOnUah` INTEGER, `screenOffUah` INTEGER, `cpuSuspendMs` INTEGER, `closeReason` TEXT, `source` TEXT NOT NULL DEFAULT 'legacy', `chargerType` TEXT, `energyNwh` INTEGER, `peakPowerMw` INTEGER, `peakTemperatureDeciC` INTEGER, `screenOffSuspendMs` INTEGER, `capacityEstimateMah` INTEGER, `capacityConfidence` TEXT, `capacityBasis` TEXT, `appUsageStatus` TEXT, `appUsageBasis` TEXT, PRIMARY KEY(`sessionId`))")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_sessions_startTime` ON `charge_sessions` (`startTime`)")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_charge_sessions_type` ON `charge_sessions` (`type`)")
+            v5.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_charge_sessions_activeKey` ON `charge_sessions` (`activeKey`)")
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `daily_summaries` (`epochDay` INTEGER NOT NULL, `screenOnMs` INTEGER NOT NULL, `screenOffMs` INTEGER NOT NULL, `screenOnDischargeUah` INTEGER NOT NULL, `screenOffDischargeUah` INTEGER NOT NULL, `chargedUah` INTEGER NOT NULL, `cpuSuspendMs` INTEGER, `minLevel` INTEGER, `maxLevel` INTEGER, `peakTemperatureDeciC` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`epochDay`))")
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshots` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` TEXT, `kind` TEXT NOT NULL, `capturedAt` INTEGER NOT NULL, `windowStartedAt` INTEGER, `windowStartCount` INTEGER)")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_app_snapshots_sessionId` ON `app_snapshots` (`sessionId`)")
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `app_snapshot_uids` (`snapshotId` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, PRIMARY KEY(`snapshotId`, `uid`), FOREIGN KEY(`snapshotId`) REFERENCES `app_snapshots`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+            v5.execSQL("CREATE TABLE IF NOT EXISTS `session_app_usage` (`sessionId` TEXT NOT NULL, `rank` INTEGER NOT NULL, `uid` INTEGER NOT NULL, `packageName` TEXT NOT NULL, `powerMah` REAL NOT NULL, `cpuTimeMs` INTEGER, `foregroundTimeMs` INTEGER, `backgroundTimeMs` INTEGER, `wakelockTimeMs` INTEGER, `mobileBytes` INTEGER, `wifiBytes` INTEGER, `isOthers` INTEGER NOT NULL, `basis` TEXT NOT NULL, PRIMARY KEY(`sessionId`, `rank`), FOREIGN KEY(`sessionId`) REFERENCES `charge_sessions`(`sessionId`) ON UPDATE NO ACTION ON DELETE CASCADE )")
+            v5.execSQL("CREATE INDEX IF NOT EXISTS `index_session_app_usage_sessionId` ON `session_app_usage` (`sessionId`)")
+            v5.execSQL("INSERT INTO charge_sessions (sessionId,type,startTime,endTime,observedMs,counterCoveredMs,screenOnMs,screenOnUah) VALUES ('v5','DISCHARGE',0,120000,120000,120000,120000,20000)")
+            v5.execSQL("INSERT INTO daily_summaries (epochDay,screenOnMs,screenOffMs,screenOnDischargeUah,screenOffDischargeUah,chargedUah,updatedAt) VALUES (20000,120000,0,20000,0,0,120000)")
+            v5.version = 5
+        }
+        val db = open(name)
+        try {
+            val session = db.sessionDao().byId("v5")!!
+            val day = db.dailySummaryDao().byDay(20_000)!!
+            assertEquals(120_000L, session.screenOnMs)
+            assertEquals(20_000L, session.screenOnUah)
+            assertEquals(20_000L, day.screenOnDischargeUah)
+            assertNull(session.screenOnCoveredMs); assertNull(session.screenOffCoveredMs)
+            assertNull(day.screenOnCoveredMs); assertNull(day.screenOffCoveredMs)
+            val coveredSession = session.copy(screenOnCoveredMs = 120_000, screenOffCoveredMs = 0)
+            val coveredDay = day.copy(screenOnCoveredMs = 120_000, screenOffCoveredMs = 0)
+            db.sessionDao().upsert(coveredSession)
+            db.dailySummaryDao().upsert(coveredDay)
+            assertEquals(coveredSession, db.sessionDao().byId("v5"))
+            assertEquals(coveredDay, db.dailySummaryDao().byDay(20_000))
+        } finally {
+            db.close()
+            context.deleteDatabase(name)
+        }
+    }
+
     private fun open(name: String) = Room.databaseBuilder(context, BatteryDatabase::class.java, name)
-        .addMigrations(BatteryDatabase.MIGRATION_1_2, BatteryDatabase.MIGRATION_2_3, BatteryDatabase.MIGRATION_3_4, BatteryDatabase.MIGRATION_4_5).build()
+        .addMigrations(BatteryDatabase.MIGRATION_1_2, BatteryDatabase.MIGRATION_2_3, BatteryDatabase.MIGRATION_3_4, BatteryDatabase.MIGRATION_4_5, BatteryDatabase.MIGRATION_5_6).build()
 
     private fun BatteryDatabase.names(type: String): Set<String> =
         openHelper.readableDatabase.query("SELECT name FROM sqlite_master WHERE type = ?", arrayOf(type)).use { cursor ->

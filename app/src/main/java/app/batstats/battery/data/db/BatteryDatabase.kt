@@ -11,7 +11,7 @@ import app.batstats.battery.apps.AppUsageStatus
 @Database(
     entities = [BatterySample::class, ChargeSession::class, DailySummary::class,
         AppSnapshot::class, AppSnapshotUid::class, SessionAppUsage::class],
-    version = 5,
+    version = 6,
     exportSchema = true
 )
 abstract class BatteryDatabase : RoomDatabase() {
@@ -81,6 +81,16 @@ abstract class BatteryDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: historical rows retain unknown (null) screen counter coverage. */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `screenOnCoveredMs` INTEGER")
+                db.execSQL("ALTER TABLE `charge_sessions` ADD COLUMN `screenOffCoveredMs` INTEGER")
+                db.execSQL("ALTER TABLE `daily_summaries` ADD COLUMN `screenOnCoveredMs` INTEGER")
+                db.execSQL("ALTER TABLE `daily_summaries` ADD COLUMN `screenOffCoveredMs` INTEGER")
+            }
+        }
+
         fun get(context: Context): BatteryDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -88,7 +98,7 @@ abstract class BatteryDatabase : RoomDatabase() {
                     BatteryDatabase::class.java,
                     "battery.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                     .build().also { INSTANCE = it }
             }
     }

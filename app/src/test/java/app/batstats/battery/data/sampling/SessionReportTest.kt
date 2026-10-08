@@ -256,10 +256,10 @@ class SessionReportTest {
         assertNotNull("Screen-off current must survive the charging boundary", drain.screenOff.currentMa)
         assertEquals(800.0, drain.screenOn.currentMa!!, 0.0)
         assertEquals(800.0, drain.screenOff.currentMa!!, 0.0)
-        assertTrue("Screen durations must not exceed counter coverage",
-            closed.screenOnMs + closed.screenOffMs <= closed.counterCoveredMs)
+        assertEquals("Keep observed time even when boundary charge is unknown",
+            7_230_000L, closed.screenOnMs + closed.screenOffMs)
         assertEquals(current.screenOnMs, closed.screenOnMs)
-        assertEquals(current.screenOffMs, closed.screenOffMs)
+        assertEquals(current.screenOffMs + 30_000, closed.screenOffMs)
         assertTrue("Screen-off suspend must not exceed its screen duration",
             closed.screenOffSuspendMs!! <= closed.screenOffMs)
         assertEquals("Screen-off suspend must exclude the charging boundary",
