@@ -104,6 +104,39 @@ class ChargeEtaTest {
         assertEquals(mapOf(usb to 300_000L), eta.learnedTaperMsPerPercent)
     }
 
+    @Test fun pluggedHoldAtEightyDoesNotPolluteLearnedTapers() {
+        charge = 3_950_000 // 79 %
+        val fresh = ChargeEta()
+        val learned = ChargeEta(learnedTaperMsPerPercent = mapOf(ac to 180_000L, usb to 300_000L))
+        val estimators = listOf(fresh, learned)
+        estimators.forEach { it.accept(point(), ac, null) }
+        elapsed += 120_000
+        uptime += 30_000
+        charge += 50_000 // observed step into 80 %
+        estimators.forEach { it.accept(point(), ac, null) }
+
+        repeat(48) { poll -> // four-hour adaptive charging hold, polled every five minutes
+            elapsed += 300_000
+            uptime += 30_000
+            val hold = point(PowerState.PLUGGED, if (poll == 0) Boundary.POWER else Boundary.SAMPLE)
+                .copy(expectedIntervalMs = 300_000)
+            estimators.forEach { it.accept(hold, ac, null) }
+        }
+        estimators.forEach { it.accept(point(boundary = Boundary.POWER), ac, null) }
+        repeat(20) { // 80 → 100 % at three minutes per percent, with a final FULL capture
+            elapsed += 180_000
+            uptime += 30_000
+            charge += 50_000
+            val full = level() == 100
+            val step = point(if (full) PowerState.PLUGGED else PowerState.CHARGING,
+                if (full) Boundary.POWER else Boundary.SAMPLE)
+            estimators.forEach { it.accept(step, ac, null) }
+        }
+
+        assertEquals(emptyMap<Int, Long>(), fresh.learnedTaperMsPerPercent)
+        assertEquals(mapOf(ac to 180_000L, usb to 300_000L), learned.learnedTaperMsPerPercent)
+    }
+
     @Test fun partialChargesAndInterruptedTapersTeachNothing() {
         charge = 3_900_000
         val eta = ChargeEta()
