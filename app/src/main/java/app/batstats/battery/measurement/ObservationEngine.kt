@@ -16,7 +16,9 @@ data class Observation(
     val dozing: Boolean,
     val generation: String,
     val expectedIntervalMs: Long = 30_000,
-    val boundary: Boundary = Boundary.SAMPLE
+    val boundary: Boundary = Boundary.SAMPLE,
+    /** In-memory event evidence attached by StateEventSequencer to a confirmed endpoint. */
+    val confirmedBoundaries: Set<Boundary> = emptySet(),
 )
 
 enum class Boundary { SAMPLE, SCREEN, POWER, DOZE, GAP }
@@ -68,9 +70,10 @@ internal fun observationGap(before: Observation, point: Observation): String? {
     val elapsed = point.elapsedMs - before.elapsedMs
     val awake = point.uptimeMs - before.uptimeMs
     val clockShift = abs((point.wallMs - before.wallMs) - elapsed) > 5_000
-    val missingTransition = (before.interactive != point.interactive && point.boundary != Boundary.SCREEN) ||
-        (before.power != point.power && point.boundary != Boundary.POWER) ||
-        (before.dozing != point.dozing && point.boundary != Boundary.DOZE)
+    fun confirmed(boundary: Boundary) = point.boundary == boundary || boundary in point.confirmedBoundaries
+    val missingTransition = (before.interactive != point.interactive && !confirmed(Boundary.SCREEN)) ||
+        (before.power != point.power && !confirmed(Boundary.POWER)) ||
+        (before.dozing != point.dozing && !confirmed(Boundary.DOZE))
     return when {
         point.generation != before.generation -> "Monitoring restarted"
         elapsed < 0 || awake < 0 || awake > elapsed + 100 -> "Monotonic clock discontinuity"
