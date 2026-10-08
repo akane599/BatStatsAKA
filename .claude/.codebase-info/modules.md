@@ -1,6 +1,6 @@
 # Modules and Packages
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 There is one Gradle module, `:app`. The packages below are under `app/src/main/java/app/batstats/`, and
 unit tests mirror them under `app/src/test/java/app/batstats/`.
@@ -9,14 +9,14 @@ unit tests mirror them under `app/src/test/java/app/batstats/`.
 | --- | --- | --- |
 | `battery/` | App + launcher activity | `BatteryApp.kt` (Koin start, warm-up, migrations), `BatteryMainActivity.kt` |
 | `battery/service/` | Monitoring lifecycle | `BatteryMonitorService.kt` (FGS), `MonitoringController.kt` / `MonitoringControl` (start/stop), `SamplingDemand.kt` (2 s demand tokens), `BootReceiver.kt` |
-| `battery/data/` | History repository and services | `BatteryRepository.kt` (single writer, `realtimeFlow`, sessions, `HistoryWriter`), `CalibrationStore.kt`, `DesignCapacitySource.kt`, `ExportImport.kt`, `HistoryFiles.kt`, `HistoryRetention.kt`, `HistoryPolicy.kt`, `PowerTransition.kt`, `SessionDrain.kt`, `SessionEvidence.kt`, `LiveReading.kt` |
+| `battery/data/` | History repository and services | `BatteryRepository.kt` (single writer, `realtimeFlow`, sessions, `HistoryWriter`), `CalibrationStore.kt`, `DesignCapacitySource.kt`, `FullCapacity.kt` (`resolveFullUah`: charge counter first, then stored Health estimate, never design capacity; `storedFullUah`), `ExportImport.kt`, `HistoryFiles.kt`, `HistoryRetention.kt`, `HistoryPolicy.kt`, `PowerTransition.kt`, `SessionDrain.kt`, `SessionEvidence.kt`, `LiveReading.kt` |
 | `battery/data/db/` | Room | see [database.md](database.md) |
 | `battery/data/sampling/` | Sampler and session rows | `SamplingController.kt` (the only sampler, `HandlerThread`), `SessionReport.kt` (open/report session rows, `ChargerType`, `SessionExtremes`), `SamplerState.kt`, `DailySummaryReplay.kt`, `KeyValueStore.kt` |
-| `battery/measurement/` | Pure measurement logic (no Android; heavily unit-tested) | `ObservationEngine.kt` (intervals, `Boundary`, gaps), `PersistPolicy.kt`, `SamplingPolicy.kt`, `StateEventSequencer.kt`, `Calibration.kt` + `CurrentCalibrator.kt` (unit/sign detection), `CapacityEstimator.kt`, `ChargeEta.kt`, `DischargeEta.kt`, `EtaHold.kt`, `EtaModel.kt`, `HealthSummary.kt`, `DailySummaryAggregator.kt`, `BatteryAlerts.kt`, `BatteryReading.kt` |
+| `battery/measurement/` | Pure measurement logic (no Android; heavily unit-tested) | `ObservationEngine.kt` (intervals, `Boundary`, gaps), `PersistPolicy.kt`, `SamplingPolicy.kt`, `StateEventSequencer.kt` (compound boundaries: each changed dimension needs its own confirming event), `Calibration.kt` + `CurrentCalibrator.kt` (unit/sign detection), `CapacityEstimator.kt`, `ChargeEta.kt`, `DischargeEta.kt`, `EtaHold.kt`, `EtaModel.kt`, `HealthSummary.kt`, `DailySummaryAggregator.kt`, `BatteryAlerts.kt`, `BatteryReading.kt` |
 | `battery/apps/` | Per-app usage | `AppStatsRepository.kt`, `SessionSnapshotCollector.kt`, `SessionSnapshotStore.kt`, `AppUsage*.kt`, `TopApps.kt`, `AppInfo*.kt`, `AppLabel.kt` (see [privileged-shell.md](privileged-shell.md)) |
 | `battery/shizuku/` | Shizuku binding | `ShizukuBridge.kt`, `ShellUserService.kt` |
 | `battery/util/` | Shell + parsing + misc | `ShellRunner.kt`, `BatteryStatsParser.kt`, `CommandOutput.kt`, `CommandProtocol.kt`, `DumpOutput.kt`, `RootStatsCollector.kt`, `PrivilegeChecker.kt`, `TimeEstimator.kt`, `UpdateGate.kt` (dedupe/gate pushes), `Notifier.kt` |
-| `battery/drain/` | Ongoing notification | `DrainNotificationManager.kt`, `NotificationContent.kt`, `NotificationFitter.kt` (longest text form that fits; `rows(fontScale)` hides the summary and footer above 1.3x), `NotificationInputs.kt`, `StatusIconRenderer.kt` / `StatusIconText.kt` (status-bar icon text), `DrainState.kt`, `DrainNotificationReceiver.kt`; layouts `res/layout/notification_*.xml` |
+| `battery/drain/` | Ongoing notification | `DrainNotificationManager.kt`, `OngoingPosts.kt` (one stable `when` per monitoring session so refreshes update in place), `NotificationContent.kt` (%/h when full capacity is known, else mA), `NotificationFitter.kt` (longest text form that fits; `rows(fontScale)` hides the summary and footer above 1.3x), `NotificationInputs.kt`, `StatusIconRenderer.kt` / `StatusIconText.kt` (status-bar icon text), `DrainState.kt`, `DrainNotificationReceiver.kt`; layouts `res/layout/notification_*.xml` |
 | `battery/widget/` | RemoteViews widgets | `WidgetUpdater.kt`, `Battery{Level,Temp,Time}Widget.kt`, `WidgetIdCache.kt` |
 | `battery/tile/` | QS tile | `MonitorTileService.kt`, `TileListenSession.kt`, `TileText.kt` |
 | `battery/diagnostics/` | Privacy-safe local diagnostics | `DiagnosticStore.kt`, `DiagnosticLog.kt` (fixed codes only), `DiagnosticReport.kt` |

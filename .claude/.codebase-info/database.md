@@ -1,12 +1,12 @@
 # Database
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
-Room database `battery.db`, **version 5**, `exportSchema = true`.
+Room database `battery.db`, **version 6**, `exportSchema = true`.
 - Definition and migrations: `app/src/main/java/app/batstats/battery/data/db/BatteryDatabase.kt`
 - Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`
 - DAOs: `data/db/Dao.kt`
-- Exported schemas: `app/schemas/app.batstats.battery.data.db.BatteryDatabase/4.json`, `5.json`
+- Exported schemas: `app/schemas/app.batstats.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`
   (KSP arg `room.schemaLocation` in `app/build.gradle.kts`)
 
 ## Tables
@@ -14,8 +14,8 @@ Room database `battery.db`, **version 5**, `exportSchema = true`.
 | Table | Entity | Key | Purpose |
 | --- | --- | --- | --- |
 | `battery_samples` | `BatterySample` | `id` autoinc; unique (`observationId`,`elapsedMs`); idx `timestamp`, `sessionId` | Persisted captures: level, status, plugged, **raw** `currentNowUa`, charge counter, voltage, temperature, screen, monotonic clocks, ETA, `source`, `boundaryReason`. |
-| `charge_sessions` | `ChargeSession` | `sessionId` (UUID text); unique `activeKey` (1 while open, so at most one open session); idx `startTime`, `type` | Observed sessions. `type` is a `SessionType` (CHARGE, DISCHARGE, PLUGGED, UNKNOWN). The v5 nullable columns are charger type, energy, peaks, screen-off suspend, capacity estimate/confidence/basis, `appUsageStatus`, `appUsageBasis`. |
-| `daily_summaries` | `DailySummary` | `epochDay` | Per-local-day screen on/off time and discharge, charged µAh, min/max level, peak temperature. Upserted with each persisted sample. |
+| `charge_sessions` | `ChargeSession` | `sessionId` (UUID text); unique `activeKey` (1 while open, so at most one open session); idx `startTime`, `type` | Observed sessions. `type` is a `SessionType` (CHARGE, DISCHARGE, PLUGGED, UNKNOWN). The v5 nullable columns are charger type, energy, peaks, screen-off suspend, capacity estimate/confidence/basis, `appUsageStatus`, `appUsageBasis`. v6 adds nullable `screenOnCoveredMs` / `screenOffCoveredMs` (time actually covered by measured intervals per screen bucket; `SessionDrain` rates = covered charge / covered ms, ≥ 60 s; null on legacy rows keeps the old rule). |
+| `daily_summaries` | `DailySummary` | `epochDay` | Per-local-day screen on/off time and discharge, charged µAh, min/max level, peak temperature, and (v6) nullable `screenOnCoveredMs` / `screenOffCoveredMs`; a day without coverage shows as unmeasured ("—") in History/Now. Upserted with each persisted sample (`DailySummaryAggregator`). |
 | `app_snapshots` | `AppSnapshot` | `id` autoinc; idx `sessionId` | BASELINE / END batterystats snapshot headers (`AppSnapshotKind`). |
 | `app_snapshot_uids` | `AppSnapshotUid` | (`snapshotId`,`uid`), FK → `app_snapshots` ON DELETE CASCADE | Per-UID power, CPU, foreground/background, wakelock, data bytes. |
 | `session_app_usage` | `SessionAppUsage` | (`sessionId`,`rank`), FK → `charge_sessions` ON DELETE CASCADE | The ranked per-session app breakdown (top-N plus an `isOthers` row) with `basis`. |
@@ -37,6 +37,7 @@ as a documented fallback for the two NOT NULL enum columns.
 | 2→3 | no-op (keeps rows) |
 | 3→4 | rebuilds `battery_samples` and `charge_sessions` with range-sanitised copies; legacy sessions get a close reason |
 | 4→5 | **irreversible**: drops `alarm_rules` and `app_energy_stats`, adds the v5 session columns and creates `daily_summaries`, `app_snapshots`, `app_snapshot_uids`, `session_app_usage` (DDL copied from `5.json`). No 5→4 path. |
+| 5→6 | additive: four nullable `screen{On,Off}CoveredMs` columns on `charge_sessions` and `daily_summaries` (`MIGRATION_5_6`). |
 
 There's no destructive fallback: every version needs an explicit `MIGRATION_a_b` registered in `get()`.
 
@@ -51,7 +52,7 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 - Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`).
 - SharedPreferences: `CalibrationStore.PREFS_NAME` (calibration) and `SamplerState.PREFS_NAME` (sampler
   state), both wrapped in `SharedPreferencesStore` / `KeyValueStore` (`data/sampling/KeyValueStore.kt`).
-- Export/import: `data/ExportImport.kt` (`BatteryExport` format 3; formats 1–2 still import) and
+- Export/import: `data/ExportImport.kt` (`BatteryExport` format 4 = `HISTORY_FORMAT_VERSION`, carries the coverage columns; formats 1–3 still import) and
   `data/HistoryFiles.kt`. Backup rules: `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`.
 - Retention: `data/HistoryRetention.kt`, `data/HistoryPolicy.kt`; `boundStorage` trims to
   `HistoryLimits.SAMPLE_TRIM_TARGET`/`SESSION_TRIM_TARGET` (cap − 200) every `CLEANUP_SAMPLE_INTERVAL` inserts

@@ -1,6 +1,6 @@
 # BatStats Codebase Map
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 BatStats is an Android battery monitor: live readings, observed charge/discharge sessions saved in
 Room, and per-app battery use via a privileged `dumpsys batterystats` (Shizuku / root / ADB `DUMP`).
@@ -13,7 +13,7 @@ single sampler (`SamplingController`) and the single history writer (`BatteryRep
 | [architecture.md](architecture.md) | Layers, key flows (monitoring, live readings, per-app stats, deep links), invariants |
 | [entry-points.md](entry-points.md) | Application, activity, FGS, boot receiver, tile, widgets, notification actions, navigation routes |
 | [modules.md](modules.md) | Every package with its key files; screen → ViewModel → repository table |
-| [database.md](database.md) | Room v5 tables, DAOs, migrations (4→5 irreversible), other persistence, checks |
+| [database.md](database.md) | Room v6 tables, DAOs, migrations (4→5 irreversible, 5→6 additive), other persistence, checks |
 | [privileged-shell.md](privileged-shell.md) | ShellRunner modes, Shizuku bridge/user service, batterystats parsing, session snapshots |
 | [tech-landscape.md](tech-landscape.md) | Toolchain versions, libraries, variants/signing, CI, localization |
 | [directory-structure.md](directory-structure.md) | Annotated tree |

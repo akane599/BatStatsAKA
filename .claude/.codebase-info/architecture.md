@@ -1,6 +1,6 @@
 # Architecture
 
-*Last Updated: 2026-10-07*
+*Last Updated: 2026-10-08*
 
 BatStats is a single-module (`:app`) Android app. It reads battery state, records observed
 charge/discharge **sessions** into Room, and, when it has privileged access (Shizuku, root or ADB-granted
@@ -22,7 +22,7 @@ charge/discharge **sessions** into Room, and, when it has privileged access (Shi
    ├─ ShellRunner/ShizukuBridge battery/util, battery/shizuku      privileged command execution
    ├─ CalibrationStore, DesignCapacitySource, HistoryRetention, ExportImportManager, DiagnosticStore
    └─ SettingsRepository<AppSettings>  (kmp-settings over DataStore; settings/)
- Persistence             battery/data/db/  Room `battery.db` v5   + DataStore + SharedPreferences
+ Persistence             battery/data/db/  Room `battery.db` v6   + DataStore + SharedPreferences
  Android surfaces        service/ (FGS), drain/ (notification), widget/ (RemoteViews), tile/ (QS tile)
 ```
 
