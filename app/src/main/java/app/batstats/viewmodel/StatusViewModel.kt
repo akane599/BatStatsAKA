@@ -279,7 +279,7 @@ class DefaultStatusRepository(
 
     override fun report(): String = buildString {
         val calibration = calibrationStore.state.value
-        appendLine("BatStats ${BuildConfig.VERSION_NAME} · Android API ${Build.VERSION.SDK_INT}")
+        appendLine("Voltwise ${BuildConfig.VERSION_NAME} · Android API ${Build.VERSION.SDK_INT}")
         appendLine("Report generated: ${Instant.now()} (UTC)")
         appendLine()
         appendLine(DiagnosticReport.reading(battery.realtimeFlow.value.sample))

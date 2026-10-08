@@ -21,13 +21,13 @@
     <string name="health_design_checking">Checking…</string>
     <string name="health_cycles_not_reported">Not reported</string>
     <string name="health_no_estimate">No estimate yet</string>
-    <string name="health_no_estimate_body">It appears after BatStats records a long charge or discharge with monitoring on.</string>
+    <string name="health_no_estimate_body">It appears after Voltwise records a long charge or discharge with monitoring on.</string>
     <string name="health_needs_design">Design capacity needed</string>
-    <string name="health_needs_design_body">Enter it in mAh from your phone\'s specifications. With root, BatStats reads it from the battery.</string>
+    <string name="health_needs_design_body">Enter it in mAh from your phone\'s specifications. With root, Voltwise reads it from the battery.</string>
     <string name="health_checking_design">Checking the design capacity the battery reports…</string>
     <string name="health_set_design">Set design capacity</string>
     <string name="health_info_title">About battery health</string>
-    <string name="health_info_body">BatStats estimates your battery\'s full capacity from what it records: the charge that flowed in or out during a charge or discharge, divided by how far the level moved.\n\nEvery estimate comes with a confidence. High: the level moved at least 40 percent and the charge counter reported nearly all the time. Medium: at least 20 percent. Low: at least 10 percent. Shorter sessions give no estimate.\n\nThe capacity shown combines the estimates of the newest 50 sessions and weighs confident ones more, so one odd session can\'t move it much.\n\nHealth compares that capacity with the design capacity: the one you set in Settings or, with root, the one the battery reports. A new battery can read above 100 percent. It is an estimate, not a lab test.</string>
+    <string name="health_info_body">Voltwise estimates your battery\'s full capacity from what it records: the charge that flowed in or out during a charge or discharge, divided by how far the level moved.\n\nEvery estimate comes with a confidence. High: the level moved at least 40 percent and the charge counter reported nearly all the time. Medium: at least 20 percent. Low: at least 10 percent. Shorter sessions give no estimate.\n\nThe capacity shown combines the estimates of the newest 50 sessions and weighs confident ones more, so one odd session can\'t move it much.\n\nHealth compares that capacity with the design capacity: the one you set in Settings or, with root, the one the battery reports. A new battery can read above 100 percent. It is an estimate, not a lab test.</string>
     <string name="health_trend_title">Capacity over time</string>
     <string name="health_trend_series">Capacity</string>
     <string name="health_trend_design">Design</string>

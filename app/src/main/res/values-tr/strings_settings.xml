@@ -10,7 +10,7 @@
     <string name="settings_status_link">Durum</string>
     <string name="settings_status_link_summary">Erişim modu, kalibrasyon ve son sorunlar</string>
     <string name="settings_monitoring_info_title">İzleme hakkında</string>
-    <string name="settings_monitoring_info_body">Yeniden başlatınca başlat: Android izin verirse telefon yeniden başladığında BatStats izlemeye devam eder. Aksi hâlde bir bildirim izlemeyi başlatmanızı sağlar. Shizuku\'nun ayrıca yeniden başlatılması gerekebilir.\n\nDurum çubuğu simgesi: izleme bildiriminin durum çubuğunda gösterdiği değer.</string>
+    <string name="settings_monitoring_info_body">Yeniden başlatınca başlat: Android izin verirse telefon yeniden başladığında Voltwise izlemeye devam eder. Aksi hâlde bir bildirim izlemeyi başlatmanızı sağlar. Shizuku\'nun ayrıca yeniden başlatılması gerekebilir.\n\nDurum çubuğu simgesi: izleme bildiriminin durum çubuğunda gösterdiği değer.</string>
 
     <string name="settings_alerts_title">Uyarılar</string>
     <string name="settings_alert_low">Düşük pil</string>
@@ -42,9 +42,9 @@
     <string name="settings_design_capacity_hint">Otomatik için boş, ya da %1$s–%2$s mAh</string>
     <string name="settings_design_capacity_error">%1$s–%2$s mAh girin veya boş bırakın.</string>
     <string name="settings_measurement_info_title">Ölçüm hakkında</string>
-    <string name="settings_measurement_info_body">Android pil akımını µA olarak bildirir, ancak bazı telefonlar mA kullanır ya da işareti ters çevirir. BatStats okumaları şarj sayacıyla karşılaştırır ve düzeltir.\n\nAkım birimi ve akım işareti algılamayı geçersiz kılar; Otomatik algılamayı kullanır.\n\nKalibrasyonu sıfırla algılamayı unutur ve yeniden başlar. Tüm verileri silmek onu korur.\n\nAyar dışa aktarımı birim ve işaret ayarlarınızı içerir, algılanan kalibrasyonu asla içermez.\n\nTasarım kapasitesi pil sağlığı için kullanılır. Android\'in bildirdiği kapasiteyi kullanmak için Otomatik bırakın.</string>
+    <string name="settings_measurement_info_body">Android pil akımını µA olarak bildirir, ancak bazı telefonlar mA kullanır ya da işareti ters çevirir. Voltwise okumaları şarj sayacıyla karşılaştırır ve düzeltir.\n\nAkım birimi ve akım işareti algılamayı geçersiz kılar; Otomatik algılamayı kullanır.\n\nKalibrasyonu sıfırla algılamayı unutur ve yeniden başlar. Tüm verileri silmek onu korur.\n\nAyar dışa aktarımı birim ve işaret ayarlarınızı içerir, algılanan kalibrasyonu asla içermez.\n\nTasarım kapasitesi pil sağlığı için kullanılır. Android\'in bildirdiği kapasiteyi kullanmak için Otomatik bırakın.</string>
     <string name="settings_reset_calibration_title">Kalibrasyon sıfırlansın mı?</string>
-    <string name="settings_reset_calibration_body">BatStats algılanan birimi ve işareti unutur ve yeni okumalardan yeniden algılar. Geçmişiniz ve ayarlarınız korunur.</string>
+    <string name="settings_reset_calibration_body">Voltwise algılanan birimi ve işareti unutur ve yeni okumalardan yeniden algılar. Geçmişiniz ve ayarlarınız korunur.</string>
     <string name="settings_reset_calibration_confirm">Sıfırla</string>
     <string name="settings_calibration_reset_done">Kalibrasyon sıfırlandı</string>
 

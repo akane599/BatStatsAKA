@@ -59,7 +59,7 @@ run_prebuilt_phase() {
   shift
   local report="${batstats_report_dir}/${phase}-instrumentation.txt"
   adb shell am instrument -w -r -e expectedPageSize "$batstats_page_size" "$@" \
-    org.mlm.batstats.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$report" || return 1
+    com.akane.voltwise.debug.test/androidx.test.runner.AndroidJUnitRunner | tee "$report" || return 1
   # adb can exit successfully even when the test runner crashed or assertions failed.
   python3 scripts/check_instrumentation_result.py "$report"
 }

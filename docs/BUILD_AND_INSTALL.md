@@ -1,4 +1,4 @@
-# Build and install BatStats
+# Build and install Voltwise
 
 ## Download a build from a phone
 
@@ -22,10 +22,12 @@ The separate **Android App Releases** workflow publishes only when **Upload rele
 | Build | Package | Signing and compatibility |
 | --- | --- | --- |
 | Supplied6.2.6 | `org.mlm.batstats` | Original release certificate; its private key is unavailable here. |
-| Debug | `org.mlm.batstats.debug` | Development certificate; debuggable. Installs alongside the supplied app. |
-| Preview | `org.mlm.batstats.preview` | Optimized, nondebuggable build. Uses an optional preview key, otherwise the local/runner development certificate. Installs alongside both other packages. |
+| Debug | `com.akane.voltwise.debug` | Development certificate; debuggable. Installs alongside the supplied app. |
+| Preview | `com.akane.voltwise.preview` | Optimized, nondebuggable build. Uses an optional preview key, otherwise the local/runner development certificate. Installs alongside both other packages. |
 
-An in-place update requires the same package, a compatible signing certificate and an acceptable version code. This build cannot update the supplied APK without its original signing key. Its original signerSHA256 is `4aed2f691df64a7b0fea25a6b8c80183c6dc520e049dac0178defa1d6472228f`.
+The app is now called Voltwise and uses the `com.akane.voltwise` package, so it installs as a new app, separate from the old `org.mlm.batstats` (BatStats) one.
+
+An in-place update requires the same package, a compatible signing certificate and an acceptable version code. This build has a different package and cannot update the supplied APK. Its original signerSHA256 is `4aed2f691df64a7b0fea25a6b8c80183c6dc520e049dac0178defa1d6472228f`.
 
 Temporary GitHub runners usually generate different development keys. Therefore, APKs from separate runs **may not update each other**, even if both are named Preview. The APK-dist plugin applies ABI-specific version-code offsets; the universal APK uses the source code plus1. Use the actual version code in `build-info.json`. Compare `signerSha256` in that file; never uninstall a history-bearing installation before deliberately exporting its data. Separate packages do not share preferences, grants or history. Legacy exports may require conversion; only formats accepted by the import validator can be imported.
 

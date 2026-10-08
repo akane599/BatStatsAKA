@@ -83,10 +83,10 @@
     <string name="sessiondetails_apps_show_fewer">Mostrar menos</string>
     <string name="sessiondetails_apps_pending">El uso por app se lee cuando conectas el teléfono.</string>
     <string name="sessiondetails_apps_collecting">Leyendo el uso por app…</string>
-    <string name="sessiondetails_apps_no_access">Sin uso por app: BatStats no tenía acceso de Shizuku, root ni ADB cuando se conectó el teléfono. Shizuku sin root se detiene al reiniciar el teléfono; abre Shizuku para iniciarlo de nuevo.</string>
+    <string name="sessiondetails_apps_no_access">Sin uso por app: Voltwise no tenía acceso de Shizuku, root ni ADB cuando se conectó el teléfono. Shizuku sin root se detiene al reiniciar el teléfono; abre Shizuku para iniciarlo de nuevo.</string>
     <string name="sessiondetails_apps_failed">Sin uso por app: la supervisión se detuvo antes de conectar el teléfono, o no se pudieron leer las estadísticas de Android.</string>
     <string name="sessiondetails_apps_not_recorded">No se registró uso por app en esta sesión.</string>
     <string name="sessiondetails_apps_empty">Ninguna app usó una cantidad medible de energía en esta sesión.</string>
     <string name="sessiondetails_apps_info_title">Acerca del uso por app</string>
-    <string name="sessiondetails_apps_info_body">BatStats lee las estadísticas de batería por app de Android al desconectar y de nuevo al conectar; el número de cada app es la diferencia. Si Android reinició sus estadísticas entremedias, se muestran los totales desde el reinicio. Sin una lectura al desconectar, se muestran los totales desde la última carga completa.\n\nLeer estas estadísticas requiere acceso de Shizuku, root o ADB. Shizuku sin root se detiene al reiniciar el teléfono: abre Shizuku para iniciarlo de nuevo.\n\nLos valores son estimaciones de Android. Una entrada puede incluir varias apps que comparten un ID.</string>
+    <string name="sessiondetails_apps_info_body">Voltwise lee las estadísticas de batería por app de Android al desconectar y de nuevo al conectar; el número de cada app es la diferencia. Si Android reinició sus estadísticas entremedias, se muestran los totales desde el reinicio. Sin una lectura al desconectar, se muestran los totales desde la última carga completa.\n\nLeer estas estadísticas requiere acceso de Shizuku, root o ADB. Shizuku sin root se detiene al reiniciar el teléfono: abre Shizuku para iniciarlo de nuevo.\n\nLos valores son estimaciones de Android. Una entrada puede incluir varias apps que comparten un ID.</string>
 </resources>

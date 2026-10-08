@@ -10,16 +10,16 @@
 
     <string name="apps_access_title">Las estadísticas por app necesitan acceso</string>
     <string name="apps_access_not_set_up">Android protege las estadísticas de batería por app tras el acceso de Shizuku, root o ADB. Aún no hay ninguno configurado.</string>
-    <string name="apps_access_shizuku">Shizuku está en ejecución, pero todavía no ha permitido a BatStats.</string>
+    <string name="apps_access_shizuku">Shizuku está en ejecución, pero todavía no ha permitido a Voltwise.</string>
     <string name="apps_access_adb">En esta versión de Android, el acceso concedido por ADB no cubre las estadísticas por app. Usa Shizuku o root.</string>
     <string name="apps_access_refused">Android rechazó las estadísticas por app con el acceso actual.</string>
     <string name="apps_access_set_up">Configurar acceso</string>
     <string name="apps_access_allow">Permitir en Shizuku</string>
-    <string name="apps_access_shizuku_blocked">BatStats está bloqueada en Shizuku («Denegar y no volver a preguntar»), así que Shizuku no volverá a preguntar. Abre Shizuku, ve a sus apps autorizadas y activa BatStats.</string>
+    <string name="apps_access_shizuku_blocked">Voltwise está bloqueada en Shizuku («Denegar y no volver a preguntar»), así que Shizuku no volverá a preguntar. Abre Shizuku, ve a sus apps autorizadas y activa Voltwise.</string>
     <string name="apps_access_open_shizuku">Abrir Shizuku</string>
 
     <string name="apps_failed_title">No se pudieron leer las estadísticas de Android</string>
-    <string name="apps_failed_format">Android respondió en un formato que BatStats no puede leer.</string>
+    <string name="apps_failed_format">Android respondió en un formato que Voltwise no puede leer.</string>
     <string name="apps_failed_shizuku">La lectura con Shizuku falló. Inténtalo de nuevo o reinicia Shizuku.</string>
     <string name="apps_failed_other">La lectura falló. Inténtalo de nuevo en un momento.</string>
     <string name="apps_retry">Reintentar</string>
@@ -139,7 +139,7 @@
     <string name="apps_details_history_failed">No se pudieron leer las sesiones guardadas.</string>
     <string name="apps_details_history_series">Batería usada</string>
     <string name="apps_details_history_info_title">Acerca de las sesiones con batería</string>
-    <string name="apps_details_history_info_body">Cada barra es un periodo con batería de los últimos 30 días (hasta 14), desde que se desconecta hasta que se conecta. BatStats lee las estadísticas de Android en ambos extremos cuando tiene acceso y guarda las 30 primeras apps de cada uno.\n\nUna sesión en la que esta app no estuvo entre las 30 primeras aparece como 0.</string>
+    <string name="apps_details_history_info_body">Cada barra es un periodo con batería de los últimos 30 días (hasta 14), desde que se desconecta hasta que se conecta. Voltwise lee las estadísticas de Android en ambos extremos cuando tiene acceso y guarda las 30 primeras apps de cada uno.\n\nUna sesión en la que esta app no estuvo entre las 30 primeras aparece como 0.</string>
     <string name="apps_details_nothing_else">No hay nada más registrado para esta app.</string>
     <string name="apps_summary_capacity_source">Estimación de Android</string>
 </resources>

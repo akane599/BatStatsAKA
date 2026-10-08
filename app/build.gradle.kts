@@ -29,12 +29,12 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "org.mlm.batstats"
+        applicationId = "com.akane.voltwise"
         minSdk = 26
         targetSdk = 36
         versionCode = 736
         versionName = "6.2.7-dev"
-        manifestPlaceholders["appLabel"] = "BatStats"
+        manifestPlaceholders["appLabel"] = "Voltwise"
 
         androidResources {
             localeFilters += setOf("en", "es", "tr")
@@ -101,13 +101,13 @@ android {
             isDebuggable = true
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
-            manifestPlaceholders["appLabel"] = "BatStats Debug"
+            manifestPlaceholders["appLabel"] = "Voltwise Debug"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
         create("preview") {
             initWith(getByName("release"))
             applicationIdSuffix = ".preview"
-            manifestPlaceholders["appLabel"] = "BatStats Preview"
+            manifestPlaceholders["appLabel"] = "Voltwise Preview"
             signingConfig = signingConfigs.findByName("preview") ?: signingConfigs.getByName("debug")
             matchingFallbacks += "release"
         }

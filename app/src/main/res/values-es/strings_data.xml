@@ -9,7 +9,7 @@
     <string name="data_stored_sessions">Sesiones</string>
     <string name="data_stored_limit">de %1$s</string>
     <string name="data_stored_info_title">Acerca del historial guardado</string>
-    <string name="data_stored_info_body">BatStats guarda como máximo 100.000 lecturas y 10.000 sesiones en este teléfono; las más antiguas se eliminan primero. El ajuste de retención puede eliminarlas antes.\n\nBorrar elimina lecturas, sesiones y estadísticas de apps. Tus ajustes y la calibración actual se conservan. Las estadísticas de batería de Android no se ven afectadas.</string>
+    <string name="data_stored_info_body">Voltwise guarda como máximo 100.000 lecturas y 10.000 sesiones en este teléfono; las más antiguas se eliminan primero. El ajuste de retención puede eliminarlas antes.\n\nBorrar elimina lecturas, sesiones y estadísticas de apps. Tus ajustes y la calibración actual se conservan. Las estadísticas de batería de Android no se ven afectadas.</string>
 
     <!-- Exportar -->
     <string name="data_export_title">Exportar historial</string>
@@ -41,7 +41,7 @@
     <string name="data_settings_save">Guardar ajustes</string>
     <string name="data_settings_restore">Restaurar ajustes</string>
     <string name="data_settings_info_title">Acerca de las copias de ajustes</string>
-    <string name="data_settings_info_body">La copia contiene tus ajustes, incluidas las correcciones de unidad y signo. Nunca contiene el historial de batería ni la calibración que BatStats detectó en este teléfono.\n\nAl restaurar se comprueba primero el archivo entero. Si algo no es correcto, ningún ajuste cambia.</string>
+    <string name="data_settings_info_body">La copia contiene tus ajustes, incluidas las correcciones de unidad y signo. Nunca contiene el historial de batería ni la calibración que Voltwise detectó en este teléfono.\n\nAl restaurar se comprueba primero el archivo entero. Si algo no es correcto, ningún ajuste cambia.</string>
     <string name="data_settings_saved">Ajustes guardados.</string>
     <string name="data_settings_restored">Ajustes restaurados · aplicados: %1$s · omitidos: %2$s · no aplicados: %3$s</string>
 
@@ -58,12 +58,12 @@
     <!-- Errores -->
     <string name="data_failed_export">La exportación no se guardó. %1$s</string>
     <string name="data_failed_import">No se importó nada. %1$s</string>
-    <string name="data_failed_not_export">No se importó nada. No es una exportación de historial de BatStats.</string>
+    <string name="data_failed_not_export">No se importó nada. No es una exportación de historial de Voltwise.</string>
     <string name="data_failed_read">No se pudo leer ese archivo. Nada cambió.</string>
     <string name="data_failed_write">No se pudo escribir en esa ubicación. Elige otra.</string>
     <string name="data_failed_settings_invalid">No es una copia de ajustes válida. Ningún ajuste cambió.</string>
     <string name="data_failed_settings_other_app">Esta copia pertenece a otra app. Ningún ajuste cambió.</string>
-    <string name="data_failed_settings_too_new">Esta copia es de una versión más nueva de BatStats. Ningún ajuste cambió.</string>
+    <string name="data_failed_settings_too_new">Esta copia es de una versión más nueva de Voltwise. Ningún ajuste cambió.</string>
     <string name="data_failed_settings_damaged">Esta copia se editó o está dañada. Ningún ajuste cambió.</string>
     <string name="data_failed_no_picker">Ninguna app de este teléfono puede elegir archivos.</string>
     <string name="data_failed_unexpected">Algo salió mal. Inténtalo de nuevo.</string>
