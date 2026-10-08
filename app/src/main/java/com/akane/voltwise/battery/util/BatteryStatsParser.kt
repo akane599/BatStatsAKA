@@ -54,6 +54,7 @@ object BatteryStatsParser {
         val processStats: List<ProcessStats> = emptyList(),
         val appPowerRecords: Int = 0,
         val rejectedAppPowerRecords: Int = 0,
+        val wakeupReasons: List<WakeupReasonStats> = emptyList(),
     ) {
         val hasValidWindow: Boolean get() = startedAt != null && startCount != null &&
             batteryRealtimeMs != null && batteryUptimeMs != null && batteryUptimeMs <= batteryRealtimeMs
@@ -100,7 +101,14 @@ object BatteryStatsParser {
         val audioTimeMs: Long? = null,
         val videoTimeMs: Long? = null,
         val bluetoothScanTimeMs: Long? = null,
-        val bluetoothUnoptimizedScanTimeMs: Long? = null
+        val bluetoothUnoptimizedScanTimeMs: Long? = null,
+        val wakeupAlarmCount: Long? = null,
+        val partialWakelockCount: Long? = null,
+        val partialWakelockTimeMs: Long? = null,
+        val partialWakelockBgTimeMs: Long? = null,
+        val jobCount: Long? = null,
+        val jobTimeMs: Long? = null,
+        val syncCount: Long? = null,
     )
 
     data class WakelockStats(
@@ -126,6 +134,12 @@ object BatteryStatsParser {
         val maxTimeMs: Long? = null,
         val lastChangeMs: Long? = null,
         val preventSuspendTimeMs: Long? = null
+    )
+
+    data class WakeupReasonStats(
+        val name: String,
+        val count: Int,
+        val totalTimeMs: Long,
     )
 
     data class AlarmStats(
@@ -242,6 +256,8 @@ object BatteryStatsParser {
     private fun List<String>.int(i: Int) = long(i)?.takeIf { it <= Int.MAX_VALUE }?.toInt()
     private fun List<String>.number(i: Int) = getOrNull(i)?.toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0 }
     private fun sum(a: Long?, b: Long?): Long? = if (a == null || b == null || a > Long.MAX_VALUE - b) null else a + b
+    private fun <T> List<T>.reportedSum(value: (T) -> Long?): Long? =
+        takeIf { it.isNotEmpty() }?.fold(0L as Long?) { total, row -> sum(total, value(row)) }
 
     /** Delegates to the single-pass [Sequence] overload; kept for existing callers. */
     fun parseCheckin(raw: String, sdkInt: Int = 28): FullSnapshot = parseCheckin(raw.lineSequence(), sdkInt)
@@ -273,6 +289,7 @@ object BatteryStatsParser {
         val components = linkedMapOf<String, Double>()
         val locks = mutableListOf<WakelockStats>()
         val kernel = mutableListOf<KernelWakelockStats>()
+        val wakeupReasons = mutableListOf<WakeupReasonStats>()
         val alarms = mutableListOf<AlarmStats>()
         val jobs = mutableListOf<JobStats>()
         val syncs = mutableListOf<SyncStats>()
@@ -330,6 +347,10 @@ object BatteryStatsParser {
                     val name = p.getOrNull(4); val time = p.long(5); val count = p.int(6)
                     if (name != null && time != null && count != null) kernel += KernelWakelockStats(name, count, time, maxTimeMs = p.long(8)) else rejected++
                 }
+                "wr" -> if (uid == 0) {
+                    val name = p.getOrNull(4); val time = p.long(5); val count = p.int(6)
+                    if (name != null && time != null && count != null) wakeupReasons += WakeupReasonStats(name, count, time) else rejected++
+                }
                 "wua" -> {
                     val name = p.getOrNull(4); val count = p.int(5)
                     if (name != null && count != null) alarms += AlarmStats(uid, label, pkgs, name, count, count, null) else rejected++
@@ -386,6 +407,10 @@ object BatteryStatsParser {
             fun duration(tag: String) = record(tag)?.long(4)
             val cpu = record("cpu"); val state = record("st"); val net = record("nt"); val scan = record("blem")
             val sensorTimes = sensors.filter { it.uid == uid && it.sensorHandle != -10000 }
+            val partialLocks = locks.filter { it.uid == uid && it.type == WakelockType.PARTIAL }
+            val uidAlarms = alarms.filter { it.uid == uid }
+            val uidJobs = jobs.filter { it.uid == uid }
+            val uidSyncs = syncs.filter { it.uid == uid }
             app.copy(cpuTimeMs = cpu?.let { sum(it.long(4), it.long(5)) }, wakeLockTimeMs = duration("awl"),
                 foregroundTimeMs = duration("fg"), foregroundServiceTimeMs = duration("fgs"),
                 topTimeMs = state?.long(4), backgroundTimeMs = state?.long(backgroundStateField), cachedTimeMs = state?.long(cachedStateField),
@@ -394,7 +419,13 @@ object BatteryStatsParser {
                 gpsTimeMs = sensors.firstOrNull { it.uid == uid && it.sensorHandle == -10000 }?.totalTimeMs,
                 sensorTimeMs = sensorTimes.takeIf { it.isNotEmpty() }?.fold(0L as Long?) { a, b -> sum(a, b.totalTimeMs) },
                 cameraTimeMs = duration("cam"), flashlightTimeMs = duration("fla"), audioTimeMs = duration("aud"), videoTimeMs = duration("vid"),
-                bluetoothScanTimeMs = scan?.long(4), bluetoothUnoptimizedScanTimeMs = scan?.long(11))
+                bluetoothScanTimeMs = scan?.long(4), bluetoothUnoptimizedScanTimeMs = scan?.long(11),
+                wakeupAlarmCount = uidAlarms.reportedSum { it.count.toLong() },
+                partialWakelockCount = partialLocks.reportedSum { it.count.toLong() },
+                partialWakelockTimeMs = partialLocks.reportedSum { it.totalTimeMs },
+                partialWakelockBgTimeMs = partialLocks.reportedSum { it.backgroundTimeMs },
+                jobCount = uidJobs.reportedSum { it.count.toLong() }, jobTimeMs = uidJobs.reportedSum { it.totalTimeMs },
+                syncCount = uidSyncs.reportedSum { it.count.toLong() })
         }
         val frequencyTimes = Array<Long?>(frequencies.size) { 0L }
         var frequencyRows = 0
@@ -411,7 +442,8 @@ object BatteryStatsParser {
         return snapshot.copy(apps = enriched.sortedByDescending { it.powerMah }, componentEstimatesMah = components,
             reportedTags = tags, rejectedRecords = rejected, appPowerRecords = appPowerRecords,
             rejectedAppPowerRecords = appPowerRecords - apps.size, wakelocks = locks.sortedByDescending { it.totalTimeMs },
-            kernelWakelocks = kernel.sortedByDescending { it.totalTimeMs }, alarms = alarms.sortedByDescending { it.count },
+            kernelWakelocks = kernel.sortedByDescending { it.totalTimeMs }, wakeupReasons = wakeupReasons.sortedByDescending { it.totalTimeMs },
+            alarms = alarms.sortedByDescending { it.count },
             jobs = jobs.sortedByDescending { it.totalTimeMs }, syncs = syncs.sortedByDescending { it.totalTimeMs },
             network = network.distinctBy { it.uid }.sortedByDescending { it.mobileRxBytes.toDouble() + it.mobileTxBytes + it.wifiRxBytes + it.wifiTxBytes },
             sensors = sensors.sortedByDescending { it.totalTimeMs }, signalStrength = signals, wifiSignal = wifi,
