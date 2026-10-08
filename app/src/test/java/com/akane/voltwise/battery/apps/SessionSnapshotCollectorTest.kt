@@ -45,6 +45,7 @@ class SessionSnapshotCollectorTest {
         val usage = mutableMapOf<String, List<AppUsageRow>>()
         var failWrites = false
         var statusGate: CompletableDeferred<Unit>? = null
+        var endGate: CompletableDeferred<Unit>? = null
         val captureWindows = mutableMapOf<String, Pair<Long?, Long?>>()
         var openSessionError: Exception? = null
         var openSessionFailures = 0
@@ -65,6 +66,7 @@ class SessionSnapshotCollectorTest {
         }
         override suspend fun saveEnd(sessionId: String, end: AppUsageSnapshot, result: AppUsageDeltaResult): Boolean {
             check(!failWrites) { "disk I/O error" }
+            endGate?.await()
             val row = sessions[sessionId] ?: return false
             ends[sessionId] = end
             usage[sessionId] = result.rows
@@ -377,12 +379,14 @@ class SessionSnapshotCollectorTest {
             events += id
         } }
         start()
-        stats.gate = CompletableDeferred()
+        store.endGate = CompletableDeferred()
         stats.results += AppStatsResult.Ready(full(100, 1 to 3.0).copy(capturedAt = 456))
         plugIn("A", "C")
         advance(END_DEBOUNCE_MS)
         assertTrue(events.isEmpty())
-        stats.gate?.complete(Unit)
+        assertEquals(AppUsageStatus.PENDING, store.status("A"))
+        assertFalse(store.captureWindows.containsKey("A"))
+        store.endGate?.complete(Unit)
         runCurrent()
         assertEquals(listOf("A"), events)
         assertTrue(collector.finalizedSessions.replayCache.isEmpty())
