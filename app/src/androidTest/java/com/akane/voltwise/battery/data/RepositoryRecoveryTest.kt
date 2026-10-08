@@ -327,19 +327,53 @@ class RepositoryRecoveryTest {
 
     @Test fun storageLossCannotKeepAStoppedOrResetObservationRunning(): Unit = runBlocking {
         val fixture = Fixture()
+        var phase = "initial discharge session"
         try {
             fixture.repository.startSampling()
+            // Observation is published before persistence; wait for a committed open session too.
+            withTimeout(60_000) { fixture.repository.activeSessionFlow.first { it?.type == SessionType.DISCHARGE } }
             withTimeout(60_000) { fixture.repository.observation.first { it.startedAt != null } }
             fixture.database.close()
+            phase = "stop with closed storage"
             fixture.repository.stopSampling()
-            withTimeout(60_000) { fixture.repository.observation.first { it.stopped } }
+            val stopped = withTimeout(60_000) { fixture.repository.observation.first { it.stopped } }
             assertFalse(fixture.repository.isMonitoringFlow.value)
             withTimeout(60_000) { fixture.repository.error.first { it?.contains("History collection failed") == true } }
+            phase = "stale reset after stop"
+            // 3bfba51 / PROGRESS.md: Reset applies only to an open DISCHARGE session.
+            // Stop has already detached it, even when its storage close failed: keep the stopped result.
+            fixture.repository.resetObservation()
+            assertEquals(80, fixture.refresh().level)
+            assertEquals("A stale Reset must retain the stopped observation", stopped, fixture.repository.observation.value)
+            assertFalse(fixture.repository.isMonitoringFlow.value)
+        } catch (failure: Throwable) {
+            throw AssertionError("Failed during $phase; observation=${fixture.repository.observation.value}; " +
+                "monitoring=${fixture.repository.isMonitoringFlow.value}; errors=${fixture.repository.error.value}", failure)
+        } finally { fixture.close() }
+    }
+
+    @Test fun storageLossCannotKeepAnActiveDischargeObservationAfterReset(): Unit = runBlocking {
+        val fixture = Fixture()
+        var phase = "initial discharge session"
+        try {
+            fixture.repository.startSampling()
+            withTimeout(60_000) { fixture.repository.activeSessionFlow.first { it?.type == SessionType.DISCHARGE } }
+            withTimeout(60_000) { fixture.repository.observation.first { it.startedAt != null } }
+            fixture.database.close()
+            phase = "active reset with closed storage"
             fixture.repository.resetObservation()
             withTimeout(60_000) { fixture.repository.observation.first { it.startedAt == null } }
+            withTimeout(60_000) { fixture.repository.error.first { it?.contains("History collection failed") == true } }
             assertEquals(0L, fixture.repository.observation.value.observedMs)
+            assertNull(fixture.repository.observation.value.latest)
+            // Reset does not stop monitoring, but failed storage cannot resurrect the old window.
+            assertTrue(fixture.repository.isMonitoringFlow.value)
+            phase = "ordinary refresh after failed reset"
             assertEquals(80, fixture.refresh().level)
             assertNull(fixture.repository.observation.value.latest)
+        } catch (failure: Throwable) {
+            throw AssertionError("Failed during $phase; observation=${fixture.repository.observation.value}; " +
+                "monitoring=${fixture.repository.isMonitoringFlow.value}; errors=${fixture.repository.error.value}", failure)
         } finally { fixture.close() }
     }
 }
