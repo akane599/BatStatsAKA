@@ -116,7 +116,19 @@ data class Finding(
     val evidence: List<Evidence>,
     val series: List<SeriesPoint>,
     val recommendations: List<Recommendation>,
+    val attributions: List<Attribution> = emptyList(),
 )
+
+/** Matched observations are hints, not evidence of causation. */
+data class Attribution(
+    val kind: AttributionKind,
+    val name: String,
+    val packageName: String?,
+    val value: Double,
+    val unit: MetricUnit,
+    val sessions: Int,
+)
+enum class AttributionKind { KERNEL_WAKELOCK, WAKEUP_REASON, APP }
 
 sealed interface Subject {
     data object Device : Subject
@@ -144,7 +156,10 @@ enum class ActionType {
     OPEN_APP_SETTINGS, OPEN_BATTERY_OPTIMIZATION_SETTINGS, ENABLE_HIGH_BATTERY_ALERT,
 }
 
-enum class MetricUnit { MAH_PER_H, COUNT_PER_H, MS_PER_H, BYTES_PER_H, SHARE, RATIO, PCT_PER_H, PCT, CELSIUS, MAH }
+enum class MetricUnit {
+    MAH_PER_H, COUNT_PER_H, MS_PER_H, BYTES_PER_H, SHARE, RATIO, PCT_PER_H, PCT, CELSIUS, MAH,
+    MS, COUNT, PCT_PER_YEAR,
+}
 enum class Metric(val unit: MetricUnit) {
     POWER_MAH_PER_H(MetricUnit.MAH_PER_H),
     WAKEUP_ALARMS_PER_H(MetricUnit.COUNT_PER_H),
@@ -173,4 +188,6 @@ enum class Metric(val unit: MetricUnit) {
     DAILY_USE_PCT(MetricUnit.PCT),
     TEMPERATURE_C(MetricUnit.CELSIUS),
     CAPACITY_MAH(MetricUnit.MAH),
+    CAPACITY_CHANGE_PCT_PER_YEAR(MetricUnit.PCT_PER_YEAR),
+    PLUGGED_AT_FULL_MS(MetricUnit.MS),
 }

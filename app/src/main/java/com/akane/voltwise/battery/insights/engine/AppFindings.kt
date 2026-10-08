@@ -30,7 +30,7 @@ fun appFindings(inputs: InsightInputs): List<Finding> {
             detectors.flatMap { it(ctx) }
         }
         .distinctBy { it.key }
-        .sortedWith(compareByDescending<Finding> { it.score }.thenBy { it.key })
+        .sortedWith(findingOrder)
         .take(MAX_APP_FINDINGS)
 }
 
