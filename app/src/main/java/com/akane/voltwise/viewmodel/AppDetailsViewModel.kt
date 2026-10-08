@@ -25,7 +25,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -73,8 +72,7 @@ internal fun SessionAppUsage.isSameApp(uid: Int, packageName: String): Boolean =
 class DefaultAppDetailsRepository(
     reader: AppStatsReader,
     private val database: BatteryDatabase,
-    // whittle: transitional default until T9a (SQ-144) passes InsightRepository.report; remove the default then.
-    private val insights: Flow<InsightReport?> = flowOf(null),
+    private val insights: Flow<InsightReport?>,
 ) : AppDetailsRepository, AppStatsReader by reader {
     override fun findingsFor(packageName: String): Flow<List<Finding>> = insights.map { it.appFindings(packageName) }
 

@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
+import com.akane.voltwise.battery.insights.InsightRepository
 import com.akane.voltwise.battery.apps.SessionSnapshotCollector
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.drain.DrainNotificationManager
@@ -35,6 +36,7 @@ class BatteryMonitorService : Service() {
     private val notifications: DrainNotificationManager by inject()
     private val shell: ShellRunner by inject()
     private val sessionSnapshots: SessionSnapshotCollector by inject()
+    private val insights: InsightRepository by inject()
     private val diagnostics: DiagnosticStore by inject()
     private var started = false
     private var monitoringStartedElapsed = 0L
@@ -98,6 +100,10 @@ class BatteryMonitorService : Service() {
         started = true
         monitoringStartedElapsed = SystemClock.elapsedRealtime()
         repository.startSampling()
+        // Subscribe before snapshots start: a finalized session must not race the refresh collector.
+        serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            refreshOnFinalizedSessions(sessionSnapshots.finalizedSessions) { insights.refresh() }
+        }
         // Per-app baselines/ends at unplug and plug-in; runs (and dumps) only while monitoring runs.
         serviceScope.launch(Dispatchers.Default) { sessionSnapshots.run() }
         serviceScope.launch(Dispatchers.IO) {
@@ -190,4 +196,9 @@ class BatteryMonitorService : Service() {
         super.onDestroy()
     }
     override fun onBind(intent: Intent?): IBinder? = null
+}
+
+/** Coalesce bursts without cancelling analysis: one refresh runs, and only the latest pending event is kept. */
+internal suspend fun refreshOnFinalizedSessions(finalizedSessions: Flow<String>, refresh: suspend () -> Unit) {
+    finalizedSessions.conflate().collect { refresh() }
 }

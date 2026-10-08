@@ -5,6 +5,23 @@ import android.os.Build
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
+import com.akane.voltwise.battery.actions.ActionReadback
+import com.akane.voltwise.battery.actions.PrivilegedCommand
+import com.akane.voltwise.battery.actions.Readback
+import com.akane.voltwise.battery.actions.WhitelistKind
+import com.akane.voltwise.battery.insights.InsightRepository
+import com.akane.voltwise.battery.insights.actions.ActionExecutor
+import com.akane.voltwise.battery.insights.actions.InsightActionRepository
+import com.akane.voltwise.battery.insights.actions.PackageManagerTargetInspector
+import com.akane.voltwise.battery.insights.actions.ShellRunnerActionExecutor
+import com.akane.voltwise.battery.insights.actions.TargetInspector
+import com.akane.voltwise.viewmodel.AppDetailsRepository
+import com.akane.voltwise.viewmodel.DefaultInsightsRepository
+import com.akane.voltwise.viewmodel.FindingDetailsViewModel
+import com.akane.voltwise.viewmodel.InsightsRepository
+import com.akane.voltwise.viewmodel.InsightsViewModel
+import com.akane.voltwise.viewmodel.NowRepository
+import java.time.Clock
 import com.akane.voltwise.battery.apps.AppInfoRepository
 import com.akane.voltwise.battery.apps.AppInfoSource
 import com.akane.voltwise.battery.apps.AppStatsRepository
@@ -150,11 +167,58 @@ val appModule = module {
 
     single { DrainNotificationManager(androidContext(), get()) }
 
-    viewModel {
-        NowViewModel(
-            DefaultNowRepository(get(), get(), get(), get(), get(), get(), get()), get(), get(),
-            savedStateHandle = get(),
+    single { get<BatteryDatabase>().insightDao() }
+    single { ShellRunnerActionExecutor(get()) } bind ActionExecutor::class
+    single { PackageManagerTargetInspector(androidContext()) } bind TargetInspector::class
+    single {
+        InsightActionRepository(
+            get(), get(), get(), System::currentTimeMillis,
+            alertEnabler = { get<SettingsRepository<AppSettings>>().set("highBatteryAlertEnabled", true) },
         )
+    }
+    single {
+        val database = get<BatteryDatabase>()
+        val shell = get<ShellRunner>()
+        val stats = get<AppStatsRepository>()
+        val battery = get<BatteryRepository>()
+        val preferences = androidContext().getSharedPreferences("insights", Context.MODE_PRIVATE)
+        InsightRepository(
+            database.sessionDao(), database.dailySummaryDao(), database.appUsageDao(), get(),
+            get(), Clock.systemDefaultZone(),
+            dozeWhitelist = {
+                if (shell.access.value == ShellRunner.Mode.SHIZUKU || shell.access.value == ShellRunner.Mode.ROOT) {
+                    val outcome = shell.execAction(PrivilegedCommand.ListDozeWhitelist)
+                    val readback = (outcome as? ShellRunner.Outcome.Success)?.let { ActionReadback.dozeWhitelist(it.output) }
+                    when (readback) {
+                        is Readback.Recognized -> readback.value.filter { it.kind == WhitelistKind.USER }
+                            .map { it.packageName }.toSet()
+                        else -> null
+                    }
+                } else null
+            },
+            privileged = { shell.access.value == ShellRunner.Mode.SHIZUKU || shell.access.value == ShellRunner.Mode.ROOT },
+            liveDump = { stats.snapshot(force = true) },
+            store = SharedPreferencesStore(preferences),
+            capacityReading = {
+                val sample = battery.realtimeFlow.value.sample
+                sample?.chargeCounterUah to sample?.levelPercent
+            },
+        )
+    }
+    single<InsightsRepository> { DefaultInsightsRepository(get(), get(), get(), get<BatteryDatabase>().sessionDao()) }
+    single<NowRepository> {
+        val insights = get<InsightRepository>().report
+        DefaultNowRepository(get(), get(), get(), get(), get(), get(), get(), insights)
+    }
+    single<AppDetailsRepository> {
+        val insights = get<InsightRepository>().report
+        DefaultAppDetailsRepository(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get(), insights)
+    }
+
+    viewModel { InsightsViewModel(get(), get(), get()) }
+    viewModel { FindingDetailsViewModel(get(), get(), get()) }
+    viewModel {
+        NowViewModel(get(), get(), get(), savedStateHandle = get())
     }
     viewModel { SettingsViewModel(KmpSettingsStore(get()), get()) }
     // The second get() is the nav entry's SavedStateHandle (mode, range, chip and selected day survive process death).
@@ -165,7 +229,7 @@ val appModule = module {
     // Apps' second get() is the nav entry's SavedStateHandle (sort, query and "show system" survive process death).
     viewModel { AppsViewModel(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()) }
     viewModel { (uid: Int, packageName: String) ->
-        AppDetailsViewModel(DefaultAppDetailsRepository(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get()), uid, packageName)
+        AppDetailsViewModel(get(), uid, packageName)
     }
 
     viewModel { (sessionId: String) ->
