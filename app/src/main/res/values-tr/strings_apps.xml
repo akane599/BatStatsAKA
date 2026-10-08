@@ -10,16 +10,16 @@
 
     <string name="apps_access_title">Uygulama başına istatistikler için erişim gerekiyor</string>
     <string name="apps_access_not_set_up">Android, uygulama başına pil istatistiklerini Shizuku, root veya ADB erişimi arkasında tutar. Henüz hiçbiri kurulmadı.</string>
-    <string name="apps_access_shizuku">Shizuku çalışıyor ancak BatStats\'e henüz izin vermedi.</string>
+    <string name="apps_access_shizuku">Shizuku çalışıyor ancak Voltwise\'a henüz izin vermedi.</string>
     <string name="apps_access_adb">Bu Android sürümünde ADB ile verilen erişim uygulama başına istatistikleri kapsamıyor. Bunun yerine Shizuku veya root kullanın.</string>
     <string name="apps_access_refused">Android, mevcut erişimle uygulama başına istatistikleri reddetti.</string>
     <string name="apps_access_set_up">Erişimi kur</string>
     <string name="apps_access_allow">Shizuku\'da izin ver</string>
-    <string name="apps_access_shizuku_blocked">BatStats Shizuku\'da engellendi (“Reddet ve bir daha sorma”), bu yüzden Shizuku bir daha sormayacak. Shizuku\'yu açın, yetkili uygulamalarına gidin ve BatStats\'i açın.</string>
+    <string name="apps_access_shizuku_blocked">Voltwise Shizuku\'da engellendi (“Reddet ve bir daha sorma”), bu yüzden Shizuku bir daha sormayacak. Shizuku\'yu açın, yetkili uygulamalarına gidin ve Voltwise\'ı açın.</string>
     <string name="apps_access_open_shizuku">Shizuku\'yu aç</string>
 
     <string name="apps_failed_title">Android istatistikleri okunamadı</string>
-    <string name="apps_failed_format">Android, BatStats\'in okuyamadığı bir biçimde yanıt verdi.</string>
+    <string name="apps_failed_format">Android, Voltwise\'ın okuyamadığı bir biçimde yanıt verdi.</string>
     <string name="apps_failed_shizuku">Shizuku üzerinden okuma başarısız oldu. Tekrar deneyin veya Shizuku\'yu yeniden başlatın.</string>
     <string name="apps_failed_other">Okuma başarısız oldu. Birazdan tekrar deneyin.</string>
     <string name="apps_retry">Tekrar dene</string>
@@ -139,7 +139,7 @@
     <string name="apps_details_history_failed">Kaydedilen oturumlar okunamadı.</string>
     <string name="apps_details_history_series">Kullanılan pil</string>
     <string name="apps_details_history_info_title">Pildeki oturumlar hakkında</string>
-    <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. BatStats, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
+    <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. Voltwise, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
     <string name="apps_details_nothing_else">Bu uygulama için kaydedilen başka bir şey yok.</string>
     <string name="apps_summary_capacity_source">Android tahmini</string>
 </resources>

@@ -142,7 +142,7 @@ fun DataScreen(
 }
 
 private fun documentName(kind: String, extension: String) =
-    "BatStats-$kind-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date())}.$extension"
+    "Voltwise-$kind-${SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(Date())}.$extension"
 
 /**
  * Settings › Data, stateless: what's stored, history export and import, the settings backup, and "Clear all data"

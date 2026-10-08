@@ -10,7 +10,7 @@
     <string name="settings_status_link">Estado</string>
     <string name="settings_status_link_summary">Modo de acceso, calibración y problemas recientes</string>
     <string name="settings_monitoring_info_title">Acerca de la monitorización</string>
-    <string name="settings_monitoring_info_body">Iniciar tras reiniciar: BatStats reanuda la monitorización cuando el teléfono se reinicia, si Android lo permite. Si no, una notificación te deja iniciarla. Puede que Shizuku tenga que reiniciarse por separado.\n\nIcono de la barra de estado: lo que la notificación de monitorización muestra en la barra de estado.</string>
+    <string name="settings_monitoring_info_body">Iniciar tras reiniciar: Voltwise reanuda la monitorización cuando el teléfono se reinicia, si Android lo permite. Si no, una notificación te deja iniciarla. Puede que Shizuku tenga que reiniciarse por separado.\n\nIcono de la barra de estado: lo que la notificación de monitorización muestra en la barra de estado.</string>
 
     <string name="settings_alerts_title">Alertas</string>
     <string name="settings_alert_low">Batería baja</string>
@@ -42,9 +42,9 @@
     <string name="settings_design_capacity_hint">Vacío para auto, o %1$s–%2$s mAh</string>
     <string name="settings_design_capacity_error">Introduce %1$s–%2$s mAh o déjalo vacío.</string>
     <string name="settings_measurement_info_title">Acerca de la medición</string>
-    <string name="settings_measurement_info_body">Android informa de la corriente de la batería en µA, pero algunos teléfonos usan mA o invierten el signo. BatStats compara las lecturas con el contador de carga y las corrige.\n\nLa unidad y el signo de corriente anulan la detección; Auto la usa.\n\nRestablecer calibración olvida la detección y empieza de nuevo. Borrar todos los datos la conserva.\n\nUna exportación de ajustes incluye tus ajustes de unidad y signo, nunca la calibración detectada.\n\nLa capacidad de diseño se usa para la salud de la batería. Déjala en Auto para usar la capacidad que informa Android, si lo hace.</string>
+    <string name="settings_measurement_info_body">Android informa de la corriente de la batería en µA, pero algunos teléfonos usan mA o invierten el signo. Voltwise compara las lecturas con el contador de carga y las corrige.\n\nLa unidad y el signo de corriente anulan la detección; Auto la usa.\n\nRestablecer calibración olvida la detección y empieza de nuevo. Borrar todos los datos la conserva.\n\nUna exportación de ajustes incluye tus ajustes de unidad y signo, nunca la calibración detectada.\n\nLa capacidad de diseño se usa para la salud de la batería. Déjala en Auto para usar la capacidad que informa Android, si lo hace.</string>
     <string name="settings_reset_calibration_title">¿Restablecer calibración?</string>
-    <string name="settings_reset_calibration_body">BatStats olvida la unidad y el signo detectados y los vuelve a detectar con lecturas nuevas. Tu historial y tus ajustes se conservan.</string>
+    <string name="settings_reset_calibration_body">Voltwise olvida la unidad y el signo detectados y los vuelve a detectar con lecturas nuevas. Tu historial y tus ajustes se conservan.</string>
     <string name="settings_reset_calibration_confirm">Restablecer</string>
     <string name="settings_calibration_reset_done">Calibración restablecida</string>
 

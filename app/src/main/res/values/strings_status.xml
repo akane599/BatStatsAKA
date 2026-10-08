@@ -18,23 +18,23 @@
     <string name="status_access_on">Per-app statistics are available.</string>
     <string name="status_access_off">Per-app statistics need Shizuku, root or ADB grants.</string>
     <string name="status_access_adb_limited">Battery details only. On this Android version, per-app statistics need Shizuku or root.</string>
-    <string name="status_access_authorize_hint">Shizuku is running. Authorize BatStats to use it.</string>
+    <string name="status_access_authorize_hint">Shizuku is running. Authorize Voltwise to use it.</string>
     <string name="status_access_authorize">Authorize Shizuku</string>
-    <string name="status_access_blocked_hint">BatStats is blocked in Shizuku (“Deny and don\'t ask again”). Open Shizuku, go to its authorized apps and switch BatStats on.</string>
+    <string name="status_access_blocked_hint">Voltwise is blocked in Shizuku (“Deny and don\'t ask again”). Open Shizuku, go to its authorized apps and switch Voltwise on.</string>
     <string name="status_access_open_shizuku">Open Shizuku</string>
     <string name="status_access_check">Check again</string>
     <string name="status_access_checking_short">Checking…</string>
     <string name="status_access_info_title">About advanced access</string>
-    <string name="status_access_info_body">Ordinary battery readings need no special access. Per-app statistics come from Android\'s own battery report, which needs Shizuku, root or ADB-granted permissions.\n\nAndroid counts those statistics since its own last reset, which can differ from BatStats sessions.</string>
+    <string name="status_access_info_body">Ordinary battery readings need no special access. Per-app statistics come from Android\'s own battery report, which needs Shizuku, root or ADB-granted permissions.\n\nAndroid counts those statistics since its own last reset, which can differ from Voltwise sessions.</string>
 
     <!-- Setup -->
     <string name="status_setup_show">Show setup steps</string>
     <string name="status_setup_hide">Hide setup steps</string>
     <string name="status_setup_intro">Use any one of these:</string>
     <string name="status_setup_shizuku_title">Shizuku</string>
-    <string name="status_setup_shizuku_body">Install and start Shizuku, then authorize BatStats.</string>
+    <string name="status_setup_shizuku_body">Install and start Shizuku, then authorize Voltwise.</string>
     <string name="status_setup_root_title">Root</string>
-    <string name="status_setup_root_body">Allow BatStats when your root manager asks, then check again.</string>
+    <string name="status_setup_root_body">Allow Voltwise when your root manager asks, then check again.</string>
     <string name="status_setup_adb_title">ADB</string>
     <string name="status_setup_adb_body">From a computer with ADB, run these commands, then check again.</string>
     <string name="status_setup_adb_limited">On Android 16 and later, these grants cover battery details but not per-app statistics.</string>
@@ -56,7 +56,7 @@
     <string name="status_calibration_override">Set in Settings.</string>
     <string name="status_calibration_default">Not checked yet. The Android standard is used until enough readings are in.</string>
     <string name="status_calibration_info_title">About calibration</string>
-    <string name="status_calibration_info_body">Phones report battery current in different ways: some in milliamps instead of microamps, some with drain as a positive number. BatStats checks the reported current against the charge counter while it monitors, and corrects the display.\n\nYou can set the unit and sign yourself in Settings, and reset the detection there.</string>
+    <string name="status_calibration_info_body">Phones report battery current in different ways: some in milliamps instead of microamps, some with drain as a positive number. Voltwise checks the reported current against the charge counter while it monitors, and corrects the display.\n\nYou can set the unit and sign yourself in Settings, and reset the detection there.</string>
 
     <!-- Recent issues -->
     <string name="status_issues_title">Recent issues</string>
@@ -66,7 +66,7 @@
     <string name="status_issues_repeated">%1$s · %2$s times</string>
     <string name="status_issues_log_unavailable">The issue log cannot be saved right now. Recent entries may be lost.</string>
     <string name="status_issues_info_title">About recent issues</string>
-    <string name="status_issues_info_body">BatStats keeps up to 60 events on this phone and groups repeats. They never include app lists, raw system reports or device IDs, and they leave the phone only in a report you share.</string>
+    <string name="status_issues_info_body">Voltwise keeps up to 60 events on this phone and groups repeats. They never include app lists, raw system reports or device IDs, and they leave the phone only in a report you share.</string>
     <string name="status_issue_start_failed">Monitoring could not start</string>
     <string name="status_issue_battery_unavailable">Android gave no battery reading</string>
     <string name="status_issue_battery_failed">A battery reading failed</string>
@@ -85,6 +85,6 @@
     <string name="status_report_title">Report</string>
     <string name="status_report_body">A plain-text summary for troubleshooting: readings, access, calibration and recent events. No app lists, raw system reports or device IDs.</string>
     <string name="status_report_share">Share report</string>
-    <string name="status_report_subject">BatStats status report</string>
+    <string name="status_report_subject">Voltwise status report</string>
     <string name="status_report_unavailable">No app on this phone can share the report.</string>
 </resources>

@@ -24,9 +24,9 @@ private const val MINUTE = 60_000L
 private const val HOUR = 60 * MINUTE
 
 private val commands = listOf(
-    "adb shell pm grant org.mlm.batstats android.permission.DUMP",
-    "adb shell pm grant org.mlm.batstats android.permission.PACKAGE_USAGE_STATS",
-    "adb shell appops set org.mlm.batstats GET_USAGE_STATS allow",
+    "adb shell pm grant com.akane.voltwise android.permission.DUMP",
+    "adb shell pm grant com.akane.voltwise android.permission.PACKAGE_USAGE_STATS",
+    "adb shell appops set com.akane.voltwise GET_USAGE_STATS allow",
 )
 
 private val issues = listOf(

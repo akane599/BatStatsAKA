@@ -14,7 +14,7 @@ object DeviceEnvironment {
     val context: Context get() = ApplicationProvider.getApplicationContext()
     val device: UiDevice get() = UiDevice.getInstance(InstrumentationRegistry.getInstrumentation())
     fun requireDisposableEmulator() {
-        assertEquals("Only the separate development package may be changed", "org.mlm.batstats.debug", context.packageName)
+        assertEquals("Only the separate development package may be changed", "com.akane.voltwise.debug", context.packageName)
         assertTrue("Run on an emulator, never a personal device", Build.HARDWARE in setOf("ranchu", "goldfish"))
         assertEquals("This suite verifies the Android 16 contract", 36, Build.VERSION.SDK_INT)
     }

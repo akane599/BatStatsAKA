@@ -9,7 +9,7 @@
     <string name="data_stored_sessions">Oturumlar</string>
     <string name="data_stored_limit">/ %1$s</string>
     <string name="data_stored_info_title">Kayıtlı geçmiş hakkında</string>
-    <string name="data_stored_info_body">BatStats bu telefonda en fazla 100.000 ölçüm ve 10.000 oturum tutar; önce en eskiler silinir. Saklama ayarı onları daha erken silebilir.\n\nTemizleme ölçümleri, oturumları ve uygulama istatistiklerini siler. Ayarlarınız ve geçerli kalibrasyon kalır. Android\'in kendi pil istatistikleri etkilenmez.</string>
+    <string name="data_stored_info_body">Voltwise bu telefonda en fazla 100.000 ölçüm ve 10.000 oturum tutar; önce en eskiler silinir. Saklama ayarı onları daha erken silebilir.\n\nTemizleme ölçümleri, oturumları ve uygulama istatistiklerini siler. Ayarlarınız ve geçerli kalibrasyon kalır. Android\'in kendi pil istatistikleri etkilenmez.</string>
 
     <!-- Dışa aktar -->
     <string name="data_export_title">Geçmişi dışa aktar</string>
@@ -41,7 +41,7 @@
     <string name="data_settings_save">Ayarları kaydet</string>
     <string name="data_settings_restore">Ayarları geri yükle</string>
     <string name="data_settings_info_title">Ayar yedekleri hakkında</string>
-    <string name="data_settings_info_body">Yedek, birim ve işaret düzeltmeleri dahil ayarlarınızı içerir. Pil geçmişini ya da BatStats\'in bu telefonda algıladığı kalibrasyonu asla içermez.\n\nGeri yükleme önce dosyanın tamamını denetler. İçinde bir hata varsa hiçbir ayar değişmez.</string>
+    <string name="data_settings_info_body">Yedek, birim ve işaret düzeltmeleri dahil ayarlarınızı içerir. Pil geçmişini ya da Voltwise\'ın bu telefonda algıladığı kalibrasyonu asla içermez.\n\nGeri yükleme önce dosyanın tamamını denetler. İçinde bir hata varsa hiçbir ayar değişmez.</string>
     <string name="data_settings_saved">Ayarlar kaydedildi.</string>
     <string name="data_settings_restored">Ayarlar geri yüklendi · uygulanan: %1$s · atlanan: %2$s · uygulanamayan: %3$s</string>
 
@@ -58,12 +58,12 @@
     <!-- Hatalar -->
     <string name="data_failed_export">Dışa aktarım kaydedilmedi. %1$s</string>
     <string name="data_failed_import">Hiçbir şey içe aktarılmadı. %1$s</string>
-    <string name="data_failed_not_export">Hiçbir şey içe aktarılmadı. Bu bir BatStats geçmiş dışa aktarımı değil.</string>
+    <string name="data_failed_not_export">Hiçbir şey içe aktarılmadı. Bu bir Voltwise geçmiş dışa aktarımı değil.</string>
     <string name="data_failed_read">Bu dosya okunamadı. Hiçbir şey değişmedi.</string>
     <string name="data_failed_write">Bu konuma yazılamadı. Başka bir konum seçin.</string>
     <string name="data_failed_settings_invalid">Bu geçerli bir ayar yedeği değil. Hiçbir ayar değişmedi.</string>
     <string name="data_failed_settings_other_app">Bu yedek başka bir uygulamaya ait. Hiçbir ayar değişmedi.</string>
-    <string name="data_failed_settings_too_new">Bu yedek daha yeni bir BatStats sürümünden. Hiçbir ayar değişmedi.</string>
+    <string name="data_failed_settings_too_new">Bu yedek daha yeni bir Voltwise sürümünden. Hiçbir ayar değişmedi.</string>
     <string name="data_failed_settings_damaged">Bu yedek düzenlenmiş ya da bozuk. Hiçbir ayar değişmedi.</string>
     <string name="data_failed_no_picker">Bu telefonda dosya seçebilen bir uygulama yok.</string>
     <string name="data_failed_unexpected">Bir sorun oluştu. Yeniden deneyin.</string>

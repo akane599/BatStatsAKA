@@ -85,10 +85,10 @@
     <string name="sessiondetails_apps_show_fewer">Show fewer</string>
     <string name="sessiondetails_apps_pending">Per-app usage is read when you plug in.</string>
     <string name="sessiondetails_apps_collecting">Reading per-app usage…</string>
-    <string name="sessiondetails_apps_no_access">No per-app usage: BatStats had no Shizuku, root or ADB access when the phone was plugged in. Shizuku without root stops when the phone restarts; open Shizuku to start it again.</string>
+    <string name="sessiondetails_apps_no_access">No per-app usage: Voltwise had no Shizuku, root or ADB access when the phone was plugged in. Shizuku without root stops when the phone restarts; open Shizuku to start it again.</string>
     <string name="sessiondetails_apps_failed">No per-app usage: monitoring stopped before the phone was plugged in, or Android\'s stats couldn\'t be read.</string>
     <string name="sessiondetails_apps_not_recorded">No per-app usage was recorded for this session.</string>
     <string name="sessiondetails_apps_empty">No app used measurable power in this session.</string>
     <string name="sessiondetails_apps_info_title">About per-app usage</string>
-    <string name="sessiondetails_apps_info_body">BatStats reads Android\'s per-app battery stats when you unplug and again when you plug in; each app\'s number is the difference. If Android reset its stats in between, the totals since the reset are shown. Without a reading at unplug, the totals since the last full charge are shown instead.\n\nReading these stats needs Shizuku, root or ADB access. Shizuku without root stops when the phone restarts: open Shizuku to start it again.\n\nThe values are Android\'s estimates. One entry can cover several apps that share an ID.</string>
+    <string name="sessiondetails_apps_info_body">Voltwise reads Android\'s per-app battery stats when you unplug and again when you plug in; each app\'s number is the difference. If Android reset its stats in between, the totals since the reset are shown. Without a reading at unplug, the totals since the last full charge are shown instead.\n\nReading these stats needs Shizuku, root or ADB access. Shizuku without root stops when the phone restarts: open Shizuku to start it again.\n\nThe values are Android\'s estimates. One entry can cover several apps that share an ID.</string>
 </resources>

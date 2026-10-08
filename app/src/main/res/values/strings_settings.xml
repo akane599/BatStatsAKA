@@ -19,7 +19,7 @@
     <string name="settings_status_link">Status</string>
     <string name="settings_status_link_summary">Access mode, calibration and recent issues</string>
     <string name="settings_monitoring_info_title">About monitoring</string>
-    <string name="settings_monitoring_info_body">Start after reboot: BatStats resumes monitoring when the phone restarts, if Android allows it. Otherwise a notification lets you start it. Shizuku may need to be restarted separately.\n\nStatus bar icon: what the monitoring notification shows in the status bar.</string>
+    <string name="settings_monitoring_info_body">Start after reboot: Voltwise resumes monitoring when the phone restarts, if Android allows it. Otherwise a notification lets you start it. Shizuku may need to be restarted separately.\n\nStatus bar icon: what the monitoring notification shows in the status bar.</string>
 
     <!-- Alerts -->
     <string name="settings_alerts_title">Alerts</string>
@@ -56,9 +56,9 @@
     <string name="settings_design_capacity_hint">Empty for auto, or %1$s–%2$s mAh</string>
     <string name="settings_design_capacity_error">Enter %1$s–%2$s mAh, or leave it empty.</string>
     <string name="settings_measurement_info_title">About measurement</string>
-    <string name="settings_measurement_info_body">Android reports battery current in µA, but some phones use mA or flip the sign. BatStats compares the readings with the charge counter and corrects them.\n\nCurrent unit and current sign override the detection; Auto uses it.\n\nReset calibration forgets the detection and starts again. Clearing all data keeps it.\n\nA settings export includes your unit and sign settings, never the detected calibration.\n\nDesign capacity is used for battery health. Leave it on Auto to use the capacity Android reports, where it does.</string>
+    <string name="settings_measurement_info_body">Android reports battery current in µA, but some phones use mA or flip the sign. Voltwise compares the readings with the charge counter and corrects them.\n\nCurrent unit and current sign override the detection; Auto uses it.\n\nReset calibration forgets the detection and starts again. Clearing all data keeps it.\n\nA settings export includes your unit and sign settings, never the detected calibration.\n\nDesign capacity is used for battery health. Leave it on Auto to use the capacity Android reports, where it does.</string>
     <string name="settings_reset_calibration_title">Reset calibration?</string>
-    <string name="settings_reset_calibration_body">BatStats forgets the detected unit and sign and detects them again from new readings. Your history and settings stay.</string>
+    <string name="settings_reset_calibration_body">Voltwise forgets the detected unit and sign and detects them again from new readings. Your history and settings stay.</string>
     <string name="settings_reset_calibration_confirm">Reset</string>
     <string name="settings_calibration_reset_done">Calibration reset</string>
 

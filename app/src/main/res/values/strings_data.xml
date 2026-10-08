@@ -9,7 +9,7 @@
     <string name="data_stored_sessions">Sessions</string>
     <string name="data_stored_limit">of %1$s</string>
     <string name="data_stored_info_title">About stored history</string>
-    <string name="data_stored_info_body">BatStats keeps at most 100,000 readings and 10,000 sessions on this phone; the oldest go first. The retention setting can remove them sooner.\n\nClearing deletes readings, sessions and app statistics. Your settings and the current calibration stay. Android\'s own battery statistics are not affected.</string>
+    <string name="data_stored_info_body">Voltwise keeps at most 100,000 readings and 10,000 sessions on this phone; the oldest go first. The retention setting can remove them sooner.\n\nClearing deletes readings, sessions and app statistics. Your settings and the current calibration stay. Android\'s own battery statistics are not affected.</string>
 
     <!-- Export -->
     <string name="data_export_title">Export history</string>
@@ -41,7 +41,7 @@
     <string name="data_settings_save">Save settings</string>
     <string name="data_settings_restore">Restore settings</string>
     <string name="data_settings_info_title">About settings backups</string>
-    <string name="data_settings_info_body">The backup holds your settings, including the current unit and sign overrides. It never contains battery history or the calibration BatStats detected on this phone.\n\nA restore checks the whole file first. If anything in it is wrong, no setting changes.</string>
+    <string name="data_settings_info_body">The backup holds your settings, including the current unit and sign overrides. It never contains battery history or the calibration Voltwise detected on this phone.\n\nA restore checks the whole file first. If anything in it is wrong, no setting changes.</string>
     <string name="data_settings_saved">Settings saved.</string>
     <string name="data_settings_restored">Settings restored · applied: %1$s · skipped: %2$s · not applied: %3$s</string>
 
@@ -58,12 +58,12 @@
     <!-- Failures (one sentence each; nothing changed unless it says so) -->
     <string name="data_failed_export">The export was not saved. %1$s</string>
     <string name="data_failed_import">Nothing was imported. %1$s</string>
-    <string name="data_failed_not_export">Nothing was imported. This is not a BatStats history export.</string>
+    <string name="data_failed_not_export">Nothing was imported. This is not a Voltwise history export.</string>
     <string name="data_failed_read">That file could not be read. Nothing changed.</string>
     <string name="data_failed_write">That location could not be written. Choose another one.</string>
     <string name="data_failed_settings_invalid">This is not a valid settings backup. No setting changed.</string>
     <string name="data_failed_settings_other_app">This backup belongs to another app. No setting changed.</string>
-    <string name="data_failed_settings_too_new">This backup is from a newer BatStats. No setting changed.</string>
+    <string name="data_failed_settings_too_new">This backup is from a newer Voltwise. No setting changed.</string>
     <string name="data_failed_settings_damaged">This backup was edited or damaged. No setting changed.</string>
     <string name="data_failed_no_picker">No app on this phone can pick files.</string>
     <string name="data_failed_unexpected">Something went wrong. Try again.</string>
