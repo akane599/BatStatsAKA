@@ -1,6 +1,9 @@
 package app.batstats.viewmodel
 
 import app.batstats.battery.data.db.DailySummary
+import app.batstats.ui.components.chart.NumberFormatter
+import app.batstats.ui.components.chart.barSummary
+import app.batstats.ui.screens.dayChartFormats
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -20,7 +23,7 @@ class HistoryDrainMappingTest {
         assertEquals(8.0, figures.screenOnUsed!!, 1e-9)
         assertEquals(5.0, figures.screenOffUsed!!, 1e-9)
         assertEquals(13.0, figures.used!!, 1e-9)
-        assertEquals(50.0, figures.charged, 1e-9)
+        assertEquals(50.0, figures.charged!!, 1e-9)
     }
 
     @Test fun legacyRowsWithoutCoverageFallBackToTheWholeScreenTime() {
@@ -52,14 +55,14 @@ class HistoryDrainMappingTest {
         assertEquals(DrainState(4 * HOUR, null, null), blank.screenOn)
         assertEquals(DrainState(6 * HOUR, null, null), blank.screenOff)
 
-        // Drain averages only the measured day; time and charge still average both recorded days.
+        // Drain and charge average only the measured day (its 0 charge is unknown, as on Now); time averages both.
         val average = state.average!!
         assertEquals(12.0, average.screenOnUsed!!, 1e-9)
         assertEquals(6.0, average.screenOffUsed!!, 1e-9)
         assertEquals(18.0, average.used!!, 1e-9)
         assertEquals(DrainState(3 * HOUR, 300.0, 6.0), average.screenOn)
         assertEquals(DrainState(8 * HOUR, 30.0, 0.6), average.screenOff)
-        assertEquals(10.0, average.charged, 1e-9)
+        assertEquals(20.0, average.charged!!, 1e-9)
 
         // Every averaged day unmeasured: the average drain is unavailable too.
         val none = HistoryMapping.days(DayRange.WEEK, TODAY, listOf(unmeasured), fullUah = FULL_UAH).average!!
@@ -67,11 +70,42 @@ class HistoryDrainMappingTest {
         assertEquals(DrainState(4 * HOUR, null, null), none.screenOn)
     }
 
+    @Test fun anUnmeasuredDaysChargeIsUnavailableLikeNowToday() {
+        // Time on battery, no covered interval, no charge: Now › Today shows Charged "—", and so must History.
+        val unmeasured = day(TODAY - 2, onMs = 4 * HOUR, onCovered = 0, onUah = 0, offMs = 6 * HOUR, offCovered = 0, offUah = 0, chargedUah = 0)
+        val figures = HistoryMapping.days(DayRange.WEEK, TODAY, listOf(unmeasured), fullUah = FULL_UAH).days.single { it.epochDay == TODAY - 2 }.figures!!
+        assertNull(figures.charged)
+        assertEquals(NowMapping.today(unmeasured, FULL_UAH).chargedPercent, figures.charged)
+        // Every averaged day's charge unknown: the average's is too.
+        assertNull(HistoryMapping.days(DayRange.WEEK, TODAY, listOf(unmeasured), fullUah = FULL_UAH).average!!.charged)
+
+        // A charge the unmeasured day did record still stands (as on Now).
+        val recharged = unmeasured.copy(chargedUah = 1_500_000)
+        val kept = HistoryMapping.days(DayRange.WEEK, TODAY, listOf(recharged), fullUah = FULL_UAH).days.single { it.epochDay == TODAY - 2 }.figures!!
+        assertEquals(NowMapping.today(recharged, FULL_UAH).chargedPercent!!, kept.charged!!, 1e-9)
+        assertEquals(30.0, kept.charged!!, 1e-9)
+    }
+
+    @Test fun anUnmeasuredSelectedDayBlanksOnlyItsOwnBar() {
+        val number = NumberFormatter("%", maxDecimals = 0)
+        val formats = dayChartFormats("%", unmeasuredSelected = true, noValue = NO_VALUE)
+        // The selected unmeasured bar's cap and announcement read "—" ...
+        assertEquals(NO_VALUE, formats.selected.format(0.0))
+        // ... while the summary keeps a measured zero latest bar (today) as "0 %".
+        val template = "Highest %1\$s, %2\$s; latest %3\$s, %4\$s"
+        assertEquals(
+            "Highest Mon, ${number.format(12.0)}; latest Today, ${number.format(0.0)}",
+            barSummary(listOf("Mon", "Tue", "Today"), listOf(12.0, 0.0, 0.0), formats.totals, template, "empty"),
+        )
+        // A measured day selected: its zero cap is a number too.
+        assertEquals(number.format(0.0), dayChartFormats("%", unmeasuredSelected = false, noValue = NO_VALUE).selected.format(0.0))
+    }
+
     @Test fun aDayWithoutTimeOnBatteryUsedNothing() {
         val plugged = day(TODAY - 1, onMs = 0, onCovered = 0, onUah = 0, offMs = 0, offCovered = 0, offUah = 0, chargedUah = 3_000_000)
         val figures = HistoryMapping.days(DayRange.WEEK, TODAY, listOf(plugged), fullUah = FULL_UAH).days.single { it.epochDay == TODAY - 1 }.figures!!
         assertEquals(0.0, figures.used!!, 1e-9)
-        assertEquals(60.0, figures.charged, 1e-9)
+        assertEquals(60.0, figures.charged!!, 1e-9)
     }
 
     @Test fun ratesNeedAMinuteOfCoverage() {
@@ -93,7 +127,7 @@ class HistoryDrainMappingTest {
             assertEquals(DrainState(10 * HOUR, 50.0, null), figures.screenOff)
             assertEquals(400.0, figures.screenOnUsed!!, 1e-9)
             assertEquals(650.0, figures.used!!, 1e-9)
-            assertEquals(2_500.0, figures.charged, 1e-9)
+            assertEquals(2_500.0, figures.charged!!, 1e-9)
         }
     }
 
@@ -103,6 +137,7 @@ class HistoryDrainMappingTest {
         const val HOUR = 60 * MINUTE
         const val TODAY = 20_000L
         const val FULL_UAH = 5_000_000L
+        const val NO_VALUE = "\u2014"
 
         fun day(
             epochDay: Long,

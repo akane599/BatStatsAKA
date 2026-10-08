@@ -128,7 +128,8 @@ object BarChartDefaults {
  *
  * @param entries the bars, oldest first (the newest keeps its label when labels thin out).
  * @param unit caption above the value axis.
- * @param format formats the cap label and the spoken summary.
+ * @param format formats the spoken summary (the highest and the latest total).
+ * @param selectedFormat formats the selected total on its cap and in its announcement; [format] by default.
  * @param contentDescription overrides the default summary (highest and latest total).
  */
 @Composable
@@ -139,6 +140,7 @@ fun BarChart(
     chartHeight: Dp = BarChartDefaults.Height,
     unit: String = "",
     format: ValueFormatter = NumberFormatter(unit),
+    selectedFormat: ValueFormatter = format,
     selectedIndex: Int? = null,
     onSelect: ((Int?) -> Unit)? = null,
     emptyText: String = stringResource(R.string.component_chart_empty),
@@ -155,7 +157,7 @@ fun BarChart(
     val selectedTemplate = stringResource(R.string.component_bar_selected)
     val currentOnSelect by rememberUpdatedState(onSelect)
     val selected = selectedIndex?.takeIf { it in bars.indices }
-    val selectedText = selected?.let { selectedTemplate.format(bars[it].label, format.format(totals[it])) }
+    val selectedText = selected?.let { selectedTemplate.format(bars[it].label, selectedFormat.format(totals[it])) }
     // One action per bar (plus "Clear selection"): TalkBack users select bars without aiming at them.
     val actions = remember(bars, onSelect != null, selected != null, selectTemplate, clearLabel) {
         if (onSelect == null) {
@@ -172,12 +174,7 @@ fun BarChart(
         }
     }
     val summary = contentDescription ?: remember(bars, totals, format, template, emptyText) {
-        if (!hasData) {
-            emptyText
-        } else {
-            val highest = totals.indices.maxBy { totals[it] }
-            template.format(bars[highest].label, format.format(totals[highest]), bars.last().label, format.format(totals.last()))
-        }
+        barSummary(bars.map { it.label }, totals, format, template, emptyText)
     }
     Column(
         modifier.fillMaxWidth().clearAndSetSemantics {
@@ -196,7 +193,7 @@ fun BarChart(
         }
         Box(Modifier.fillMaxWidth().height(chartHeight)) {
             if (hasData) {
-                Bars(bars, layers, totals, unit, format, selectedIndex, onSelect)
+                Bars(bars, layers, totals, unit, selectedFormat, selectedIndex, onSelect)
             } else {
                 Text(
                     emptyText,
@@ -441,6 +438,13 @@ fun BreakdownBar(
             }
         }
     }
+}
+
+/** A [BarChart]'s spoken summary: the highest and the latest total ([totals] as drawn), or [emptyText] with none above 0. */
+internal fun barSummary(labels: List<String>, totals: List<Double>, format: ValueFormatter, template: String, emptyText: String): String {
+    if (totals.none { it > 0.0 }) return emptyText
+    val highest = totals.indices.maxBy { totals[it] }
+    return template.format(labels[highest], format.format(totals[highest]), labels.last(), format.format(totals.last()))
 }
 
 /** A stack value as drawn: negative, NaN and infinite values count as 0. */

@@ -88,7 +88,8 @@ data class DayEntry(val epochDay: Long, val figures: DayFigures?)
  * One day's figures on battery. [screenOn] / [screenOff]: the time in that screen state and its drain rate (mA and
  * %/h over the time the charge counter covered). The totals are in [DaysState.unit]: [screenOnUsed] / [screenOffUsed]
  * are null when the counter measured no charge in that state, and [used] is null when it measured none all day
- * although there was time on battery (unavailable, not zero). [charged] is the charge taken in.
+ * although there was time on battery (unavailable, not zero). [charged] is the charge taken in, null when unknown
+ * (Now › Today's rule, [NowMapping.chargedUah]: a 0 on a day the counter didn't measure).
  */
 @Immutable
 data class DayFigures(
@@ -97,7 +98,7 @@ data class DayFigures(
     val screenOnUsed: Double?,
     val screenOffUsed: Double?,
     val used: Double?,
-    val charged: Double,
+    val charged: Double?,
     val deepSleepPercent: Double?,
 )
 
@@ -352,9 +353,10 @@ internal object HistoryMapping {
     }
 
     /**
-     * The mean of [days] (one day's own figures when it is the only one). Time, charge taken in and deep sleep
-     * average over every day; drain only over the days the counter measured it, so an unmeasured day never counts
-     * as zero. Rates are the measured charge over the measured time. Totals are % of [fullUah], or mAh without it.
+     * The mean of [days] (one day's own figures when it is the only one). Time and deep sleep average over every day;
+     * drain only over the days the counter measured it, and charge taken in only over the days it is known
+     * ([NowMapping.chargedUah]), so an unmeasured day never counts as zero. Rates are the measured charge over the
+     * measured time. Totals are % of [fullUah], or mAh without it.
      */
     fun average(days: List<DailySummary>, fullUah: Long?): DayFigures? {
         if (days.isEmpty()) return null
@@ -372,6 +374,7 @@ internal object HistoryMapping {
         val (on, off) = buckets(days)
         val onUsed = used(on)
         val offUsed = used(off)
+        val charged = days.mapNotNull(NowMapping::chargedUah)
         val slept = days.filter { it.cpuSuspendMs != null }
         return DayFigures(
             screenOn = drain(on),
@@ -383,7 +386,7 @@ internal object HistoryMapping {
                 onUsed == null && offUsed == null -> null
                 else -> (onUsed ?: 0.0) + (offUsed ?: 0.0)
             },
-            charged = total(days.sumOf { it.chargedUah.coerceAtLeast(0) }.toDouble() / count),
+            charged = charged.takeIf { it.isNotEmpty() }?.let { known -> total(known.sumOf { it.coerceAtLeast(0) }.toDouble() / known.size) },
             deepSleepPercent = deepSleep(
                 slept.takeIf { it.isNotEmpty() }?.sumOf { it.cpuSuspendMs ?: 0 },
                 slept.sumOf { it.screenOnMs + it.screenOffMs },
