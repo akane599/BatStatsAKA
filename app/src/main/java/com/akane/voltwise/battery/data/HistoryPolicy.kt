@@ -147,13 +147,18 @@ object HistoryPolicy {
     }
     /** Values written after a session closes (per-app status, capacity estimate) and explanatory text are not its measurement. */
     private fun measured(s: ChargeSession) = s.copy(closeReason = null, appUsageStatus = null, appUsageBasis = null,
-        capacityEstimateMah = null, capacityConfidence = null, capacityBasis = null)
-    fun sameMeasurement(first: ChargeSession, second: ChargeSession): Boolean = measured(first) == measured(second)
+        capacityEstimateMah = null, capacityConfidence = null, capacityBasis = null, dozeMs = null, screenOffDozeMs = null)
+    // Formats 1–4 have no Doze evidence. Unknown values may be enriched, not treated as zero.
+    fun sameMeasurement(first: ChargeSession, second: ChargeSession): Boolean = measured(first) == measured(second) &&
+        (first.dozeMs == null || second.dozeMs == null || first.dozeMs == second.dozeMs) &&
+        (first.screenOffDozeMs == null || second.screenOffDozeMs == null || first.screenOffDozeMs == second.screenOffDozeMs)
     /** [incoming], keeping [previous]'s after-close values where the file has none (e.g. an export made before them). */
     fun mergeDerived(previous: ChargeSession, incoming: ChargeSession): ChargeSession {
         val usage = if (incoming.appUsageStatus != null) incoming else previous
         val capacity = if (incoming.capacityEstimateMah != null) incoming else previous
         return incoming.copy(appUsageStatus = usage.appUsageStatus, appUsageBasis = usage.appUsageBasis,
+            dozeMs = incoming.dozeMs ?: previous.dozeMs.takeIf { previous.endTime == incoming.endTime },
+            screenOffDozeMs = incoming.screenOffDozeMs ?: previous.screenOffDozeMs.takeIf { previous.endTime == incoming.endTime },
             capacityEstimateMah = capacity.capacityEstimateMah, capacityConfidence = capacity.capacityConfidence, capacityBasis = capacity.capacityBasis)
     }
     /** Plans raw rows before normalization can shrink coverage; keeps stale skips distinct from enrichment. */

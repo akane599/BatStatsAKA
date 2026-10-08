@@ -53,6 +53,47 @@ class HistoryFormatFiveTest {
         }
     }
 
+    @Test fun formatFourWithoutNewColumnsDecodesAndImportsUnknownDoze() {
+        val record = JsonObject(json.encodeToJsonElement(HistorySessionSerializer, session()).jsonObject
+            .filterKeys { it != "dozeMs" && it != "screenOffDozeMs" })
+        val payload = json.decodeFromJsonElement(BatteryExport.serializer(), buildJsonObject {
+            put("formatVersion", 4)
+            put("sessions", JsonArray(listOf(record)))
+        })
+        val imported = HistoryPolicy.planSessionImport(null, payload.sessions.single(),
+            hasAppUsage = false, formatVersion = payload.formatVersion).session
+        assertNull(imported.dozeMs)
+        assertNull(imported.screenOffDozeMs)
+    }
+
+    @Test fun formatFiveEnrichesLegacyDozeAndLegacyReimportKeepsKnownEvidence() {
+        val old = HistoryPolicy.session(session(), 4)
+        val enriched = HistoryPolicy.planSessionImport(old, session(), hasAppUsage = false)
+        assertEquals(ImportSessionDisposition.UPDATED, enriched.disposition)
+        assertEquals(7000L, enriched.session.dozeMs)
+        assertEquals(6000L, enriched.session.screenOffDozeMs)
+        val repeated = HistoryPolicy.planSessionImport(enriched.session, session(),
+            hasAppUsage = false, formatVersion = 4)
+        assertEquals(ImportSessionDisposition.UNCHANGED, repeated.disposition)
+        assertEquals(enriched.session, repeated.session)
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.planSessionImport(enriched.session, session().copy(dozeMs = 6999), hasAppUsage = false)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.planSessionImport(enriched.session, session().copy(screenOffDozeMs = 5999), hasAppUsage = false)
+        }
+    }
+
+    @Test fun dozeFromAnOlderWindowIsNotCopiedIntoAnExtendedUnknownWindow() {
+        val previous = HistoryPolicy.session(session())
+        val incoming = session().copy(endTime = 12_000, observedMs = 11_000,
+            screenOffMs = 9000, dozeMs = null, screenOffDozeMs = null)
+        val updated = HistoryPolicy.planSessionImport(previous, incoming, hasAppUsage = false)
+        assertEquals(ImportSessionDisposition.UPDATED, updated.disposition)
+        assertNull(updated.session.dozeMs)
+        assertNull(updated.session.screenOffDozeMs)
+    }
+
     @Test fun importClampsDozeToObservedAndScreenOffIntervalsAndDropsNegatives() {
         val oversized = HistoryPolicy.session(session().copy(dozeMs = Long.MAX_VALUE, screenOffDozeMs = Long.MAX_VALUE))
         assertEquals(10_000L, oversized.dozeMs)
