@@ -14,6 +14,8 @@ import com.akane.voltwise.battery.data.db.DailySummary
 import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.resolveFullUah
 import com.akane.voltwise.battery.data.uah
+import com.akane.voltwise.battery.insights.model.Severity
+import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.measurement.CalibrationState
 import com.akane.voltwise.battery.measurement.DailySummaryAggregator
 import com.akane.voltwise.battery.measurement.EtaHold
@@ -111,7 +113,8 @@ class NowViewModel(
     val state: StateFlow<NowUiState> = combine(
         combine(live, trace, source.settings.map { it.useFahrenheit }.distinctUntilChanged(), source.calibration, ::Now),
         combine(today, health, topApps, source.dischargeSessions(1).map { it.firstOrNull() }, ::Cards),
-    ) { now, cards ->
+        source.insights,
+    ) { now, cards, report ->
         val fullUah = resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah)
         NowUiState(
             nowMs = now.live.nowMs,
@@ -122,6 +125,14 @@ class NowViewModel(
             today = cards.today?.let { NowMapping.today(it, fullUah) },
             health = cards.health?.let(NowMapping::health),
             topApps = cards.topApps,
+            insightsSummary = report?.let {
+                InsightsSummary(
+                    headline = it.headline?.let { finding ->
+                        InsightHeadline(finding.key, finding.type, finding.severity, (finding.subject as? Subject.App)?.packageName)
+                    },
+                    activeFindingCount = it.findings.count { finding -> finding.severity != Severity.INFO },
+                )
+            },
             calibrationNotice = NowMapping.notice(now.calibration),
             useFahrenheit = now.fahrenheit,
         )

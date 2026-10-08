@@ -1,5 +1,8 @@
 package com.akane.voltwise.viewmodel
 
+import com.akane.voltwise.battery.insights.model.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import com.akane.voltwise.battery.apps.AppLabel
 import com.akane.voltwise.battery.apps.AppStatsResult
 import com.akane.voltwise.battery.util.BatteryStatsParser
@@ -52,6 +55,53 @@ class AppDetailsViewModelTest {
         runCurrent()
         return vm to { vm.state.value }
     }
+
+    @Test fun findingsFilterByPackageNotUidAndUpdateAsActiveReportChanges() = runTest {
+        val reports = MutableStateFlow<InsightReport?>(null)
+        val repository = object : AppDetailsRepository by source {
+            override fun findingsFor(packageName: String) = reports.map { it.appFindings(packageName) }
+        }
+        val (_, state) = start(repository = repository)
+        assertTrue(state().findings.isEmpty())
+        val chrome = finding("chrome", Subject.App(CHROME_UID, CHROME), Direction.UP)
+        val down = finding("down", Subject.App(CHROME_UID, CHROME), Direction.DOWN).copy(type = FindingType.TREND, severity = Severity.INFO)
+        val other = finding("other", Subject.App(CHROME_UID, YOUTUBE), null)
+        val device = finding("device", Subject.Device, null)
+        reports.value = InsightReport(NOW, listOf(chrome, other, device, down), chrome)
+        runCurrent()
+        assertEquals(listOf(chrome, down), reports.value.appFindings(CHROME))
+        assertEquals(listOf(
+            AppFinding(chrome.key, chrome.type, chrome.severity, Direction.UP),
+            AppFinding(down.key, down.type, down.severity, Direction.DOWN),
+        ), state().findings)
+        val retained = state().findings
+        reports.value = InsightReport(NOW + 1, listOf(other, device), other)
+        runCurrent()
+        assertTrue("an upstream dismissal removes the finding without a dump refresh", state().findings.isEmpty())
+        assertEquals(2, retained.size)
+    }
+
+    @Test fun findingsAreAnUnmodifiableSnapshot() = runTest {
+        val input = mutableListOf(finding("chrome", Subject.App(CHROME_UID, CHROME), null))
+        val repository = object : AppDetailsRepository by source {
+            override fun findingsFor(packageName: String) = MutableStateFlow<List<Finding>>(input)
+        }
+        val (_, state) = start(repository = repository)
+        val snapshot = state().findings
+        input.clear()
+        assertEquals(1, snapshot.size)
+        try {
+            (snapshot as MutableList<AppFinding>).clear()
+            org.junit.Assert.fail("findings must reject mutation")
+        } catch (_: UnsupportedOperationException) {
+            assertEquals(1, snapshot.size)
+        }
+    }
+
+    private fun finding(key: String, subject: Subject, direction: Direction?) = Finding(
+        key, FindingType.APP_DRAIN_ANOMALY, Severity.HIGH, Confidence.HIGH, 1.0, subject, direction,
+        emptyList(), emptyList(), emptyList(),
+    )
 
     @Test fun detailsCoverOnlyThisUidLargestFirst() = runTest {
         source.next = { AppStatsResult.Ready(detailedDump()) }
