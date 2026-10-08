@@ -68,11 +68,11 @@ class InsightsWiringTest {
 
     @Test fun notifierDefinitionIsLazyAndDoesNotRequireAndroidContext() {
         assertEquals(Kind.Singleton, definition(InsightNotifier::class).kind)
-        try {
-            koinApplication { modules(appModule) }.close()
-        } catch (e: Exception) {
-            fail("Loading lazy notifier without Android context must succeed: $e")
-        }
+        assertTrue(
+            "Notifier must not be created at Koin startup",
+            appModule.eagerInstances.none { it.beanDefinition.primaryType == InsightNotifier::class },
+        )
+        koinApplication { modules(appModule) }.close()
     }
 
     @Test fun notificationStartupWaitsForMigrationReconcileAndRefreshThenForwardsReports() = runTest {
