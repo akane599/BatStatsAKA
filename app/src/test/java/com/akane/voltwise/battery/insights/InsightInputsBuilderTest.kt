@@ -1,0 +1,93 @@
+package com.akane.voltwise.battery.insights
+
+import com.akane.voltwise.battery.apps.AppUsageBasis
+import com.akane.voltwise.battery.apps.AppUsageStatus
+import com.akane.voltwise.battery.data.db.*
+import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
+import com.akane.voltwise.battery.insights.model.*
+import org.junit.Assert.*
+import org.junit.Test
+
+internal const val NOW = 100L * 24 * 60 * 60 * 1_000
+internal const val HOUR = 60L * 60 * 1_000
+internal fun testSession(id: String = "local") = ChargeSession(
+    id, SessionType.DISCHARGE, NOW - 2 * HOUR, NOW - HOUR, 80, 75, 100_000, null, null,
+    observationId = "observation", source = "local", observedMs = HOUR, screenOffMs = HOUR,
+    appUsageStatus = AppUsageStatus.READY, appUsageBasis = AppUsageBasis.DELTA,
+    appCaptureStartMs = NOW - 2 * HOUR, appCaptureEndMs = NOW - HOUR,
+)
+internal fun testAppRow(id: String = "local", rank: Int = 0, others: Boolean = false) = SessionAppUsage(
+    id, rank, 10_001 + rank, "example.app$rank", 10.0, basis = AppUsageBasis.DELTA, isOthers = others,
+    jobCount = null, fgServiceMs = 300, topWakelockTag = "hint",
+)
+
+class InsightInputsBuilderTest {
+    private fun build(
+        sessions: List<ChargeSession> = listOf(testSession()),
+        rows: List<SessionAppUsage> = emptyList(),
+        wakers: List<SessionDeviceWaker> = emptyList(),
+        days: List<DailySummary> = emptyList(),
+        capacity: List<CapacityEstimateRow> = emptyList(),
+        actions: List<InsightActionEntity> = emptyList(),
+    ) = InsightInputsBuilder.build(NOW, 100, 4_000_000, true, sessions, days, rows, wakers, capacity,
+        setOf("example.app0"), actions, listOf(FindingCodec.encode(testFinding(), 1, feedbackMultiplier = 1.5)))
+
+    @Test fun readyWindowCountsOnlyNonOthersAndRequiresFortyForFullRowSet() {
+        val rows = (0..38).map { testAppRow(rank = it) } + testAppRow(rank = 39, others = true)
+        val partial = build(rows = rows).sessions.single().appWindow!!
+        assertEquals(39, partial.rowsStored)
+        assertFalse(partial.fullRowSet)
+        val full = build(rows = rows + testAppRow(rank = 40)).sessions.single().appWindow!!
+        assertEquals(40, full.rowsStored)
+        assertTrue(full.fullRowSet)
+        assertEquals(WindowBasis.DELTA, full.basis)
+        assertEquals(HOUR, full.captureEndMs - full.captureStartMs)
+        for (status in AppUsageStatus.entries.filter { it != AppUsageStatus.READY }) {
+            assertNull(build(sessions = listOf(testSession().copy(appUsageStatus = status)), rows = rows).sessions.single().appWindow)
+        }
+        assertNull(build(sessions = listOf(testSession().copy(appCaptureEndMs = null))).sessions.single().appWindow)
+    }
+
+    @Test fun importsOpenUnknownAndOldSessionsCannotFeedAppAnalysis() {
+        val imported = testSession("import:session").copy(source = "import:file")
+        val legacy = testSession("legacy").copy(observationId = null)
+        val inputs = build(sessions = listOf(testSession(), imported, legacy,
+            testSession("open").copy(endTime = null), testSession("unknown").copy(type = SessionType.UNKNOWN),
+            testSession("old").copy(endTime = NOW - InsightInputsBuilder.HISTORY_MS - 1)))
+        assertEquals(listOf("local", "import:session", "legacy"), inputs.sessions.map { it.id })
+        assertTrue(inputs.sessions[1].imported)
+        assertFalse(inputs.sessions[2].imported)
+        assertEquals(2, AppWindows.select(inputs).size)
+        val absolute = build(sessions = listOf(testSession().copy(appUsageBasis = AppUsageBasis.ABSOLUTE)))
+        assertEquals(WindowBasis.ABSOLUTE, absolute.sessions.single().appWindow!!.basis)
+        assertTrue(AppWindows.select(absolute).isEmpty())
+    }
+
+    @Test fun allNullableCountersAndDeviceMeasurementsRemainUnsupported() {
+        val session = testSession().copy(screenOffCoveredMs = 500, screenOffDozeMs = 200, screenOffSuspendMs = 300)
+        val inputs = build(sessions = listOf(session), rows = listOf(testAppRow(), testAppRow("open")),
+            wakers = listOf(SessionDeviceWaker("local", "KERNEL_WAKELOCK", "waker", 3, 500, 0),
+                SessionDeviceWaker("local", "FUTURE_KIND", "other", 1, 2, 1)),
+            days = listOf(DailySummary(100, screenOffCoveredMs = 500, screenOffDozeMs = 200, screenOffSuspendMs = 300)))
+        assertNull(inputs.appSessions.single().jobCount)
+        assertNull(inputs.appSessions.single().gpsMs)
+        assertEquals(300L, inputs.appSessions.single().fgServiceMs)
+        assertEquals("hint", inputs.appSessions.single().topWakelockTag)
+        assertNull(inputs.sessions.single().dozeMs)
+        assertEquals(200L, inputs.sessions.single().screenOffDozeMs)
+        assertEquals(300L, inputs.days.single().screenOffSuspendMs)
+        assertEquals(1, inputs.deviceWakers.size)
+        assertEquals(1.5, inputs.feedback[testFinding().key]!!, 0.0)
+    }
+
+    @Test fun capacityAndActionsUseOnlySupportedClosedAppliedRecords() {
+        val point = CapacityEstimateRow("local", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80, 4_000, "HIGH", "COUNTER_SPAN")
+        val action = InsightActionEntity(1, testFinding().key, ActionType.FORCE_STOP.name, userId = 0,
+            status = InsightActionStatus.APPLIED, priorStateVersion = 1, createdAt = 1, appliedAt = 2)
+        val inputs = build(capacity = listOf(point, point.copy(capacityConfidence = "FUTURE"), point.copy(endTime = null)),
+            actions = InsightActionStatus.entries.map { action.copy(id = it.ordinal.toLong(), status = it) } +
+                action.copy(type = "FUTURE") + action.copy(appliedAt = null))
+        assertEquals(listOf(CapacityPointInput(NOW, 4_000.0, 3)), inputs.capacity)
+        assertEquals(setOf(ActionStatus.APPLIED, ActionStatus.REVERTED, ActionStatus.ONE_SHOT), inputs.actions.map { it.status }.toSet())
+    }
+}
