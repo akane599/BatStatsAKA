@@ -19,7 +19,6 @@ import com.akane.voltwise.settings.AppSettings
 import io.github.mlmgames.settings.core.SettingsRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /**
@@ -72,8 +71,7 @@ class DefaultNowRepository(
     private val snapshots: SessionSnapshotStore,
     settingsRepository: SettingsRepository<AppSettings>,
     designCapacity: DesignCapacitySource,
-    // whittle: transitional default until T9a (SQ-144) passes InsightRepository.report; remove the default then.
-    override val insights: Flow<InsightReport?> = flowOf(null),
+    override val insights: Flow<InsightReport?>,
 ) : NowRepository {
     override val realtime = repository.realtimeFlow
     override val calibration = calibrationStore.state

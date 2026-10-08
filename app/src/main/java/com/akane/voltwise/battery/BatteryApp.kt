@@ -6,6 +6,8 @@ import android.content.res.Configuration
 import com.akane.voltwise.battery.apps.AppInfoRepository
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.data.db.BatteryDatabase
+import com.akane.voltwise.battery.insights.InsightRepository
+import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
 import com.akane.voltwise.di.appModule
 import com.akane.voltwise.settings.AppSettings
@@ -27,6 +29,8 @@ class BatteryApp : Application() {
     private val shizukuBridge: ShizukuBridge by inject()
     private val appInfo: AppInfoRepository by inject()
     private val repository: BatteryRepository by inject()
+    private val insightActions: InsightActionRepository by inject()
+    private val insights: InsightRepository by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -52,12 +56,34 @@ class BatteryApp : Application() {
             settingsMigrator.run()
         }
 
+        appScope.launch(Dispatchers.IO) {
+            settingsMigrator.awaitMigrated()
+            reconcileAndCatchUpInsights(
+                reconcile = { insightActions.reconcile() },
+                lastAnalyzedAt = { insights.lastAnalyzedAt.value },
+                refresh = { insights.refresh() },
+            )
+        }
+
         // History › Days for upgraders with monitoring off: the one-time backfill also runs at app start (the
         // repository is created here, off the main thread).
         appScope.launch(Dispatchers.IO) {
             repository.backfillDailySummariesOnce()
         }
     }
+}
+
+internal suspend fun reconcileAndCatchUpInsights(
+    reconcile: suspend () -> Unit,
+    lastAnalyzedAt: () -> Long?,
+    refresh: suspend () -> Unit,
+    clock: () -> Long = System::currentTimeMillis,
+) {
+    reconcile()
+    val last = lastAnalyzedAt()
+    val now = clock()
+    // A corrected wall clock can put the saved analysis in the future; catch up rather than wait for it.
+    if (last == null || last > now || now - last > 6 * 60 * 60 * 1_000L) refresh()
 }
 
 /**
