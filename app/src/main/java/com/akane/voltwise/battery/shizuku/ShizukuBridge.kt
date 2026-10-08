@@ -379,18 +379,30 @@ class ShizukuBridge(private val context: Context) {
         }
     }
 
-    fun unbind() {
-        unbindService()
-        binding.reset()
+    suspend fun unbind() = bindMutex.withLock {
+        withContext(Dispatchers.Main) {
+            unbindService()
+            binding.reset()
+        }
     }
 
-    /** remove = true also stops the helper process. */
+    /** Stops the helper and detaches its cached client connection before another bind can reuse it. */
     private fun unbindService() {
         try {
-            Shizuku.unbindUserService(args, connection, true)
+            removeHelperService { remove -> Shizuku.unbindUserService(args, connection, remove) }
         } catch (t: Throwable) {
             Log.e(TAG, "unbind failed", t)
         }
+    }
+}
+
+internal fun removeHelperService(unbind: (remove: Boolean) -> Unit) {
+    try {
+        unbind(true)
+    } finally {
+        // api 13.1.5 leaves its connection cached for remove=true until a posted death callback.
+        // Detach it now: that callback must not clear a subsequent bind's callbacks.
+        unbind(false)
     }
 }
 
