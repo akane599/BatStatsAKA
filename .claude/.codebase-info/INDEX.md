@@ -2,7 +2,7 @@
 
 *Last Updated: 2026-10-08*
 
-Voltwise (formerly BatStats; the repo is still BatStatsAKA) is an Android battery monitor: live readings, observed charge/discharge sessions saved in
+Voltwise (formerly BatStats; GitHub repo `akane599/Voltwise`, formerly BatStatsAKA; local checkout folder still `BatStatsAKA/`) is an Android battery monitor: live readings, observed charge/discharge sessions saved in
 Room, and per-app battery use via a privileged `dumpsys batterystats` (Shizuku / root / ADB `DUMP`).
 It is one Kotlin module (`:app`, namespace `com.akane.voltwise`, appId `com.akane.voltwise`) built with Compose
 Material 3 (dark-only), MVVM + Koin, Navigation 3 and coroutines/Flow. A foreground service drives the
