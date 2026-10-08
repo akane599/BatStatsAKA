@@ -8,12 +8,15 @@ import app.batstats.battery.data.db.SessionType
 import app.batstats.battery.measurement.EtaHold
 import app.batstats.settings.AppSettings
 import app.batstats.settings.useFahrenheit
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.retryWhen
 import kotlinx.coroutines.flow.scan
 
 /** The ongoing notification's update stream, before formatting: [DrainNotificationManager.run] gates and posts it. */
@@ -34,9 +37,10 @@ object NotificationInputs {
         recentSessions: Flow<List<ChargeSession>> = flowOf(emptyList()),
     ): Flow<Update> {
         val readings = realtime.scan(EtaHold.Reading()) { held, reading -> EtaHold.next(held, reading) }.drop(1)
-        val session = activeSession.map { open -> open?.takeIf { it.type == SessionType.DISCHARGE } }.distinctUntilChanged()
+        val session = activeSession.withHistoryFallback(null)
+            .map { open -> open?.takeIf { it.type == SessionType.DISCHARGE } }.distinctUntilChanged()
         val options = settings.map { it.statusIconValue to it.useFahrenheit }.distinctUntilChanged()
-        val storedEstimate = recentSessions.map(::storedFullUah).distinctUntilChanged()
+        val storedEstimate = recentSessions.withHistoryFallback(emptyList()).map(::storedFullUah).distinctUntilChanged()
         return combine(readings, session, options, issue.distinctUntilChanged(), storedEstimate) { reading, open, (icon, fahrenheit), problem, stored ->
             Update(
                 input = NotificationInput(reading, open, icon, fahrenheit, problem,
@@ -45,4 +49,15 @@ object NotificationInputs {
             )
         }
     }
+
+    // Clear unavailable history immediately so live readings continue during the query retry backoff.
+    // Kept before map/combine: formatting and downstream failures must not be hidden as database failures.
+    private fun <T> Flow<T>.withHistoryFallback(fallback: T): Flow<T> = retryWhen { cause, _ ->
+        if (cause is CancellationException || cause !is Exception) throw cause
+        emit(fallback)
+        delay(HISTORY_RETRY_MS)
+        true
+    }
+
+    private const val HISTORY_RETRY_MS = 60_000L
 }
