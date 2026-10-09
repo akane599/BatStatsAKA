@@ -83,7 +83,10 @@ object AppWindows {
         val cutoff = when (metric) {
             Metric.POWER_MAH_PER_H -> supported.minOrNull()
             Metric.WAKEUP_ALARMS_PER_H -> wakers.mapNotNull { value(window, it, metric) }.minOrNull()
-            // Power selection does not bound other activity; the unselected tail's total does.
+            // The tail's aggregate ratio cannot bound an app with less foreground time.
+            Metric.FGS_TO_FOREGROUND_RATIO -> window.rows.firstOrNull { it.isOthers }?.fgServiceMs
+                ?.takeIf { it >= 0 }?.toDouble()?.div(FOREGROUND_FLOOR_MS)
+            // Remaining supported metrics are additive totals divided by a shared window duration.
             else -> window.rows.firstOrNull { it.isOthers }?.let { value(window, it, metric) }
         } ?: return null
         return AppMetricPoint(window.session.id, window.atMs, null, cutoff, present = false)
