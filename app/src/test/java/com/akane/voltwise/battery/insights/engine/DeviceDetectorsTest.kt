@@ -84,6 +84,27 @@ class DeviceDetectorsTest {
             .single().attributions.size)
     }
 
+    @Test fun `device attributions reserve slots for wakeup reasons`() {
+        val base = dozeInput()
+        val id = base.sessions.last().id
+        val wakers = (1..6).map { DeviceWakerInput(id, WakerKind.KERNEL_WAKELOCK, "kernel.$it", 5, 60_000L * it) } +
+            listOf(
+                DeviceWakerInput(id, WakerKind.WAKEUP_REASON, "reason.1", 300, 0),
+                DeviceWakerInput(id, WakerKind.WAKEUP_REASON, "reason.2", 200, 0),
+            )
+        val finding = DeviceDetectors.detect(base.copy(deviceWakers = wakers)).single()
+        val deviceAttributions = finding.attributions.takeWhile { it.kind != AttributionKind.APP }
+        assertEquals(setOf("reason.1", "reason.2"), deviceAttributions.filter {
+            it.kind == AttributionKind.WAKEUP_REASON
+        }.map { it.name }.toSet())
+
+        val kernelOnly = DeviceDetectors.detect(base.copy(deviceWakers = wakers.filter {
+            it.kind == WakerKind.KERNEL_WAKELOCK
+        })).single().attributions.takeWhile { it.kind != AttributionKind.APP }
+        assertEquals(5, kernelOnly.size)
+        assertTrue(kernelOnly.all { it.kind == AttributionKind.KERNEL_WAKELOCK })
+    }
+
     private fun dozeInput() = inputs((0..4).map {
         session(it, 2 * HOUR).copy(screenOffDozeMs = if (it < 4) HOUR * 16 / 10 else HOUR / 10,
             screenOffSuspendMs = if (it < 4) HOUR * 18 / 10 else HOUR / 10)
