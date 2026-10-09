@@ -171,6 +171,98 @@ class InsightsViewModelTest {
         assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
     }
 
+    @Test fun successfulBackgroundAnalysisClearsAnalysisFailure() = runTest {
+        source.lastAnalyzedAt.value = 100
+        val vm = start()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+
+        source.lastAnalyzedAt.value = 101
+        runCurrent()
+        assertEquals(101L, vm.state.value.lastAnalyzedAt)
+        assertNull("a newer successful background analysis must clear analysis failure", vm.state.value.error)
+        assertEquals("recovery must not retry analysis", 1, source.analyzeCalls)
+    }
+
+    @Test fun unchangedOrOlderAnalysisTimestampKeepsAnalysisFailure() = runTest {
+        val timestamps = kotlinx.coroutines.flow.MutableSharedFlow<Long?>(replay = 1)
+        timestamps.emit(100)
+        val repository = object : InsightsRepository by source {
+            override val lastAnalyzedAt = timestamps
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        for (at in listOf(100L, 99L, 100L)) {
+            timestamps.emit(at)
+            runCurrent()
+            assertEquals("timestamp $at must not erase a failure recorded at 100",
+                InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        }
+        timestamps.emit(101)
+        runCurrent()
+        assertNull("recovery compares against the failure timestamp, not the last emission", vm.state.value.error)
+    }
+
+    @Test fun firstAnalysisTimestampEmissionDoesNotClearAnalysisFailure() = runTest {
+        val timestamps = kotlinx.coroutines.flow.MutableSharedFlow<Long?>(replay = 1)
+        val repository = object : InsightsRepository by source {
+            override val lastAnalyzedAt = timestamps
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        timestamps.emit(100)
+        runCurrent()
+        assertEquals("initial timestamp loading is not a successful refresh",
+            InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        timestamps.emit(100)
+        runCurrent()
+        assertEquals("re-emitting the initial timestamp must keep the failure",
+            InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        timestamps.emit(101)
+        runCurrent()
+        assertNull("only a later timestamp proves recovery", vm.state.value.error)
+    }
+
+    @Test fun firstSuccessfulBackgroundAnalysisClearsFailureWithoutAPreviousTimestamp() = runTest {
+        val vm = start()
+        assertNull(vm.state.value.lastAnalyzedAt)
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        source.lastAnalyzedAt.value = 100
+        runCurrent()
+        assertNull("a first successful analysis after the initial null must clear failure", vm.state.value.error)
+    }
+
+    @Test fun successfulBackgroundAnalysisKeepsFeedbackFailure() = runTest {
+        source.lastAnalyzedAt.value = 100
+        val repository = object : InsightsRepository by source {
+            override suspend fun dismiss(key: String) { error("feedback test failure") }
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        vm.onEvent(InsightsEvent.Dismiss("finding"))
+        runCurrent()
+        assertEquals(InsightMessageCode.FEEDBACK_FAILED, vm.state.value.error)
+        source.lastAnalyzedAt.value = 101
+        runCurrent()
+        assertEquals(101L, vm.state.value.lastAnalyzedAt)
+        assertEquals("analysis success must not erase feedback failure",
+            InsightMessageCode.FEEDBACK_FAILED, vm.state.value.error)
+    }
+
     @Test fun requestApplyRequiresExplicitConfirmAndCannotReplay() = runTest {
         val vm = start()
         vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))

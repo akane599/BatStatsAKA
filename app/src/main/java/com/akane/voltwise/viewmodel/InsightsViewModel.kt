@@ -21,7 +21,28 @@ class InsightsViewModel(
     private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope, applyResults)
     private val analyzing = MutableStateFlow(false)
     private val error = MutableStateFlow<InsightMessageCode?>(null)
+    private var observedAnalysisAt: Long? = null
+    private var analysisFailedAt: Long? = null
     val effects = flow.effects
+
+    init {
+        viewModelScope.launch {
+            var initial = true
+            source.lastAnalyzedAt.collect { at ->
+                val failedAt = analysisFailedAt
+                if (error.value == InsightMessageCode.ANALYSIS_FAILED) {
+                    if (initial) {
+                        // Loading the first timestamp is not evidence of a successful refresh.
+                        analysisFailedAt = at
+                    } else if (at != null && (failedAt == null || at > failedAt)) {
+                        error.value = null
+                    }
+                }
+                observedAnalysisAt = at
+                initial = false
+            }
+        }
+    }
 
     private val content = combine(source.report, source.actions, source.privileged) { report, actions, access ->
         val privileged = access == true
@@ -64,6 +85,7 @@ class InsightsViewModel(
         error.value = null
         viewModelScope.launch {
             try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailedAt = observedAnalysisAt
                 error.value = code
                 flow.message(InsightActionMessage(code))
             }
