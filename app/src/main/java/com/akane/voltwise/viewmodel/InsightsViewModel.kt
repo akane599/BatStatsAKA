@@ -10,7 +10,9 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 class InsightsViewModel(
@@ -95,6 +97,7 @@ class InsightsViewModel(
         error.value = null
         viewModelScope.launch {
             try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (!currentCoroutineContext().isActive) return@launch
                 if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailedAt = observedAnalysisAt
                 error.value = code
                 val published = flow.message(InsightActionMessage(code))
