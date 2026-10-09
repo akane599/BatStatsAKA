@@ -116,6 +116,42 @@ class AppWindowsTest {
         assertFalse(point.present)
     }
 
+    @Test fun absentAppFgsRatioBoundUsesTailFgsTotalAndForegroundFloor() {
+        val session = session(0, 8 * HOUR).let {
+            it.copy(appWindow = it.appWindow!!.copy(fullRowSet = true))
+        }
+        val rows = truncatedWindow().rows.map {
+            if (it.isOthers) it.copy(fgServiceMs = HOUR, fgMs = 3 * HOUR, topMs = 0) else it
+        }
+        val window = AppWindows.select(inputs(listOf(session), rows)).single()
+        val others = rows.single { it.isOthers }
+        assertEquals(1.0 / 3.0, AppWindows.value(window, others, Metric.FGS_TO_FOREGROUND_RATIO)!!, 1e-9)
+        val missingApp = row(session.id).copy(fgServiceMs = 40 * 60_000L, fgMs = 0, topMs = 0)
+        val missingRatio = AppWindows.value(window, missingApp, Metric.FGS_TO_FOREGROUND_RATIO)!!
+        assertEquals(40.0, missingRatio, 0.0)
+        val point = AppWindows.point(window, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!
+        assertTrue("The censored bound must cover the missing app's ratio", point.upperBound!! >= missingRatio)
+        assertEquals(60.0, point.upperBound!!, 0.0)
+        assertNull(point.value)
+        assertTrue(point.censored)
+        assertFalse(point.present)
+        // Only the tail's FGS total is needed; its foreground fields cannot tighten this bound.
+        val noForeground = window.copy(rows = rows.map { if (it.isOthers) it.copy(fgMs = null, topMs = null) else it })
+        assertEquals(60.0, AppWindows.point(noForeground, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!.upperBound!!, 0.0)
+    }
+
+    @Test fun absentAppFgsRatioNeedsNonnegativeTailFgsTotal() {
+        val window = truncatedWindow()
+        for (fgs in listOf(null, -1L)) {
+            val unsupported = window.copy(rows = window.rows.map { if (it.isOthers) it.copy(fgServiceMs = fgs) else it })
+            assertNull(AppWindows.point(unsupported, subject, Metric.FGS_TO_FOREGROUND_RATIO))
+        }
+        val zero = window.copy(rows = window.rows.map { if (it.isOthers) it.copy(fgServiceMs = 0) else it })
+        val point = AppWindows.point(zero, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!
+        assertEquals(0.0, point.upperBound!!, 0.0)
+        assertNull(point.value)
+    }
+
     @Test fun spareWakerSlotsAlsoMakeBackgroundWakelockAbsenceExactZero() {
         val point = AppWindows.point(truncatedWindow(), subject, Metric.PARTIAL_WAKELOCK_BG_SHARE)!!
         assertEquals(0.0, point.value)
