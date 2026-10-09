@@ -4,6 +4,7 @@ import com.akane.voltwise.battery.apps.AppUsageStatus
 import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.insights.model.*
 import com.akane.voltwise.battery.measurement.HealthSummary
+import com.akane.voltwise.battery.util.BatteryStatsParser
 
 /** Maps stored measurements without replacing unsupported (null) counters with zero. */
 object InsightInputsBuilder {
@@ -36,7 +37,11 @@ object InsightInputsBuilder {
                 val start = session.appCaptureStartMs
                 val finish = session.appCaptureEndMs
                 if (basis != null && start != null && finish != null) {
-                    AppWindowInput(basis, start, finish, rowsStored, rows.any { it.isOthers })
+                    AppWindowInput(
+                        basis, start, finish, rowsStored, rows.any { it.isOthers },
+                        // Profile filtering must not turn filled storage slots into exact-zero evidence.
+                        wakersStored = rows.count { !it.isOthers && it.rank >= 30 },
+                    )
                 } else null
             } else null
             SessionInput(
@@ -57,7 +62,9 @@ object InsightInputsBuilder {
                     it.screenOnDischargeUah, it.screenOffDischargeUah, it.chargedUah, it.cpuSuspendMs,
                     it.screenOffSuspendMs, it.dozeMs, it.screenOffDozeMs, it.peakTemperatureDeciC)
             },
-            appRows.filter { it.sessionId in ids }.map {
+            appRows.filter {
+                it.sessionId in ids && (it.isOthers || it.uid / BatteryStatsParser.PER_USER_RANGE == 0)
+            }.map {
                 AppSessionInput(it.sessionId, it.uid, it.packageName, it.rank, it.powerMah, it.cpuTimeMs,
                     it.foregroundTimeMs, it.backgroundTimeMs, it.wakelockTimeMs, it.mobileBytes, it.wifiBytes,
                     it.wakeupAlarms, it.partialWakelockCount, it.partialWakelockBgMs, it.jobCount, it.jobMs,

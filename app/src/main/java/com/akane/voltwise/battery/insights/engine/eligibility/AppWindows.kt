@@ -75,7 +75,7 @@ object AppWindows {
         }
         val wakers = window.rows.filter { !it.isOthers && it.rank >= 30 }
         // Spare waker slots mean every app with alarms or background wakelock time was kept.
-        if (wakers.size < 10 &&
+        if ((window.session.appWindow.wakersStored ?: wakers.size) < 10 &&
             (metric == Metric.WAKEUP_ALARMS_PER_H || metric == Metric.PARTIAL_WAKELOCK_BG_SHARE)
         ) {
             return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
