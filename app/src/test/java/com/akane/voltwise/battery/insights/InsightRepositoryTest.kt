@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.yield
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.Clock
@@ -28,6 +29,7 @@ class InsightRepositoryTest {
         val rows = MutableStateFlow(initial)
         var actionRows = emptyList<InsightActionEntity>()
         var afterFindingsRead: suspend () -> Unit = {}
+        var afterFindingsWrite: suspend () -> Unit = {}
         var feedbackWrites = 0
         override fun findings() = rows
         override suspend fun findingsOnce(): List<InsightFindingEntity> {
@@ -43,6 +45,7 @@ class InsightRepositoryTest {
             val merged = rows.value.associateBy { it.key }.toMutableMap()
             list.forEach { merged[it.key] = it }
             rows.value = merged.values.toList()
+            afterFindingsWrite()
         }
         override suspend fun setStatus(key: String, status: InsightFindingStatus) {
             feedbackWrites++
@@ -480,6 +483,83 @@ class InsightRepositoryTest {
         feedback.await()
         assertEquals(2, fixture.seen.size)
         assertEquals(1.5, fixture.insights.row().feedbackMultiplier, 0.0)
+    }
+
+    @Test fun cancellationAfterFindingsWriteStillAdvancesStoredAndPublishedAnalysisTime() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        fixture.now += 500
+        fixture.output = listOf(testFinding().copy(score = 80.0))
+        lateinit var refresh: Deferred<Unit>
+        fixture.insights.afterFindingsWrite = {
+            // Room can commit rows before its suspending write returns to a cancelled caller.
+            refresh.cancel()
+            yield()
+        }
+        refresh = async { repo.refresh() }
+        refresh.join()
+        runCurrent()
+        assertTrue("The refresh caller must have been cancelled", refresh.isCancelled)
+        assertEquals(NOW + 500, fixture.insights.row().lastSeenAt)
+        assertEquals(80.0, fixture.insights.row().score, 0.0)
+        assertEquals("Committed findings must advance the stored analysis time",
+            (NOW + 500).toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
+        assertEquals("Committed findings must advance the timestamp StateFlow", NOW + 500, repo.lastAnalyzedAt.value)
+        assertEquals("Republished findings must use the new analysis time", NOW + 500, repo.report.value!!.generatedAtMs)
+        assertEquals(fixture.output, repo.report.value!!.findings)
+    }
+
+    @Test fun cancellationBeforeWriteLeavesFindingsAndAnalysisTimeUnchanged() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        val previousRows = fixture.insights.rows.value
+        val previousReport = repo.report.value
+        fixture.now += 500
+        fixture.output = listOf(testFinding().copy(score = 80.0))
+        fixture.maintenance.mutations.lock()
+        val refresh = async { repo.refresh() }
+        try {
+            runCurrent()
+            assertEquals("Analysis must finish before waiting for the write lock", 2, fixture.seen.size)
+            assertFalse("Refresh must still be waiting to write", refresh.isCompleted)
+            refresh.cancel()
+            refresh.join()
+        } finally {
+            fixture.maintenance.mutations.unlock()
+        }
+        runCurrent()
+        assertTrue(refresh.isCancelled)
+        assertEquals("Cancellation before writing must not change findings", previousRows, fixture.insights.rows.value)
+        assertEquals(1, fixture.insights.feedbackWrites)
+        assertEquals(NOW.toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
+        assertEquals(NOW, repo.lastAnalyzedAt.value)
+        assertEquals(previousReport, repo.report.value)
+    }
+
+    @Test fun cancellationDuringPreCommitReadLeavesFindingsAndAnalysisTimeUnchanged() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        val previousRows = fixture.insights.rows.value
+        val previousReport = repo.report.value
+        fixture.now += 500
+        fixture.output = listOf(testFinding().copy(score = 80.0))
+        lateinit var refresh: Deferred<Unit>
+        fixture.duringAnalysis = {
+            // Cancel in the final read, without a further suspension before the commit boundary.
+            fixture.insights.afterFindingsRead = { refresh.cancel() }
+        }
+        refresh = async { repo.refresh() }
+        refresh.join()
+        runCurrent()
+        assertTrue(refresh.isCancelled)
+        assertEquals("Cancellation at the commit boundary must not change findings", previousRows, fixture.insights.rows.value)
+        assertEquals(1, fixture.insights.feedbackWrites)
+        assertEquals(NOW.toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
+        assertEquals(NOW, repo.lastAnalyzedAt.value)
+        assertEquals(previousReport, repo.report.value)
     }
 
     @Test fun successfulRefreshPersistsLastAnalyzedAtAndFailureDoesNotAdvanceIt() = runTest {
