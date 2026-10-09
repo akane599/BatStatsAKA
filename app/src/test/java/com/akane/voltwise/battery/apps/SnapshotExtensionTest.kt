@@ -211,7 +211,54 @@ class SnapshotExtensionTest {
         assertNull(others.topJobName)
     }
 
-    @Test fun deviceHeaderAndTopTwoHundredWakersAreMapped() {
+    @Test fun idleBaselineWakerSurvivesSnapshotCapAndAppearsInSessionDelta() {
+        val idle = (1..239).map { Parser.KernelWakelockStats("idle$it", 0, 0) } +
+            Parser.KernelWakelockStats("zz_idle", 0, 0)
+        val active = (1..10).map { Parser.KernelWakelockStats("active$it", 1, 1_000) }
+        val baseline = Parser.FullSnapshot(startedAt = 1, startCount = 1,
+            kernelWakelocks = idle + active).toAppUsageSnapshot()
+        val end = Parser.FullSnapshot(startedAt = 1, startCount = 1,
+            kernelWakelocks = idle.dropLast(1) + active +
+                Parser.KernelWakelockStats("zz_idle", 900, 7_200_000)).toAppUsageSnapshot()
+
+        val delta = AppUsageDelta.compute(baseline, end).deviceWakers
+        assertTrue("Idle baseline waker must survive into the session delta",
+            DeviceWaker("KERNEL_WAKELOCK", "zz_idle", 900, 7_200_000) in delta)
+        assertEquals(true, baseline.wakersComplete)
+        assertEquals(10, baseline.deviceWakers.size)
+    }
+
+    @Test fun countRankedReasonSurvivesMoreThanTwoHundredActiveKernels() {
+        val kernels = (1..250).map { Parser.KernelWakelockStats("k$it", 1, 10_000L + it) }
+        val full = Parser.FullSnapshot(startedAt = 1, startCount = 1,
+            kernelWakelocks = kernels,
+            wakeupReasons = listOf(Parser.WakeupReasonStats("reason", 1, 1)))
+        val baseline = full.toAppUsageSnapshot()
+        val end = full.copy(wakeupReasons = listOf(
+            Parser.WakeupReasonStats("reason", 3_001, 1_501),
+        )).toAppUsageSnapshot()
+
+        assertTrue("Count-ranked reason must survive into the session delta",
+            DeviceWaker("WAKEUP_REASON", "reason", 3_000, 1_500) in
+                AppUsageDelta.compute(baseline, end).deviceWakers)
+        assertEquals(false, baseline.wakersComplete)
+    }
+
+    @Test fun nonzeroWakersWithinBothKindCapsRemainComplete() {
+        val full = Parser.FullSnapshot(
+            kernelWakelocks = (1..150).map { Parser.KernelWakelockStats("k$it", it, it.toLong()) },
+            wakeupReasons = (1..50).map { Parser.WakeupReasonStats("r$it", it, it.toLong()) },
+        )
+        val snapshot = full.toAppUsageSnapshot()
+
+        assertEquals(200, snapshot.deviceWakers.size)
+        assertEquals((1..150).map { "k$it" }.toSet() + (1..50).map { "r$it" },
+            snapshot.deviceWakers.map { it.name }.toSet())
+        assertEquals(true, snapshot.wakersComplete)
+        assertEquals(true, snapshot.header("s", AppSnapshotKind.BASELINE).wakersComplete)
+    }
+
+    @Test fun deviceHeaderAndPerKindCappedWakersAreMapped() {
         val full = Parser.FullSnapshot(screenOffTimeMs = 123,
             doze = Parser.DozeStats(1, 2, 3, 4, 5, 6),
             kernelWakelocks = (1..200).map { Parser.KernelWakelockStats("k$it", it, it.toLong()) },
@@ -224,10 +271,12 @@ class SnapshotExtensionTest {
         assertEquals(6L, header.lightIdleCount)
         assertEquals(123L, header.screenOffMs)
         assertEquals(false, header.wakersComplete)
-        assertEquals(200, snapshot.deviceWakers.size)
-        assertEquals(DeviceWaker("WAKEUP_REASON", "reason", 2, 999), snapshot.deviceWakers.first())
-        assertFalse(snapshot.deviceWakers.any { it.name == "k1" })
-        assertEquals(true, full.copy(wakeupReasons = emptyList()).toAppUsageSnapshot().wakersComplete)
+        assertEquals(151, snapshot.deviceWakers.size)
+        assertEquals(DeviceWaker("KERNEL_WAKELOCK", "k200", 200, 200), snapshot.deviceWakers.first())
+        assertEquals(DeviceWaker("WAKEUP_REASON", "reason", 2, 999), snapshot.deviceWakers.last())
+        assertFalse(snapshot.deviceWakers.any { it.name == "k50" })
+        assertEquals(false, full.copy(wakeupReasons = emptyList()).toAppUsageSnapshot().wakersComplete)
+        assertEquals(true, full.copy(kernelWakelocks = full.kernelWakelocks.take(150)).toAppUsageSnapshot().wakersComplete)
         val unsupported = Parser.FullSnapshot().toAppUsageSnapshot().header("s", AppSnapshotKind.BASELINE)
         assertNull(unsupported.deepIdleMs)
         assertNull(unsupported.screenOffMs)

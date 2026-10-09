@@ -60,6 +60,7 @@ fun BatteryStatsParser.AppPowerStats.identity(): UidIdentity {
 fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
     val wakers = kernelWakelocks.map { DeviceWaker("KERNEL_WAKELOCK", it.name, it.count.toLong(), it.totalTimeMs) } +
         wakeupReasons.map { DeviceWaker("WAKEUP_REASON", it.name, it.count.toLong(), it.totalTimeMs) }
+    val selectedWakers = wakers.selectSnapshotWakers()
     val wakelockHints = wakelocks.filter { it.type == BatteryStatsParser.WakelockType.PARTIAL }.groupBy { it.uid }
     val alarmHints = alarms.groupBy { it.uid }
     val jobHints = jobs.groupBy { it.uid }
@@ -97,8 +98,8 @@ fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
         lightIdleMs = doze?.lightIdleTimeMs,
         lightIdleCount = doze?.lightIdleCount?.toLong(),
         screenOffMs = screenOffTimeMs,
-        deviceWakers = wakers.rankedWakers().take(200),
-        wakersComplete = wakers.size <= 200,
+        deviceWakers = selectedWakers.entries,
+        wakersComplete = selectedWakers.complete,
         tagHints = apps.associate { app -> app.uid to AppTagHints(
             wakelockHints[app.uid]?.maxByOrNull { it.totalTimeMs }?.tag,
             alarmHints[app.uid]?.maxByOrNull { it.wakeups }?.tag,
@@ -107,8 +108,26 @@ fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
     )
 }
 
-internal fun List<DeviceWaker>.rankedWakers(): List<DeviceWaker> =
-    sortedWith(compareByDescending<DeviceWaker> { it.totalMs }.thenBy { it.kind }.thenBy { it.name })
+// Reserve reason capacity by wake count without exceeding the 200-row snapshot budget.
+private const val SNAPSHOT_KERNEL_WAKER_LIMIT = 150
+private const val SNAPSHOT_WAKEUP_REASON_LIMIT = 50
+
+internal data class SnapshotWakerSelection(val entries: List<DeviceWaker>, val complete: Boolean)
+
+internal fun List<DeviceWaker>.selectSnapshotWakers(): SnapshotWakerSelection {
+    val (kernels, reasons) = filter { it.count != 0L || it.totalMs != 0L }
+        .partition { it.kind == "KERNEL_WAKELOCK" }
+    val selectedKernels = kernels.sortedWith(
+        compareByDescending<DeviceWaker> { it.totalMs }.thenBy { it.name },
+    ).take(SNAPSHOT_KERNEL_WAKER_LIMIT)
+    val selectedReasons = reasons.sortedWith(
+        compareByDescending<DeviceWaker> { it.count }.thenBy { it.name },
+    ).take(SNAPSHOT_WAKEUP_REASON_LIMIT)
+    return SnapshotWakerSelection(
+        entries = selectedKernels + selectedReasons,
+        complete = kernels.size <= SNAPSHOT_KERNEL_WAKER_LIMIT && reasons.size <= SNAPSHOT_WAKEUP_REASON_LIMIT,
+    )
+}
 
 /** rx + tx, null only when both sides are unknown. */
 private fun sumBytesOrNull(rx: Long?, tx: Long?): Long? =

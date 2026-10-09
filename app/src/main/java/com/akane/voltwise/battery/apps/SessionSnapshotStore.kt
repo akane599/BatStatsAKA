@@ -94,8 +94,9 @@ class RoomSessionSnapshotStore(private val db: BatteryDatabase) : SessionSnapsho
 
     /** insertSnapshot prunes to the open session's baseline + the newest [AppUsageDao.SNAPSHOTS_KEPT]. */
     private suspend fun insert(sessionId: String, kind: AppSnapshotKind, snapshot: AppUsageSnapshot) {
-        val id = usage.insertSnapshot(snapshot.header(sessionId, kind), snapshot.rows.collapseByUid())
-        usage.insertSnapshotWakers(snapshot.deviceWakers.rankedWakers().take(200).map { waker ->
+        val wakers = snapshot.deviceWakers.selectSnapshotWakers()
+        val id = usage.insertSnapshot(snapshot.header(sessionId, kind, wakers), snapshot.rows.collapseByUid())
+        usage.insertSnapshotWakers(wakers.entries.map { waker ->
             SnapshotDeviceWaker(id, waker.kind, waker.name, waker.count, waker.totalMs)
         })
         usage.pruneOrphanSnapshots()
@@ -138,9 +139,13 @@ internal fun List<AppUsageRow>.collapseByUid(): List<AppUsageRow> = groupBy { it
 
 private fun addOrNull(a: Long?, b: Long?): Long? = if (a == null && b == null) null else (a ?: 0L) + (b ?: 0L)
 
-internal fun AppUsageSnapshot.header(sessionId: String, kind: AppSnapshotKind) = AppSnapshot(
+internal fun AppUsageSnapshot.header(
+    sessionId: String,
+    kind: AppSnapshotKind,
+    wakers: SnapshotWakerSelection = deviceWakers.selectSnapshotWakers(),
+) = AppSnapshot(
     sessionId = sessionId, kind = kind, capturedAt = capturedAt,
     windowStartedAt = windowStartedAt, windowStartCount = windowStartCount,
     deepIdleMs = deepIdleMs, deepIdleCount = deepIdleCount, lightIdleMs = lightIdleMs, lightIdleCount = lightIdleCount,
-    screenOffMs = screenOffMs, wakersComplete = wakersComplete?.let { it && deviceWakers.size <= 200 },
+    screenOffMs = screenOffMs, wakersComplete = wakersComplete?.let { it && wakers.complete },
 )
