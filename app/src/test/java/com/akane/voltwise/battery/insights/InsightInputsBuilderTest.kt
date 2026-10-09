@@ -87,6 +87,24 @@ class InsightInputsBuilderTest {
         }
     }
 
+    @Test fun appliedActionKeepsMetricWhenStoredFindingChangesLeadEvidence() {
+        val finding = testFinding("JOB_STORM:example.app0").copy(
+            type = FindingType.JOB_STORM,
+            subject = Subject.App(10_001, "example.app0"),
+            evidence = listOf(Evidence(Metric.SYNCS_PER_H, 60.0, 1.0, MetricUnit.COUNT_PER_H, 5)),
+        )
+        val action = InsightActionEntity(
+            findingKey = finding.key, type = ActionType.RESTRICT_BACKGROUND.name,
+            packageName = "example.app0", uid = 10_001, userId = 0,
+            status = InsightActionStatus.APPLIED, priorStateVersion = 1,
+            createdAt = 1, appliedAt = 2, metric = Metric.JOBS_PER_H.name,
+        )
+        val stored = FindingCodec.encode(finding, 1)
+        assertEquals(Metric.JOBS_PER_H, build(actions = listOf(action), findings = listOf(stored)).actions.single().metric)
+        assertEquals(Metric.JOBS_PER_H, build(actions = listOf(action), findings = emptyList()).actions.single().metric)
+        assertNull(build(actions = listOf(action.copy(metric = "FUTURE_METRIC")), findings = listOf(stored)).actions.single().metric)
+    }
+
     @Test fun appliedActionMetricComesFromMatchingStoredFindingsLeadEvidence() {
         for ((type, metric) in listOf(
             FindingType.JOB_STORM to Metric.SYNCS_PER_H,

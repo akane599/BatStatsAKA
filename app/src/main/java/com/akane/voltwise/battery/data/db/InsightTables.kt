@@ -80,4 +80,5 @@ data class InsightActionEntity(
     val appliedAt: Long? = null,
     val revertedAt: Long? = null,
     val message: String? = null,
+    val metric: String? = null,
 )
