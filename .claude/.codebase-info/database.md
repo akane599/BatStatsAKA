@@ -29,7 +29,7 @@ Room database `battery.db`, **version 8**, `exportSchema = true`.
 - `SessionDao`: `active()` / `activeFlow()`, `filteredSessions`, `capacityEstimates`, `closeInterrupted`, `deleteSession(id, recordingGeneration)` (deletes samples, snapshots and the row together), `purge`.
 - `PersistDao`: `persistSample(sample, session, days)` is the single transactional write the repository uses per persisted capture.
 - `DailySummaryDao`: per-day upsert/read/range, `purgeBefore`.
-- `AppUsageDao`: snapshot header + UID rows, session app usage.
+- `AppUsageDao`: snapshot header + UID rows, session app usage. `insertSnapshot` writes header, UID rows and wakers in one transaction, then `pruneSnapshots` keeps the `SNAPSHOTS_KEPT` (3) last inserted snapshots by `id` (not `capturedAt`, so a backward clock change can't prune the new row) plus open-session BASELINEs; readers (`latestSnapshot`, `snapshots`) order by `capturedAt`.
 - `InsightDao`: findings (flow/once, upsert, status, feedback, clear, `purgeFindingsSeenBefore`) and the action journal (`actions`, `actionsOnce`, `actionsWithStatus`, …).
 
 `EnumConverters` (in `BatteryDatabase.kt`) never uses `valueOf`: unknown enum text reads as null, or
