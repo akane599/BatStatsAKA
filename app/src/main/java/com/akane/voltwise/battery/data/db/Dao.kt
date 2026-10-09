@@ -4,6 +4,7 @@ import androidx.room.*
 import com.akane.voltwise.battery.apps.AppUsageBasis
 import com.akane.voltwise.battery.apps.AppUsageRow
 import com.akane.voltwise.battery.apps.AppUsageStatus
+import com.akane.voltwise.battery.apps.DeviceWaker
 import com.akane.voltwise.battery.data.HistoryLimits
 import com.akane.voltwise.battery.data.SessionEvidence
 import kotlinx.coroutines.flow.Flow
@@ -239,17 +240,22 @@ interface AppUsageDao {
         insertSessionWakerRows(rows)
     }
 
-    /** Stores a snapshot and its per-uid rows, then prunes to the open session's baseline plus the last [SNAPSHOTS_KEPT]. */
+    /** Stores the header, per-uid rows and wakers before pruning; the newly inserted snapshot always survives. */
     @Transaction
-    suspend fun insertSnapshot(snapshot: AppSnapshot, rows: List<AppUsageRow>): Long {
+    suspend fun insertSnapshot(
+        snapshot: AppSnapshot,
+        rows: List<AppUsageRow>,
+        wakers: List<DeviceWaker> = emptyList(),
+    ): Long {
         val id = insertSnapshotHeader(snapshot.copy(id = 0))
         insertSnapshotUids(rows.map { it.toSnapshotUid(id) })
+        insertSnapshotWakers(wakers.map { SnapshotDeviceWaker(id, it.kind, it.name, it.count, it.totalMs) })
         pruneSnapshots(SNAPSHOTS_KEPT)
         return id
     }
 
-    /** Keeps the [keepLatest] newest snapshots and every BASELINE of the open (activeKey = 1) session; uids cascade. */
-    @Query("DELETE FROM app_snapshots WHERE id NOT IN (SELECT id FROM app_snapshots ORDER BY capturedAt DESC, id DESC LIMIT :keepLatest) AND id NOT IN (SELECT a.id FROM app_snapshots a JOIN charge_sessions s ON s.sessionId = a.sessionId WHERE s.activeKey = 1 AND a.kind = 'BASELINE')")
+    /** Keeps the [keepLatest] last inserted snapshots plus open-session BASELINEs; uid and waker rows cascade. */
+    @Query("DELETE FROM app_snapshots WHERE id NOT IN (SELECT id FROM app_snapshots ORDER BY id DESC LIMIT :keepLatest) AND id NOT IN (SELECT a.id FROM app_snapshots a JOIN charge_sessions s ON s.sessionId = a.sessionId WHERE s.activeKey = 1 AND a.kind = 'BASELINE')")
     suspend fun pruneSnapshots(keepLatest: Int = SNAPSHOTS_KEPT): Int
 
     @Query("DELETE FROM app_snapshots WHERE sessionId IS NOT NULL AND sessionId NOT IN (SELECT sessionId FROM charge_sessions)")

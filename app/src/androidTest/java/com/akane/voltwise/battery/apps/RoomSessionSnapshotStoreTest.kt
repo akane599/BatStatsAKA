@@ -70,6 +70,27 @@ class RoomSessionSnapshotStoreTest {
         assertEquals(OpenSession("open", SessionType.DISCHARGE), store.openSession().first())
     }
 
+    @Test fun backwardClockEndRetainsSnapshotWakersAndReadyBreakdown() = runBlocking {
+        repeat(3) { i ->
+            db.sessionDao().insert(session("seed$i"))
+            val seed = snapshot(100, 10_000L + i, AppUsageRow(1, "a", 2.0))
+            assertTrue(store.saveEnd("seed$i", seed, AppUsageDelta.compute(null, seed)))
+        }
+        db.sessionDao().insert(session("backward"))
+        val waker = DeviceWaker("WAKEUP_REASON", "alarm", 2, 20)
+        val end = snapshot(100, 500, AppUsageRow(1, "a", 3.0)).copy(
+            deviceWakers = listOf(waker), wakersComplete = true,
+        )
+        assertTrue(store.saveEnd("backward", end, AppUsageDelta.compute(null, end)))
+        val header = db.appUsageDao().latestSnapshot("backward", AppSnapshotKind.END)!!
+        assertEquals(500L, header.capturedAt)
+        assertEquals(listOf(1), db.appUsageDao().snapshotUids(header.id).map { it.uid })
+        assertEquals(listOf(waker.name), db.appUsageDao().snapshotWakers(header.id).map { it.name })
+        assertEquals(AppUsageStatus.READY, db.sessionDao().byId("backward")!!.appUsageStatus)
+        assertEquals(listOf("a"), db.appUsageDao().sessionUsageRows("backward").map { it.packageName })
+        assertEquals(setOf("seed1", "seed2", "backward"), db.appUsageDao().snapshots().map { it.sessionId }.toSet())
+    }
+
     @Test fun snapshotsArePrunedToTheOpenBaselinePlusTheNewestThree() = runBlocking {
         db.sessionDao().insert(session("open", open = true, start = 1))
         assertTrue(store.saveBaseline("open", snapshot(100, 1, AppUsageRow(1, "a", 1.0))))
@@ -79,6 +100,7 @@ class RoomSessionSnapshotStoreTest {
         }
         val kept = db.appUsageDao().snapshots()
         assertEquals(4, kept.size)
+        assertEquals(setOf("open", "s2", "s3", "s4"), kept.map { it.sessionId }.toSet())
         assertTrue(kept.any { it.sessionId == "open" && it.kind == AppSnapshotKind.BASELINE })
     }
 }
