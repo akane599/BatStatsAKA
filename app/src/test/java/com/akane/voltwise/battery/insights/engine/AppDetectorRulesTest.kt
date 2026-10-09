@@ -36,6 +36,23 @@ class AppDetectorRulesTest {
         assertEquals(1, BackgroundRunaway.detect(context(boundary)).size)
     }
 
+    @Test fun backgroundOnlyAppWithSparseForegroundStillProducesLocationFinding() {
+        val input = detectorInputs(FindingType.BACKGROUND_LOCATION).let { input ->
+            input.copy(appSessions = input.appSessions.mapIndexed { index, row ->
+                row.copy(fgMs = null, topMs = 0, bgMs = HOUR / 2, gpsMs = if (index < 4) HOUR / 4 else HOUR / 2)
+            })
+        }
+        val findings = appFindings(input).filter { it.type == FindingType.BACKGROUND_LOCATION }
+        assertEquals(1, findings.size)
+        val evidence = findings.single().evidence.first()
+        assertEquals(Metric.GPS_MS_PER_H, evidence.metric)
+        assertEquals((HOUR / 4).toDouble(), evidence.baseline!!, 0.0)
+        assertEquals((HOUR / 2).toDouble(), evidence.observed, 0.0)
+
+        val unknownTop = input.copy(appSessions = input.appSessions.map { it.copy(topMs = null) })
+        assertTrue(appFindings(unknownTop).none { it.type == FindingType.BACKGROUND_LOCATION })
+    }
+
     @Test fun foregroundActivityDisqualifiesLocationRadioAndLingeringService() {
         for (type in listOf(FindingType.BACKGROUND_LOCATION, FindingType.BACKGROUND_RADIO, FindingType.LINGERING_FOREGROUND_SERVICE)) {
             val input = detectorInputs(type)
