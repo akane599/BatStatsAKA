@@ -4,12 +4,33 @@ import com.akane.voltwise.battery.insights.model.ActionStatus
 import com.akane.voltwise.battery.insights.model.ActionType
 import com.akane.voltwise.battery.insights.model.AppliedActionInput
 import com.akane.voltwise.battery.insights.model.Direction
+import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.SessionKind
 import org.junit.Assert.*
 import org.junit.Test
 
 class ActionEffectsTest {
+    @Test fun `new heavy app actions fall back from window drain share to measurable power`() {
+        val sessions = (0..3).map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(powerMah = if (index < 2) 40.0 else 5.0)
+        }
+        for (type in listOf(ActionType.RESTRICT_BACKGROUND, ActionType.STANDBY_BUCKET_RESTRICTED)) {
+            val action = AppliedActionInput(5, "NEW_HEAVY_APP:$APP", type,
+                APP, UID, sessions[1].endMs + HOUR, ActionStatus.APPLIED, metric = Metric.WINDOW_DRAIN_SHARE)
+            val effects = ActionEffects.detect(inputs(sessions, rows).copy(actions = listOf(action)))
+            assertEquals("one action effect for $type", 1, effects.size)
+            val effect = effects.single()
+            assertEquals(FindingType.ACTION_EFFECT, effect.type)
+            assertEquals(Metric.POWER_MAH_PER_H, effect.evidence.single().metric)
+            assertEquals(40.0, effect.evidence.single().baseline!!, 0.0)
+            assertEquals(5.0, effect.evidence.single().observed, 0.0)
+            assertEquals(4, effect.evidence.single().sessions)
+            assertEquals(Direction.DOWN, effect.direction)
+        }
+    }
+
     @Test fun `sync sourced job storm effect follows syncs rather than rising jobs`() {
         val sessions = (0..3).map { session(it) }
         val rows = sessions.mapIndexed { index, session ->
@@ -38,6 +59,42 @@ class ActionEffectsTest {
             action.copy(metric = null, findingKey = "JOB_STORM:$APP:SYNCS_PER_H"),
         ))).single()
         assertEquals(effect, explicit)
+        val unsupported = ActionEffects.detect(input.copy(actions = listOf(
+            action.copy(metric = Metric.TEMPERATURE_C, findingKey = "JOB_STORM:$APP:SYNCS_PER_H"),
+        ))).single()
+        assertEquals(effect, unsupported)
+        // A supported but unavailable metric must not be replaced with another measurement.
+        assertTrue(ActionEffects.detect(input.copy(appSessions = rows.map { it.copy(syncCount = null) })).isEmpty())
+    }
+
+    @Test fun `device actions reject app metrics and retain supported device metrics`() {
+        val sessions = (0..3).map { index ->
+            session(index).copy(
+                screenOnMs = HOUR / 2, screenOffMs = HOUR / 2,
+                screenOnCoveredMs = HOUR / 2, screenOffCoveredMs = HOUR / 2,
+                screenOnUah = if (index < 2) 100_000 else 200_000,
+                screenOffUah = if (index < 2) 200_000 else 100_000,
+            )
+        }
+        val action = AppliedActionInput(6, "SCREEN_OFF_DRAIN:device", ActionType.RESTRICT_BACKGROUND,
+            null, null, sessions[1].endMs + HOUR, ActionStatus.APPLIED)
+        val input = inputs(sessions, emptyList())
+        for (metric in listOf(Metric.POWER_MAH_PER_H, Metric.WINDOW_DRAIN_SHARE, Metric.CAPACITY_MAH)) {
+            val effects = ActionEffects.detect(input.copy(actions = listOf(action.copy(metric = metric))))
+            assertEquals("one device action effect for unsupported $metric", 1, effects.size)
+            val effect = effects.single()
+            assertEquals(Metric.SCREEN_OFF_PCT_PER_H, effect.evidence.single().metric)
+            assertEquals(10.0, effect.evidence.single().baseline!!, 0.0)
+            assertEquals(5.0, effect.evidence.single().observed, 0.0)
+            assertEquals(Direction.DOWN, effect.direction)
+        }
+        val supported = ActionEffects.detect(input.copy(actions = listOf(
+            action.copy(metric = Metric.SCREEN_ON_PCT_PER_H),
+        ))).single()
+        assertEquals(Metric.SCREEN_ON_PCT_PER_H, supported.evidence.single().metric)
+        assertEquals(Direction.UP, supported.direction)
+        assertEquals(5.0, supported.evidence.single().baseline!!, 0.0)
+        assertEquals(10.0, supported.evidence.single().observed, 0.0)
     }
 
     @Test fun `charging actions compare charging metrics rather than unrelated discharge drain`() {
@@ -55,6 +112,11 @@ class ActionEffectsTest {
                 null, null, sessions[1].endMs + HOUR, ActionStatus.APPLIED)
             val input = inputs(sessions, emptyList()).copy(actions = listOf(action))
             val effect = ActionEffects.detect(input).single()
+            for (sourceMetric in listOf(metric, Metric.WINDOW_DRAIN_SHARE, Metric.POWER_MAH_PER_H)) {
+                assertEquals(effect, ActionEffects.detect(input.copy(actions = listOf(
+                    action.copy(metric = sourceMetric),
+                ))).single())
+            }
             assertEquals(metric, effect.evidence.single().metric)
             assertEquals(Direction.DOWN, effect.direction)
             assertEquals(if (kind == SessionKind.CHARGE) 44.0 else 3.0 * HOUR, effect.evidence.single().baseline!!, 0.0)

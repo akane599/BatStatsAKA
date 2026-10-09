@@ -70,7 +70,39 @@ object ActionEffects {
     }
 
     private fun metric(action: AppliedActionInput): Metric {
-        action.metric?.let { return it }
+        // Match the measurement path, not the availability of a particular observation.
+        action.metric?.takeIf { metric ->
+            when (metric) {
+                // AppWindows.value supports these per-window app metrics.
+                Metric.POWER_MAH_PER_H,
+                Metric.CPU_MS_PER_H,
+                Metric.FOREGROUND_MS_PER_H,
+                Metric.TOP_MS_PER_H,
+                Metric.FGS_MS_PER_H,
+                Metric.BG_TIME_SHARE,
+                Metric.PARTIAL_WAKELOCK_BG_SHARE,
+                Metric.WAKELOCK_MS_PER_H,
+                Metric.WAKEUP_ALARMS_PER_H,
+                Metric.PARTIAL_WAKELOCKS_PER_H,
+                Metric.JOBS_PER_H,
+                Metric.JOB_MS_PER_H,
+                Metric.SYNCS_PER_H,
+                Metric.GPS_MS_PER_H,
+                Metric.SENSOR_MS_PER_H,
+                Metric.RADIO_ACTIVE_MS_PER_H,
+                Metric.MOBILE_BYTES_PER_H,
+                Metric.WIFI_BYTES_PER_H,
+                Metric.FGS_TO_FOREGROUND_RATIO -> action.packageName != null
+                // deviceValue plus the plugged-at-full observation above.
+                Metric.SCREEN_OFF_PCT_PER_H,
+                Metric.SCREEN_ON_PCT_PER_H,
+                Metric.DEEP_DOZE_SHARE,
+                Metric.SCREEN_OFF_DEEP_SLEEP_SHARE,
+                Metric.TEMPERATURE_C,
+                Metric.PLUGGED_AT_FULL_MS -> action.packageName == null
+                else -> false
+            }
+        }?.let { return it }
         val explicit = action.findingKey.split(':').getOrNull(2)
         Metric.entries.firstOrNull { it.name == explicit }?.let { return it }
         return when (action.findingKey.substringBefore(':')) {
