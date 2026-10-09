@@ -22,6 +22,7 @@ import kotlinx.serialization.json.Json
 /**
  * [InsightRepository.report] carries only ACTIVE findings, so dismissed or not-a-problem keys never
  * reach [select]. Cooldown and the notified keys still in the report persist in [store].
+ * The posted key is tracked separately until its notification is replaced or cancelled.
  */
 class InsightNotificationPolicy(private val store: KeyValueStore, private val nowMs: () -> Long) {
     fun select(report: InsightReport): Finding? {
@@ -41,10 +42,20 @@ class InsightNotificationPolicy(private val store: KeyValueStore, private val no
         }
     }
 
+    fun shouldCancel(report: InsightReport): Boolean {
+        val postedKey = store.getString(POSTED_KEY) ?: return false
+        return report.headline?.key != postedKey && report.findings.none { it.key == postedKey }
+    }
+
+    fun markCancelled() {
+        store.edit(mapOf(POSTED_KEY to null))
+    }
+
     fun markNotified(finding: Finding) {
         store.edit(
             mapOf(
                 LAST_AT to nowMs().toString(),
+                POSTED_KEY to finding.key,
                 NOTIFIED_KEYS to Json.encodeToString(notifiedKeys() + finding.key),
                 LAST_KEY to null,
             ),
@@ -59,6 +70,7 @@ class InsightNotificationPolicy(private val store: KeyValueStore, private val no
         const val COOLDOWN_MS = 24L * 60 * 60 * 1000
         const val LAST_AT = "notify_last_at"
         const val LAST_KEY = "notify_last_key"
+        const val POSTED_KEY = "notify_posted_key"
         const val NOTIFIED_KEYS = "notify_keys"
     }
 }
@@ -71,6 +83,10 @@ class InsightNotifier(
 ) {
     fun maybeNotify(report: InsightReport) {
         try {
+            if (policy.shouldCancel(report)) {
+                context.getSystemService(NotificationManager::class.java).cancel(NOTIFICATION_ID)
+                policy.markCancelled()
+            }
             val finding = policy.select(report) ?: return
             if (!canPost()) return
             ensureChannel()

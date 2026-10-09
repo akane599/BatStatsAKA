@@ -10,7 +10,9 @@ import com.akane.voltwise.battery.insights.model.Subject
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class InsightNotifierPolicyTest {
@@ -26,6 +28,62 @@ class InsightNotifierPolicyTest {
 
     private fun report(vararg findings: Finding, headline: Finding? = null) =
         InsightReport(now, findings.toList(), headline)
+
+    @Test
+    fun postedFindingLeavingReportRequestsCancellationDuringCooldown() {
+        policy.markNotified(finding("a"))
+        now += 1
+        val withoutPostedFinding = report(finding("b"))
+        assertNull(policy.select(withoutPostedFinding))
+
+        assertTrue("The notification must be cancelled when its finding leaves the report", policy.shouldCancel(withoutPostedFinding))
+    }
+
+    @Test
+    fun postedFindingStillInReportDoesNotRequestCancellation() {
+        val posted = finding("a")
+        policy.markNotified(posted)
+
+        assertFalse(policy.shouldCancel(report(posted)))
+        assertFalse(policy.shouldCancel(report(finding("b"), headline = posted)))
+        assertFalse(policy.shouldCancel(report(finding("a", Severity.MEDIUM, Confidence.LOW))))
+    }
+
+    @Test
+    fun emptyReportRequestsCancellationOnlyUntilItIsHandled() {
+        policy.markNotified(finding("a"))
+        val restarted = InsightNotificationPolicy(store) { now }
+        assertTrue(restarted.shouldCancel(report()))
+        assertTrue("Keep requesting cancellation until the manager succeeds", restarted.shouldCancel(report()))
+
+        restarted.markCancelled()
+
+        assertNull(store.getString(InsightNotificationPolicy.POSTED_KEY))
+        assertFalse(restarted.shouldCancel(report()))
+        assertFalse(InsightNotificationPolicy(store) { now }.shouldCancel(report(finding("b"))))
+        assertEquals(now.toString(), store.getString(InsightNotificationPolicy.LAST_AT))
+        assertEquals(setOf("a"), storedKeys())
+        assertNull(restarted.select(report(finding("b"))))
+    }
+
+    @Test
+    fun replacementNotificationTracksOnlyTheLatestPostedFinding() {
+        policy.markNotified(finding("a"))
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        policy.markNotified(finding("b"))
+        val restarted = InsightNotificationPolicy(store) { now }
+
+        assertEquals("b", store.getString(InsightNotificationPolicy.POSTED_KEY))
+        assertFalse(restarted.shouldCancel(report(finding("b"))))
+        assertTrue(restarted.shouldCancel(report(finding("a"))))
+    }
+
+    @Test
+    fun noPostedNotificationDoesNotRequestCancellation() {
+        assertFalse(policy.shouldCancel(report()))
+        assertFalse(policy.shouldCancel(report(finding("a"))))
+        assertEquals(0, store.writes)
+    }
 
     @Test
     fun highSeverityMediumConfidenceIsSelected() {
