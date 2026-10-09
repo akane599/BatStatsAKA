@@ -44,8 +44,11 @@ class DefaultInsightsRepository(
     override val actions = actionRepository.actions
     override val lastAnalyzedAt = insights.lastAnalyzedAt
     override val privileged: Flow<Boolean?> = flow {
-        emit(null)
-        shellRunner.detectMode()
+        // NONE is also ShellRunner's initial value; keep pending applies unknown during detection.
+        if (shellRunner.access.value == ShellRunner.Mode.NONE) {
+            emit(null)
+            shellRunner.detectMode()
+        }
         emitAll(shellRunner.access.map { it == ShellRunner.Mode.SHIZUKU || it == ShellRunner.Mode.ROOT })
     }
     override val eligibleSessionCount = sessionDao.filteredSessions(null, "", Int.MAX_VALUE).map { sessions ->
