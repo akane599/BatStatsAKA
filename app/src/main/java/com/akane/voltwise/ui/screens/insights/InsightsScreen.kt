@@ -106,8 +106,12 @@ fun InsightsScreen(
     )
 }
 
-/** Codes the screen shows as its error notice rather than as a snackbar. */
+/** Codes the screen can show as its error notice rather than as a snackbar. */
 private val NOTICE_CODES = setOf(InsightMessageCode.ANALYSIS_FAILED, InsightMessageCode.FEEDBACK_FAILED)
+
+/** Codes to keep out of the snackbar: a notice code only while the screen shows it as [error]; any other result shows. */
+internal fun silentResultCodes(error: InsightMessageCode?): Set<InsightMessageCode> =
+    setOfNotNull(error).intersect(NOTICE_CODES)
 
 /**
  * Shows the ViewModel's held [result] in [snackbar] (codes in [silentCodes] skip it), then consumes it with
@@ -203,7 +207,7 @@ fun InsightsContent(
     val column = Arrangement.spacedBy(spacing.sm)
     val snackbar = remember { SnackbarHostState() }
     // Analysis and feedback failures already stand as the error notice on screen: consumed without a snackbar.
-    ResultSnackbar(snackbar, state.apply.lastResult, onEvent, silentCodes = NOTICE_CODES)
+    ResultSnackbar(snackbar, state.apply.lastResult, onEvent, silentCodes = silentResultCodes(state.error))
     val busy = state.apply.working
     val open: (String) -> Unit = { key -> onEvent(InsightsEvent.OpenFinding(key)) }
     val apply: (String, RecommendationState) -> Unit = { key, rec -> onEvent(InsightsEvent.RequestApply(key, rec.action)) }
