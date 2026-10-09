@@ -396,15 +396,53 @@ class InsightActionRepositoryTest {
     }
 
     @Test fun sdkGatingAndLegacyOp() = runTest {
-        val f = Fixture(); f.inspector.sdkInt = 26
-        assertEquals(ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK), f.apply(ActionType.STANDBY_BUCKET_RARE))
-        assertTrue(f.commands.isEmpty())
-        f.reply("No operations.", "", "RUN_IN_BACKGROUND: ignore")
+        for (sdk in listOf(26, 27)) {
+            for (type in listOf(ActionType.RESTRICT_BACKGROUND, ActionType.STANDBY_BUCKET_RARE, ActionType.STANDBY_BUCKET_RESTRICTED)) {
+                val f = Fixture(); f.inspector.sdkInt = sdk
+                f.reply("No operations.", "", "RUN_IN_BACKGROUND: ignore")
+                assertEquals("$type API $sdk", ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK), f.apply(type))
+                assertTrue("Unsupported fixes must not issue shell commands", f.commands.isEmpty())
+                assertTrue("Unsupported fixes must not create journal rows", f.dao.rows.value.isEmpty())
+            }
+        }
+        val f = Fixture(); f.inspector.sdkInt = 28
+        f.reply("No operations.", "", "RUN_ANY_IN_BACKGROUND: ignore")
         assertEquals(ActionResult.Applied(1), f.apply())
-        f.inspector.sdkInt = 35
-        f.reply("RUN_IN_BACKGROUND: ignore", "", "RUN_IN_BACKGROUND: allow")
-        assertEquals(ActionResult.Reverted, f.repo.undo(1))
-        assertEquals(PrivilegedCommand.SetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND, AppOpMode.ALLOW), f.commands[4])
+        assertEquals(PrivilegedCommand.SetBackgroundOp(pkg, BackgroundOp.RUN_ANY_IN_BACKGROUND, AppOpMode.IGNORE), f.commands[1])
+    }
+
+    @Test fun legacyBackgroundJournalRestoresRecordedOpOnApi26AndAfterUpgrade() = runTest {
+        for (sdk in listOf(26, 35)) {
+            val f = Fixture(); f.inspector.sdkInt = sdk
+            f.dao.insertAction(InsightActionEntity(
+                findingKey = "finding", type = ActionType.RESTRICT_BACKGROUND.name,
+                packageName = pkg, uid = uid, userId = 0, status = APPLIED,
+                priorStateVersion = 1, priorState = "RUN_IN_BACKGROUND:ALLOW",
+                targetState = "RUN_IN_BACKGROUND:IGNORE", createdAt = 1, appliedAt = 2,
+            ))
+            f.reply("RUN_IN_BACKGROUND: ignore", "", "RUN_IN_BACKGROUND: allow")
+            assertEquals(ActionResult.Reverted, f.repo.undo(1))
+            assertEquals(listOf(
+                PrivilegedCommand.GetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND),
+                PrivilegedCommand.SetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND, AppOpMode.ALLOW),
+                PrivilegedCommand.GetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND),
+            ), f.commands)
+            assertEquals(REVERTED, f.row().status)
+        }
+    }
+
+    @Test fun legacyBackgroundJournalReconcilesOnApi26WithoutWriting() = runTest {
+        val f = Fixture(); f.inspector.sdkInt = 26
+        f.dao.insertAction(InsightActionEntity(
+            findingKey = "finding", type = ActionType.RESTRICT_BACKGROUND.name,
+            packageName = pkg, uid = uid, userId = 0, status = PREPARED,
+            priorStateVersion = 1, priorState = "RUN_IN_BACKGROUND:ALLOW",
+            targetState = "RUN_IN_BACKGROUND:IGNORE", createdAt = 1,
+        ))
+        f.reply("RUN_IN_BACKGROUND: ignore")
+        f.repo.reconcile()
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(listOf(PrivilegedCommand.GetBackgroundOp(pkg, BackgroundOp.RUN_IN_BACKGROUND)), f.commands)
     }
 
     @Test fun preflightNoAccessWritesNoRow() = runTest {
