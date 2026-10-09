@@ -18,6 +18,7 @@ import com.akane.voltwise.battery.insights.model.ActionType
 import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.model.Recommendation
+import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.util.ShellRunner
 import java.time.Clock
 import kotlinx.coroutines.CompletableDeferred
@@ -38,6 +39,97 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultInsightsRepositoryTest {
+    @Test fun highBatteryAlertEnabledAtOrAfterReportIsAppliedAndUnavailableWithoutUndo() {
+        val finding = insightFinding().copy(
+            type = FindingType.CHARGING_AT_FULL,
+            subject = Subject.Device,
+            recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
+        )
+        for (appliedAt in listOf(10L, 11L)) {
+            val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+                type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
+                packageName = null,
+                uid = null,
+                appliedAt = appliedAt,
+            )
+            val state = finding.toInsightState(privileged = false, listOf(row), generatedAtMs = 10)
+            val recommendation = state.recommendations.single()
+            assertTrue("alert enabled at $appliedAt must count as applied", recommendation.alreadyApplied)
+            assertFalse("enabled alert must not be offered again", recommendation.available)
+            assertFalse("one-shot alert must not gain Undo", actionStates(listOf(row), listOf(state)).single().undoable)
+        }
+    }
+
+    @Test fun highBatteryAlertEnabledBeforeNewReportRemainsAvailable() {
+        val finding = insightFinding().copy(
+            type = FindingType.CHARGING_AT_FULL,
+            subject = Subject.Device,
+            recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
+        )
+        val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+            type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
+            packageName = null,
+            uid = null,
+            createdAt = 11,
+            appliedAt = 9,
+        )
+        val recommendation = finding.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
+        assertFalse("old alert row must not block a newer report", recommendation.alreadyApplied)
+        assertTrue("new report may offer enabling the alert again", recommendation.available)
+    }
+
+    @Test fun oneShotHighBatteryAlertUsesCreatedAtWhenAppliedAtIsMissing() {
+        val finding = insightFinding().copy(
+            type = FindingType.HOT_CHARGING,
+            subject = Subject.Device,
+            recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
+        )
+        for (createdAt in listOf(9L, 10L, 11L)) {
+            val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+                type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
+                packageName = null,
+                uid = null,
+                createdAt = createdAt,
+                appliedAt = null,
+            )
+            val recommendation = finding.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
+            assertEquals("one-shot alert uses creation time $createdAt", createdAt >= 10, recommendation.alreadyApplied)
+            assertEquals("old alert creation time must not block a newer report", createdAt < 10, recommendation.available)
+        }
+    }
+
+    @Test fun oneShotHighBatteryAlertOnlyAppliesToMatchingDeviceFinding() {
+        val finding = insightFinding().copy(
+            type = FindingType.CHARGING_AT_FULL,
+            subject = Subject.Device,
+            recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
+        )
+        val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+            type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
+            appliedAt = 11,
+        )
+        for (unmatched in listOf(finding.copy(key = "other"), finding.copy(subject = insightFinding().subject))) {
+            val recommendation = unmatched.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
+            assertFalse("one-shot alert must belong to this Device finding", recommendation.alreadyApplied)
+            assertTrue("unmatched one-shot alert must not block the recommendation", recommendation.available)
+        }
+    }
+
+    @Test fun oneShotForceStopRemainsRepeatableAndUnavailableForUndo() {
+        val finding = insightFinding().copy(
+            recommendations = listOf(Recommendation(ActionType.FORCE_STOP, false, true)),
+        )
+        val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+            type = ActionType.FORCE_STOP.name,
+            appliedAt = 11,
+        )
+        val state = finding.toInsightState(true, listOf(row), generatedAtMs = 10)
+        val recommendation = state.recommendations.single()
+        assertFalse("one-shot force-stop must not count as a lasting fix", recommendation.alreadyApplied)
+        assertTrue("force-stop must remain repeatable", recommendation.available)
+        assertFalse("one-shot force-stop must not gain Undo", actionStates(listOf(row), listOf(state)).single().undoable)
+    }
+
     @Test fun dozeRemovalAfterStoredReportIsAppliedAndUnavailable() {
         val finding = insightFinding().copy(
             type = FindingType.DOZE_WHITELISTED_DRAINER,
