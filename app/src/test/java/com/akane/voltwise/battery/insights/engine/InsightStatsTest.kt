@@ -31,6 +31,22 @@ class InsightStatsTest {
         assertNull(baseline.robustZ(10.0, 0.0))
     }
 
+    @Test fun nearFlatBaselineDoesNotAmplifyZComparedWithFlatBaseline() {
+        val nearFlat = RobustBaseline.of(listOf(0.0, 0.0, 0.2, 0.25, 0.33).map { TimedValue(0, it) }, 0, 100.0)!!
+        val flat = RobustBaseline.of(List(5) { TimedValue(0, 0.0) }, 0, 100.0)!!
+        val z = nearFlat.robustZ(35.0, 30.0)!!
+        assertTrue("Near-flat z ($z) must not exceed flat z", z <= flat.robustZ(35.0, 30.0)!! + 1e-9)
+        assertEquals(3.48, z, 1e-9)
+        assertEquals(3.0, nearFlat.robustZ(nearFlat.median + 30.0, 30.0)!!, 1e-9)
+    }
+
+    @Test fun wideBaselineStillUsesMadScale() {
+        val baseline = RobustBaseline.of(listOf(0.0, 20.0, 40.0, 60.0, 80.0).map { TimedValue(0, it) }, 0, 100.0)!!
+        assertEquals(20.0, baseline.mad, 0.0)
+        assertTrue(RobustBaseline.MAD_SCALE * baseline.mad > 30.0 / RobustBaseline.Z_THRESHOLD)
+        assertEquals((100.0 - baseline.median) / (RobustBaseline.MAD_SCALE * baseline.mad), baseline.robustZ(100.0, 30.0)!!, 1e-9)
+    }
+
     @Test fun emptySingletonNonFiniteAndVeryOldSeriesAreDefined() {
         assertNull(RobustBaseline.of(emptyList(), 0, 1.0))
         assertNull(RobustBaseline.of(listOf(TimedValue(0, Double.NaN)), 0, 1.0))
