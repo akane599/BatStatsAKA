@@ -16,31 +16,50 @@ import com.akane.voltwise.battery.insights.model.Finding
 import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.ui.navigation.Destinations
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
- * Pure decision logic. [InsightRepository.report] carries only ACTIVE findings, so dismissed or
- * not-a-problem keys never reach [select]. Cooldown and last notified key persist in [store].
+ * [InsightRepository.report] carries only ACTIVE findings, so dismissed or not-a-problem keys never
+ * reach [select]. Cooldown and the notified keys still in the report persist in [store].
  */
 class InsightNotificationPolicy(private val store: KeyValueStore, private val nowMs: () -> Long) {
     fun select(report: InsightReport): Finding? {
+        val findings = listOfNotNull(report.headline) + report.findings
+        val savedKeys = notifiedKeys()
+        // Prune even during cooldown; retaining only report keys bounds the set to 12 findings.
+        val notifiedKeys = savedKeys.intersect(findings.map { it.key }.toSet())
+        if (notifiedKeys != savedKeys || store.getString(LAST_KEY) != null) {
+            store.edit(mapOf(NOTIFIED_KEYS to Json.encodeToString(notifiedKeys), LAST_KEY to null))
+        }
         val lastAt = store.getString(LAST_AT)?.toLongOrNull()
         val now = nowMs()
         // A clock set back must not silence notifications for longer than one cooldown.
         if (lastAt != null && now - lastAt in 0 until COOLDOWN_MS) return null
-        val lastKey = store.getString(LAST_KEY)
-        return (listOfNotNull(report.headline) + report.findings).firstOrNull {
-            it.severity == Severity.HIGH && it.confidence >= Confidence.MEDIUM && it.key != lastKey
+        return findings.firstOrNull {
+            it.severity == Severity.HIGH && it.confidence >= Confidence.MEDIUM && it.key !in notifiedKeys
         }
     }
 
     fun markNotified(finding: Finding) {
-        store.edit(mapOf(LAST_AT to nowMs().toString(), LAST_KEY to finding.key))
+        store.edit(
+            mapOf(
+                LAST_AT to nowMs().toString(),
+                NOTIFIED_KEYS to Json.encodeToString(notifiedKeys() + finding.key),
+                LAST_KEY to null,
+            ),
+        )
     }
+
+    private fun notifiedKeys(): Set<String> =
+        store.getString(NOTIFIED_KEYS)?.let { Json.decodeFromString<Set<String>>(it) }.orEmpty() +
+            listOfNotNull(store.getString(LAST_KEY))
 
     companion object {
         const val COOLDOWN_MS = 24L * 60 * 60 * 1000
         const val LAST_AT = "notify_last_at"
         const val LAST_KEY = "notify_last_key"
+        const val NOTIFIED_KEYS = "notify_keys"
     }
 }
 
