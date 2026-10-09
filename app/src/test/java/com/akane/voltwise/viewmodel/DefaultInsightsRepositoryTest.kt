@@ -16,6 +16,7 @@ import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.insights.actions.TargetInspector
 import com.akane.voltwise.battery.insights.model.ActionType
 import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.model.Recommendation
 import com.akane.voltwise.battery.util.ShellRunner
 import java.time.Clock
@@ -37,6 +38,54 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultInsightsRepositoryTest {
+    @Test fun dozeRemovalAfterStoredReportIsAppliedAndUnavailable() {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        val report = InsightReport(10, listOf(finding), finding)
+        val row = insightAction().copy(
+            type = ActionType.REMOVE_DOZE_WHITELIST.name,
+            priorState = "PRESENT",
+            targetState = "ABSENT",
+            createdAt = report.generatedAtMs + 1,
+            appliedAt = report.generatedAtMs + 2,
+        )
+
+        val recommendation = report.findings.single().toInsightState(privileged = true, listOf(row), report.generatedAtMs).recommendations.single()
+        assertTrue("removal after the stored report must count as applied", recommendation.alreadyApplied)
+        assertFalse("removal after the stored report must not be offered again", recommendation.available)
+    }
+
+    @Test fun unknownDozeRemovalUsesCreatedAtWhenAppliedAtIsMissing() {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        val report = InsightReport(10, listOf(finding), finding)
+        for (createdAt in listOf(9L, 10L, 11L)) {
+            val row = insightAction(status = InsightActionStatus.UNKNOWN).copy(
+                type = ActionType.REMOVE_DOZE_WHITELIST.name,
+                createdAt = createdAt,
+                appliedAt = null,
+            )
+            val recommendation = finding.toInsightState(true, listOf(row), report.generatedAtMs).recommendations.single()
+            assertEquals("UNKNOWN removal uses creation time $createdAt", createdAt >= report.generatedAtMs, recommendation.alreadyApplied)
+            assertEquals("only a newer report may offer removal again", createdAt < report.generatedAtMs, recommendation.available)
+        }
+    }
+
+    @Test fun dozeRemovalAtReportTimeStillCountsAsApplied() {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        val row = insightAction().copy(type = ActionType.REMOVE_DOZE_WHITELIST.name, appliedAt = 10)
+        val recommendation = finding.toInsightState(true, listOf(row), generatedAtMs = 10).recommendations.single()
+        assertTrue("equal timestamps do not prove removal stopped holding", recommendation.alreadyApplied)
+        assertFalse(recommendation.available)
+    }
+
     @Test fun liveDozeWhitelistFindingAllowsRemovalAgainDespiteUndoableRow() {
         val finding = insightFinding().copy(
             type = FindingType.DOZE_WHITELISTED_DRAINER,
@@ -49,11 +98,11 @@ class DefaultInsightsRepositoryTest {
                 targetState = "ABSENT",
             )
 
-            val recommendation = finding.toInsightState(privileged = true, listOf(row)).recommendations.single()
+            val recommendation = finding.toInsightState(privileged = true, listOf(row), generatedAtMs = 10).recommendations.single()
             assertTrue("live whitelist must keep removal available despite $status", recommendation.available)
             assertFalse("live whitelist proves $status removal no longer holds", recommendation.alreadyApplied)
 
-            val withoutPrivilege = finding.toInsightState(privileged = false, listOf(row)).recommendations.single()
+            val withoutPrivilege = finding.toInsightState(privileged = false, listOf(row), generatedAtMs = 10).recommendations.single()
             assertFalse("removal still requires privileged access", withoutPrivilege.available)
             assertFalse("lack of privilege must not claim removal is applied", withoutPrivilege.alreadyApplied)
         }
@@ -64,9 +113,11 @@ class DefaultInsightsRepositoryTest {
             recommendations = listOf(Recommendation(ActionType.RESTRICT_BACKGROUND, true, true)),
         )
 
-        val recommendation = finding.toInsightState(privileged = true, listOf(insightAction())).recommendations.single()
-        assertFalse("applied background restriction must remain unavailable", recommendation.available)
-        assertTrue("background restriction must retain applied state", recommendation.alreadyApplied)
+        for (generatedAtMs in listOf(1L, 2L, 10L)) {
+            val recommendation = finding.toInsightState(privileged = true, listOf(insightAction()), generatedAtMs).recommendations.single()
+            assertFalse("applied background restriction must remain unavailable", recommendation.available)
+            assertTrue("background restriction must retain applied state", recommendation.alreadyApplied)
+        }
     }
 
     @Test fun establishedPrivilegeIsImmediateOnEveryCollectionWithoutWaitingForStaleProbe() = runTest {

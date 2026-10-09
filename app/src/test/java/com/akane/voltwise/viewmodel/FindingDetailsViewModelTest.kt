@@ -51,6 +51,33 @@ class FindingDetailsViewModelTest {
         assertEquals(false, restriction?.available)
     }
 
+    @Test fun dozeRemovalAfterReportDisablesFixUntilNewerAnalysis() = runTest {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        val report = InsightReport(10, listOf(finding), finding)
+        source.report.value = report
+        val vm = start()
+        assertTrue(checkNotNull(vm.state.value.finding).recommendations.single().available)
+        source.actions.value = listOf(insightAction().copy(
+            type = ActionType.REMOVE_DOZE_WHITELIST.name, createdAt = 11, appliedAt = 12,
+        ))
+        runCurrent()
+
+        val recommendation = checkNotNull(vm.state.value.finding).recommendations.single()
+        assertTrue("details must show a post-report removal as applied", recommendation.alreadyApplied)
+        assertFalse("details must not offer the same removal again", recommendation.available)
+        assertTrue("the removal remains available to undo", vm.state.value.relatedActions.single().undoable)
+        assertSame(report, source.report.value)
+
+        source.report.value = report.copy(generatedAtMs = 13)
+        runCurrent()
+        val refreshed = checkNotNull(vm.state.value.finding).recommendations.single()
+        assertTrue("a newer live whitelist finding permits removal again", refreshed.available)
+        assertFalse(refreshed.alreadyApplied)
+    }
+
     @Test fun relatedActionsMatchBothUidAndPackageAcrossProfiles() = runTest {
         val personal = insightAction()
         val work = insightAction(8).copy(uid = 1_010_042, userId = 10)
