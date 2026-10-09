@@ -103,8 +103,8 @@ class InsightActionRepository(
         val uid = row.uid ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
         val refusal = validate(pkg, uid, restoring = true)
         if (refusal == RefusalCode.NOT_INSTALLED || refusal == RefusalCode.UID_MISMATCH) {
-            dao.updateAction(row.copy(status = REVERTED, revertedAt = clock()))
-            return@withLock ActionResult.Reverted
+            dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+            return@withLock ActionResult.ChangedExternally(null)
         }
         if (refusal != null) return@withLock ActionResult.Refused(refusal)
         val current = read(operation, pkg)
@@ -149,7 +149,7 @@ class InsightActionRepository(
             }
             val refusal = validate(pkg, uid, restoring = true)
             if (refusal == RefusalCode.NOT_INSTALLED || refusal == RefusalCode.UID_MISMATCH) {
-                dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
+                dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
                 continue
             }
             if (refusal != null) {

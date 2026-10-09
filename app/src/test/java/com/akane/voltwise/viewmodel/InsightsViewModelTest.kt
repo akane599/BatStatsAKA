@@ -251,6 +251,7 @@ class InsightsViewModelTest {
             ActionResult.Unknown to InsightMessageCode.UNKNOWN,
             ActionResult.Reverted to InsightMessageCode.REVERTED,
             ActionResult.ChangedExternally("private shell text") to InsightMessageCode.CHANGED_EXTERNALLY,
+            ActionResult.ChangedExternally(null) to InsightMessageCode.CHANGED_EXTERNALLY,
             ActionResult.OneShot(3) to InsightMessageCode.ONE_SHOT,
         ) + FailureCode.entries.map { ActionResult.Failed(it) to InsightMessageCode.valueOf(it.name) } +
             RefusalCode.entries.map { ActionResult.Refused(it) to InsightMessageCode.valueOf(it.name) }

@@ -135,6 +135,48 @@ class InsightActionRepositoryTest {
         f.reply(system, "Added: $pkg", "$system\nuser,$pkg,$uid")
         assertEquals(ActionResult.Reverted, f.repo.undo(1))
         assertEquals(PrivilegedCommand.AddDozeWhitelist(pkg), f.commands[4])
+        assertEquals(REVERTED, f.row().status)
+        assertNotNull(f.row().revertedAt)
+        assertNull(f.row().message)
+    }
+
+    @Test fun dozeUndoAfterUninstallOrReinstallSettlesAsChangedExternallyWithoutCommands() = runTest {
+        for (installed in listOf(uid + 1, null)) {
+            val f = Fixture()
+            f.reply("system,android,1000\nuser,$pkg,$uid", "Removed: $pkg", "system,android,1000")
+            assertEquals(ActionResult.Applied(1), f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+            assertEquals("PRESENT", f.row().priorState)
+            assertEquals("ABSENT", f.row().targetState)
+            f.inspector.installed = installed
+
+            assertEquals("nothing was restored for installed uid $installed", ActionResult.ChangedExternally(null), f.repo.undo(1))
+            assertEquals(REVERTED, f.row().status)
+            assertNotNull(f.row().revertedAt)
+            assertEquals("CHANGED_EXTERNALLY", f.row().message)
+            assertEquals(3, f.commands.size)
+            assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+            assertEquals(3, f.commands.size)
+        }
+    }
+
+    @Test fun dozeReconcileAfterUninstallOrReinstallRecordsExternalChangeWithoutCommands() = runTest {
+        for (installed in listOf(uid + 1, null)) {
+            for (status in listOf(PREPARED, UNKNOWN)) {
+                val f = Fixture()
+                f.reply("system,android,1000\nuser,$pkg,$uid", "Removed: $pkg", "system,android,1000")
+                assertEquals(ActionResult.Applied(1), f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+                f.dao.updateAction(f.row().copy(status = status, message = null))
+                f.inspector.installed = installed
+
+                f.repo.reconcile()
+
+                assertEquals(REVERTED, f.row().status)
+                assertNotNull(f.row().revertedAt)
+                assertEquals("CHANGED_EXTERNALLY", f.row().message)
+                assertEquals(3, f.commands.size)
+                assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+            }
+        }
     }
 
     @Test fun reapplyAfterExternalDozeChangeClosesOldRowBeforeWritingAndPreventsOldUndo() = runTest {
@@ -734,15 +776,17 @@ class InsightActionRepositoryTest {
             val f = Fixture(); f.reply("active", "", "rare")
             f.apply(ActionType.STANDBY_BUCKET_RARE)
             f.inspector.installed = installed
-            assertEquals(ActionResult.Reverted, f.repo.undo(1))
+            assertEquals(ActionResult.ChangedExternally(null), f.repo.undo(1))
             assertEquals(REVERTED, f.row().status)
             assertNotNull(f.row().revertedAt)
+            assertEquals("CHANGED_EXTERNALLY", f.row().message)
             assertEquals(3, f.commands.size)
             for (status in listOf(PREPARED, UNKNOWN)) {
-                f.dao.updateAction(f.row().copy(status = status, revertedAt = null))
+                f.dao.updateAction(f.row().copy(status = status, revertedAt = null, message = null))
                 f.repo.reconcile()
                 assertEquals(REVERTED, f.row().status)
                 assertNotNull(f.row().revertedAt)
+                assertEquals("CHANGED_EXTERNALLY", f.row().message)
                 assertEquals(3, f.commands.size)
             }
         }
