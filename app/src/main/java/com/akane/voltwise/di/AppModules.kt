@@ -228,8 +228,9 @@ val appModule = module {
         DefaultAppDetailsRepository(DefaultAppsRepository(androidContext(), get(), get(), get(), get()), get(), insights)
     }
 
-    viewModel { InsightsViewModel(get(), get(), get()) }
-    viewModel { FindingDetailsViewModel(get(), get(), get()) }
+    single { com.akane.voltwise.viewmodel.InsightApplyResults() }
+    viewModel { InsightsViewModel(get(), get(), get(), get()) }
+    viewModel { FindingDetailsViewModel(get(), get(), get(), get()) }
     viewModel {
         NowViewModel(get(), get(), get(), savedStateHandle = get())
     }

@@ -15,8 +15,9 @@ class InsightsViewModel(
     private val source: InsightsRepository,
     applicationScope: CoroutineScope,
     savedStateHandle: SavedStateHandle = SavedStateHandle(),
+    applyResults: InsightApplyResults,
 ) : ViewModel() {
-    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope)
+    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope, applyResults)
     private val analyzing = MutableStateFlow(false)
     private val error = MutableStateFlow<InsightMessageCode?>(null)
     val effects = flow.effects
@@ -69,12 +70,27 @@ class InsightsViewModel(
     }
 }
 
-/** Saved primitives only; restoring a dialog never executes anything. Action work outlives the screen. */
+/** Application-owned latest unconsumed outcome, shared by both Insights destinations. */
+class InsightApplyResults {
+    private val mutableResult = MutableStateFlow<InsightActionMessage?>(null)
+    val latest = mutableResult.asStateFlow()
+
+    internal fun publish(result: InsightActionMessage) {
+        mutableResult.value = result
+    }
+
+    internal fun consume(result: InsightActionMessage?) {
+        mutableResult.compareAndSet(result, null)
+    }
+}
+
+/** Saved dialog primitives only; restoring a dialog never executes anything. Action work outlives the screen. */
 internal class InsightApplyFlow(
     private val source: InsightsRepository,
     private val applicationScope: CoroutineScope,
     private val saved: SavedStateHandle,
     observationScope: CoroutineScope,
+    private val results: InsightApplyResults,
 ) {
     private val events = Channel<InsightUiEffect>(Channel.UNLIMITED)
     val effects: Flow<InsightUiEffect> = events.receiveAsFlow()
@@ -84,15 +100,14 @@ internal class InsightApplyFlow(
             saved.get<String>(PENDING_KEY)?.let { key -> action?.let { PendingInsightApply(key, it) } }
         },
         selectedKey = saved[SELECTED_KEY],
-        lastResult = saved.get<String>(RESULT_CODE)?.let { name ->
-            InsightMessageCode.entries.firstOrNull { it.name == name }?.let { code ->
-                InsightActionMessage(code, saved[RESULT_ACTION_ID])
-            }
-        },
+        lastResult = results.latest.value,
     ))
     val state = mutableState.asStateFlow()
 
     init {
+        observationScope.launch {
+            results.latest.collect { result -> mutableState.update { it.copy(lastResult = result) } }
+        }
         // Keep saved dialogs current even while the screen has no state collector.
         observationScope.launch {
             combine(source.report, source.actions, source.privileged) { report, actions, privileged ->
@@ -116,7 +131,7 @@ internal class InsightApplyFlow(
                 pending(PendingInsightApply(event.key, event.action))
             }
             InsightsEvent.CancelApply -> pending(null)
-            InsightsEvent.ResultShown -> saveResult(null)
+            InsightsEvent.ResultShown -> results.consume(state.value.lastResult)
             InsightsEvent.ConfirmApply -> confirm()
             is InsightsEvent.Undo -> runAction { source.undo(event.actionId) }
             is InsightsEvent.OpenFinding -> {
@@ -191,7 +206,7 @@ internal class InsightApplyFlow(
                     }))
                     is ActionResult.OneShot -> message(InsightActionMessage(InsightMessageCode.ONE_SHOT, result.actionId))
                     is ActionResult.OpenSettings -> {
-                        saveResult(null)
+                        results.consume(state.value.lastResult)
                         events.trySend(InsightUiEffect.OpenSettings(result.spec))
                     }
                 }
@@ -207,19 +222,11 @@ internal class InsightApplyFlow(
     }
 
     fun message(result: InsightActionMessage) {
-        saveResult(result)
+        results.publish(result)
         events.trySend(InsightUiEffect.Message(result))
     }
 
-    private fun saveResult(result: InsightActionMessage?) {
-        saved[RESULT_CODE] = result?.code?.name
-        saved[RESULT_ACTION_ID] = result?.actionId
-        mutableState.update { it.copy(lastResult = result) }
-    }
-
     private companion object {
-        const val RESULT_CODE = "insights.result.code"
-        const val RESULT_ACTION_ID = "insights.result.actionId"
         const val PENDING_KEY = "insights.pending.key"
         const val PENDING_ACTION = "insights.pending.action"
         const val SELECTED_KEY = "key"

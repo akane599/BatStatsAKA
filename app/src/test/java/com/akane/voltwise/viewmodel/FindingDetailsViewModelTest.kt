@@ -19,11 +19,12 @@ import org.junit.Test
 class FindingDetailsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val source = FakeInsightsRepository()
+    private val results = InsightApplyResults()
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun cleanup() = Dispatchers.resetMain()
 
     private fun TestScope.start(saved: SavedStateHandle = SavedStateHandle(mapOf("key" to "finding"))): FindingDetailsViewModel {
-        val vm = FindingDetailsViewModel(source, backgroundScope, saved)
+        val vm = FindingDetailsViewModel(source, backgroundScope, saved, results)
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()
         return vm
@@ -164,7 +165,7 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
             override suspend fun dismiss(key: String) = throw IllegalStateException("not user-facing")
             override suspend fun notAProblem(key: String) = throw IllegalStateException("not user-facing")
         }
-        val vm = FindingDetailsViewModel(failing, backgroundScope, SavedStateHandle(mapOf("key" to "finding")))
+        val vm = FindingDetailsViewModel(failing, backgroundScope, SavedStateHandle(mapOf("key" to "finding")), results)
         val effects = mutableListOf<InsightUiEffect>()
         backgroundScope.launch { vm.effects.collect { effects += it } }
         vm.onEvent(InsightsEvent.Dismiss("finding"))
@@ -197,7 +198,7 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
 
     @Test fun pendingIsInvalidatedWithoutAScreenCollector() = runTest {
         val saved = SavedStateHandle(mapOf("key" to "finding"))
-        val vm = FindingDetailsViewModel(source, backgroundScope, saved)
+        val vm = FindingDetailsViewModel(source, backgroundScope, saved, results)
         vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
         runCurrent()
         assertNotNull(saved.get<String>("insights.pending.key"))
@@ -229,7 +230,7 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         assertTrue(source.applied.isEmpty())
     }
 
-    @Test fun latestUnconsumedResultRestoresAndConsumptionIsSaved() = runTest {
+    @Test fun latestUnconsumedResultSurvivesRecreationAndConsumptionIsShared() = runTest {
         val saved = SavedStateHandle(mapOf("key" to "finding"))
         val vm = start(saved)
         vm.onEvent(InsightsEvent.Undo(7))
@@ -245,15 +246,49 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         restored.onEvent(InsightsEvent.ResultShown)
         runCurrent()
         assertNull(restored.state.value.apply.lastResult)
+        assertNull("consumption must clear the original observer too", vm.state.value.apply.lastResult)
+        assertFalse("results must not be duplicated in saved state", saved.keys().any { it.startsWith("insights.result.") })
         assertNull(start(SavedStateHandle(restoredSaved.keys().associateWith { restoredSaved.get<Any?>(it) })).state.value.apply.lastResult)
         assertEquals("restoring or consuming must not replay actions", listOf(7L, 8L), source.undone)
+    }
+
+    @Test fun refusedApplyAfterDetailsIsClearedIsShownOnceOnInsights() = runTest {
+        source.actionGate = kotlinx.coroutines.CompletableDeferred()
+        source.result = ActionResult.Refused(RefusalCode.PROTECTED)
+        val details = start()
+        val store = ViewModelStore().apply { put("details", details) }
+        details.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
+        details.onEvent(InsightsEvent.ConfirmApply)
+        runCurrent()
+        assertEquals("apply must start before leaving details", 1, source.applied.size)
+        assertEquals(0, source.completedActions)
+        store.clear()
+        source.actionGate?.complete(Unit)
+        runCurrent()
+        assertEquals("application-scoped apply must finish after details is cleared", 1, source.completedActions)
+        assertTrue("a refusal has no journal row to communicate its outcome", source.actions.value.isEmpty())
+
+        val insights = InsightsViewModel(source, backgroundScope, applyResults = results)
+        backgroundScope.launch { insights.state.collect {} }
+        runCurrent()
+        assertEquals("Insights must show the refusal from the popped details screen",
+            InsightActionMessage(InsightMessageCode.PROTECTED), insights.state.value.apply.lastResult)
+        insights.onEvent(InsightsEvent.ResultShown)
+        runCurrent()
+        assertNull("ResultShown must consume the shared result", insights.state.value.apply.lastResult)
+        val fresh = InsightsViewModel(source, backgroundScope, applyResults = results)
+        backgroundScope.launch { fresh.state.collect {} }
+        runCurrent()
+        assertNull("a consumed result must not show on another Insights entry", fresh.state.value.apply.lastResult)
+        assertNull("a consumed result must not show on another details entry", start().state.value.apply.lastResult)
+        assertEquals("observing or consuming must not replay apply", 1, source.applied.size)
     }
 
     @Test fun loadedWaitsForNonNullReportAndActions() = runTest {
         source.report.value = null
         val actions = kotlinx.coroutines.flow.MutableSharedFlow<List<com.akane.voltwise.battery.data.db.InsightActionEntity>>(replay = 1)
         val delayed = object : InsightsRepository by source { override val actions = actions }
-        val vm = FindingDetailsViewModel(delayed, backgroundScope, SavedStateHandle(mapOf("key" to "finding")))
+        val vm = FindingDetailsViewModel(delayed, backgroundScope, SavedStateHandle(mapOf("key" to "finding")), results)
         assertFalse(vm.state.value.loaded)
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()
