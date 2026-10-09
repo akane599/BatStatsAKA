@@ -32,7 +32,7 @@ data class NowUiState(
     val health: HealthState? = null,
     val topApps: TopAppsState = TopAppsState.Empty,
     /**
-     * Null until analysis has completed and a report is loaded. Like Insights: findings first, then
+     * Null until analysis has completed and a report is loaded. Like Insights: findings first, then changes, then
      * [InsightsSummary.learning], and only then [InsightsSummary.allGood].
      */
     val insightsSummary: InsightsSummary? = null,
@@ -45,10 +45,12 @@ data class NowUiState(
 data class InsightsSummary(
     val headline: InsightHeadline?,
     val activeFindingCount: Int,
-    /** No active findings and too few sessions with app data to judge apps yet: "still learning", not "all good". */
+    /** Informational trends with a direction: Insights lists them under Changes, so Now can't call them "all good". */
+    val changeCount: Int = 0,
+    /** No findings or changes and too few sessions with app data to judge apps yet: "still learning", not "all good". */
     val learning: Boolean = false,
 ) {
-    val allGood: Boolean get() = activeFindingCount == 0 && !learning
+    val allGood: Boolean get() = activeFindingCount == 0 && changeCount == 0 && !learning
 }
 
 @Immutable

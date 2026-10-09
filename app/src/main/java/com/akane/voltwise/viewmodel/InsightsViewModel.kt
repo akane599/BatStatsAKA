@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.akane.voltwise.battery.insights.actions.*
+import com.akane.voltwise.battery.insights.engine.detectors.app.AppContext
 import com.akane.voltwise.battery.insights.model.*
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
@@ -61,7 +62,7 @@ class InsightsViewModel(
         )
     }
     private val status = combine(source.lastAnalyzedAt, source.eligibleSessionCount, analyzing, error) { at, count, busy, failure ->
-        InsightsUiState(lastAnalyzedAt = at, eligibleSessionCount = count, lowData = count < 4, analyzing = busy, error = failure)
+        InsightsUiState(lastAnalyzedAt = at, eligibleSessionCount = count, lowData = count < AppContext.MIN_ELIGIBLE_WINDOWS, analyzing = busy, error = failure)
     }
     val state: StateFlow<InsightsUiState> = combine(content, status, flow.state) { content, status, apply ->
         content.copy(

@@ -132,11 +132,23 @@ class InsightsViewModelTest {
         assertEquals(100L, vm.state.value.lastAnalyzedAt)
         assertFalse(vm.state.value.empty)
         assertTrue(vm.state.value.lowData)
-        source.eligibleSessionCount.value = 4
+        source.eligibleSessionCount.value = 5
         source.report.value = InsightReport(101, emptyList(), null)
         runCurrent()
         assertFalse(vm.state.value.lowData)
         assertTrue(vm.state.value.empty)
+    }
+
+    // R9-5: app detectors baseline on the windows before the current one, so 4 eligible windows is still learning.
+    @Test fun fourEligibleWindowsAreStillLowDataAndFiveAreNot() = runTest {
+        source.report.value = InsightReport(100, emptyList(), null)
+        source.lastAnalyzedAt.value = 100
+        source.eligibleSessionCount.value = 4
+        val vm = start()
+        assertTrue("4 windows leave only 3 history windows for an app baseline", vm.state.value.lowData)
+        source.eligibleSessionCount.value = 5
+        runCurrent()
+        assertFalse(vm.state.value.lowData)
     }
 
     @Test fun marksOnlyRevertedRowsSettledAsChangedExternally() = runTest {

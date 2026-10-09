@@ -101,6 +101,11 @@
         <item quantity="many">%d hallazgos</item>
         <item quantity="other">%d hallazgos</item>
     </plurals>
+    <plurals name="now_insights_changes">
+        <item quantity="one">Sin problemas · %d cambio para revisar</item>
+        <item quantity="many">Sin problemas · %d cambios para revisar</item>
+        <item quantity="other">Sin problemas · %d cambios para revisar</item>
+    </plurals>
 
     <string name="now_eta_estimating_full">Calculando el tiempo hasta llenar</string>
 </resources>

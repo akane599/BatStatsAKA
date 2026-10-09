@@ -196,7 +196,7 @@ fun InsightsNotPrivilegedPreview() {
     ScreenshotTheme { InsightsPreviewContent(notPrivileged) }
 }
 
-/** 2 of 4 sessions so far, while an analysis runs: progress under the header, "still learning" as the body. */
+/** 2 of 5 sessions so far, while an analysis runs: progress under the header, "still learning" as the body. */
 @PreviewTest
 @PhonePreview
 @Composable

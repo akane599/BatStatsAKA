@@ -89,6 +89,12 @@ data class AppContext(val inputs: InsightInputs, val windows: List<EligibleAppWi
 
     companion object {
         const val MIN_BASELINE_SESSIONS = 4
+
+        /**
+         * Eligible windows before any app finding is possible: [MIN_BASELINE_SESSIONS] history windows (the baseline,
+         * see [history]) plus the current one being evaluated. Below this, Now and Insights say "still learning".
+         */
+        const val MIN_ELIGIBLE_WINDOWS = MIN_BASELINE_SESSIONS + 1
         const val HALF_LIFE_MS = 14.0 * 24.0 * AppWindows.HOUR_MS
         const val BACKGROUND_RATIO = 3.0
         const val HIGH_CONFIDENCE_SESSIONS = 12
