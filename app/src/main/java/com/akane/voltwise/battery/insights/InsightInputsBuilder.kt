@@ -28,13 +28,14 @@ object InsightInputsBuilder {
         val mappedSessions = sessions.mapNotNull { session ->
             val end = session.endTime?.takeIf { it in (nowMs - HISTORY_MS)..nowMs } ?: return@mapNotNull null
             val kind = enumName<SessionKind>(session.type.name) ?: return@mapNotNull null
-            val rowsStored = rowsBySession[session.sessionId].orEmpty().count { !it.isOthers }
+            val rows = rowsBySession[session.sessionId].orEmpty()
+            val rowsStored = rows.count { !it.isOthers }
             val window = if (session.appUsageStatus == AppUsageStatus.READY) {
                 val basis = enumName<WindowBasis>(session.appUsageBasis?.name)
                 val start = session.appCaptureStartMs
                 val finish = session.appCaptureEndMs
                 if (basis != null && start != null && finish != null) {
-                    AppWindowInput(basis, start, finish, rowsStored, rowsStored >= 40)
+                    AppWindowInput(basis, start, finish, rowsStored, rows.any { it.isOthers })
                 } else null
             } else null
             SessionInput(
