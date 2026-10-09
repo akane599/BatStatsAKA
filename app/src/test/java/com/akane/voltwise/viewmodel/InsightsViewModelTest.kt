@@ -10,6 +10,7 @@ import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
 import com.akane.voltwise.battery.insights.*
 import com.akane.voltwise.battery.util.ShellRunner
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
+import java.io.IOException
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -22,9 +23,11 @@ import com.akane.voltwise.battery.insights.model.*
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.*
+import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -282,6 +285,34 @@ class InsightsViewModelTest {
         val vm2 = start()
         assertNull(vm2.state.value.error)
         assertNull("a new screen must not show 'Couldn't analyze' under a fresh analysis", vm2.state.value.apply.lastResult)
+    }
+
+    @Test fun analysisFailureAfterClearingTheViewModelIsNotPublished() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val repository = object : InsightsRepository by source {
+            override suspend fun analyzeNow() {
+                source.analyzeCalls++
+                withContext(NonCancellable) {
+                    gate.await()
+                    throw IOException("late analysis failure")
+                }
+            }
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        val store = ViewModelStore().apply { put("insights", vm) }
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals("analysis must start before the VM is cleared", 1, source.analyzeCalls)
+
+        store.clear()
+        assertNull(results.latest.value)
+        gate.complete(Unit)
+        advanceUntilIdle()
+        assertNull("a failure after clearing must not publish a held snackbar", results.latest.value)
+
+        val nextVm = start()
+        assertNull(nextVm.state.value.error)
+        assertNull("the next VM must not receive the late analysis failure", nextVm.state.value.apply.lastResult)
     }
 
     @Test fun clearingTheViewModelKeepsANewerApplyResult() = runTest {
