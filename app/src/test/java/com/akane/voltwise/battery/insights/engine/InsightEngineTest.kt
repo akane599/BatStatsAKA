@@ -90,14 +90,15 @@ class InsightEngineTest {
         )
     }
 
-    @Test fun `standby recommendations require API 28 and preserve fallback and other actions`() {
+    @Test fun `restriction recommendations require API 28 and preserve fallback and other actions`() {
         val input = inputs(emptyList(), emptyList())
         for (sdk in listOf(26, 27, 28, 29, 30, 37)) {
             for (type in FindingType.entries) {
                 val candidate = finding(type, emptyList(), Subject.App(UID, APP))
                 val supported = Recommender.recommend(candidate, input, sdkInt = 37).recommendations
                 val expected = if (sdk >= 28) supported else supported.filterNot {
-                    it.action == ActionType.STANDBY_BUCKET_RESTRICTED || it.action == ActionType.STANDBY_BUCKET_RARE
+                    it.action == ActionType.RESTRICT_BACKGROUND || it.action == ActionType.STANDBY_BUCKET_RESTRICTED ||
+                        it.action == ActionType.STANDBY_BUCKET_RARE
                 }
                 for (privileged in listOf(false, true)) {
                     assertEquals("$type API $sdk privileged=$privileged", expected,
@@ -123,7 +124,9 @@ class InsightEngineTest {
             assertEquals("API $sdk", sdk >= 28, appFinding.recommendations.any {
                 it.action == ActionType.STANDBY_BUCKET_RESTRICTED
             })
-            assertTrue(appFinding.recommendations.any { it.action == ActionType.RESTRICT_BACKGROUND })
+            assertEquals("API $sdk background restriction", sdk >= 28, appFinding.recommendations.any {
+                it.action == ActionType.RESTRICT_BACKGROUND
+            })
             assertTrue(appFinding.recommendations.any { it.action == ActionType.OPEN_APP_SETTINGS })
         }
     }

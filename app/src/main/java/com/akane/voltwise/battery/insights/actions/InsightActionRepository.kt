@@ -213,7 +213,8 @@ class InsightActionRepository(
     }
 
     private fun operation(type: ActionType): Operation? = when (type) {
-        ActionType.RESTRICT_BACKGROUND -> Operation(type, BackgroundOp.forSdk(inspector.sdkInt))
+        ActionType.RESTRICT_BACKGROUND ->
+            if (inspector.sdkInt >= 28) Operation(type, BackgroundOp.forSdk(inspector.sdkInt)) else null
         ActionType.STANDBY_BUCKET_RARE, ActionType.STANDBY_BUCKET_RESTRICTED ->
             if (inspector.sdkInt >= 28) Operation(type, restricted = inspector.sdkInt >= 30) else null
         ActionType.REMOVE_DOZE_WHITELIST -> Operation(type)
@@ -223,12 +224,12 @@ class InsightActionRepository(
     private fun journalOperation(row: InsightActionEntity): Operation? {
         if (row.priorStateVersion != 1 || row.userId != 0) return null
         val type = ActionType.entries.firstOrNull { it.name == row.type } ?: return null
-        val base = operation(type) ?: return null
         // Persist the exact app-op in both states, so an OS upgrade cannot redirect Undo.
+        // Legacy rows remain restorable even when new restrictions are unsupported.
         val op = if (type == ActionType.RESTRICT_BACKGROUND) {
             val name = row.targetState?.substringBefore(':')
-            base.copy(op = BackgroundOp.entries.firstOrNull { it.name == name } ?: return null)
-        } else base
+            Operation(type, op = BackgroundOp.entries.firstOrNull { it.name == name } ?: return null)
+        } else operation(type) ?: return null
         if (!op.restorable(row.priorState, inspector.sdkInt) || !op.restorable(row.targetState, inspector.sdkInt)) return null
         return op
     }

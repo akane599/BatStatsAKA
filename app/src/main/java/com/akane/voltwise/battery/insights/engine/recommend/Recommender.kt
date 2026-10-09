@@ -10,12 +10,18 @@ import com.akane.voltwise.battery.insights.model.Subject
 
 object Recommender {
     fun recommend(finding: Finding, inputs: InsightInputs, sdkInt: Int): Finding {
+        val app = finding.subject as? Subject.App
+        val pkg = app?.packageName
+        val whitelisted = pkg != null && inputs.dozeUserWhitelist?.contains(pkg) == true
+        val appFixes = if (whitelisted) {
+            listOf(ActionType.REMOVE_DOZE_WHITELIST, ActionType.OPEN_APP_SETTINGS)
+        } else appActions
         val actions = when (finding.type) {
             FindingType.APP_DRAIN_ANOMALY, FindingType.NEW_HEAVY_APP, FindingType.STUCK_WAKELOCK,
             FindingType.WAKEUP_STORM, FindingType.JOB_STORM, FindingType.BACKGROUND_LOCATION,
-            FindingType.BACKGROUND_RADIO -> appActions
+            FindingType.BACKGROUND_RADIO -> appFixes
             FindingType.BACKGROUND_RUNAWAY, FindingType.LINGERING_FOREGROUND_SERVICE ->
-                appActions.dropLast(1) + ActionType.FORCE_STOP + ActionType.OPEN_APP_SETTINGS
+                appFixes.dropLast(1) + ActionType.FORCE_STOP + ActionType.OPEN_APP_SETTINGS
             FindingType.DOZE_WHITELISTED_DRAINER -> listOf(
                 ActionType.REMOVE_DOZE_WHITELIST, ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS,
             )
@@ -24,18 +30,18 @@ object Recommender {
             FindingType.CHARGING_AT_FULL, FindingType.HOT_CHARGING -> listOf(ActionType.ENABLE_HIGH_BATTERY_ALERT)
             FindingType.TREND, FindingType.HEALTH_DECLINE, FindingType.ACTION_EFFECT -> emptyList()
         }
-        val app = finding.subject as? Subject.App
-        val pkg = app?.packageName
-        // A live whitelist finding proves an earlier removal no longer holds.
+        // Live whitelist membership proves an earlier removal no longer holds.
         val applied = inputs.actions.filter {
             it.status == ActionStatus.APPLIED && it.packageName == pkg &&
                 (app == null || it.uid == app.uid) &&
-                !(finding.type == FindingType.DOZE_WHITELISTED_DRAINER && it.type == ActionType.REMOVE_DOZE_WHITELIST)
+                !((whitelisted || finding.type == FindingType.DOZE_WHITELISTED_DRAINER) &&
+                    it.type == ActionType.REMOVE_DOZE_WHITELIST)
         }.map { it.type }.toSet()
         return finding.copy(recommendations = actions.filterNot { action ->
             action in applied || (action == ActionType.ENABLE_HIGH_BATTERY_ALERT && inputs.highBatteryAlertEnabled) ||
                 (sdkInt < 28 &&
-                    (action == ActionType.STANDBY_BUCKET_RESTRICTED || action == ActionType.STANDBY_BUCKET_RARE))
+                    (action == ActionType.RESTRICT_BACKGROUND || action == ActionType.STANDBY_BUCKET_RESTRICTED ||
+                        action == ActionType.STANDBY_BUCKET_RARE))
         }.map { action ->
             Recommendation(action, action != ActionType.FORCE_STOP, action in privilegedActions)
         })
