@@ -177,6 +177,7 @@ class InsightActionRepository(
         return InsightActionEntity(
             findingKey = finding.key, type = type.name, packageName = app?.packageName, uid = app?.uid,
             userId = 0, status = status, priorStateVersion = 1, createdAt = clock(),
+            metric = finding.evidence.firstOrNull()?.metric?.name,
         )
     }
 

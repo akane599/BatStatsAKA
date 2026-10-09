@@ -12,7 +12,7 @@ import com.akane.voltwise.battery.apps.AppUsageStatus
     entities = [BatterySample::class, ChargeSession::class, DailySummary::class,
         AppSnapshot::class, AppSnapshotUid::class, SessionAppUsage::class,
         SnapshotDeviceWaker::class, SessionDeviceWaker::class, InsightFindingEntity::class, InsightActionEntity::class],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class BatteryDatabase : RoomDatabase() {
@@ -143,6 +143,13 @@ abstract class BatteryDatabase : RoomDatabase() {
             }
         }
 
+        /** Additive: legacy actions keep their journal data and use finding evidence as a fallback. */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `insight_actions` ADD COLUMN `metric` TEXT")
+            }
+        }
+
         fun get(context: Context): BatteryDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -150,7 +157,7 @@ abstract class BatteryDatabase : RoomDatabase() {
                     BatteryDatabase::class.java,
                     "battery.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                     .build().also { INSTANCE = it }
             }
     }

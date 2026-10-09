@@ -42,7 +42,7 @@ if latest == 6:
     assert len(newest) == 4 and all(re.fullmatch(
         r'ALTER TABLE `(charge_sessions|daily_summaries)` ADD COLUMN `screen(On|Off)CoveredMs` INTEGER', sql
     ) for sql in newest), 'MIGRATION_5_6 must only add four nullable coverage columns'
-if latest == 7:
+if latest >= 7:
     metrics = set('wakeupAlarms partialWakelockCount partialWakelockBgMs jobCount jobMs syncCount fgServiceMs topMs mobileActiveMs gpsMs sensorMs'.split())
     added_columns = {
         'charge_sessions': set('dozeMs screenOffDozeMs appCaptureStartMs appCaptureEndMs'.split()),
@@ -51,10 +51,10 @@ if latest == 7:
         'session_app_usage': metrics | {'topWakelockTag', 'topAlarmTag', 'topJobName'},
         'app_snapshots': set('deepIdleMs deepIdleCount lightIdleMs lightIdleCount screenOffMs wakersComplete'.split()),
     }
-    entities = {e['tableName']: e for e in schema['entities']}
+    entities = {e['tableName']: e for e in schemas[7]['entities']}
     old_entities = {e['tableName']: e for e in schemas[6]['entities']}
     assert set(entities) - set(old_entities) == {'snapshot_device_wakers', 'session_device_wakers', 'insight_findings', 'insight_actions'}
-    assert all(sql.startswith(('ALTER TABLE ', 'CREATE TABLE ', 'CREATE INDEX ')) for sql in newest), 'v7 must be additive only'
+    assert all(sql.startswith(('ALTER TABLE ', 'CREATE TABLE ', 'CREATE INDEX ')) for sql in migrations[6]), 'v7 must be additive only'
     for table, old_entity in old_entities.items():
         old_fields = {f['columnName']: f for f in old_entity['fields']}
         new_fields = {f['columnName']: f for f in entities[table]['fields']}
@@ -69,6 +69,17 @@ if latest == 7:
         assert not entities[table].get('foreignKeys', []), 'Findings and journal must not cascade with history'
     feedback = next(f for f in entities['insight_findings']['fields'] if f['columnName'] == 'feedbackMultiplier')
     assert feedback['affinity'] == 'REAL' and feedback['notNull'] and feedback['defaultValue'] == '1.0'
+if latest == 8:
+    assert newest == ['ALTER TABLE `insight_actions` ADD COLUMN `metric` TEXT'], 'v8 must only add a nullable action metric'
+    old_entities = {e['tableName']: e for e in schemas[7]['entities']}
+    for entity in schema['entities']:
+        old_entity = old_entities[entity['tableName']]
+        fields = [f for f in entity['fields'] if not (entity['tableName'] == 'insight_actions' and f['columnName'] == 'metric')]
+        assert fields == old_entity['fields'], (entity['tableName'], 'Historical columns changed')
+        assert entity.get('indices', []) == old_entity.get('indices', [])
+        assert entity.get('foreignKeys', []) == old_entity.get('foreignKeys', [])
+    metric = next(f for e in schema['entities'] if e['tableName'] == 'insight_actions' for f in e['fields'] if f['columnName'] == 'metric')
+    assert metric['affinity'] == 'TEXT' and not metric.get('notNull', False) and 'defaultValue' not in metric
 before = {e['tableName']: e for e in schemas[latest - 1]['entities']}
 for entity in schema['entities']:
     table = entity['tableName']
@@ -164,6 +175,8 @@ for version, statements in sorted(seeds.items()):
                 assert db.execute(f'SELECT COUNT(*) FROM {table}').fetchone()[0] > 0, ('Unseeded v6 table', table)
                 columns = ', '.join(f'`{name}`' for name in sorted(names))
                 assert all(all(value is None for value in row) for row in db.execute(f'SELECT {columns} FROM {table}')), (table, 'New fields must read null')
+        if version == 7:
+            assert db.execute('SELECT metric FROM insight_actions').fetchall() == [(None,)]
         if version == 5:
             for table in ('charge_sessions', 'daily_summaries'):
                 assert db.execute(f'SELECT screenOnCoveredMs, screenOffCoveredMs FROM {table}').fetchall() == [(None, None)]

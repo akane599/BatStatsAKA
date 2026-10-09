@@ -87,7 +87,8 @@ object InsightInputsBuilder {
                 if (it.appliedAt == null || it.status !in appliedStatuses) return@mapNotNull null
                 val type = enumName<ActionType>(it.type) ?: return@mapNotNull null
                 val status = enumName<ActionStatus>(it.status.name) ?: return@mapNotNull null
-                val metric = findingsByKey[it.findingKey]?.let(FindingCodec::decode)?.evidence?.firstOrNull()?.metric
+                val metric = if (it.metric != null) enumName<Metric>(it.metric) else
+                    findingsByKey[it.findingKey]?.let(FindingCodec::decode)?.evidence?.firstOrNull()?.metric
                 AppliedActionInput(it.id, it.findingKey, type, it.packageName, it.uid, it.appliedAt, status, metric)
             },
             findings.associate { it.key to it.feedbackMultiplier },

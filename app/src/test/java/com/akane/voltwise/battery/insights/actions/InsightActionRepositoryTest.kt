@@ -71,6 +71,26 @@ class InsightActionRepositoryTest {
         suspend fun apply(type: ActionType = ActionType.RESTRICT_BACKGROUND) = repo.apply(finding(), rec(type))
     }
 
+    @Test fun applyStoresLeadMetricInPreparedAndAppliedJournal() = runTest {
+        for (metric in listOf(Metric.JOBS_PER_H, null)) {
+            val f = Fixture()
+            val appliedFinding = finding().copy(
+                type = FindingType.JOB_STORM,
+                evidence = metric?.let { listOf(Evidence(it, 60.0, 1.0, it.unit, 5)) } ?: emptyList(),
+            )
+            f.reply("No operations.", "", "RUN_ANY_IN_BACKGROUND: ignore")
+            f.intercept = {
+                if (it is PrivilegedCommand.SetBackgroundOp) {
+                    assertEquals(PREPARED, f.row().status)
+                    assertEquals(metric?.name, f.row().metric)
+                }
+            }
+            assertEquals(ActionResult.Applied(1), f.repo.apply(appliedFinding, rec(ActionType.RESTRICT_BACKGROUND)))
+            assertEquals(APPLIED, f.row().status)
+            assertEquals(metric?.name, f.row().metric)
+        }
+    }
+
     @Test fun backgroundRoundTripRestoresEffectiveAllowAndPublishesJournal() = runTest {
         val f = Fixture()
         f.reply("No operations.", "", "RUN_ANY_IN_BACKGROUND: ignore")
