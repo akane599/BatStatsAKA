@@ -97,6 +97,7 @@ class InsightsWiringTest {
                 },
                 reports = { events += "reports"; reports },
                 maybeNotify = { notified += it },
+                onFailure = { fail("Successful catch-up must not record a failure") },
             )
         }
         runCurrent()
@@ -123,6 +124,44 @@ class InsightsWiringTest {
         startup.cancelAndJoin()
     }
 
+    @Test fun catchUpFailureDoesNotPreventNotificationCollection() = runTest {
+        val report = InsightReport(3L, emptyList(), null)
+        val reports = MutableStateFlow<InsightReport?>(report)
+        val notified = mutableListOf<InsightReport>()
+        val recorded = mutableListOf<DiagnosticCode>()
+        val startup = launch {
+            startInsightNotifications(
+                awaitMigrated = {},
+                catchUp = { throw IllegalStateException("catch-up failed") },
+                reports = { reports },
+                maybeNotify = { notified += it },
+                onFailure = { recorded += it },
+            )
+        }
+        runCurrent()
+
+        assertEquals(listOf(report), notified)
+        assertEquals(listOf(DiagnosticCode.APP_SCOPE_FAILED), recorded)
+        startup.cancelAndJoin()
+    }
+
+    @Test fun catchUpCancellationIsRethrownWithoutRecordingFailure() = runTest {
+        val recorded = mutableListOf<DiagnosticCode>()
+        val startup = launch {
+            startInsightNotifications(
+                awaitMigrated = {},
+                catchUp = { throw kotlinx.coroutines.CancellationException("cancelled") },
+                reports = { MutableStateFlow<InsightReport?>(null) },
+                maybeNotify = { fail("Cancelled startup must not notify") },
+                onFailure = { recorded += it },
+            )
+        }
+        runCurrent()
+
+        assertTrue(startup.isCancelled)
+        assertTrue(recorded.isEmpty())
+    }
+
     @Test fun notificationCollectionFailureRecordsAppScopeFailureAndKeepsSiblingsAlive() = runTest {
         val recorded = mutableListOf<DiagnosticCode>()
         val scope = createAppScope { recorded += it }
@@ -134,6 +173,7 @@ class InsightsWiringTest {
                     catchUp = {},
                     reports = { flow { throw IllegalStateException("report collection failed") } },
                     maybeNotify = { fail("Failing source must not notify") },
+                    onFailure = { fail("Only catch-up failures should be recorded here") },
                 )
             }
             runCurrent()

@@ -6,6 +6,8 @@ import android.content.res.Configuration
 import com.akane.voltwise.battery.apps.AppInfoRepository
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.data.db.BatteryDatabase
+import com.akane.voltwise.battery.diagnostics.DiagnosticCode
+import com.akane.voltwise.battery.diagnostics.DiagnosticStore
 import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
 import com.akane.voltwise.battery.insights.model.InsightReport
@@ -36,6 +38,7 @@ class BatteryApp : Application() {
     private val insightActions: InsightActionRepository by inject()
     private val insights: InsightRepository by inject()
     private val insightNotifier: InsightNotifier by inject()
+    private val diagnostics: DiagnosticStore by inject()
 
     override fun onCreate() {
         super.onCreate()
@@ -73,6 +76,7 @@ class BatteryApp : Application() {
                 },
                 reports = { insights.report },
                 maybeNotify = { insightNotifier.maybeNotify(it) },
+                onFailure = diagnostics::record,
             )
         }
 
@@ -90,9 +94,16 @@ internal suspend fun startInsightNotifications(
     catchUp: suspend () -> Unit,
     reports: () -> Flow<InsightReport?>,
     maybeNotify: (InsightReport) -> Unit,
+    onFailure: (DiagnosticCode) -> Unit,
 ) {
     awaitMigrated()
-    catchUp()
+    try {
+        catchUp()
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        onFailure(DiagnosticCode.APP_SCOPE_FAILED)
+    }
     reports().filterNotNull().collect(maybeNotify)
 }
 
