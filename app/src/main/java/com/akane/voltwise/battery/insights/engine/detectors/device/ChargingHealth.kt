@@ -46,7 +46,7 @@ object ChargingHealth {
             it.confidence >= 2 && it.mah.isFinite() && it.mah > 0 && it.atMs in inputs.nowMs - 90 * DAY_MS..inputs.nowMs
         }.groupBy { it.atMs }.map { (at, values) -> TimedValue(at, requireNotNull(median(values.map { it.mah }))) }
             .sortedBy { it.atMs }
-        if (points.size < 5 || points.last().atMs - points.first().atMs < 30 * DAY_MS) return null
+        if (points.size < 6 || points.last().atMs - points.first().atMs < 30 * DAY_MS) return null
         val trend = TheilSen.trend(points) ?: return null
         if (trend.mannKendallZ > MAX_DECLINE_MANN_KENDALL_Z) return null
         val reference = median(points.map { it.value }) ?: return null

@@ -92,6 +92,36 @@ class InsightStatsTest {
         assertEquals(0.0, TheilSen.trend(points.map { it.copy(value = 10.0) })!!.mannKendallZ, 0.0)
     }
 
+    @Test fun mannKendallBiasCorrectsZeroObservedLagOneCorrelation() {
+        val points = listOf(101.0, 90.0, 78.0, 70.0, 61.0).mapIndexed { index, value -> TimedValue(index.toLong(), value) }
+        val trend = TheilSen.trend(points)!!
+        // Residuals [1, 0, -2, 0, 1] have mean 0 and raw r1 = 0.
+        // Bias-corrected r1 = 1/5, factor = 3/2, so z = -9 / sqrt((50/3) * (3/2)).
+        assertEquals(-10.0, trend.slope, 0.0)
+        assertEquals(-1.8, trend.mannKendallZ, 1e-9)
+    }
+
+    @Test fun mannKendallInflatesVarianceForPositiveDetrendedLagOneCorrelation() {
+        val points = listOf(100.0, 90.0, 81.0, 71.0, 61.0, 50.0, 40.0).mapIndexed { index, value -> TimedValue(index.toLong(), value) }
+        val trend = TheilSen.trend(points)!!
+        // Slope -10, intercept 100: residuals [0, 0, 1, 1, 1, 0, 0], mean 3/7.
+        // Sum of squares = 12/7, lag product = 26/49, raw r1 = 13/42.
+        // Bias-corrected r1 = 185/294, variance factor = 479/109.
+        // S = -21, iid Var(S) = 133/3: corrected z = -20 / sqrt((133/3) * (479/109)).
+        assertEquals(-10.0, trend.slope, 0.0)
+        assertEquals(-20.0 / kotlin.math.sqrt((133.0 / 3) * (479.0 / 109)), trend.mannKendallZ, 1e-9)
+        assertTrue("Positive correlation must reduce absolute z", trend.mannKendallZ > -3.003757045930553)
+        assertEquals(trend, TheilSen.trend(points.reversed()))
+        assertEquals(trend, TheilSen.trend(points.map { it.copy(atMs = it.atMs + 1_700_000_000_000L) }))
+        assertEquals(trend, TheilSen.trend(points + TimedValue(3, Double.NaN)))
+    }
+
+    @Test fun mannKendallRetainsIidVarianceForNegativeLagOneCorrelation() {
+        val points = listOf(101.0, 89.0, 81.0, 69.0, 61.0).mapIndexed { index, value -> TimedValue(index.toLong(), value) }
+        // Slope -10 leaves alternating residuals [0, -2, 0, -2, 0], with negative r1.
+        assertEquals(-2.2045407685048604, TheilSen.trend(points)!!.mannKendallZ, 1e-9)
+    }
+
     @Test fun mannKendallExcludesEqualTimestampsAndNonFiniteValuesButCountsFlatPairsAsZero() {
         val points = listOf(TimedValue(0, 10.0), TimedValue(0, 8.0), TimedValue(1, 6.0), TimedValue(2, 8.0))
         val trend = TheilSen.trend(points)!!
