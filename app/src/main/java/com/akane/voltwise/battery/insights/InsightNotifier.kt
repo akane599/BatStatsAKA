@@ -99,6 +99,6 @@ class InsightNotifier(
     companion object {
         const val CHANNEL_ID = "insights"
         private const val NOTIFICATION_ID = 1200
-        private const val REQUEST_CODE = 21
+        internal const val REQUEST_CODE = 23
     }
 }
