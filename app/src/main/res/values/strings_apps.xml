@@ -85,6 +85,7 @@
     <string name="apps_details_share">Share of all apps</string>
     <string name="apps_details_not_counted">Android hasn\'t counted any use of this app since its stats last started over.</string>
 
+    <string name="apps_details_findings_title">Findings</string>
     <string name="apps_details_time_title">Time by state</string>
     <string name="apps_details_time_foreground">Foreground</string>
     <string name="apps_details_time_fgs">Foreground service</string>
