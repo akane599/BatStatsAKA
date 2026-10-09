@@ -29,14 +29,14 @@ class InsightEngineTest {
                 else -> emptyList()
             }
             val candidate = finding(type, emptyList(), subject = Subject.App(UID, APP))
-            val result = Recommender.recommend(candidate, input)
+            val result = Recommender.recommend(candidate, input, sdkInt = 37)
             assertEquals(type.name, expected, result.recommendations.map { it.action })
             result.recommendations.forEach { rec ->
                 assertEquals(rec.action != ActionType.FORCE_STOP, rec.reversible)
                 assertEquals(rec.action in setOf(ActionType.RESTRICT_BACKGROUND, ActionType.STANDBY_BUCKET_RESTRICTED,
                     ActionType.REMOVE_DOZE_WHITELIST, ActionType.FORCE_STOP), rec.requiresPrivilege)
             }
-            assertEquals(result, Recommender.recommend(candidate, input.copy(privileged = true)))
+            assertEquals(result, Recommender.recommend(candidate, input.copy(privileged = true), sdkInt = 37))
         }
     }
 
@@ -44,9 +44,47 @@ class InsightEngineTest {
         val action = AppliedActionInput(1, "old", ActionType.RESTRICT_BACKGROUND, APP, UID, 0, ActionStatus.APPLIED)
         val candidate = finding(FindingType.APP_DRAIN_ANOMALY, emptyList(), Subject.App(UID, APP))
         val input = inputs(emptyList(), emptyList()).copy(actions = listOf(action))
-        assertEquals(2, Recommender.recommend(candidate, input).recommendations.size)
-        assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(status = ActionStatus.REVERTED)))).recommendations.size)
-        assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(packageName = "other.app")))).recommendations.size)
+        assertEquals(2, Recommender.recommend(candidate, input, sdkInt = 37).recommendations.size)
+        assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(status = ActionStatus.REVERTED))), sdkInt = 37).recommendations.size)
+        assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(packageName = "other.app"))), sdkInt = 37).recommendations.size)
+    }
+
+    @Test fun `standby recommendations require API 28 and preserve fallback and other actions`() {
+        val input = inputs(emptyList(), emptyList())
+        for (sdk in listOf(26, 27, 28, 29, 30, 37)) {
+            for (type in FindingType.entries) {
+                val candidate = finding(type, emptyList(), Subject.App(UID, APP))
+                val supported = Recommender.recommend(candidate, input, sdkInt = 37).recommendations
+                val expected = if (sdk >= 28) supported else supported.filterNot {
+                    it.action == ActionType.STANDBY_BUCKET_RESTRICTED || it.action == ActionType.STANDBY_BUCKET_RARE
+                }
+                for (privileged in listOf(false, true)) {
+                    assertEquals("$type API $sdk privileged=$privileged", expected,
+                        Recommender.recommend(candidate, input.copy(privileged = privileged), sdk).recommendations)
+                }
+            }
+        }
+        val candidate = finding(FindingType.APP_DRAIN_ANOMALY, emptyList(), Subject.App(UID, APP))
+        assertTrue(Recommender.recommend(candidate, input, 28).recommendations.any {
+            it.action == ActionType.STANDBY_BUCKET_RESTRICTED
+        })
+        val applied = AppliedActionInput(1, candidate.key, ActionType.STANDBY_BUCKET_RESTRICTED, APP, UID, 0, ActionStatus.APPLIED)
+        assertFalse(Recommender.recommend(candidate, input.copy(actions = listOf(applied)), 28).recommendations.any {
+            it.action == ActionType.STANDBY_BUCKET_RESTRICTED
+        })
+    }
+
+    @Test fun `analysis forwards SDK to recommendation policy`() {
+        val input = detectorInputs(FindingType.APP_DRAIN_ANOMALY)
+        for (sdk in listOf(27, 28)) {
+            val result = InsightEngine.analyze(input, sdk)
+            val appFinding = result.findings.first { it.type == FindingType.APP_DRAIN_ANOMALY }
+            assertEquals("API $sdk", sdk >= 28, appFinding.recommendations.any {
+                it.action == ActionType.STANDBY_BUCKET_RESTRICTED
+            })
+            assertTrue(appFinding.recommendations.any { it.action == ActionType.RESTRICT_BACKGROUND })
+            assertTrue(appFinding.recommendations.any { it.action == ActionType.OPEN_APP_SETTINGS })
+        }
     }
 
     @Test fun `rank sorts severity then confidence then score then stable key`() {
@@ -65,20 +103,20 @@ class InsightEngineTest {
         val input = base.copy(sessions = base.sessions + plugged, appSessions = rows, nowMs = plugged.last().endMs + HOUR)
         val candidates = appFindings(input) + DeviceDetectors.detect(input) + Trends.detect(input) + ChargingHealth.detect(input) + ActionEffects.detect(input)
         assertTrue(candidates.size > 12)
-        val report = InsightEngine.analyze(input)
+        val report = InsightEngine.analyze(input, sdkInt = 37)
         assertEquals(12, report.findings.size)
         assertEquals(candidates.sortedWith(findingOrder).take(12).map { it.key }, report.findings.map { it.key })
         assertEquals(report.findings.first { it.severity != Severity.INFO }, report.headline)
         assertEquals(input.nowMs, report.generatedAtMs)
-        assertEquals(report, InsightEngine.analyze(input))
-        assertEquals(report, InsightEngine.analyze(input.copy(sessions = input.sessions.reversed(), appSessions = rows.reversed())))
-        assertNull(InsightEngine.analyze(inputs(emptyList(), emptyList())).headline)
+        assertEquals(report, InsightEngine.analyze(input, sdkInt = 37))
+        assertEquals(report, InsightEngine.analyze(input.copy(sessions = input.sessions.reversed(), appSessions = rows.reversed()), sdkInt = 37))
+        assertNull(InsightEngine.analyze(inputs(emptyList(), emptyList()), sdkInt = 37).headline)
         val action = AppliedActionInput(9, "APP_DRAIN_ANOMALY:$APP", ActionType.RESTRICT_BACKGROUND, APP, UID,
             base.sessions[2].startMs, ActionStatus.APPLIED)
         val effectOnly = base.copy(appSessions = base.appSessions.mapIndexed { i, r ->
             row(r.sessionId).copy(powerMah = if (i < 2) 20.0 else 5.0)
         }, actions = listOf(action))
-        val info = InsightEngine.analyze(effectOnly)
+        val info = InsightEngine.analyze(effectOnly, sdkInt = 37)
         assertTrue(info.findings.isNotEmpty())
         assertTrue(info.findings.all { it.severity == Severity.INFO })
         assertNull(info.headline)

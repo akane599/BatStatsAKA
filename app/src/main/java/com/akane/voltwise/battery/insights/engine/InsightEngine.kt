@@ -15,10 +15,10 @@ import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
 
 object InsightEngine {
-    fun analyze(inputs: InsightInputs): InsightReport {
+    fun analyze(inputs: InsightInputs, sdkInt: Int): InsightReport {
         val findings = (appFindings(inputs) + DeviceDetectors.detect(inputs) + Trends.detect(inputs) +
             ChargingHealth.detect(inputs) + ActionEffects.detect(inputs))
-            .map { Recommender.recommend(it, inputs) }
+            .map { Recommender.recommend(it, inputs, sdkInt) }
             .sortedWith(findingOrder).take(12)
         return InsightReport(inputs.nowMs, findings, findings.firstOrNull { it.severity != Severity.INFO })
     }

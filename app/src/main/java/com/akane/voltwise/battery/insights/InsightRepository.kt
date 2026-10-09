@@ -1,5 +1,6 @@
 package com.akane.voltwise.battery.insights
 
+import android.os.Build
 import com.akane.voltwise.battery.data.HistoryMaintenance
 import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.data.resolveFullUah
@@ -40,7 +41,7 @@ class InsightRepository(
     private val capacityReading: () -> Pair<Long?, Int?> = { null to null },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val analyzeDispatcher: CoroutineDispatcher = Dispatchers.Default,
-    private val analyze: (InsightInputs) -> InsightReport = InsightEngine::analyze,
+    private val analyze: (InsightInputs) -> InsightReport = { InsightEngine.analyze(it, Build.VERSION.SDK_INT) },
 ) {
     private val mutex = Mutex()
     private val mutableReport = MutableStateFlow<InsightReport?>(null)
