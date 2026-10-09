@@ -48,7 +48,7 @@ object ChargingHealth {
             .sortedBy { it.atMs }
         if (points.size < 5 || points.last().atMs - points.first().atMs < 30 * DAY_MS) return null
         val trend = TheilSen.trend(points) ?: return null
-        if (trend.negativeSlopeShare < MIN_NEGATIVE_SLOPE_SHARE) return null
+        if (trend.mannKendallZ > MAX_DECLINE_MANN_KENDALL_Z) return null
         val reference = median(points.map { it.value }) ?: return null
         val annualPct = trend.slope * (365.25 * DAY_MS) / reference * 100.0
         if (annualPct > MAX_DECLINE_ANNUAL_PCT) return null
@@ -60,7 +60,7 @@ object ChargingHealth {
         )
     }
 
-    private const val MIN_NEGATIVE_SLOPE_SHARE = 0.75
+    private const val MAX_DECLINE_MANN_KENDALL_Z = -2.33
     private const val MAX_DECLINE_ANNUAL_PCT = -3.0
     private const val FULL_HOLD_MS = 2 * 3_600_000L
 }

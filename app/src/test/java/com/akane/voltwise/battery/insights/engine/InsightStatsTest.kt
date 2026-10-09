@@ -84,6 +84,25 @@ class InsightStatsTest {
         assertEquals(-2.0, TheilSen.slope(points.map { it.copy(value = -it.value) })!!, 0.0)
     }
 
+    @Test fun mannKendallUsesContinuityCorrectionForDecreasingIncreasingAndFlatSeries() {
+        val points = (0..4).map { TimedValue(it.toLong(), 10.0 - it) }
+        // S = -10, Var(S) = 50 / 3, so z = -9 / sqrt(50 / 3).
+        assertEquals(-2.2045407685048604, TheilSen.trend(points)!!.mannKendallZ, 1e-9)
+        assertEquals(2.2045407685048604, TheilSen.trend(points.map { it.copy(value = -it.value) })!!.mannKendallZ, 1e-9)
+        assertEquals(0.0, TheilSen.trend(points.map { it.copy(value = 10.0) })!!.mannKendallZ, 0.0)
+    }
+
+    @Test fun mannKendallExcludesEqualTimestampsAndNonFiniteValuesButCountsFlatPairsAsZero() {
+        val points = listOf(TimedValue(0, 10.0), TimedValue(0, 8.0), TimedValue(1, 6.0), TimedValue(2, 8.0))
+        val trend = TheilSen.trend(points)!!
+        // Three negative, one positive, one flat pair: S = -2; Var(S) = 26 / 3.
+        assertEquals(-1.0, trend.slope, 0.0)
+        assertEquals(-0.3396831102433787, trend.mannKendallZ, 1e-9)
+        assertEquals(trend, TheilSen.trend(points.reversed()))
+        assertEquals(trend, TheilSen.trend(points + TimedValue(3, Double.NaN) + TimedValue(4, Double.POSITIVE_INFINITY)))
+        assertNull(TheilSen.trend(listOf(TimedValue(0, 10.0), TimedValue(0, 8.0))))
+    }
+
     @Test fun theilSenHandlesMissingPairsTiesAndNonFiniteValues() {
         assertNull(TheilSen.slope(emptyList()))
         assertNull(TheilSen.slope(listOf(TimedValue(1, 2.0))))

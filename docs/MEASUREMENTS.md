@@ -94,7 +94,7 @@ Severity is HIGH when z ≥ 6 and MEDIUM otherwise. Confidence is HIGH with 12 o
 | Exempt from Doze and draining | Needs the Doze whitelist (a privileged read): among the top five apps by measured background time in the latest window, any on the user whitelist |
 | Charging at full | At least 3 plugged sessions in the last 14 days that stayed at 100% for 2 h or more |
 | Hot charging | At least 3 charge sessions in the last 14 days with a peak temperature of 40 °C or more |
-| Health decline | At least 5 capacity estimates of MEDIUM or HIGH confidence in the last 90 days spanning at least 30 days, with at least 75% of pairwise slopes between distinct timestamps negative and an annualised Theil–Sen (median pairwise) change ≤ −3% per year |
+| Health decline | Local (non-imported) capacity estimates of MEDIUM or HIGH confidence in the last 90 days, reduced to medians at each timestamp: at least 5 points spanning at least 30 days, a continuity-corrected Mann–Kendall z ≤ −2.33 (one-sided, about 1%, without a value-tie variance correction), and an annualised Theil–Sen (median pairwise) change ≤ −3% per year |
 
 Pressing **Not a problem** on an app finding scales its floors and z threshold by 1.5 each time, up to 4×, and hides it; **Dismiss** hides it until it returns at a higher severity. A trend in the opposite direction is a separate finding and is not hidden by dismissing the earlier trend. A finding the next analysis no longer produces is resolved. Findings are ranked by severity, confidence, score and key, and a run keeps at most 12; the headline is the first one that is not INFO.
 
@@ -121,7 +121,7 @@ Insights has its own notification channel (low importance, so no sound). Voltwis
 
 ### Why no learned model in v1
 
-Per-device history is small (tens of sessions), unlabelled, and shifts with how the phone is used, so a trained model would have little to learn from and could not show a user the numbers behind its verdict. The rules above are deterministic, add no dependency and can be checked by hand against the evidence shown on a finding. v1 also does not run significance tests; instead it relies on effect sizes against fixed floors and on coverage gates (four measured sessions, one hour windows, covered time) that decline to speak when data is thin.
+Per-device history is small (tens of sessions), unlabelled, and shifts with how the phone is used, so a trained model would have little to learn from and could not show a user the numbers behind its verdict. The rules above are deterministic, add no dependency and can be checked by hand against the evidence shown on a finding. Apart from the Health decline rule's Mann–Kendall test, v1 relies on effect sizes against fixed floors and on coverage gates (four measured sessions, one hour windows, covered time) that decline to speak when data is thin.
 
 ## Monitoring cost and storage
 
