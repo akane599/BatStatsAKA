@@ -44,6 +44,17 @@ class DeviceDetectorsTest {
         assertEquals(8.0, DeviceDetectors.detect(partial).single().evidence.single().observed, 0.0)
     }
 
+    @Test fun `near flat screen off drain history does not amplify score`() {
+        val sessions = listOf(0L, 0L, 8_000L, 10_000L, 13_200L, 140_000L).mapIndexed { index, uah ->
+            session(index).copy(screenOffUah = uah)
+        }
+        val finding = DeviceDetectors.detect(inputs(sessions, emptyList())).single()
+        assertEquals(FindingType.SCREEN_OFF_DRAIN_HIGH, finding.type)
+        assertEquals(3.5, finding.evidence.single().observed, 1e-9)
+        assertEquals(0.2, finding.evidence.single().baseline!!, 1e-9)
+        assertEquals(99.0, finding.score, 1e-9)
+    }
+
     @Test fun `whitelist flags only top five eligible measured background drainers`() {
         val sessions = listOf(session(0))
         val rows = (1..6).map { n -> row("s0").copy(packageName = "app.n$n", uid = UID + n, bgMs = n * 10_000L) }

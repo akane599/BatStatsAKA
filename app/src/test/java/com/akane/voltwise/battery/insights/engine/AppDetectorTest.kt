@@ -4,6 +4,7 @@ import com.akane.voltwise.battery.insights.model.Confidence
 import com.akane.voltwise.battery.insights.model.Finding
 import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.InsightInputs
+import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.insights.model.WindowBasis
 import org.junit.Assert.assertEquals
@@ -26,6 +27,22 @@ class AppDetectorTest(private val type: FindingType) {
         assertTrue(finding.evidence.isNotEmpty())
         assertTrue(finding.evidence.all { it.observed.isFinite() })
         assertTrue(finding.recommendations.isEmpty())
+    }
+
+    @Test fun nearFlatWakeupHistoryKeepsSeverityMediumAndScoreBelowFlatHistory() {
+        org.junit.Assume.assumeTrue(type == FindingType.WAKEUP_STORM)
+        val sessions = (0..5).map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(wakeupAlarms = listOf(0L, 0L, 1L, 1L, 2L, 35L)[index])
+        }
+        val finding = detected(inputs(sessions, rows)).single()
+        val flat = detected(inputs(sessions, rows.mapIndexed { index, row ->
+            if (index < 5) row.copy(wakeupAlarms = 0) else row
+        })).single()
+        assertEquals(Severity.MEDIUM, finding.severity)
+        assertEquals(34.0, finding.score, 1e-9)
+        assertTrue(finding.score <= flat.score)
+        assertEquals(35.0, finding.evidence.single().observed, 0.0)
     }
 
     @Test fun normalUsageDoesNotTrigger() {

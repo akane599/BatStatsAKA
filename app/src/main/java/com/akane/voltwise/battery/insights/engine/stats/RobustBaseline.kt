@@ -7,10 +7,10 @@ data class TimedValue(val atMs: Long, val value: Double)
 
 /** Time-decayed median and median absolute deviation; non-finite observations are unsupported. */
 data class RobustBaseline(val median: Double, val mad: Double, val samples: Int) {
-    /** For a flat baseline, one absolute-floor change has the same score as z = 3. */
+    /** One absolute-floor change from the median scores at most z = 3. */
     fun robustZ(value: Double, absoluteFloor: Double): Double? {
         if (!value.isFinite() || !absoluteFloor.isFinite() || absoluteFloor <= 0.0) return null
-        val scale = if (mad == 0.0) absoluteFloor / Z_THRESHOLD else MAD_SCALE * mad
+        val scale = maxOf(MAD_SCALE * mad, absoluteFloor / Z_THRESHOLD)
         return ((value - median) / scale).takeIf { it.isFinite() }
     }
 
