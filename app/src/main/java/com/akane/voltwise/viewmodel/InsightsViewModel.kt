@@ -190,6 +190,7 @@ internal class InsightApplyFlow(
                     is ActionResult.Failed -> message(InsightActionMessage(when (result.code) {
                         FailureCode.READ_FAILED -> InsightMessageCode.READ_FAILED
                         FailureCode.EXECUTION_FAILED -> InsightMessageCode.EXECUTION_FAILED
+                        FailureCode.NOT_APPLIED -> InsightMessageCode.NOT_APPLIED
                         FailureCode.STATE_MISMATCH -> InsightMessageCode.STATE_MISMATCH
                         FailureCode.NOT_UNDOABLE -> InsightMessageCode.NOT_UNDOABLE
                         FailureCode.INVALID_JOURNAL -> InsightMessageCode.INVALID_JOURNAL
