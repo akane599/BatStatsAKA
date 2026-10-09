@@ -16,13 +16,14 @@ class InsightsViewModel(
     private val source: InsightsRepository,
     applicationScope: CoroutineScope,
     savedStateHandle: SavedStateHandle = SavedStateHandle(),
-    applyResults: InsightApplyResults,
+    private val applyResults: InsightApplyResults,
 ) : ViewModel() {
     private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope, applyResults)
     private val analyzing = MutableStateFlow(false)
     private val error = MutableStateFlow<InsightMessageCode?>(null)
     private var observedAnalysisAt: Long? = null
     private var analysisFailedAt: Long? = null
+    private var analysisFailureResult: InsightActionMessage? = null
     val effects = flow.effects
 
     init {
@@ -35,6 +36,8 @@ class InsightsViewModel(
                         // Loading the first timestamp is not evidence of a successful refresh.
                         analysisFailedAt = at
                     } else if (at != null && (failedAt == null || at > failedAt)) {
+                        applyResults.consume(analysisFailureResult)
+                        analysisFailureResult = null
                         error.value = null
                     }
                 }
@@ -70,6 +73,7 @@ class InsightsViewModel(
     fun onEvent(event: InsightsEvent) {
         when (event) {
             InsightsEvent.AnalyzeNow -> if (!analyzing.value) {
+                analysisFailureResult = null
                 analyzing.value = true
                 launchRead(InsightMessageCode.ANALYSIS_FAILED) {
                     try { source.analyzeNow() } finally { analyzing.value = false }
@@ -87,7 +91,8 @@ class InsightsViewModel(
             try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) {
                 if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailedAt = observedAnalysisAt
                 error.value = code
-                flow.message(InsightActionMessage(code))
+                val published = flow.message(InsightActionMessage(code))
+                if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailureResult = published
             }
         }
     }
@@ -251,10 +256,11 @@ internal class InsightApplyFlow(
         }
     }
 
-    fun message(result: InsightActionMessage) {
+    fun message(result: InsightActionMessage): InsightActionMessage {
         val published = results.publish(result)
         ownLast = published
         events.trySend(InsightUiEffect.Message(published))
+        return published
     }
 
     private companion object {
