@@ -8,6 +8,7 @@ import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.SessionKind
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.random.Random
 
 class ChargingHealthTest {
     @Test fun `full charging requires three observed two hour full plugged sessions in fourteen days`() {
@@ -47,6 +48,42 @@ class ChargingHealthTest {
         assertTrue(findings.single().evidence.single().observed <= -3.0)
     }
 
+    @Test fun `flat serially correlated capacity stays below two percent false declines`() {
+        val random = Random(303)
+        val day = 24 * HOUR
+        val trials = 500
+        val falseDeclines = (0 until trials).count {
+            var noise = 0.0
+            val points = (0 until 60).map { index ->
+                noise = 0.5 * noise + random.nextDouble(-0.02, 0.02)
+                CapacityPointInput(index * day, 4500.0 * (1.0 + noise), 2)
+            }
+            val input = inputs(emptyList(), emptyList()).copy(nowMs = 59 * day, capacity = points)
+            ChargingHealth.detect(input).any { it.type == FindingType.HEALTH_DECLINE }
+        }
+        println("Flat AR(1) capacity: $falseDeclines/$trials false declines (seed 303)")
+        assertTrue("Flat AR(1) capacity produced $falseDeclines/$trials false declines; maximum is 10", falseDeclines <= 10)
+    }
+
+    @Test fun `seeded iid two percent scatter with ten percent annual decline over eighty nine days fires`() {
+        val random = Random(304)
+        val day = 24 * HOUR
+        val points = (0..89).map { index ->
+            CapacityPointInput(index * day, 4500.0 * (1.0 - 0.10 * index / 365.25 + random.nextDouble(-0.02, 0.02)), 2)
+        }
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 89 * day, capacity = points)
+        assertEquals("A noisy ten percent annual decline must fire", FindingType.HEALTH_DECLINE, ChargingHealth.detect(input).single().type)
+    }
+
+    @Test fun `health minimum is six distinct points spanning thirty days`() {
+        val day = 24 * HOUR
+        val points = (0..5).map { CapacityPointInput(it * 8 * day, 4500.0 - it * 10, 2) }
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 40 * day, capacity = points)
+        assertEquals(FindingType.HEALTH_DECLINE, ChargingHealth.detect(input).single().type)
+        assertTrue("Five declining points cannot meet the significance gate", ChargingHealth.detect(input.copy(capacity = points.take(5))).isEmpty())
+        assertTrue("Repeated timestamps cannot supply the sixth point", ChargingHealth.detect(input.copy(capacity = points.take(5) + points.first())).isEmpty())
+    }
+
     @Test fun `flat capacity with the same two percent daily scatter stays silent`() {
         val day = 24 * HOUR
         val points = (0 until 89).map { index ->
@@ -58,8 +95,8 @@ class ChargingHealthTest {
     }
 
     @Test fun `flat capacity estimate noise does not indicate health decline`() {
-        val points = listOf(4000.0, 4080.0, 3920.0, 4040.0, 3960.0).mapIndexed { index, mah ->
-            CapacityPointInput(index * 180 * HOUR, mah, 2)
+        val points = listOf(4000.0, 4080.0, 3920.0, 4040.0, 3960.0, 4000.0).mapIndexed { index, mah ->
+            CapacityPointInput(index * 144 * HOUR, mah, 2)
         }
         val input = inputs(emptyList(), emptyList()).copy(nowMs = 30 * 24 * HOUR, capacity = points)
         assertTrue("Flat noisy estimates must not report HEALTH_DECLINE", ChargingHealth.detect(input).isEmpty())
@@ -68,10 +105,10 @@ class ChargingHealthTest {
     @Test fun `clustered recent capacity estimates do not indicate health decline`() {
         val day = 24 * HOUR
         val points = listOf(CapacityPointInput(0, 4000.0, 2)) +
-            listOf(3900.0, 4000.0, 3950.0, 3950.0).mapIndexed { index, mah ->
+            listOf(3900.0, 4000.0, 3950.0, 3950.0, 4000.0).mapIndexed { index, mah ->
                 CapacityPointInput(30 * day + index * HOUR, mah, 2)
             }
-        val input = inputs(emptyList(), emptyList()).copy(nowMs = 30 * day + 3 * HOUR, capacity = points)
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 30 * day + 4 * HOUR, capacity = points)
         assertTrue("A noisy recent cluster must not report HEALTH_DECLINE", ChargingHealth.detect(input).isEmpty())
     }
 
