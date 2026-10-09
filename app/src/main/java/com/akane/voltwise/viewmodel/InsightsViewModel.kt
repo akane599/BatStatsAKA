@@ -93,6 +93,7 @@ internal class InsightApplyFlow(
     private val results: InsightApplyResults,
 ) {
     private val events = Channel<InsightUiEffect>(Channel.UNLIMITED)
+    private var ownLast: InsightActionMessage? = null
     val effects: Flow<InsightUiEffect> = events.receiveAsFlow()
     private val mutableState = MutableStateFlow(InsightApplyState(
         pending = saved.get<String>(PENDING_ACTION)?.let { name ->
@@ -206,7 +207,7 @@ internal class InsightApplyFlow(
                     }))
                     is ActionResult.OneShot -> message(InsightActionMessage(InsightMessageCode.ONE_SHOT, result.actionId))
                     is ActionResult.OpenSettings -> {
-                        results.consume(state.value.lastResult)
+                        results.consume(ownLast)
                         events.trySend(InsightUiEffect.OpenSettings(result.spec))
                     }
                 }
@@ -222,6 +223,7 @@ internal class InsightApplyFlow(
     }
 
     fun message(result: InsightActionMessage) {
+        ownLast = result
         results.publish(result)
         events.trySend(InsightUiEffect.Message(result))
     }
