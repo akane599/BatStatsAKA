@@ -56,6 +56,16 @@ class AppWindowsTest {
         for (metric in Metric.entries) assertNull(AppWindows.value(window, row.unsupported(), metric))
     }
 
+    @Test fun sparseForegroundStaysUnknownForSystemAndNativeUids() {
+        val row = row(session(0).id).copy(fgMs = null, topMs = 0)
+        for (uid in listOf(1001, 1000, 0, 101001)) {
+            assertNull("Missing foreground is unknown for UID $uid", AppWindows.foregroundMs(row.copy(uid = uid)))
+            assertEquals(1_000.0, AppWindows.foregroundMs(row.copy(uid = uid, fgMs = 1_000))!!, 0.0)
+        }
+        assertEquals(0.0, AppWindows.foregroundMs(row.copy(uid = 10123)))
+        assertEquals(0.0, AppWindows.foregroundMs(row.copy(uid = 110123)))
+    }
+
     @Test fun sparseForegroundIsZeroOnlyWithKnownNonnegativeTopTime() {
         val row = row(session(0).id).copy(fgMs = null, topMs = 0)
         assertEquals(0.0, AppWindows.foregroundMs(row))
