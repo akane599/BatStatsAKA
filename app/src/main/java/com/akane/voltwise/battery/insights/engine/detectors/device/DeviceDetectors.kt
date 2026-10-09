@@ -18,7 +18,7 @@ import com.akane.voltwise.battery.insights.model.Subject
 object DeviceDetectors {
     fun detect(inputs: InsightInputs): List<Finding> {
         val sessions = dischargeSessions(inputs)
-        val current = sessions.lastOrNull()
+        val current = sessions.lastOrNull()?.takeIf { it.endMs >= inputs.nowMs - MAX_CURRENT_WINDOW_AGE_MS }
         return listOfNotNull(current?.let { dozeBlocked(inputs, sessions, it) },
             current?.let { screenOffDrain(inputs, sessions, it) }).map { finding ->
                 finding.copy(attributions = attributions(inputs, requireNotNull(current).id))

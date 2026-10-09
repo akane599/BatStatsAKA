@@ -55,6 +55,9 @@ class InsightRepository(
     val report: StateFlow<InsightReport?> = mutableReport.asStateFlow()
     private val mutableLastAnalyzedAt = MutableStateFlow<Long?>(null)
     val lastAnalyzedAt: StateFlow<Long?> = mutableLastAnalyzedAt.asStateFlow()
+    private val mutableSuccessfulAnalysisRevision = MutableStateFlow(0L)
+    /** In-process completed publications; persisted timestamps and feedback do not advance this. */
+    val successfulAnalysisRevision: StateFlow<Long> = mutableSuccessfulAnalysisRevision.asStateFlow()
     private val initialization: Deferred<Unit>
 
     init {
@@ -122,6 +125,7 @@ class InsightRepository(
                     store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
                     mutableLastAnalyzedAt.value = inputs.nowMs
                     publish()
+                    mutableSuccessfulAnalysisRevision.value = mutableSuccessfulAnalysisRevision.value + 1
                 }
             }
         }

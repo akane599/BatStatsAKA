@@ -138,8 +138,123 @@ class BatteryStatsProtoParserTest {
     @Test fun missingPowerConsumerKeepsUidDetailsWithoutInventingAppEnergy() {
         val snapshot = parsed(dump(uid(10001, null, message(15, text(1, "job"), message(2, timer(1, 1)))), uid(10002, 3.0)))
         assertEquals(listOf(10002), snapshot.apps.map { it.uid })
-        assertEquals(10001, snapshot.jobs.single().uid)
+        val job = snapshot.jobs.single()
+        assertEquals(10001, job.uid)
+        assertEquals(1, job.count)
+        assertEquals(1L, job.totalTimeMs)
+        assertFalse(snapshot.appMeasurementsComplete)
+        assertEquals(0, snapshot.rejectedRecords)
+        assertEquals(0, snapshot.rejectedAppPowerRecords)
+        assertTrue(snapshot.deviceWakersComplete)
+    }
+
+    @Test fun omittedPowerCannotCertifyPositiveCountersCarriedToSessionSnapshots() {
+        val counters = listOf(
+            "cpu user" to message(7, number(1, 1)),
+            "cpu system" to message(7, number(2, 1)),
+            "aggregate wakelock" to message(24, number(1, 1)),
+            "foreground" to message(11, timer(1)),
+            "foreground service" to message(12, timer(1)),
+            "top state" to message(20, number(2, 1)),
+            "background state" to message(20, number(1, 3), number(2, 1)),
+            "mobile rx bytes" to message(17, number(1, 1)),
+            "mobile tx bytes" to message(17, number(2, 1)),
+            "wifi rx bytes" to message(17, number(3, 1)),
+            "wifi tx bytes" to message(17, number(4, 1)),
+            "mobile active duration" to message(17, number(11, 1)),
+            "partial count without duration" to message(25, text(1, "lock"), message(3, timer(count = 1))),
+            "partial background duration" to message(25, text(1, "lock"), message(3, timer()),
+                message(4, timer(actual = 1))),
+            "job duration" to message(15, text(1, "job"), message(2, timer(1))),
+            "job count without duration" to message(15, text(1, "job"), message(2, timer(count = 1))),
+            "sync count without duration" to message(22, text(1, "sync"), message(2, timer(count = 1))),
+            "wakeup alarm" to message(26, text(1, "alarm"), number(2, 1)),
+            "gps duration" to message(21, number(1, -10000), message(2, timer(1))),
+            "sensor duration" to message(21, number(1, 17), message(2, timer(1))),
+        )
+        val incorrectlyCertified = mutableListOf<String>()
+        counters.forEach { (name, record) ->
+            val omitted = parsed(dump(uid(10001, null, record), uid(10002, 3.0)))
+            assertEquals(name, listOf(10002), omitted.apps.map { it.uid })
+            if (omitted.appMeasurementsComplete) incorrectlyCertified += name
+            assertEquals(name, 0, omitted.rejectedRecords)
+            val powered = parsed(dump(uid(10001, 1.0, record), uid(10002, 3.0)))
+            assertTrue("$name with known power remains certifiable", powered.appMeasurementsComplete)
+            assertEquals(name, 2, powered.toAppUsageSnapshot().rows.size)
+        }
+        assertEquals("Positive counters must not be lost from certified baselines", emptyList<String>(), incorrectlyCertified)
+    }
+
+    @Test fun omittedPowerGuardUsesExistingPrimaryAppProfileBoundaries() {
+        for (id in listOf(10000, 99999)) {
+            val snapshot = parsed(dump(uid(id, null,
+                message(15, text(1, "proxy job"), message(2, timer(count = 1))),
+            ), uid(10002, 3.0)))
+            assertFalse("Primary app $id must not certify lost counters", snapshot.appMeasurementsComplete)
+        }
+        for (id in listOf(0, 1000, 9999, 100000, 110001)) {
+            val snapshot = parsed(dump(uid(id, null,
+                message(15, text(1, "other profile job"), message(2, timer(10, 1))),
+            ), uid(10002, 3.0)))
+            assertTrue("Unpowered UID $id outside primary apps preserves the existing profile contract", snapshot.appMeasurementsComplete)
+            assertEquals(id, snapshot.jobs.single().uid)
+            assertEquals(listOf(10002), snapshot.apps.map { it.uid })
+        }
+    }
+
+    @Test fun omittedPowerDetailOnlyCountersDoNotUncertifySessionMeasurements() {
+        val snapshot = parsed(dump(uid(10001, null,
+            message(8, timer(1)), message(9, timer(1)), message(10, timer(1)), message(14, timer(1)),
+            message(6, message(1, timer(1)), message(3, timer(1))),
+            message(20, number(1, 6), number(2, 1)),
+            message(17, number(7, 1), number(12, 1)),
+            message(22, text(1, "sync duration only"), message(2, timer(1))),
+            message(25, text(1, "partial duration only"), message(3, timer(1))),
+            message(21, number(1, 17), message(2, timer(count = 1))),
+        ), uid(10002, 3.0)))
         assertTrue(snapshot.appMeasurementsComplete)
+        assertEquals(1L, snapshot.wakelocks.single().totalTimeMs)
+        assertEquals(1L, snapshot.syncs.single().totalTimeMs)
+        assertEquals(1, snapshot.sensors.single().count)
+        assertEquals(listOf(10002), snapshot.toAppUsageSnapshot().rows.map { it.uid })
+    }
+
+    @Test fun omittedPowerWithOnlyZeroSessionCountersRemainsCompleteAndBrowsable() {
+        val snapshot = parsed(dump(uid(10001, null,
+            message(7), message(24), message(11), message(12), message(17),
+            message(20), message(20, number(1, 3)),
+            message(15, text(1, "job\ncontinuation")), message(22, text(1, "sync")),
+            message(25, text(1, "lock"), message(3, timer())),
+            message(26, text(1, "alarm\rcontinuation")),
+            message(21, number(1, -10000)), message(21, number(1, 17)),
+        ), uid(10002, 3.0)))
+        assertTrue(snapshot.appMeasurementsComplete)
+        assertEquals(listOf(10002), snapshot.apps.map { it.uid })
+        assertEquals("job\ncontinuation", snapshot.jobs.single().jobName)
+        assertEquals(0, snapshot.jobs.single().count)
+        assertEquals("alarm\rcontinuation", snapshot.alarms.single().tag)
+        assertEquals(0, snapshot.rejectedRecords)
+    }
+
+    @Test fun producerRetainedZeroPowerConsumerWithCountersRemainsComplete() {
+        // SHOULD_HIDE keeps the optional pwi present even when computed charge is zero.
+        val snapshot = parsed(dump(uid(10001, null,
+            message(18, number(2, 1)), message(15, text(1, "job"), message(2, timer(count = 1))),
+        )))
+        assertTrue(snapshot.appMeasurementsComplete)
+        assertEquals(0.0, snapshot.apps.single().powerMah, 0.0)
+        assertEquals(1L, snapshot.toAppUsageSnapshot().rows.single().jobCount)
+    }
+
+    @Test fun omittedPowerMalformedCounterRetainsExistingRejectionPolicy() {
+        val snapshot = parsed(dump(uid(10001, null,
+            message(15, text(1, "invalid job"), message(2, timer(count = -1))),
+        ), uid(10002, 3.0)))
+        assertFalse(snapshot.appMeasurementsComplete)
+        assertEquals(1, snapshot.rejectedRecords)
+        assertEquals(0, snapshot.rejectedAppPowerRecords)
+        assertTrue(snapshot.jobs.isEmpty())
+        assertEquals(listOf(10002), snapshot.apps.map { it.uid })
     }
 
     @Test fun partialNonfinitePowerRejectsOnlyThatConsumerAndCannotCertifyCapture() {

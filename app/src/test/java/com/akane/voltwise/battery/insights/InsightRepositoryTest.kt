@@ -129,6 +129,82 @@ class InsightRepositoryTest {
             })
     }
 
+    @Test fun completedRevisionsAdvanceAfterPublicationWithRepeatedAndBackwardClock() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        assertEquals(0L, repo.successfulAnalysisRevision.value)
+        for ((now, revision) in listOf(NOW to 1L, NOW to 2L, (NOW - 1) to 3L)) {
+            fixture.now = now
+            repo.refresh()
+            assertEquals(revision, repo.successfulAnalysisRevision.value)
+            assertEquals(now, repo.lastAnalyzedAt.value)
+            assertEquals(now.toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
+            assertEquals(now, repo.report.value!!.generatedAtMs)
+            assertEquals(fixture.output, repo.report.value!!.findings)
+        }
+    }
+
+    @Test fun successfulRevisionWaitsForReportPublication() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        runCurrent()
+        fixture.now = NOW + 1
+        val gate = CompletableDeferred<Unit>()
+        fixture.insights.afterFindingsWrite = {
+            fixture.insights.afterFindingsRead = { gate.await() }
+        }
+        val refresh = async { repo.refresh() }
+        try {
+            runCurrent()
+            assertFalse("publication must still be suspended", refresh.isCompleted)
+            assertEquals(NOW + 1, repo.lastAnalyzedAt.value)
+            assertEquals(NOW, repo.report.value!!.generatedAtMs)
+            assertEquals("persisting a timestamp alone does not complete publication", 1L, repo.successfulAnalysisRevision.value)
+        } finally {
+            gate.complete(Unit)
+        }
+        refresh.await()
+        assertEquals(NOW + 1, repo.report.value!!.generatedAtMs)
+        assertEquals(2L, repo.successfulAnalysisRevision.value)
+    }
+
+    @Test fun failedAnalysisAndFeedbackDoNotAdvanceCompletedRevision() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        fixture.analyze = { error("analysis failed") }
+        try { repo.refresh(); fail("Expected analysis failure") } catch (_: IllegalStateException) { }
+        assertEquals(1L, repo.successfulAnalysisRevision.value)
+        repo.notAProblem(testFinding().key)
+        repo.dismiss(testFinding().key)
+        runCurrent()
+        assertTrue(repo.report.value!!.findings.isEmpty())
+        assertEquals("feedback publication is not a completed analysis", 1L, repo.successfulAnalysisRevision.value)
+    }
+
+    @Test fun refreshSkippedDuringClearDoesNotAdvanceCompletedRevision() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        val gate = CompletableDeferred<Unit>()
+        val clear = async(start = CoroutineStart.UNDISPATCHED) {
+            fixture.maintenance.clear({}, { gate.await(); fixture.insights.clearFindings() })
+        }
+        try {
+            assertTrue(fixture.maintenance.isClearing)
+            repo.refresh()
+            assertEquals("a maintenance no-op must not signal success", 1L, repo.successfulAnalysisRevision.value)
+            assertEquals(1, fixture.seen.size)
+        } finally {
+            gate.complete(Unit)
+        }
+        clear.await()
+        runCurrent()
+        assertTrue(repo.report.value!!.findings.isEmpty())
+        assertEquals("clear publication is not a completed analysis", 1L, repo.successfulAnalysisRevision.value)
+    }
+
     @Test fun refreshReadsLiveHighBatteryAlertSettingForEachAnalysis() = runTest {
         val fixture = Fixture()
         fixture.highBatteryAlertEnabled = true
@@ -175,6 +251,7 @@ class InsightRepositoryTest {
         assertEquals(1, fixture.store.reads)
         assertEquals(123L, repo.lastAnalyzedAt.value)
         assertEquals(123L, repo.report.value!!.generatedAtMs)
+        assertEquals(0L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun notAProblemCannotResurrectFindingClearedAfterRead() = runTest {
@@ -384,6 +461,7 @@ class InsightRepositoryTest {
         refresh.await()
         assertTrue("Stale refresh must not repopulate cleared findings", fixture.insights.rows.value.isEmpty())
         assertNull(repo.lastAnalyzedAt.value)
+        assertEquals(0L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun startupPublishesStoredReportBeforeSuspendedRefreshReturns() = runTest {
@@ -432,11 +510,13 @@ class InsightRepositoryTest {
         assertNull(repo.lastAnalyzedAt.value)
         runCurrent()
         assertTrue(repo.report.value!!.findings.isEmpty())
+        assertEquals("discarded stale analysis is not a success", 0L, repo.successfulAnalysisRevision.value)
         fixture.duringAnalysis = {}
         fixture.output = emptyList()
         repo.refresh()
         assertTrue(fixture.seen.last().sessions.isEmpty())
         assertEquals(NOW, repo.lastAnalyzedAt.value)
+        assertEquals(1L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun clearHoldingMutationLockPreventsRefreshFromWriting() = runTest {
@@ -469,6 +549,7 @@ class InsightRepositoryTest {
         assertTrue(fixture.insights.rows.value.isEmpty())
         assertTrue(repo.report.value!!.findings.isEmpty())
         assertNull(repo.lastAnalyzedAt.value)
+        assertEquals(0L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun repeatedNotAProblemOnlyMultipliesActiveFindingOnce() = runTest {
@@ -586,6 +667,7 @@ class InsightRepositoryTest {
         assertEquals("Committed findings must advance the timestamp StateFlow", NOW + 500, repo.lastAnalyzedAt.value)
         assertEquals("Republished findings must use the new analysis time", NOW + 500, repo.report.value!!.generatedAtMs)
         assertEquals(fixture.output, repo.report.value!!.findings)
+        assertEquals(2L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun cancellationBeforeWriteLeavesFindingsAndAnalysisTimeUnchanged() = runTest {
@@ -614,6 +696,7 @@ class InsightRepositoryTest {
         assertEquals(NOW.toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
         assertEquals(NOW, repo.lastAnalyzedAt.value)
         assertEquals(previousReport, repo.report.value)
+        assertEquals(1L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun cancellationDuringPreCommitReadLeavesFindingsAndAnalysisTimeUnchanged() = runTest {
@@ -638,6 +721,7 @@ class InsightRepositoryTest {
         assertEquals(NOW.toString(), fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
         assertEquals(NOW, repo.lastAnalyzedAt.value)
         assertEquals(previousReport, repo.report.value)
+        assertEquals(1L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun successfulRefreshPersistsLastAnalyzedAtAndFailureDoesNotAdvanceIt() = runTest {
@@ -652,6 +736,7 @@ class InsightRepositoryTest {
         try { repo.refresh(true); fail("Expected dump failure") } catch (_: IllegalStateException) { }
         assertEquals(NOW, repo.lastAnalyzedAt.value)
         assertEquals(1, fixture.seen.size)
+        assertEquals(1L, repo.successfulAnalysisRevision.value)
     }
 
     @Test fun chunksDaoIdsBelowSqliteLimitAndOmitsOpenSession() = runTest {

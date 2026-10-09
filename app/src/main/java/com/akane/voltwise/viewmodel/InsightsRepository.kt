@@ -25,6 +25,7 @@ interface InsightsRepository {
     /** Null until access detection completes; false means detection found no Shizuku/root. */
     val privileged: Flow<Boolean?>
     val lastAnalyzedAt: Flow<Long?>
+    val successfulAnalysisRevision: StateFlow<Long>
     val eligibleSessionCount: Flow<Int>
     suspend fun analyzeNow()
     suspend fun dismiss(key: String)
@@ -43,6 +44,7 @@ class DefaultInsightsRepository(
     override val report = insights.report
     override val actions = actionRepository.actions
     override val lastAnalyzedAt = insights.lastAnalyzedAt
+    override val successfulAnalysisRevision = insights.successfulAnalysisRevision
     override val privileged: Flow<Boolean?> = flow {
         // NONE is also ShellRunner's initial value; keep pending applies unknown during detection.
         if (shellRunner.access.value == ShellRunner.Mode.NONE) {

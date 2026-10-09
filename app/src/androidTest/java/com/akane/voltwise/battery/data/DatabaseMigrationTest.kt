@@ -349,6 +349,9 @@ class DatabaseMigrationTest {
                 it.copy(appWindow = AppWindowInput(WindowBasis.DELTA, 1_000_000, 4_600_000, 1, false))
             })
             assertEquals(1, AppWindows.select(trustedLooking).size)
+            db.openHelper.readableDatabase.query("PRAGMA foreign_key_check").use { cursor ->
+                assertFalse("Migration left dangling foreign keys", cursor.moveToFirst())
+            }
         } finally {
             db.close()
             context.deleteDatabase(name)

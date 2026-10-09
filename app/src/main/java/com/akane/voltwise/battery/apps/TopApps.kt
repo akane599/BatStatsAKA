@@ -56,7 +56,11 @@ data class TopApps(val rows: List<TopAppRow>, val basis: AppUsageBasis, val capt
 
         private fun foldLong(rows: List<AppUsageRow>, field: (AppUsageRow) -> Long?): Long? {
             var total = 0L
-            for (row in rows) total += field(row) ?: return null
+            for (row in rows) {
+                val value = field(row) ?: return null
+                if (value < 0L || value > Long.MAX_VALUE - total) return null
+                total += value
+            }
             return total
         }
 

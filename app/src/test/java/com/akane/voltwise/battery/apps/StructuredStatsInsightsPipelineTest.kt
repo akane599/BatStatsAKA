@@ -14,6 +14,7 @@ import com.akane.voltwise.battery.insights.model.InsightInputs
 import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.measurement.PowerState
+import com.akane.voltwise.battery.util.BatteryStatsParser
 import com.akane.voltwise.battery.util.ShellRunner
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -113,7 +114,65 @@ class StructuredStatsInsightsPipelineTest {
         assertTrue(InsightEngine.analyze(pipeline.inputs, 36).findings.none { it.type == FindingType.WAKEUP_STORM })
     }
 
-    private data class Pipeline(val store: Store, val inputs: InsightInputs)
+    @Test fun proxyJobCountersBeforePowerAppearsCannotBecomeCertifiedSessionDeltas() = runTest {
+        // A proxy service executes in a different UID while the screen is on. The source UID
+        // accumulates jobs without an energy consumer; later activity supplies its first pwi.
+        val pipeline = collectWindows("proxy job\ncontinuation", "alarm", currentVictimAlarms = 0,
+            baselineVictimAlarms = 0, historicalVictimAlarms = 0,
+            omittedVictimBaselinePower = true, baselineVictimJobs = 120,
+            historicalBaselineVictimJobs = 8, historicalVictimJobs = 0)
+        val windows = AppWindows.select(pipeline.inputs)
+        val report = InsightEngine.analyze(pipeline.inputs, 36)
+        assertTrue("Counter-bearing no-pwi baselines=${pipeline.store.baselines.size}, " +
+            "eligible windows=${windows.size}, job storms=${report.findings.count { it.type == FindingType.JOB_STORM }}",
+            pipeline.store.baselines.isEmpty())
+        assertTrue(pipeline.store.sessions.values.all { it.appUsageBasis == AppUsageBasis.ABSOLUTE })
+        assertTrue(pipeline.store.sessions.values.all { it.appCaptureStartMs == null })
+        assertTrue("Details stay available without eligible app windows", windows.isEmpty())
+        val current = pipeline.store.rows.last { it.uid == VICTIM_UID }
+        assertEquals(120L, current.jobCount)
+        assertEquals(1200L, current.jobMs)
+        val begin = pipeline.captures.first()
+        assertFalse(begin.appMeasurementsComplete)
+        assertEquals(listOf(ATTACKER_UID), begin.apps.map { it.uid })
+        assertEquals(8, begin.jobs.single { it.uid == VICTIM_UID }.count)
+        assertEquals(120, pipeline.captures[pipeline.captures.lastIndex - 1].jobs.single { it.uid == VICTIM_UID }.count)
+        assertEquals("proxy job\ncontinuation", begin.jobs.single { it.uid == VICTIM_UID }.jobName)
+        assertTrue(report.findings.none { it.type == FindingType.JOB_STORM })
+    }
+
+    @Test fun genuinePoweredJobAnomalyRemainsEligibleAndCreatesRecommendations() = runTest {
+        val pipeline = collectWindows("ordinary job", "alarm", currentVictimAlarms = 0,
+            baselineVictimAlarms = 0, historicalVictimAlarms = 0,
+            baselineVictimJobs = 1000, historicalVictimJobs = 8, currentVictimJobs = 120)
+        assertEquals(5, AppWindows.select(pipeline.inputs).size)
+        assertTrue(pipeline.captures.all { it.appMeasurementsComplete })
+        assertEquals(120L, pipeline.store.rows.last { it.uid == VICTIM_UID }.jobCount)
+        val finding = InsightEngine.analyze(pipeline.inputs, 36).findings.single {
+            it.type == FindingType.JOB_STORM && (it.subject as? Subject.App)?.uid == VICTIM_UID
+        }
+        assertTrue(finding.recommendations.any { it.action == ActionType.RESTRICT_BACKGROUND && it.requiresPrivilege })
+    }
+
+    @Test fun omittedPowerWithZeroCountersStillAllowsGenuinelyNewUidJobDeltas() = runTest {
+        val pipeline = collectWindows("ordinary job", "alarm", currentVictimAlarms = 0,
+            baselineVictimAlarms = 0, historicalVictimAlarms = 0,
+            omittedVictimBaselinePower = true, historicalVictimJobs = 8, currentVictimJobs = 120)
+        assertEquals(5, pipeline.store.baselines.size)
+        assertTrue(pipeline.captures.all { it.appMeasurementsComplete })
+        assertEquals(5, AppWindows.select(pipeline.inputs).size)
+        assertEquals(120L, pipeline.store.rows.last { it.uid == VICTIM_UID }.jobCount)
+        assertEquals(1200L, pipeline.store.rows.last { it.uid == VICTIM_UID }.jobMs)
+        assertTrue(InsightEngine.analyze(pipeline.inputs, 36).findings.any {
+            it.type == FindingType.JOB_STORM && (it.subject as? Subject.App)?.uid == VICTIM_UID
+        })
+    }
+
+    private data class Pipeline(
+        val store: Store,
+        val inputs: InsightInputs,
+        val captures: List<BatteryStatsParser.FullSnapshot>,
+    )
 
     private suspend fun TestScope.collectWindows(
         jobName: String,
@@ -123,8 +182,14 @@ class StructuredStatsInsightsPipelineTest {
         invalidLastPower: Boolean = false,
         baselineVictimAlarms: Long = 100,
         historicalVictimAlarms: Long = 8,
+        omittedVictimBaselinePower: Boolean = false,
+        baselineVictimJobs: Long = 0,
+        historicalBaselineVictimJobs: Long = baselineVictimJobs,
+        historicalVictimJobs: Long = 0,
+        currentVictimJobs: Long = 0,
     ): Pipeline {
         val store = Store()
+        val captures = mutableListOf<BatteryStatsParser.FullSnapshot>()
         val outputs = ArrayDeque<String>()
         val shell = object : StatsShell {
             override val mode = ShellRunner.Mode.SHIZUKU
@@ -139,7 +204,9 @@ class StructuredStatsInsightsPipelineTest {
         // Change only wall-clock capture time: all measurements and window identities come from the real repository.
         val clockedSource = object : AppStatsSource {
             override suspend fun snapshot(force: Boolean): AppStatsResult = when (val result = repository.snapshot(force)) {
-                is AppStatsResult.Ready -> result.copy(snapshot = result.snapshot.copy(capturedAt = EPOCH + testScheduler.currentTime))
+                is AppStatsResult.Ready -> result.copy(
+                    snapshot = result.snapshot.copy(capturedAt = EPOCH + testScheduler.currentTime).also(captures::add),
+                )
                 else -> result
             }
         }
@@ -151,24 +218,34 @@ class StructuredStatsInsightsPipelineTest {
             val id = "session$index"
             val start = EPOCH + testScheduler.currentTime
             val window = StructuredBatteryStatsFixtures.START_CLOCK + index
-            fun dump(end: Boolean): String = StructuredBatteryStatsFixtures.dump(
-                startClock = window + if (end && resetLastWindow && index == 4) 1 else 0,
-                uids = listOf(
-                    StructuredBatteryStatsFixtures.Uid(ATTACKER_UID, "attacker.app", if (end) 2.5 else 1.5,
-                        alarmName, if (end) 1 else 0, jobName, if (end) 1 else 0, if (end) 10 else 0),
-                    StructuredBatteryStatsFixtures.Uid(VICTIM_UID, "victim.app",
-                        if (end && invalidLastPower && index == 4) Double.NaN else if (end) 2.0 else 1.0,
-                        "victim real alarm", baselineVictimAlarms + if (end) {
-                            if (index == 4) currentVictimAlarms else historicalVictimAlarms
-                        } else 0),
-                ),
-            )
+            fun dump(end: Boolean): String {
+                val victimJobs = (if (index == 4) baselineVictimJobs else historicalBaselineVictimJobs) + if (end) {
+                    if (index == 4) currentVictimJobs else historicalVictimJobs
+                } else 0
+                return StructuredBatteryStatsFixtures.dump(
+                    startClock = window + if (end && resetLastWindow && index == 4) 1 else 0,
+                    uids = listOf(
+                        StructuredBatteryStatsFixtures.Uid(ATTACKER_UID, "attacker.app", if (end) 2.5 else 1.5,
+                            alarmName, if (end) 1 else 0, jobName, if (end) 1 else 0, if (end) 10 else 0),
+                        StructuredBatteryStatsFixtures.Uid(VICTIM_UID, "victim.app",
+                            if (!end && omittedVictimBaselinePower) null else
+                                if (end && invalidLastPower && index == 4) Double.NaN else if (end) 2.0 else 1.0,
+                            "victim real alarm", baselineVictimAlarms + if (end) {
+                                if (index == 4) currentVictimAlarms else historicalVictimAlarms
+                            } else 0,
+                            jobName.takeIf { baselineVictimJobs > 0 || historicalVictimJobs > 0 || currentVictimJobs > 0 },
+                            victimJobs, victimJobs * 10),
+                    ),
+                )
+            }
             outputs += dump(end = false)
             store.openDischarge(id, start)
             runCurrent()
             advanceTimeBy(SessionSnapshotCollector.BASELINE_DEBOUNCE_MS)
             runCurrent()
-            assertNotNull("A genuine complete baseline must be stored", store.baselines[id])
+            if (!omittedVictimBaselinePower || (baselineVictimAlarms == 0L && baselineVictimJobs == 0L)) {
+                assertNotNull("A genuine complete baseline must be stored", store.baselines[id])
+            }
             advanceTimeBy(TWO_HOURS - SessionSnapshotCollector.BASELINE_DEBOUNCE_MS - SessionSnapshotCollector.END_DEBOUNCE_MS)
             runCurrent()
             store.close(id, EPOCH + testScheduler.currentTime)
@@ -188,7 +265,7 @@ class StructuredStatsInsightsPipelineTest {
             sessions = store.sessions.values.toList(), days = emptyList(), appRows = store.rows,
             wakers = emptyList(), capacity = emptyList(), dozeWhitelist = emptySet(), actions = emptyList(), findings = emptyList(),
         )
-        return Pipeline(store, inputs)
+        return Pipeline(store, inputs, captures)
     }
 
     private class Store : SessionSnapshotStore {

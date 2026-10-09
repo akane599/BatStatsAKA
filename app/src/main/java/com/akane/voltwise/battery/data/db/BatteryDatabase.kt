@@ -154,6 +154,9 @@ abstract class BatteryDatabase : RoomDatabase() {
         val MIGRATION_8_9 = object : Migration(8, 9) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("UPDATE `charge_sessions` SET `appCaptureStartMs` = NULL, `appCaptureEndMs` = NULL")
+                // Migration connections may not enforce foreign keys, so retire children explicitly.
+                db.execSQL("DELETE FROM `app_snapshot_uids`")
+                db.execSQL("DELETE FROM `snapshot_device_wakers`")
                 db.execSQL("DELETE FROM `app_snapshots`")
                 db.execSQL("DELETE FROM `session_device_wakers`")
                 // Device payloads can also carry app attributions from those untrusted captures.

@@ -4,6 +4,7 @@ import com.akane.voltwise.battery.insights.engine.detectors.device.DeviceDetecto
 import com.akane.voltwise.battery.insights.model.AttributionKind
 import com.akane.voltwise.battery.insights.model.DeviceWakerInput
 import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.InsightInputs
 import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.MetricUnit
 import com.akane.voltwise.battery.insights.model.WakerKind
@@ -59,12 +60,46 @@ class DeviceDetectorsTest {
             DeviceDetectors.detect(inputs(shortHistory + sustained, emptyList())).isEmpty())
     }
 
+    @Test fun `screen off drain remains current at seven days and expires one millisecond later`() {
+        assertDeviceExpiry(drainInput(), FindingType.SCREEN_OFF_DRAIN_HIGH)
+    }
+
+    @Test fun `doze blocked remains current at seven days and expires one millisecond later`() {
+        assertDeviceExpiry(dozeInput(), FindingType.DOZE_BLOCKED)
+    }
+
+    @Test fun `device freshness retains import and future measurement exclusions`() {
+        for (input in listOf(drainInput(), dozeInput())) {
+            assertEquals(1, DeviceDetectors.detect(input).size)
+            val current = input.sessions.last()
+            assertTrue(DeviceDetectors.detect(input.copy(
+                sessions = input.sessions.dropLast(1) + current.copy(imported = true),
+            )).isEmpty())
+            assertTrue(DeviceDetectors.detect(input.copy(nowMs = current.endMs - 1)).isEmpty())
+        }
+    }
+
+    @Test fun `fresh whitelist capture remains independent of expired device measurement`() {
+        val base = drainInput()
+        val current = base.sessions.last()
+        val input = base.copy(
+            nowMs = current.endMs + 7 * 24 * HOUR + 1,
+            sessions = base.sessions.dropLast(1) + current.copy(
+                appWindow = current.appWindow!!.copy(captureEndMs = current.endMs + HOUR / 20),
+            ),
+            appSessions = listOf(row(current.id)),
+            dozeUserWhitelist = setOf(APP),
+        )
+        assertEquals(FindingType.DOZE_WHITELISTED_DRAINER, DeviceDetectors.detect(input).single().type)
+    }
+
     @Test fun `seeded stationary drain stays silent and realistic sustained effect remains detectable`() {
         val trials = 500
         for ((mode, seed) in listOf("flat" to 401, "noisy" to 402, "AR1" to 403)) {
             val random = Random(seed)
             var falseFindings = 0
             var detectedEffects = 0
+            var staleFindings = 0
             repeat(trials) {
                 var noise = 0.0
                 val stationary = (0..7).map { index ->
@@ -82,10 +117,18 @@ class DeviceDetectorsTest {
                 if (DeviceDetectors.detect(inputs(changed, emptyList())).any {
                     it.type == FindingType.SCREEN_OFF_DRAIN_HIGH
                 }) detectedEffects++
+                val expired = inputs(changed, emptyList()).copy(
+                    nowMs = changed.last().endMs + 7 * 24 * HOUR + 1,
+                )
+                staleFindings += DeviceDetectors.detect(expired).count {
+                    it.type == FindingType.SCREEN_OFF_DRAIN_HIGH
+                }
             }
-            println("Screen-off $mode: $falseFindings/$trials false findings, $detectedEffects/$trials sustained effects (seed $seed)")
+            println("Screen-off $mode: $falseFindings/$trials false findings (maximum 10), " +
+                "$detectedEffects/$trials sustained effects, $staleFindings/$trials stale findings (bound 0; seed $seed)")
             assertTrue("$mode false findings $falseFindings/$trials; maximum 10", falseFindings <= 10)
             assertEquals("$mode must detect a sustained 1 to 3 percent per hour effect", trials, detectedEffects)
+            assertEquals("$mode expired sustained effects must never fire", 0, staleFindings)
         }
     }
 
@@ -200,6 +243,19 @@ class DeviceDetectorsTest {
         assertEquals(5, kernelOnly.size)
         assertTrue(kernelOnly.all { it.kind == AttributionKind.KERNEL_WAKELOCK })
     }
+
+    private fun assertDeviceExpiry(input: InsightInputs, type: FindingType) {
+        val boundary = input.copy(nowMs = input.sessions.last().endMs + 7 * 24 * HOUR)
+        val finding = DeviceDetectors.detect(boundary).single()
+        assertEquals(type, finding.type)
+        assertEquals("Older sessions must remain available for the baseline", 4, finding.evidence.first().sessions)
+        assertTrue("The latest device measurement expires immediately after seven days",
+            DeviceDetectors.detect(boundary.copy(nowMs = boundary.nowMs + 1)).isEmpty())
+    }
+
+    private fun drainInput() = inputs((0..4).map {
+        session(it).copy(screenOffUah = if (it < 4) 40_000 else 160_000)
+    }, emptyList())
 
     private fun dozeInput() = inputs((0..4).map {
         session(it, 2 * HOUR).copy(screenOffDozeMs = if (it < 4) HOUR * 16 / 10 else HOUR / 10,

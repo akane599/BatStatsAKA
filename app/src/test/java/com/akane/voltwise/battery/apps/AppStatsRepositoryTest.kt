@@ -305,10 +305,34 @@ class AppStatsRepositoryTest {
             StructuredBatteryStatsFixtures.Uid(power = null, alarms = 7, alarmName = "alarm\ncontinuation"),
         ))
         val shell = FakeShell().apply { next = { Outcome.Success(sparse, access) } }
-        val ready = repository(shell).snapshot() as AppStatsResult.Ready
+        val repository = repository(shell)
+        val ready = repository.snapshot() as AppStatsResult.Ready
         assertTrue(ready.snapshot.apps.isEmpty())
         assertEquals(7, ready.snapshot.alarms.single().wakeups)
+        assertEquals("alarm\ncontinuation", ready.snapshot.alarms.single().tag)
+        assertFalse("Positive counters without an app row cannot certify a baseline", ready.snapshot.appMeasurementsComplete)
+        assertEquals(0, ready.snapshot.rejectedRecords)
+        assertSame(ready.snapshot, repository.cached.value)
+        assertTrue(diagnostics.isEmpty())
+    }
+
+    @Test fun knownUidWithoutPowerAndZeroCountersRemainsReadyEmptyAndComplete() = runTest {
+        val sparse = StructuredBatteryStatsFixtures.dump(listOf(
+            StructuredBatteryStatsFixtures.Uid(power = null, alarms = 0, alarmName = "alarm\ncontinuation",
+                jobName = "job\ncontinuation", jobs = 0, jobMs = 0),
+        ))
+        val shell = FakeShell().apply { next = { Outcome.Success(sparse, access) } }
+        val repository = repository(shell)
+        val ready = repository.snapshot() as AppStatsResult.Ready
+        assertTrue(ready.snapshot.apps.isEmpty())
+        assertEquals(0, ready.snapshot.alarms.single().wakeups)
+        assertEquals("alarm\ncontinuation", ready.snapshot.alarms.single().tag)
+        assertEquals(0, ready.snapshot.jobs.single().count)
+        assertEquals(0L, ready.snapshot.jobs.single().totalTimeMs)
+        assertEquals("job\ncontinuation", ready.snapshot.jobs.single().jobName)
         assertTrue(ready.snapshot.appMeasurementsComplete)
+        assertEquals(0, ready.snapshot.rejectedRecords)
+        assertSame(ready.snapshot, repository.cached.value)
         assertTrue(diagnostics.isEmpty())
     }
 

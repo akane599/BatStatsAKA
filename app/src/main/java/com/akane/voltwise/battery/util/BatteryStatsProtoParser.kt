@@ -356,6 +356,8 @@ object BatteryStatsProtoParser {
                 }
             }
             fun state(kind: Int): Long? = if ("st" in invalidUidTags.orEmpty()) null else stateTimes[kind] ?: 0L
+            val top = state(0)
+            val background = state(3)
             val network = measured("nt") {
                 val item = uid.message(17)
                 fun n(field: Int) = item?.nonnegative(field) ?: 0L
@@ -433,10 +435,19 @@ object BatteryStatsProtoParser {
             val partialBgMs = total("wl", partial.mapNotNull { it.backgroundTimeMs })
             val gpsMs = total("sr", uidSensors.filter { it.sensorHandle == -10000 }.map { it.totalTimeMs })
             val sensorMs = total("sr", uidSensors.filter { it.sensorHandle != -10000 }.map { it.totalTimeMs })
+            // An omitted energy consumer can still own cumulative counters (for example proxy
+            // jobs). Losing those counters from a primary-app baseline would fabricate later deltas.
+            // Check only fields carried to session snapshots; zero omissions and details stay valid.
+            if (power == null && id in BatteryStatsParser.FIRST_APPLICATION_UID until BatteryStatsParser.PER_USER_RANGE &&
+                listOf(cpuMs, aggregateMs, foreground, foregroundService, top, background,
+                    network?.mobileRxBytes, network?.mobileTxBytes, network?.wifiRxBytes, network?.wifiTxBytes,
+                    network?.mobileActiveTimeMs, alarmCount, jobCount, jobMs, syncCount, partialCount,
+                    partialBgMs, gpsMs, sensorMs).any { it != null && it > 0 }
+            ) appsComplete = false
             power?.copy(
                 cpuTimeMs = cpuMs, wakeLockTimeMs = aggregateMs,
                 foregroundTimeMs = foreground, foregroundServiceTimeMs = foregroundService,
-                topTimeMs = state(0), backgroundTimeMs = state(3), cachedTimeMs = state(6),
+                topTimeMs = top, backgroundTimeMs = background, cachedTimeMs = state(6),
                 mobileRxBytes = network?.mobileRxBytes, mobileTxBytes = network?.mobileTxBytes,
                 wifiRxBytes = network?.wifiRxBytes, wifiTxBytes = network?.wifiTxBytes,
                 mobileRxPackets = packets(7), mobileTxPackets = packets(8), wifiRxPackets = packets(9), wifiTxPackets = packets(10),

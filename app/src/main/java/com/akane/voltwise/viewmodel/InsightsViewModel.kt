@@ -24,28 +24,18 @@ class InsightsViewModel(
     private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope, applyResults)
     private val analyzing = MutableStateFlow(false)
     private val error = MutableStateFlow<InsightMessageCode?>(null)
-    private var observedAnalysisAt: Long? = null
-    private var analysisFailedAt: Long? = null
+    private var analysisFailedRevision = 0L
     private var analysisFailureResult: InsightActionMessage? = null
     val effects = flow.effects
 
     init {
         viewModelScope.launch {
-            var initial = true
-            source.lastAnalyzedAt.collect { at ->
-                val failedAt = analysisFailedAt
-                if (error.value == InsightMessageCode.ANALYSIS_FAILED) {
-                    if (initial) {
-                        // Loading the first timestamp is not evidence of a successful refresh.
-                        analysisFailedAt = at
-                    } else if (at != null && (failedAt == null || at > failedAt)) {
-                        applyResults.consume(analysisFailureResult)
-                        analysisFailureResult = null
-                        error.value = null
-                    }
+            source.successfulAnalysisRevision.collect { revision ->
+                if (error.value == InsightMessageCode.ANALYSIS_FAILED && revision > analysisFailedRevision) {
+                    applyResults.consume(analysisFailureResult)
+                    analysisFailureResult = null
+                    error.value = null
                 }
-                observedAnalysisAt = at
-                initial = false
             }
         }
     }
@@ -98,7 +88,7 @@ class InsightsViewModel(
         viewModelScope.launch {
             try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) {
                 if (!currentCoroutineContext().isActive) return@launch
-                if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailedAt = observedAnalysisAt
+                if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailedRevision = source.successfulAnalysisRevision.value
                 error.value = code
                 val published = flow.message(InsightActionMessage(code))
                 if (code == InsightMessageCode.ANALYSIS_FAILED) analysisFailureResult = published

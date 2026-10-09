@@ -116,6 +116,79 @@ class InsightsViewModelTest {
         assertTrue(adapter.report.value?.findings?.isEmpty() == true)
     }
 
+    @Test fun sameClockBackgroundSuccessRecoversThroughRealRepositoryAndAdapter() = runTest {
+        assertClockIndependentRecovery(100)
+    }
+
+    @Test fun backwardClockBackgroundSuccessRecoversThroughRealRepositoryAndAdapter() = runTest {
+        assertClockIndependentRecovery(99)
+    }
+
+    private suspend fun TestScope.assertClockIndependentRecovery(recoveryAt: Long) {
+        var now = 100L
+        var failDump = false
+        val sessions = object : UnusedSessionDao() {
+            override fun filteredSessions(type: SessionType?, query: String, limit: Int) = flowOf(emptyList<ChargeSession>())
+            override suspend fun closedSessionsBetween(from: Long, to: Long) = emptyList<ChargeSession>()
+            override fun capacityEstimates(limit: Int) = flowOf(emptyList<CapacityEstimateRow>())
+        }
+        val rows = MutableStateFlow<List<InsightFindingEntity>>(emptyList())
+        val dao = object : UnusedInsightDao() {
+            override fun findings() = rows
+            override suspend fun findingsOnce() = rows.value
+            override fun actions() = flowOf(emptyList<InsightActionEntity>())
+            override suspend fun actionsOnce() = emptyList<InsightActionEntity>()
+            override suspend fun upsertFindings(list: List<InsightFindingEntity>) { rows.value = list }
+        }
+        val clock = object : Clock() {
+            override fun getZone() = ZoneOffset.UTC
+            override fun withZone(zone: java.time.ZoneId): Clock = this
+            override fun instant() = Instant.ofEpochMilli(now)
+        }
+        val insights = InsightRepository(
+            sessions,
+            object : UnusedDailySummaryDao() { override suspend fun range(fromDay: Long, toDay: Long) = emptyList<DailySummary>() },
+            object : UnusedAppUsageDao() {
+                override suspend fun usageRowsForSessions(sessionIds: List<String>) = emptyList<SessionAppUsage>()
+                override suspend fun sessionWakers(sessionIds: List<String>) = emptyList<SessionDeviceWaker>()
+            },
+            dao, backgroundScope, clock, { null }, { false }, { if (failDump) error("dump failed") },
+            FakeKeyValueStore(), maintenance = HistoryMaintenance(), ioDispatcher = dispatcher, analyzeDispatcher = dispatcher,
+            analyze = { InsightReport(it.nowMs, listOf(insightFinding()), insightFinding()) },
+        )
+        val journal = InsightActionRepository(dao, { error("unexpected action") }, object : TargetInspector {
+            override val sdkInt = 37
+            override fun installedUid(pkg: String, userId: Int): Int? = error("unexpected inspection")
+            override fun packagesForUid(uid: Int): List<String> = error("unexpected inspection")
+            override fun roleHolders(): Set<String> = error("unexpected inspection")
+        }, { now }, {})
+        val shell = ShellRunner({ ShellRunner.Mode.NONE }, { _, _, _ -> error("unexpected shell call") }, { false }, { 0L })
+        val adapter = DefaultInsightsRepository(insights, journal, shell, sessions, { now })
+        insights.refresh()
+        // Keep eligibility's unrelated Default-dispatcher work out of this recovery regression.
+        val repository = object : InsightsRepository by adapter {
+            override val eligibleSessionCount = flowOf(0)
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        assertEquals(100L, vm.state.value.lastAnalyzedAt)
+        failDump = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, results.latest.value?.code)
+
+        now = recoveryAt
+        insights.refresh()
+        runCurrent()
+        assertEquals(recoveryAt, vm.state.value.lastAnalyzedAt)
+        assertEquals(recoveryAt, insights.report.value?.generatedAtMs)
+        assertNull("successful background analysis at $recoveryAt must clear the failure", vm.state.value.error)
+        assertNull("recovery must retire its held failure outcome", results.latest.value)
+        assertNull(vm.state.value.apply.lastResult)
+    }
+
     @Test fun mapsHeadlineKeyFindingsTrendsJournalEffectsAndLearningCount() = runTest {
         val key = insightFinding()
         val up = key.copy(key = "trend.up", type = FindingType.TREND, severity = Severity.INFO, direction = Direction.UP)
@@ -219,6 +292,7 @@ class InsightsViewModelTest {
         assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
 
         source.lastAnalyzedAt.value = 101
+        source.successfulAnalysisRevision.value++
         runCurrent()
         assertEquals(101L, vm.state.value.lastAnalyzedAt)
         assertNull("a newer successful background analysis must clear analysis failure", vm.state.value.error)
@@ -236,6 +310,7 @@ class InsightsViewModelTest {
         assertEquals(InsightMessageCode.ANALYSIS_FAILED, results.latest.value?.code)
 
         source.lastAnalyzedAt.value = 101
+        source.successfulAnalysisRevision.value++
         runCurrent()
         assertNull("background recovery must retire the unconsumed analysis failure", results.latest.value)
 
@@ -263,6 +338,7 @@ class InsightsViewModelTest {
         assertTrue(newer!!.seq > failure!!.seq)
 
         source.lastAnalyzedAt.value = 101
+        source.successfulAnalysisRevision.value++
         runCurrent()
         assertNull(vm.state.value.error)
         assertSame("recovery must not consume a newer apply outcome", newer, results.latest.value)
@@ -335,7 +411,7 @@ class InsightsViewModelTest {
         assertSame(newer, vm2.state.value.apply.lastResult)
     }
 
-    @Test fun unchangedOrOlderAnalysisTimestampKeepsAnalysisFailure() = runTest {
+    @Test fun timestampEmissionsWithoutSuccessfulRevisionKeepAnalysisFailure() = runTest {
         val timestamps = kotlinx.coroutines.flow.MutableSharedFlow<Long?>(replay = 1)
         timestamps.emit(100)
         val repository = object : InsightsRepository by source {
@@ -347,15 +423,15 @@ class InsightsViewModelTest {
         source.analyzeFailure = true
         vm.onEvent(InsightsEvent.AnalyzeNow)
         runCurrent()
-        for (at in listOf(100L, 99L, 100L)) {
+        for (at in listOf(100L, 99L, 100L, 101L)) {
             timestamps.emit(at)
             runCurrent()
-            assertEquals("timestamp $at must not erase a failure recorded at 100",
+            assertEquals("timestamp $at without a completed analysis must keep the failure",
                 InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
         }
-        timestamps.emit(101)
+        source.successfulAnalysisRevision.value++
         runCurrent()
-        assertNull("recovery compares against the failure timestamp, not the last emission", vm.state.value.error)
+        assertNull("a completed analysis clears the failure independently of timestamp emissions", vm.state.value.error)
     }
 
     @Test fun firstAnalysisTimestampEmissionDoesNotClearAnalysisFailure() = runTest {
@@ -379,7 +455,11 @@ class InsightsViewModelTest {
             InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
         timestamps.emit(101)
         runCurrent()
-        assertNull("only a later timestamp proves recovery", vm.state.value.error)
+        assertEquals("even a newer loaded timestamp is not a successful refresh",
+            InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        source.successfulAnalysisRevision.value++
+        runCurrent()
+        assertNull("a completed analysis proves recovery", vm.state.value.error)
     }
 
     @Test fun firstSuccessfulBackgroundAnalysisClearsFailureWithoutAPreviousTimestamp() = runTest {
@@ -390,6 +470,7 @@ class InsightsViewModelTest {
         runCurrent()
         assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
         source.lastAnalyzedAt.value = 100
+        source.successfulAnalysisRevision.value++
         runCurrent()
         assertNull("a first successful analysis after the initial null must clear failure", vm.state.value.error)
     }
@@ -406,10 +487,59 @@ class InsightsViewModelTest {
         runCurrent()
         assertEquals(InsightMessageCode.FEEDBACK_FAILED, vm.state.value.error)
         source.lastAnalyzedAt.value = 101
+        source.successfulAnalysisRevision.value++
         runCurrent()
         assertEquals(101L, vm.state.value.lastAnalyzedAt)
         assertEquals("analysis success must not erase feedback failure",
             InsightMessageCode.FEEDBACK_FAILED, vm.state.value.error)
+    }
+
+    @Test fun failureCapturesCurrentRevisionBeforeItsObserverHandlesIt() = runTest {
+        source.successfulAnalysisRevision.value = 1
+        val repository = object : InsightsRepository by source {
+            override suspend fun analyzeNow() {
+                source.successfulAnalysisRevision.value = 2
+                error("failure after an earlier completion")
+            }
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals("a completion before the failure must not clear the new failure",
+            InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, results.latest.value?.code)
+        source.successfulAnalysisRevision.value = 3
+        runCurrent()
+        assertNull(vm.state.value.error)
+        assertNull(results.latest.value)
+    }
+
+    @OptIn(kotlinx.coroutines.InternalCoroutinesApi::class)
+    @Test fun firstObservedRevisionCanRecoverIfSuccessHappenedAfterFailure() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val revisions = source.successfulAnalysisRevision
+        val repository = object : InsightsRepository by source {
+            override val successfulAnalysisRevision = object : kotlinx.coroutines.flow.StateFlow<Long> by revisions {
+                override suspend fun collect(collector: kotlinx.coroutines.flow.FlowCollector<Long>): Nothing {
+                    gate.await()
+                    revisions.collect(collector)
+                }
+            }
+        }
+        val vm = InsightsViewModel(repository, backgroundScope, applyResults = results)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, vm.state.value.error)
+        revisions.value = 1
+        gate.complete(Unit)
+        runCurrent()
+        assertNull("the first observed revision still proves success after the failure", vm.state.value.error)
+        assertNull(results.latest.value)
     }
 
     @Test fun requestApplyRequiresExplicitConfirmAndCannotReplay() = runTest {
@@ -796,6 +926,7 @@ internal class FakeInsightsRepository : InsightsRepository {
     override val actions = MutableStateFlow<List<InsightActionEntity>>(emptyList())
     override val privileged = MutableStateFlow<Boolean?>(true)
     override val lastAnalyzedAt = MutableStateFlow<Long?>(null)
+    override val successfulAnalysisRevision = MutableStateFlow(0L)
     override val eligibleSessionCount = MutableStateFlow(0)
     val applied = mutableListOf<Pair<Finding, Recommendation>>()
     val undone = mutableListOf<Long>()
@@ -811,6 +942,7 @@ internal class FakeInsightsRepository : InsightsRepository {
         analyzeCalls++
         analyzeGate?.await()
         if (analyzeFailure) error("analysis test failure")
+        successfulAnalysisRevision.value++
     }
     override suspend fun dismiss(key: String) { dismissed += key }
     override suspend fun notAProblem(key: String) { feedback += key }
