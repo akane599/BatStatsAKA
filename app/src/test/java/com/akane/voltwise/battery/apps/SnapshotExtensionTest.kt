@@ -55,13 +55,58 @@ class SnapshotExtensionTest {
         row.sensorMs,
     )
 
+    @Test fun countersStartingOnExistingUidUseZeroBaselineAndRemainWakerCandidates() {
+        val base = snapshot(listOf(row().copy(cpuTimeMs = 10), row(9).copy(wakeupAlarms = 5)))
+        val end = snapshot(listOf(row(counter = 200), row(9, power = 10.0).copy(wakeupAlarms = 5)), 200)
+
+        val result = AppUsageDelta.compute(base, end, topN = 1)
+
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        assertEquals(listOf(9, 1), result.rows.map { it.uid })
+        val started = result.rows.single { it.uid == 1 }
+        assertTrue("All starting extended counters must subtract zero", counters(started).all { it == 200L })
+        assertEquals(190L, started.cpuTimeMs)
+    }
+
+    @Test fun everyExtendedCounterCanEstablishBaselineSupportEvenWhenZero() {
+        val supportRows = listOf(
+            row(9).copy(wakeupAlarms = 0),
+            row(9).copy(partialWakelockCount = 0),
+            row(9).copy(partialWakelockBgMs = 0),
+            row(9).copy(jobCount = 0),
+            row(9).copy(jobMs = 0),
+            row(9).copy(syncCount = 0),
+            row(9).copy(fgServiceMs = 0),
+            row(9).copy(topMs = 0),
+            row(9).copy(mobileActiveMs = 0),
+            row(9).copy(gpsMs = 0),
+            row(9).copy(sensorMs = 0),
+        )
+        for ((index, support) in supportRows.withIndex()) {
+            val result = AppUsageDelta.compute(snapshot(listOf(row(), support)), snapshot(listOf(row(counter = 6))))
+            assertTrue("Baseline support from counter $index", counters(result.rows.single()).all { it == 6L })
+        }
+    }
+
+    @Test fun preUpgradeBaselineKeepsExtendedDeltasUnknownForExistingAndNewUids() {
+        val base = snapshot(listOf(row().copy(cpuTimeMs = 10), row(9).copy(foregroundTimeMs = 5)))
+        val end = snapshot(listOf(row(counter = 200), row(2, counter = 7)), 200)
+
+        val result = AppUsageDelta.compute(base, end)
+
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        assertEquals(setOf(1, 2), result.rows.map { it.uid }.toSet())
+        assertTrue(result.rows.all { counters(it).all { value -> value == null } })
+        assertEquals(190L, result.rows.single { it.uid == 1 }.cpuTimeMs)
+    }
+
     @Test fun newCountersDifferenceAndUnsupportedEndpointsStayUnknown() {
         val base = snapshot(listOf(row(counter = 10), row(2), row(3, counter = 5)))
         val end = snapshot(listOf(row(counter = 15), row(2, counter = 6), row(3, power = 2.0), row(4, counter = 7)), 200)
         val result = AppUsageDelta.compute(base, end)
         assertEquals(AppUsageBasis.DELTA, result.basis)
         assertTrue(counters(result.rows.single { it.uid == 1 }).all { it == 5L })
-        assertTrue(counters(result.rows.single { it.uid == 2 }).all { it == null })
+        assertTrue(counters(result.rows.single { it.uid == 2 }).all { it == 6L })
         assertTrue(counters(result.rows.single { it.uid == 3 }).all { it == null })
         assertTrue(counters(result.rows.single { it.uid == 4 }).all { it == 7L })
         assertEquals(100L, result.captureStartMs)
