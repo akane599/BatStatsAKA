@@ -22,7 +22,7 @@ Room (sessions, session_app_usage, *_device_wakers, insight_*)
                  └─ battery/insights/InsightNotifier.kt  one HIGH finding per 24 h
 ```
 
-Every `report` publish re-reads the findings table under a small `publishLock`; `refresh()`'s commit (upsert, `LAST_ANALYZED_AT`, publish) runs under `NonCancellable`, so a cancelled refresh writes all of it or none, separate from the analysis mutex, so the Room-driven republish (initial load, Clear history) is never held back by a running analysis; `refresh()` runs under the analysis mutex and captures `HistoryMaintenance`'s clear generation before
+Every `report` publish re-reads the findings table under a small `publishLock`, separate from the analysis mutex, so the Room-driven republish (initial load, Clear history) is never held back by a running analysis; `refresh()`'s commit (upsert, `LAST_ANALYZED_AT`, publish) runs under `NonCancellable`, so a cancelled refresh writes all of it or none; `refresh()` runs under the analysis mutex and captures `HistoryMaintenance`'s clear generation before
 reading; its writes happen under `HistoryMaintenance.mutations` and are dropped when a history clear ran in
 between (no stale report after Clear history). `dismiss(key)` / `notAProblem(key)` write user feedback
 (a down-weighting multiplier) that the next refresh honours, under the same `mutations` lock and clear-generation
