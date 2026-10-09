@@ -100,6 +100,29 @@ class AppDetectorTest(private val type: FindingType) {
         else assertTrue(detected(censored).isEmpty())
     }
 
+    @Test fun stableJobsInTruncatedHistoryDoNotCreateJobStorm() {
+        org.junit.Assume.assumeTrue(type == FindingType.JOB_STORM)
+        val sessions = (0..9).map { index ->
+            session(index).let {
+                if (index in 4..8) it.copy(appWindow = it.appWindow!!.copy(rowsStored = 30, fullRowSet = true)) else it
+            }
+        }
+        val rows = sessions.flatMapIndexed { index, session ->
+            if (index in 4..8) {
+                val leaders = (0 until 30).map { rank ->
+                    row(session.id).copy(uid = 20_000 + rank, packageName = "example.leader$rank", rank = rank,
+                        powerMah = 60.0 - rank, jobCount = 0, syncCount = 0)
+                }
+                val others = row(session.id).copy(uid = -1, packageName = "", rank = 30, isOthers = true,
+                    powerMah = 5.0, jobCount = 40, syncCount = 0)
+                leaders + others
+            } else {
+                listOf(row(session.id).copy(jobCount = if (index == 9) 45 else 40, syncCount = 0))
+            }
+        }
+        assertTrue("Stable 40 jobs/h history must not turn 45 jobs/h into JOB_STORM", detected(inputs(sessions, rows)).isEmpty())
+    }
+
     @Test fun aggregateOthersIsNeverASubject() {
         val input = detectorInputs(type)
         assertTrue(appFindings(input.copy(appSessions = input.appSessions.map { it.copy(isOthers = true) })).isEmpty())
