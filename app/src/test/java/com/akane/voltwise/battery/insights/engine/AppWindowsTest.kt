@@ -56,6 +56,35 @@ class AppWindowsTest {
         for (metric in Metric.entries) assertNull(AppWindows.value(window, row.unsupported(), metric))
     }
 
+    @Test fun sparseForegroundIsZeroOnlyWithKnownNonnegativeTopTime() {
+        val row = row(session(0).id).copy(fgMs = null, topMs = 0)
+        assertEquals(0.0, AppWindows.foregroundMs(row))
+        assertEquals(1_000.0, AppWindows.foregroundMs(row.copy(topMs = 1_000))!!, 0.0)
+        assertNull(AppWindows.foregroundMs(row.copy(topMs = null)))
+        assertNull(AppWindows.foregroundMs(row.copy(topMs = -1)))
+        assertNull(AppWindows.foregroundMs(row.copy(fgMs = -1)))
+        assertNull(AppWindows.foregroundMs(row.copy(fgMs = 1_000, topMs = null)))
+        assertEquals(3_000.0, AppWindows.foregroundMs(row.copy(fgMs = 1_000, topMs = 2_000))!!, 0.0)
+    }
+
+    @Test fun absentAppWithZeroTailGpsHasExactZeroButPositiveTailRemainsCensored() {
+        val window = truncatedWindow().let { window ->
+            window.copy(rows = window.rows.map { if (it.isOthers) it.copy(gpsMs = 0) else it })
+        }
+        val point = AppWindows.point(window, subject, Metric.GPS_MS_PER_H)!!
+        assertEquals(0.0, point.value)
+        assertNull(point.upperBound)
+        assertFalse(point.censored)
+        assertFalse(point.present)
+
+        val positiveTail = window.copy(rows = window.rows.map { if (it.isOthers) it.copy(gpsMs = 5_000) else it })
+        val censored = AppWindows.point(positiveTail, subject, Metric.GPS_MS_PER_H)!!
+        assertNull(censored.value)
+        assertEquals(2_500.0, censored.upperBound!!, 0.0)
+        assertTrue(censored.censored)
+        assertFalse(censored.present)
+    }
+
     @Test fun fullRowSetAbsenceCarriesMetricSpecificUpperBoundNotZero() {
         val session = session(0).let { it.copy(appWindow = it.appWindow!!.copy(fullRowSet = true)) }
         val others = listOf(
@@ -148,8 +177,10 @@ class AppWindowsTest {
         }
         val zero = window.copy(rows = window.rows.map { if (it.isOthers) it.copy(fgServiceMs = 0) else it })
         val point = AppWindows.point(zero, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!
-        assertEquals(0.0, point.upperBound!!, 0.0)
-        assertNull(point.value)
+        assertEquals(0.0, point.value)
+        assertNull(point.upperBound)
+        assertFalse(point.censored)
+        assertFalse(point.present)
     }
 
     @Test fun spareWakerSlotsAlsoMakeBackgroundWakelockAbsenceExactZero() {

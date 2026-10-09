@@ -89,6 +89,9 @@ object AppWindows {
             // Remaining supported metrics are additive totals divided by a shared window duration.
             else -> window.rows.firstOrNull { it.isOthers }?.let { value(window, it, metric) }
         } ?: return null
+        if (cutoff == 0.0) {
+            return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
+        }
         return AppMetricPoint(window.session.id, window.atMs, null, cutoff, present = false)
     }
 
@@ -125,8 +128,9 @@ object AppWindows {
     }
 
     fun foregroundMs(row: AppSessionInput): Double? {
-        val fg = row.fgMs?.takeIf { it >= 0 } ?: return null
         val top = row.topMs?.takeIf { it >= 0 } ?: return null
+        // A known process-state (st) timer makes an absent sparse foreground (fg) timer an observed zero.
+        val fg = (row.fgMs ?: 0L).takeIf { it >= 0 } ?: return null
         return fg.toDouble() + top.toDouble()
     }
 
