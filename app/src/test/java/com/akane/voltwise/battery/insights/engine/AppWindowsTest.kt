@@ -50,7 +50,7 @@ class AppWindowsTest {
             Metric.GPS_MS_PER_H to 500_000.0, Metric.RADIO_ACTIVE_MS_PER_H to 500_000.0,
             Metric.BG_TIME_SHARE to (2_000_000.0 / (2 * HOUR)),
             Metric.PARTIAL_WAKELOCK_BG_SHARE to (1_000_000.0 / (2 * HOUR)),
-            Metric.FGS_TO_FOREGROUND_RATIO to 30.0,
+            Metric.FGS_TO_FOREGROUND_RATIO to 15.0,
         )
         for ((metric, value) in expected) assertEquals(metric.name, value, AppWindows.value(window, row, metric)!!, 1e-9)
         for (metric in Metric.entries) assertNull(AppWindows.value(window, row.unsupported(), metric))
@@ -128,16 +128,16 @@ class AppWindowsTest {
         assertEquals(1.0 / 3.0, AppWindows.value(window, others, Metric.FGS_TO_FOREGROUND_RATIO)!!, 1e-9)
         val missingApp = row(session.id).copy(fgServiceMs = 40 * 60_000L, fgMs = 0, topMs = 0)
         val missingRatio = AppWindows.value(window, missingApp, Metric.FGS_TO_FOREGROUND_RATIO)!!
-        assertEquals(40.0, missingRatio, 0.0)
+        assertEquals(5.0, missingRatio, 0.0)
         val point = AppWindows.point(window, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!
         assertTrue("The censored bound must cover the missing app's ratio", point.upperBound!! >= missingRatio)
-        assertEquals(60.0, point.upperBound!!, 0.0)
+        assertEquals(7.5, point.upperBound!!, 0.0)
         assertNull(point.value)
         assertTrue(point.censored)
         assertFalse(point.present)
         // Only the tail's FGS total is needed; its foreground fields cannot tighten this bound.
         val noForeground = window.copy(rows = rows.map { if (it.isOthers) it.copy(fgMs = null, topMs = null) else it })
-        assertEquals(60.0, AppWindows.point(noForeground, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!.upperBound!!, 0.0)
+        assertEquals(7.5, AppWindows.point(noForeground, subject, Metric.FGS_TO_FOREGROUND_RATIO)!!.upperBound!!, 0.0)
     }
 
     @Test fun absentAppFgsRatioNeedsNonnegativeTailFgsTotal() {

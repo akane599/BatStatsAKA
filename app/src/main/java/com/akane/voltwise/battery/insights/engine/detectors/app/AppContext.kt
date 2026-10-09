@@ -30,7 +30,7 @@ data class AppContext(val inputs: InsightInputs, val windows: List<EligibleAppWi
         val row = window.row(subject) ?: return false
         val foreground = AppWindows.foregroundMs(row) ?: return false
         val background = row.bgMs?.takeIf { it >= 0 } ?: return false
-        return background.toDouble() >= ratio * maxOf(foreground, AppWindows.FOREGROUND_FLOOR_MS)
+        return background.toDouble() >= ratio * maxOf(foreground, AppWindows.FOREGROUND_FLOOR_MS * window.hours)
     }
 
     /** Excludes the entire evaluated suffix, so persistence cannot train its own baseline. */

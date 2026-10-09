@@ -44,6 +44,37 @@ class AppDetectorRulesTest {
         }
     }
 
+    @Test fun unchangedFgsRateDoesNotBecomeLingeringInLongerWindows() {
+        for (currentHours in listOf(3L, 10L)) {
+            val sessions = (0..4).map { session(it, (if (it < 4) 2L else currentHours) * HOUR) }
+            val rows = sessions.map { row(it.id).copy(fgServiceMs = (it.endMs - it.startMs) / 2) }
+            assertTrue(
+                "An unchanged 30 min/h FGS rate must not fire in a $currentHours-hour window",
+                appFindings(inputs(sessions, rows)).none { it.type == FindingType.LINGERING_FOREGROUND_SERVICE },
+            )
+        }
+    }
+
+    @Test fun fourfoldFgsRateIncreaseStillFiresLingering() {
+        val sessions = (0..4).map { session(it, 2 * HOUR) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(fgServiceMs = if (index < 4) HOUR / 2 else 2 * HOUR)
+        }
+        val finding = appFindings(inputs(sessions, rows)).single { it.type == FindingType.LINGERING_FOREGROUND_SERVICE }
+        assertEquals(Metric.FGS_TO_FOREGROUND_RATIO, finding.evidence.first().metric)
+        assertEquals(15.0, finding.evidence.first().baseline!!, 0.0)
+        assertEquals(60.0, finding.evidence.first().observed, 0.0)
+    }
+
+    @Test fun backgroundDominanceRequiresThreeMinutesPerHourWhenNeverForeground() {
+        for (hours in listOf(1L, 2L, 10L)) {
+            val session = session(0, hours * HOUR)
+            val boundary = row(session.id).copy(bgMs = hours * 180_000L)
+            assertTrue(context(inputs(listOf(session), listOf(boundary))).backgroundDominant())
+            assertFalse(context(inputs(listOf(session), listOf(boundary.copy(bgMs = boundary.bgMs!! - 1)))).backgroundDominant())
+        }
+    }
+
     @Test fun jobStormCanUseSupportedSyncsWithoutJobs() {
         val input = detectorInputs(FindingType.JOB_STORM)
         val finding = JobStorm.detect(context(input.copy(appSessions = input.appSessions.map { it.copy(jobCount = null) }))).single()

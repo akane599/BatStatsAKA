@@ -31,7 +31,7 @@ data class EligibleAppWindow(val session: SessionInput, val durationMs: Double, 
 object AppWindows {
     const val HOUR_MS = 3_600_000.0
     const val SPAN_TOLERANCE = 0.10
-    // A one-minute denominator floor keeps no-foreground FGS ratios finite and interpretable.
+    // A one-minute-per-hour denominator floor keeps no-foreground FGS ratios independent of window length.
     const val FOREGROUND_FLOOR_MS = 60_000.0
 
     fun select(inputs: InsightInputs): List<EligibleAppWindow> {
@@ -85,7 +85,7 @@ object AppWindows {
             Metric.WAKEUP_ALARMS_PER_H -> wakers.mapNotNull { value(window, it, metric) }.minOrNull()
             // The tail's aggregate ratio cannot bound an app with less foreground time.
             Metric.FGS_TO_FOREGROUND_RATIO -> window.rows.firstOrNull { it.isOthers }?.fgServiceMs
-                ?.takeIf { it >= 0 }?.toDouble()?.div(FOREGROUND_FLOOR_MS)
+                ?.takeIf { it >= 0 }?.toDouble()?.div(FOREGROUND_FLOOR_MS * window.hours)
             // Remaining supported metrics are additive totals divided by a shared window duration.
             else -> window.rows.firstOrNull { it.isOthers }?.let { value(window, it, metric) }
         } ?: return null
@@ -117,7 +117,7 @@ object AppWindows {
             Metric.FGS_TO_FOREGROUND_RATIO -> {
                 val fgs = row.fgServiceMs?.takeIf { it >= 0 } ?: return null
                 val foreground = foregroundMs(row) ?: return null
-                fgs.toDouble() / max(FOREGROUND_FLOOR_MS, foreground)
+                fgs.toDouble() / max(FOREGROUND_FLOOR_MS * window.hours, foreground)
             }
             else -> null
         }
