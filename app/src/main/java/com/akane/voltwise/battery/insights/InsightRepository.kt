@@ -90,7 +90,7 @@ class InsightRepository(
                 now, today, resolveFullUah(counter, level, storedFullUah(sessions)), privileged(), sessions,
                 dailyDao.range(today - InsightInputsBuilder.HISTORY_DAYS, today), rows, wakers,
                 sessionDao.capacityEstimates(Int.MAX_VALUE).first(), dozeWhitelist(),
-                insightDao.actionsOnce(), insightDao.findingsOnce(),
+                insightDao.actionsOnce(), insightDao.findingsOnce(), zone = clock.zone,
             )
         }
         val analyzed = withContext(analyzeDispatcher) { analyze(inputs) }

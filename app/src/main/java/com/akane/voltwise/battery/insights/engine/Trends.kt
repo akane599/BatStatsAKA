@@ -1,6 +1,5 @@
 package com.akane.voltwise.battery.insights.engine
 
-import com.akane.voltwise.battery.insights.engine.detectors.device.DAY_MS
 import com.akane.voltwise.battery.insights.engine.detectors.device.percentRate
 import com.akane.voltwise.battery.insights.engine.detectors.device.share
 import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
@@ -15,6 +14,7 @@ import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.SeriesPoint
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
+import java.time.LocalDate
 import kotlin.math.abs
 
 object Trends {
@@ -23,31 +23,36 @@ object Trends {
         val days = inputs.days.filter { it.epochDay in inputs.todayEpochDay - 28 until inputs.todayEpochDay }
             .sortedBy { it.epochDay }
         val split = inputs.todayEpochDay - 7
+        fun dayStart(epochDay: Long): Long =
+            LocalDate.ofEpochDay(epochDay).atStartOfDay(inputs.zone).toInstant().toEpochMilli()
+        val historyStartMs = dayStart(inputs.todayEpochDay - 28)
+        val todayStartMs = dayStart(inputs.todayEpochDay)
+        val splitMs = dayStart(split)
         val device = floors.mapNotNull { (metric, floor) ->
             val points = days.mapNotNull { day -> dayValue(day, metric, inputs.fullUah)?.let { day.epochDay to it } }
             comparison(
                 points.filter { it.first < split }.map { it.second },
                 points.filter { it.first >= split }.map { it.second }, metric, floor, Subject.Device,
-                points.map { SeriesPoint(it.first * DAY_MS, it.second, null, null) },
+                points.map { SeriesPoint(dayStart(it.first), it.second, null, null) },
             )
         }
         val windows = AppWindows.select(inputs).filter {
             val start = it.session.appWindow?.captureStartMs ?: it.session.startMs
-            start >= (inputs.todayEpochDay - 28) * DAY_MS && it.atMs <= inputs.todayEpochDay * DAY_MS
+            start >= historyStartMs && it.atMs <= todayStartMs
         }
         val subjects = windows.flatMap { it.rows }.filterNot { it.isOthers }
             .map { Subject.App(it.uid, it.packageName) }.distinct().sortedWith(compareBy({ it.packageName }, { it.uid }))
         val apps = subjects.mapNotNull { subject ->
-            // Each side needs actual containing observations; censored upper bounds are not measurements.
+            // Exact-zero absences are measurements; censored upper bounds are not.
             val points = windows.mapNotNull { window ->
                 val start = window.session.appWindow?.captureStartMs ?: window.session.startMs
-                val value = window.row(subject)?.let { AppWindows.value(window, it, Metric.POWER_MAH_PER_H) }
+                val value = AppWindows.point(window, subject, Metric.POWER_MAH_PER_H)?.value
                     ?: return@mapNotNull null
                 Triple(start, window.atMs, value)
             }
             comparison(
-                points.filter { it.second <= split * DAY_MS }.map { it.third },
-                points.filter { it.first >= split * DAY_MS }.map { it.third },
+                points.filter { it.second <= splitMs }.map { it.third },
+                points.filter { it.first >= splitMs }.map { it.third },
                 Metric.POWER_MAH_PER_H, 2.0, subject,
                 points.map { SeriesPoint(it.second, it.third, null, null) },
             )
