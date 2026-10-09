@@ -55,7 +55,7 @@ class InsightsViewModel(
             loaded = report != null,
             headline = report?.headline?.toInsightState(privileged, actions, report.generatedAtMs),
             keyFindings = findings.filter { it.type != FindingType.TREND && it.severity != Severity.INFO }.insightSnapshot(),
-            changes = findings.filter { it.type == FindingType.TREND && it.direction != null }.insightSnapshot(),
+            changes = findings.filter { isInsightChange(it.type, it.severity, it.direction) }.insightSnapshot(),
             appliedActions = actionStates(actions, findings),
             privileged = privileged,
             empty = findings.isEmpty(),
@@ -84,6 +84,11 @@ class InsightsViewModel(
             is InsightsEvent.NotAProblem -> launchRead(InsightMessageCode.FEEDBACK_FAILED) { source.notAProblem(event.key) }
             else -> flow.onEvent(event)
         }
+    }
+
+    /** The failure's notice ([error]) dies with this VM, so its held snackbar does too; newer outcomes survive. */
+    override fun onCleared() {
+        applyResults.consume(analysisFailureResult)
     }
 
     private fun launchRead(code: InsightMessageCode, block: suspend () -> Unit) {
