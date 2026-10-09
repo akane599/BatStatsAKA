@@ -186,6 +186,50 @@ class InsightsViewModelTest {
         assertEquals("recovery must not retry analysis", 1, source.analyzeCalls)
     }
 
+    @Test fun successfulBackgroundAnalysisAlsoRetiresHeldFailureResult() = runTest {
+        source.lastAnalyzedAt.value = 100
+        // No screen collector: a stopped activity cannot consume the failure result.
+        val vm = InsightsViewModel(source, backgroundScope, applyResults = results)
+        runCurrent()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, results.latest.value?.code)
+
+        source.lastAnalyzedAt.value = 101
+        runCurrent()
+        assertNull("background recovery must retire the unconsumed analysis failure", results.latest.value)
+
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        assertNull(vm.state.value.error)
+        assertNull("a resumed screen must not receive a stale failure snackbar", vm.state.value.apply.lastResult)
+        assertEquals("recovery must not retry analysis", 1, source.analyzeCalls)
+    }
+
+    @Test fun successfulBackgroundAnalysisKeepsNewerApplyResult() = runTest {
+        source.lastAnalyzedAt.value = 100
+        val vm = start()
+        source.analyzeFailure = true
+        vm.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        val failure = results.latest.value
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, failure?.code)
+
+        source.result = ActionResult.Reverted
+        vm.onEvent(InsightsEvent.Undo(7))
+        runCurrent()
+        val newer = results.latest.value
+        assertEquals(InsightMessageCode.REVERTED, newer?.code)
+        assertTrue(newer!!.seq > failure!!.seq)
+
+        source.lastAnalyzedAt.value = 101
+        runCurrent()
+        assertNull(vm.state.value.error)
+        assertSame("recovery must not consume a newer apply outcome", newer, results.latest.value)
+        assertSame(newer, vm.state.value.apply.lastResult)
+    }
+
     @Test fun unchangedOrOlderAnalysisTimestampKeepsAnalysisFailure() = runTest {
         val timestamps = kotlinx.coroutines.flow.MutableSharedFlow<Long?>(replay = 1)
         timestamps.emit(100)
