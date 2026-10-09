@@ -2,9 +2,12 @@ package com.akane.voltwise.di
 
 import com.akane.voltwise.battery.diagnostics.DiagnosticCode
 import com.akane.voltwise.battery.reconcileAndCatchUpInsights
+import com.akane.voltwise.battery.startInsightNotifications
 import com.akane.voltwise.battery.service.refreshOnFinalizedSessions
 import com.akane.voltwise.battery.data.db.InsightDao
+import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
+import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.actions.ActionExecutor
 import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.insights.actions.PackageManagerTargetInspector
@@ -21,7 +24,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -56,6 +63,91 @@ class InsightsWiringTest {
         } finally {
             scope.coroutineContext[Job]?.cancelAndJoin()
             application.close()
+        }
+    }
+
+    @Test fun notifierDefinitionIsLazyAndDoesNotRequireAndroidContext() {
+        assertEquals(Kind.Singleton, definition(InsightNotifier::class).kind)
+        assertTrue(
+            "Notifier must not be created at Koin startup",
+            appModule.eagerInstances.none { it.beanDefinition.primaryType == InsightNotifier::class },
+        )
+        koinApplication { modules(appModule) }.close()
+    }
+
+    @Test fun notificationStartupWaitsForMigrationReconcileAndRefreshThenForwardsReports() = runTest {
+        val events = mutableListOf<String>()
+        val migrated = CompletableDeferred<Unit>()
+        val reconciled = CompletableDeferred<Unit>()
+        val refreshed = CompletableDeferred<Unit>()
+        val reports = MutableStateFlow<InsightReport?>(null)
+        val first = InsightReport(1L, emptyList(), null)
+        val second = InsightReport(2L, emptyList(), null)
+        val notified = mutableListOf<InsightReport>()
+        val startup = launch {
+            startInsightNotifications(
+                awaitMigrated = { events += "migration"; migrated.await() },
+                catchUp = {
+                    reconcileAndCatchUpInsights(
+                        reconcile = { events += "reconcile"; reconciled.await() },
+                        lastAnalyzedAt = { events += "timestamp"; null },
+                        refresh = { events += "refresh"; refreshed.await(); reports.value = first },
+                        clock = { 30_000_000L },
+                    )
+                },
+                reports = { events += "reports"; reports },
+                maybeNotify = { notified += it },
+            )
+        }
+        runCurrent()
+        assertEquals(listOf("migration"), events)
+        assertTrue(notified.isEmpty())
+        migrated.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("migration", "reconcile"), events)
+        reconciled.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("migration", "reconcile", "timestamp", "refresh"), events)
+        assertTrue(notified.isEmpty())
+        refreshed.complete(Unit)
+        runCurrent()
+        assertEquals(listOf("migration", "reconcile", "timestamp", "refresh", "reports"), events)
+        assertEquals(listOf(first), notified)
+        reports.value = null
+        runCurrent()
+        assertEquals(listOf(first), notified)
+        reports.value = second
+        runCurrent()
+        assertEquals(listOf(first, second), notified)
+        assertTrue(startup.isActive)
+        startup.cancelAndJoin()
+    }
+
+    @Test fun notificationCollectionFailureRecordsAppScopeFailureAndKeepsSiblingsAlive() = runTest {
+        val recorded = mutableListOf<DiagnosticCode>()
+        val scope = createAppScope { recorded += it }
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        try {
+            val collector = scope.launch(dispatcher) {
+                startInsightNotifications(
+                    awaitMigrated = {},
+                    catchUp = {},
+                    reports = { flow { throw IllegalStateException("report collection failed") } },
+                    maybeNotify = { fail("Failing source must not notify") },
+                )
+            }
+            runCurrent()
+            collector.join()
+            assertTrue(collector.isCancelled)
+            assertEquals(listOf(DiagnosticCode.APP_SCOPE_FAILED), recorded)
+            assertTrue(scope.isActive)
+            var siblingRan = false
+            val sibling = scope.launch(dispatcher) { siblingRan = true }
+            runCurrent()
+            sibling.join()
+            assertTrue(siblingRan)
+        } finally {
+            scope.coroutineContext[Job]?.cancelAndJoin()
         }
     }
 
