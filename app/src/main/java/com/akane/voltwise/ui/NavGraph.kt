@@ -24,7 +24,7 @@ import com.akane.voltwise.ui.screens.HistoryScreen
 import com.akane.voltwise.ui.screens.SessionDetailsScreen
 import com.akane.voltwise.ui.screens.SettingsScreen
 import com.akane.voltwise.ui.screens.StatusScreen
-import com.akane.voltwise.ui.screens.insights.FindingDetailsPlaceholder
+import com.akane.voltwise.ui.screens.insights.FindingDetailsScreen
 import com.akane.voltwise.ui.screens.insights.InsightsScreen
 import com.akane.voltwise.ui.screens.now.NowScreen
 import org.koin.androidx.compose.koinViewModel
@@ -71,8 +71,13 @@ fun NavGraph(
             )
         }
 
-        entry<Routes.FindingDetails> { key ->
-            FindingDetailsPlaceholder(onBack = { popBack(key) })
+        // FindingDetails -> Settings › Status (no access); Back, also once Not a problem / Dismiss took the finding away
+        entry<Routes.FindingDetails> { args ->
+            FindingDetailsScreen(
+                findingKey = args.key,
+                onBack = { popBack(args) },
+                onOpenAccessSetup = { topLevelBackStack.navigate(Routes.SettingsStatus) },
+            )
         }
 
         // History -> SessionDetails

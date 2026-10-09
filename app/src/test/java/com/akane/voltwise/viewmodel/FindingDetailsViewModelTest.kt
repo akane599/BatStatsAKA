@@ -1,6 +1,7 @@
 package com.akane.voltwise.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelStore
 import com.akane.voltwise.battery.data.db.InsightActionStatus
 import com.akane.voltwise.battery.insights.actions.ActionResult
 import com.akane.voltwise.battery.insights.actions.RefusalCode
@@ -119,6 +120,35 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
             (snapshot.evidence as MutableList<Evidence>).clear()
             fail("evidence must reject mutation")
         } catch (_: UnsupportedOperationException) { }
+    }
+
+    @Test fun dismissAndNotAProblemReachTheSourceEvenAfterTheScreenIsCleared() = runTest {
+        val vm = start()
+        val store = ViewModelStore().apply { put("vm", vm) }
+        vm.onEvent(InsightsEvent.Dismiss("finding"))
+        vm.onEvent(InsightsEvent.NotAProblem("finding"))
+        store.clear() // Leaving the screen must not cancel feedback already sent.
+        runCurrent()
+        assertEquals("details Dismiss must reach the source", listOf("finding"), source.dismissed)
+        assertEquals("details Not a problem must reach the source", listOf("finding"), source.feedback)
+        assertTrue(source.applied.isEmpty())
+    }
+
+    @Test fun failedFeedbackIsAFixedCodeMessage() = runTest {
+        val failing = object : InsightsRepository by source {
+            override suspend fun dismiss(key: String) = throw IllegalStateException("not user-facing")
+            override suspend fun notAProblem(key: String) = throw IllegalStateException("not user-facing")
+        }
+        val vm = FindingDetailsViewModel(failing, backgroundScope, SavedStateHandle(mapOf("key" to "finding")))
+        val effects = mutableListOf<InsightUiEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        vm.onEvent(InsightsEvent.Dismiss("finding"))
+        vm.onEvent(InsightsEvent.NotAProblem("finding"))
+        runCurrent()
+        assertEquals(
+            listOf(InsightMessageCode.FEEDBACK_FAILED, InsightMessageCode.FEEDBACK_FAILED),
+            effects.map { (it as InsightUiEffect.Message).result.code },
+        )
     }
 
     @Test fun deviceActionsAreRelatedByFindingNotNullPackage() = runTest {
