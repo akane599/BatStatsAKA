@@ -219,8 +219,8 @@ val appModule = module {
     }
     single<InsightsRepository> { DefaultInsightsRepository(get(), get(), get(), get<BatteryDatabase>().sessionDao()) }
     single<NowRepository> {
-        val insights = get<InsightRepository>().report
-        DefaultNowRepository(get(), get(), get(), get(), get(), get(), get(), insights)
+        val insights = get<InsightRepository>()
+        DefaultNowRepository(get(), get(), get(), get(), get(), get(), get(), insights.report, insights.lastAnalyzedAt)
     }
     single<AppDetailsRepository> {
         val insights = get<InsightRepository>().report

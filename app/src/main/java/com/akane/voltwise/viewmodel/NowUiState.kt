@@ -31,7 +31,7 @@ data class NowUiState(
     /** Null until some session produced a capacity estimate. */
     val health: HealthState? = null,
     val topApps: TopAppsState = TopAppsState.Empty,
-    /** Null before a report; a non-null summary with [InsightsSummary.allGood] has no active concerns. */
+    /** Null until analysis has completed and a report is loaded; [InsightsSummary.allGood] means no active concerns. */
     val insightsSummary: InsightsSummary? = null,
     /** The applied correction while its notice is pending (Undo / Keep), else null. */
     val calibrationNotice: CurrentCalibration? = null,
