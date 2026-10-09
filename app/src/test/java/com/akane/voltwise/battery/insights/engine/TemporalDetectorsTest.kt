@@ -45,14 +45,16 @@ class TemporalDetectorsTest {
         })).size)
     }
 
-    @Test fun `weekly app comparisons normalize duration and require containing eligible windows`() {
+    @Test fun `weekly app comparisons normalize duration and require measured eligible windows`() {
         val sessions = (75..78).map { session(it) } + (92..95).map { session(it, 2 * HOUR) }
         val rows = sessions.mapIndexed { i, s -> row(s.id).copy(powerMah = if (i < 4) 5.0 else 30.0) }
         val input = inputs(sessions, rows)
         val trend = Trends.detect(input).single()
         assertEquals("TREND:$APP:POWER_MAH_PER_H", trend.key)
         assertEquals(15.0, trend.evidence.single().observed, 0.0)
-        assertTrue(Trends.detect(input.copy(appSessions = rows.drop(1))).isEmpty())
+        val withExactZero = Trends.detect(input.copy(appSessions = rows.drop(1))).single()
+        assertEquals(0.0, withExactZero.series.first().value, 0.0)
+        assertEquals(15.0, withExactZero.evidence.single().observed, 0.0)
         assertTrue(Trends.detect(input.copy(sessions = sessions.map { it.copy(imported = true) })).isEmpty())
         assertTrue(Trends.detect(input.copy(appSessions = rows.map { it.copy(isOthers = true) })).isEmpty())
     }

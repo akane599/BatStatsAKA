@@ -1,5 +1,8 @@
 package com.akane.voltwise.battery.insights.model
 
+import java.time.ZoneId
+import java.time.ZoneOffset
+
 /** Pure analysis inputs. The repository supplies only closed sessions (appWindow only when READY). */
 data class InsightInputs(
     val nowMs: Long,
@@ -14,6 +17,8 @@ data class InsightInputs(
     val dozeUserWhitelist: Set<String>?,
     val actions: List<AppliedActionInput>,
     val feedback: Map<String, Double>,
+    /** Zone used to assign local epoch days; UTC preserves fixtures without a repository clock. */
+    val zone: ZoneId = ZoneOffset.UTC,
 )
 
 data class SessionInput(

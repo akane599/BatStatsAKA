@@ -5,6 +5,8 @@ import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.insights.model.*
 import com.akane.voltwise.battery.measurement.HealthSummary
 import com.akane.voltwise.battery.util.BatteryStatsParser
+import java.time.ZoneId
+import java.time.ZoneOffset
 
 /** Maps stored measurements without replacing unsupported (null) counters with zero. */
 object InsightInputsBuilder {
@@ -24,6 +26,7 @@ object InsightInputsBuilder {
         dozeWhitelist: Set<String>?,
         actions: List<InsightActionEntity>,
         findings: List<InsightFindingEntity>,
+        zone: ZoneId = ZoneOffset.UTC,
     ): InsightInputs {
         val rowsBySession = appRows.groupBy { it.sessionId }
         val findingsByKey = findings.associateBy { it.key }
@@ -92,6 +95,7 @@ object InsightInputsBuilder {
                 AppliedActionInput(it.id, it.findingKey, type, it.packageName, it.uid, it.appliedAt, status, metric)
             },
             findings.associate { it.key to it.feedbackMultiplier },
+            zone = zone,
         )
     }
 
