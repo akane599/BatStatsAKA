@@ -79,7 +79,7 @@ if latest == 8:
         assert entity.get('indices', []) == old_entity.get('indices', [])
         assert entity.get('foreignKeys', []) == old_entity.get('foreignKeys', [])
     metric = next(f for e in schema['entities'] if e['tableName'] == 'insight_actions' for f in e['fields'] if f['columnName'] == 'metric')
-    assert metric['affinity'] == 'TEXT' and not metric['notNull'] and 'defaultValue' not in metric
+    assert metric['affinity'] == 'TEXT' and not metric.get('notNull', False) and 'defaultValue' not in metric
 before = {e['tableName']: e for e in schemas[latest - 1]['entities']}
 for entity in schema['entities']:
     table = entity['tableName']
