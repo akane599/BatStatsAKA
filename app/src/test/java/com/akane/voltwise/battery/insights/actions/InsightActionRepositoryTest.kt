@@ -404,6 +404,81 @@ class InsightActionRepositoryTest {
         assertEquals(1, f.alerts); assertEquals(ONE_SHOT, f.row().status); assertTrue(f.commands.isEmpty())
     }
 
+    @Test fun settingsIntentsReturnWhilePrivilegedApplyIsSuspended() = runTest {
+        for ((type, spec) in listOf(
+            ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS to IntentSpec("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS"),
+            ActionType.OPEN_APP_SETTINGS to IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", pkg),
+        )) {
+            val f = Fixture()
+            f.reply("active", "", "rare")
+            val entered = CompletableDeferred<Unit>()
+            val resume = CompletableDeferred<Unit>()
+            f.intercept = {
+                if (it is PrivilegedCommand.SetStandbyBucket) {
+                    entered.complete(Unit)
+                    resume.await()
+                }
+            }
+            val apply = async { f.apply(ActionType.STANDBY_BUCKET_RARE) }
+            entered.await()
+            val settings = async { f.apply(type) }
+            runCurrent()
+            try {
+                assertTrue("$type must return before the privileged write resumes", settings.isCompleted)
+                assertEquals(ActionResult.OpenSettings(spec), settings.await())
+                assertFalse(apply.isCompleted)
+                assertFalse(resume.isCompleted)
+                assertEquals(2, f.commands.size)
+                assertEquals(PREPARED, f.row().status)
+                assertEquals(0, f.alerts)
+            } finally {
+                resume.complete(Unit)
+            }
+            assertEquals(ActionResult.Applied(1), apply.await())
+        }
+    }
+
+    @Test fun appSettingsStillRejectInvalidSubjectAndPackageWithoutSideEffects() = runTest {
+        val f = Fixture()
+        assertEquals(ActionResult.Refused(RefusalCode.INVALID_SUBJECT), f.repo.apply(finding(Subject.Device), rec(ActionType.OPEN_APP_SETTINGS)))
+        assertEquals(ActionResult.Refused(RefusalCode.INVALID_PACKAGE), f.repo.apply(finding(Subject.App(uid, "bad;pkg")), rec(ActionType.OPEN_APP_SETTINGS)))
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.dao.rows.value.isEmpty())
+        assertEquals(0, f.alerts)
+    }
+
+    @Test fun privilegedApplyAndJournaledAlertStillWaitForInFlightApply() = runTest {
+        for (type in listOf(ActionType.FORCE_STOP, ActionType.ENABLE_HIGH_BATTERY_ALERT)) {
+            val f = Fixture()
+            f.reply("active", "", "rare", "")
+            val entered = CompletableDeferred<Unit>()
+            val resume = CompletableDeferred<Unit>()
+            f.intercept = {
+                if (it is PrivilegedCommand.SetStandbyBucket) {
+                    entered.complete(Unit)
+                    resume.await()
+                }
+            }
+            val first = async { f.apply(ActionType.STANDBY_BUCKET_RARE) }
+            entered.await()
+            val second = async { f.apply(type) }
+            runCurrent()
+            try {
+                assertFalse("$type must wait for the privileged write and readback", second.isCompleted)
+                assertEquals(2, f.commands.size)
+                assertEquals(PREPARED, f.row().status)
+                assertEquals(0, f.alerts)
+            } finally {
+                resume.complete(Unit)
+            }
+            assertEquals(ActionResult.Applied(1), first.await())
+            assertEquals(ActionResult.OneShot(2), second.await())
+            assertEquals(listOf(APPLIED, ONE_SHOT), f.dao.rows.value.map { it.status })
+            assertEquals(if (type == ActionType.FORCE_STOP) 4 else 3, f.commands.size)
+            assertEquals(if (type == ActionType.ENABLE_HIGH_BATTERY_ALERT) 1 else 0, f.alerts)
+        }
+    }
+
     @Test fun interruptedUndoRetainsUnknownAndNoAccessDoesNotClaimRefusalAfterWrite() = runTest {
         for (atWrite in listOf(true, false)) {
             val f = Fixture(); f.reply("active", "", "rare"); f.apply(ActionType.STANDBY_BUCKET_RARE)
