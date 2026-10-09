@@ -62,7 +62,7 @@ data class AppContext(val inputs: InsightInputs, val windows: List<EligibleAppWi
         }
         val observed = value(metric) ?: return null
         val z = baseline.robustZ(observed, floor) ?: return null
-        return AppAnomaly(metric, observed, baseline, measured, points, z)
+        return AppAnomaly(metric, observed, baseline, measured, points, z, floor)
     }
 
     fun finding(type: FindingType, anomaly: AppAnomaly, extra: List<Evidence> = emptyList()): Finding {
@@ -72,7 +72,7 @@ data class AppContext(val inputs: InsightInputs, val windows: List<EligibleAppWi
             censoredShare <= MEDIUM_CONFIDENCE_CENSORING -> Confidence.MEDIUM
             else -> Confidence.LOW
         }
-        val band = RobustBaseline.Z_THRESHOLD * RobustBaseline.MAD_SCALE * anomaly.baseline.mad
+        val band = maxOf(RobustBaseline.Z_THRESHOLD * RobustBaseline.MAD_SCALE * anomaly.baseline.mad, anomaly.floor)
         val series = AppWindows.series(windows, subject, anomaly.metric).mapNotNull { point ->
             // The public chart point has no censoring flag. Omit upper bounds rather than show them as measurements.
             point.value?.let { value ->
@@ -113,4 +113,5 @@ data class AppAnomaly(
     val measured: Int,
     val points: List<AppMetricPoint>,
     val z: Double,
+    val floor: Double,
 )
