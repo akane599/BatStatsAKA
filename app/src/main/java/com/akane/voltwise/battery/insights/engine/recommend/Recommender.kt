@@ -9,7 +9,7 @@ import com.akane.voltwise.battery.insights.model.Recommendation
 import com.akane.voltwise.battery.insights.model.Subject
 
 object Recommender {
-    fun recommend(finding: Finding, inputs: InsightInputs): Finding {
+    fun recommend(finding: Finding, inputs: InsightInputs, sdkInt: Int): Finding {
         val actions = when (finding.type) {
             FindingType.APP_DRAIN_ANOMALY, FindingType.NEW_HEAVY_APP, FindingType.STUCK_WAKELOCK,
             FindingType.WAKEUP_STORM, FindingType.JOB_STORM, FindingType.BACKGROUND_LOCATION,
@@ -27,7 +27,10 @@ object Recommender {
         val pkg = (finding.subject as? Subject.App)?.packageName
         val applied = inputs.actions.filter { it.status == ActionStatus.APPLIED && it.packageName == pkg }
             .map { it.type }.toSet()
-        return finding.copy(recommendations = actions.filterNot { it in applied }.map { action ->
+        return finding.copy(recommendations = actions.filterNot { action ->
+            action in applied || (sdkInt < 28 &&
+                (action == ActionType.STANDBY_BUCKET_RESTRICTED || action == ActionType.STANDBY_BUCKET_RARE))
+        }.map { action ->
             Recommendation(action, action != ActionType.FORCE_STOP, action in privilegedActions)
         })
     }

@@ -115,6 +115,43 @@ class CommandPolicyTest {
         assertFalse(CommandPolicy.isProtected("com.google.android.gms.other", 10_000))
     }
 
+    @Test fun policyRejectsEveryProtectedPackageMutation() {
+        val protected = listOf(
+            "com.akane.voltwise", "com.akane.voltwise.debug", "com.akane.voltwise.preview",
+            "moe.shizuku.privileged.api", "android", "com.android.systemui", "com.android.phone", "com.google.android.gms",
+        )
+        val mutations = mutableListOf<PrivilegedCommand>(ForceStop(pkg), AddDozeWhitelist(pkg), RemoveDozeWhitelist(pkg))
+        mutations += StandbyBucket.supported(30).map { SetStandbyBucket(pkg, it) }
+        for (op in BackgroundOp.entries) {
+            mutations += listOf(AppOpMode.ALLOW, AppOpMode.IGNORE).map { SetBackgroundOp(pkg, op, it) }
+        }
+        for (target in protected) {
+            for (command in mutations) {
+                val argv = command.argv.map { it.replace(pkg, target) }
+                assertFalse(argv.toString(), CommandPolicy.allows(argv))
+                assertFalse(argv.toString(), CommandPolicy.allows(argv.joinToString(" ").split(' ')))
+            }
+        }
+        for (target in listOf(pkg, "com.google.android.gms.other", "com.akane.voltwise.other")) {
+            for (command in mutations) {
+                val argv = command.argv.map { it.replace(pkg, target) }
+                assertTrue(argv.toString(), CommandPolicy.allows(argv))
+            }
+        }
+    }
+
+    @Test fun policyPreservesReadOnlyQueriesForProtectedPackages() {
+        for (target in listOf(
+            "com.akane.voltwise", "com.akane.voltwise.debug", "com.akane.voltwise.preview",
+            "moe.shizuku.privileged.api", "com.android.systemui", "com.android.phone", "com.google.android.gms",
+        )) {
+            assertTrue(CommandPolicy.allows(GetStandbyBucket(target).argv))
+            for (op in BackgroundOp.entries) assertTrue(CommandPolicy.allows(GetBackgroundOp(target, op).argv))
+        }
+        assertTrue(CommandPolicy.allows(ListDozeWhitelist.argv))
+        assertTrue(CommandPolicy.allows(DumpDeviceIdle.argv))
+    }
+
     @Test fun sdkGatesOnlyWritableBucketsAndChoosesBackgroundOp() {
         for (sdk in listOf(26, 27)) {
             assertEquals(emptyList<StandbyBucket>(), StandbyBucket.supported(sdk))

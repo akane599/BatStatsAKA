@@ -30,8 +30,10 @@ object CommandPolicy {
             return false
         }
         return when (argv[1]) {
-            "get-standby-bucket", "force-stop" -> argv.size == 5
-            "set-standby-bucket" -> argv.size == 6 && StandbyBucket.entries.any { it.writable && it.token == argv[5] }
+            "get-standby-bucket" -> argv.size == 5
+            "force-stop" -> argv.size == 5 && argv[4] !in protectedPackages
+            "set-standby-bucket" -> argv.size == 6 && argv[4] !in protectedPackages &&
+                StandbyBucket.entries.any { it.writable && it.token == argv[5] }
             else -> false
         }
     }
@@ -42,7 +44,8 @@ object CommandPolicy {
         ) return false
         return when (argv[2]) {
             "get" -> argv.size == 7
-            "set" -> argv.size == 8 && AppOpMode.entries.any { it.writable && it.token == argv[7] }
+            "set" -> argv.size == 8 && argv[5] !in protectedPackages &&
+                AppOpMode.entries.any { it.writable && it.token == argv[7] }
             else -> false
         }
     }
@@ -50,6 +53,6 @@ object CommandPolicy {
     private fun allowsWhitelist(argv: List<String>): Boolean {
         if (argv.size !in 3..4 || argv[1] != "deviceidle" || argv[2] != "whitelist") return false
         return argv.size == 3 ||
-            (argv[3].first() in "+-" && isPackageName(argv[3].drop(1)))
+            (argv[3].first() in "+-" && isPackageName(argv[3].drop(1)) && argv[3].drop(1) !in protectedPackages)
     }
 }
