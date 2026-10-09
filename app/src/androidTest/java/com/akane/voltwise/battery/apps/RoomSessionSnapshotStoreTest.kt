@@ -1,12 +1,16 @@
 package com.akane.voltwise.battery.apps
 
 import android.content.Context
+import android.database.sqlite.SQLiteConstraintException
 import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.akane.voltwise.battery.data.db.AppSnapshotKind
+import com.akane.voltwise.battery.data.db.AppSnapshot
 import com.akane.voltwise.battery.data.db.BatteryDatabase
 import com.akane.voltwise.battery.data.db.ChargeSession
+import com.akane.voltwise.battery.data.db.SessionAppUsage
+import com.akane.voltwise.battery.data.db.SessionDeviceWaker
 import com.akane.voltwise.battery.data.db.SessionType
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -55,6 +59,92 @@ class RoomSessionSnapshotStoreTest {
         assertEquals(listOf("a"), db.appUsageDao().sessionUsageRows("A").map { it.packageName })
         assertNotNull(db.appUsageDao().latestSnapshot("A", AppSnapshotKind.END))
         assertFalse("A deleted session is skipped", store.saveEnd("gone", end, result))
+    }
+
+    @Test fun failedSessionWakerInsertRollsBackEndIncludingPrunedSnapshotChildren() = runBlocking {
+        val usage = db.appUsageDao()
+        val oldSession = session("rollback", status = AppUsageStatus.FAILED).copy(
+            appUsageBasis = AppUsageBasis.WINDOW_RESET,
+            appCaptureStartMs = 1_200,
+            appCaptureEndMs = 1_800,
+        )
+        db.sessionDao().insert(oldSession)
+        val oldUsage = listOf(
+            SessionAppUsage("rollback", 0, 11, "old.app", 7.0,
+                cpuTimeMs = 80, basis = AppUsageBasis.WINDOW_RESET, wakeupAlarms = 4,
+                topAlarmTag = "old-alarm"),
+        )
+        usage.insertSessionUsage(oldUsage)
+        val oldWakers = listOf(
+            SessionDeviceWaker("rollback", "KERNEL_WAKELOCK", "old-lock", 3, 90, 0),
+            SessionDeviceWaker("rollback", "WAKEUP_REASON", "old-reason", 2, 20, 1),
+        )
+        usage.insertSessionWakers("rollback", oldWakers)
+
+        val baseline = snapshot(100, 2_000, AppUsageRow(21, "new.app", 1.0)).copy(
+            deviceWakers = listOf(DeviceWaker("WAKEUP_REASON", "new-alarm", 1, 10)),
+            wakersComplete = true,
+        )
+        val oldestId = usage.insertSnapshot(
+            AppSnapshot(sessionId = "rollback", kind = AppSnapshotKind.BASELINE,
+                capturedAt = 2_000, windowStartedAt = 100, windowStartCount = 3, wakersComplete = true),
+            baseline.rows, baseline.deviceWakers,
+        )
+        repeat(2) { i ->
+            val sessionId = "seed$i"
+            db.sessionDao().insert(session(sessionId))
+            usage.insertSnapshot(
+                AppSnapshot(sessionId = sessionId, kind = AppSnapshotKind.END,
+                    capturedAt = 3_000L + i, windowStartedAt = 100, windowStartCount = 3,
+                    deepIdleMs = 40L + i, wakersComplete = true),
+                listOf(AppUsageRow(31 + i, "seed.app$i", 2.0 + i, cpuTimeMs = 60L + i)),
+                listOf(DeviceWaker("KERNEL_WAKELOCK", "seed-lock$i", 2L + i, 30L + i)),
+            )
+        }
+
+        val sessionBefore = db.sessionDao().byId("rollback")!!
+        val usageBefore = usage.sessionUsageRows("rollback")
+        val wakersBefore = usage.sessionWakers(listOf("rollback"))
+        val headersBefore = usage.snapshots()
+        val uidsBefore = headersBefore.associate { it.id to usage.snapshotUids(it.id) }
+        val snapshotWakersBefore = headersBefore.associate { it.id to usage.snapshotWakers(it.id) }
+        assertEquals(oldSession, sessionBefore)
+        assertEquals(oldUsage, usageBefore)
+        assertEquals(oldWakers, wakersBefore)
+        assertEquals(3, headersBefore.size)
+        assertEquals("The fourth insert must prune this closed session's baseline", oldestId, headersBefore.minOf { it.id })
+        assertTrue(uidsBefore.values.all { it.isNotEmpty() })
+        assertTrue(snapshotWakersBefore.values.all { it.isNotEmpty() })
+
+        val end = snapshot(100, 5_000, AppUsageRow(21, "new.app", 5.0, cpuTimeMs = 200)).copy(
+            deviceWakers = listOf(DeviceWaker("WAKEUP_REASON", "new-alarm", 6, 70)),
+            wakersComplete = true,
+        )
+        val validResult = AppUsageDelta.compute(baseline, end)
+        assertEquals(AppUsageBasis.DELTA, validResult.basis)
+        assertEquals(2_000L, validResult.captureStartMs)
+        assertEquals(listOf(DeviceWaker("WAKEUP_REASON", "new-alarm", 5, 60)), validResult.deviceWakers)
+        // Only the final session-waker replacement is invalid; snapshot wakers stay valid.
+        val invalidResult = validResult.copy(deviceWakers = validResult.deviceWakers + validResult.deviceWakers)
+        try {
+            store.saveEnd("rollback", end, invalidResult)
+            fail("Duplicate session-waker keys must abort END persistence")
+        } catch (error: SQLiteConstraintException) {
+            assertTrue("Failure must come from the final session-waker insert: ${error.message}",
+                error.message.orEmpty().contains("session_device_wakers"))
+        }
+
+        // Removing the public constructor's outer withTransaction would commit the earlier
+        // snapshot/pruning, capture and READY writes despite the final DAO transaction failing.
+        assertEquals("All session fields, including status/basis/capture, must roll back",
+            sessionBefore, db.sessionDao().byId("rollback"))
+        assertEquals(usageBefore, usage.sessionUsageRows("rollback"))
+        assertEquals(wakersBefore, usage.sessionWakers(listOf("rollback")))
+        assertEquals("No new END or pruned header may survive", headersBefore, usage.snapshots())
+        assertEquals("Every original snapshot UID set, including the pruned baseline, must survive",
+            uidsBefore, headersBefore.associate { it.id to usage.snapshotUids(it.id) })
+        assertEquals("Every original snapshot waker set, including the pruned baseline, must survive",
+            snapshotWakersBefore, headersBefore.associate { it.id to usage.snapshotWakers(it.id) })
     }
 
     @Test fun pendingClosedDischargesSkipsOpenReadyLegacyAndChargingSessions() = runBlocking {

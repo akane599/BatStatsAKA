@@ -176,8 +176,8 @@ internal fun InsightsUiState.body(): InsightsBody = when {
 }
 
 /**
- * "Still learning" progress: the count is sessions with app data to compare (comparable per-app windows), which only
- * grows with Shizuku or root, so without access the copy says so instead of promising findings later.
+ * "Still learning" counts comparable per-app windows collected through supported ADB, Shizuku or root access.
+ * Without action privileges, the copy separates app-data collection from applying app restrictions.
  */
 @Composable
 private fun learningBody(state: InsightsUiState): String = stringResource(

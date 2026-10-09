@@ -150,6 +150,8 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 
 - 2026-10-09 — Code audit: privileged mutations never replay automatically after a lost response; a fresh reversible-action read establishes the outcome, while uncertain force-stop remains unconfirmed without Undo. A newer eligible apply from a third live state retires older PREPARED or UNKNOWN Undo authority. Supported missing app counters stay unknown through selection and tail aggregation. Rejected power, malformed consumed app counters, positive main-profile app counters without power, or a baseline UID missing at the end leave app evidence uncertified: skip an incomplete baseline and exclude a partial delta window from Insights, because synthetic zero would invent evidence; accepted rows remain browsable. Doze-whitelist app findings use the same seven-day latest-window limit as other app findings.
 
+- 2026-10-09 — Code audit: a committed discharge closed by Stop refreshes device Insights from application scope even after the service's snapshot collector is cancelled; normal power-change discharges still wait for app finalization. Device-waker completeness includes rejected consumed records as well as row limits, separately from app-measurement eligibility, so a missing name in an incomplete baseline cannot become a cumulative session hint. API 28–29 standby restrictions are presented as Rare before consent, and action history uses the persisted target so an OS upgrade does not relabel an earlier Rare change. Commands choose a backend separately; a later readback may use newly available access, while an uncertain mutation is never replayed automatically.
+
 ## Audit status
 | Area | Last run | Result | How |
 |---|---|---|---|

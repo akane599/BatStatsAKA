@@ -39,6 +39,15 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultInsightsRepositoryTest {
+    @Test fun actionHistoryPreservesActualJournalTargetWithoutChangingRequestedType() {
+        for (target in listOf("RARE", "RESTRICTED", "FUTURE_BUCKET", null)) {
+            val row = insightAction().copy(type = ActionType.STANDBY_BUCKET_RESTRICTED.name, targetState = target)
+            val history = actionStates(listOf(row), emptyList()).single()
+            assertEquals("stored target $target", target, history.targetState)
+            assertEquals(ActionType.STANDBY_BUCKET_RESTRICTED, history.action)
+        }
+    }
+
     @Test fun highBatteryAlertEnabledAtOrAfterReportIsAppliedAndUnavailableWithoutUndo() {
         val finding = insightFinding().copy(
             type = FindingType.CHARGING_AT_FULL,

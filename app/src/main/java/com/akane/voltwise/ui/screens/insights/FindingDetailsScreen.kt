@@ -501,10 +501,11 @@ private fun FixesPanel(
 @Composable
 private fun FixRow(rec: RecommendationState, busy: Boolean, onRun: () -> Unit) {
     val spacing = MaterialTheme.spacing
-    val label = stringResource(rec.action.labelRes())
+    val presentation = rec.action.presentation()
+    val label = stringResource(presentation.labelRes)
     Column(Modifier.fillMaxWidth().padding(vertical = spacing.xs), verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
         Text(
-            stringResource(if (rec.action.opensSettings) R.string.finding_opens_settings else rec.action.effectRes()),
+            stringResource(if (rec.action.opensSettings) R.string.finding_opens_settings else presentation.effectRes),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )

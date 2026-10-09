@@ -305,10 +305,11 @@ class InsightsWiringTest {
         }
     }
 
-    private fun closedSession(id: String, type: SessionType) = ChargeSession(
+    private fun closedSession(id: String, type: SessionType, reason: String? = null) = ChargeSession(
         sessionId = id, type = type, startTime = 0, endTime = 1,
         startLevel = null, endLevel = null, deltaUah = null,
         avgCurrentUa = null, estCapacityMah = null,
+        closeReason = reason,
     )
 
     @Test fun committedChargingAndPluggedClosuresRefreshImmediately() = runTest {
@@ -319,10 +320,10 @@ class InsightsWiringTest {
             refreshOnFinalizedSessions(finalized, { fail("Unexpected failure") }, closed) { refreshes++ }
         }
         runCurrent()
-        closed.emit(closedSession("charge", SessionType.CHARGE))
+        closed.emit(closedSession("charge", SessionType.CHARGE, "Monitoring stopped"))
         runCurrent()
         assertEquals(1, refreshes)
-        closed.emit(closedSession("plugged", SessionType.PLUGGED))
+        closed.emit(closedSession("plugged", SessionType.PLUGGED, "Monitoring stopped"))
         runCurrent()
         assertEquals(2, refreshes)
         collector.cancelAndJoin()
@@ -544,7 +545,7 @@ class InsightsWiringTest {
             refreshOnFinalizedSessions(finalized, { fail("Unexpected failure") }, closed) { refreshes++ }
         }
         runCurrent()
-        closed.emit(closedSession("discharge", SessionType.DISCHARGE))
+        closed.emit(closedSession("discharge", SessionType.DISCHARGE, "Power state changed"))
         runCurrent()
         assertEquals(0, refreshes)
         finalized.emit("discharge")

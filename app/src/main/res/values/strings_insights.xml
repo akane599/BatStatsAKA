@@ -24,7 +24,7 @@
     <string name="insights_access_set_up">Set up access</string>
     <string name="insights_learning_title">Still learning your usage</string>
     <string name="insights_learning_body">%1$d of %2$d sessions with app data to compare. Findings about apps start once Voltwise has %2$d.</string>
-    <string name="insights_learning_body_no_access">%1$d of %2$d sessions with app data to compare. Voltwise records app data only with Shizuku or root, so findings about apps need one of them.</string>
+    <string name="insights_learning_body_no_access">%1$d of %2$d sessions with app data to compare. Voltwise can record app data with supported ADB access, Shizuku or root. Applying app restrictions requires Shizuku or root.</string>
     <string name="insights_all_good_title">Nothing needs attention</string>
     <string name="insights_all_good_body">No app or setting is draining more than usual. Voltwise checks again after each session.</string>
     <string name="insights_never_title">No analysis yet</string>
@@ -141,7 +141,7 @@
     <string name="insights_action_enable_high_battery_alert">Turn on high-battery alert</string>
 
     <!-- ActionType: exact effect -->
-    <string name="insights_effect_restrict_background">Turns off this app\'s permission to run in the background. It only runs while you use it.</string>
+    <string name="insights_effect_restrict_background">Applies Android\'s background-activity restriction to this app. Android exemptions can still allow background activity.</string>
     <string name="insights_effect_standby_restricted">Moves this app to Android\'s Restricted standby bucket: its jobs and alarms run at most about once a day.</string>
     <string name="insights_effect_standby_rare">Moves this app to Android\'s Rare standby bucket: its jobs and alarms are held back for hours.</string>
     <string name="insights_effect_force_stop">Stops this app and its background work right now. It starts normally the next time you open it.</string>

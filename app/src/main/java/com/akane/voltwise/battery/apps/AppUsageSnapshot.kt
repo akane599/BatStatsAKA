@@ -99,7 +99,7 @@ fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
         lightIdleCount = doze?.lightIdleCount?.toLong(),
         screenOffMs = screenOffTimeMs,
         deviceWakers = selectedWakers.entries,
-        wakersComplete = selectedWakers.complete,
+        wakersComplete = deviceWakersComplete && selectedWakers.complete,
         tagHints = apps.associate { app -> app.uid to AppTagHints(
             wakelockHints[app.uid]?.maxByOrNull { it.totalTimeMs }?.tag,
             alarmHints[app.uid]?.maxByOrNull { it.wakeups }?.tag,

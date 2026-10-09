@@ -27,6 +27,9 @@ import java.time.ZoneId
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
+/** Persisted Stop identity, also used by the application-owned insights refresh listener. */
+internal const val MONITORING_STOPPED_CLOSE_REASON = "Monitoring stopped"
+
 /** Whether the writer's current session can be reset by a user action. */
 internal fun resetApplies(open: ChargeSession?): Boolean = open?.type == SessionType.DISCHARGE
 
@@ -216,7 +219,7 @@ class BatteryRepository(
                         generation = null
                         engine.stop()
                         _observation.value = engine.summary
-                        finishSession("Monitoring stopped")
+                        finishSession(MONITORING_STOPPED_CLOSE_REASON)
                     }
                     Event.Reset -> if (resetApplies(session)) {
                         resetObservationState()

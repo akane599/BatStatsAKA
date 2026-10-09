@@ -17,7 +17,7 @@
     <string name="insights_access_set_up">Erişimi ayarla</string>
     <string name="insights_learning_title">Kullanımını hâlâ öğreniyor</string>
     <string name="insights_learning_body">Karşılaştırılacak uygulama verisi olan %2$d oturumdan %1$d tanesi var. Uygulama bulguları, Voltwise\'ın %2$d oturumu olduğunda başlar.</string>
-    <string name="insights_learning_body_no_access">Karşılaştırılacak uygulama verisi olan %2$d oturumdan %1$d tanesi var. Voltwise uygulama verisini yalnızca Shizuku ya da root ile kaydeder; uygulama bulguları bunlardan birini gerektirir.</string>
+    <string name="insights_learning_body_no_access">Karşılaştırılacak uygulama verisi olan %2$d oturumdan %1$d tanesi var. Voltwise uygulama verisini desteklenen ADB erişimi, Shizuku ya da root ile kaydedebilir. Uygulama kısıtlamalarını uygulamak Shizuku ya da root gerektirir.</string>
     <string name="insights_all_good_title">İlgilenmen gereken bir şey yok</string>
     <string name="insights_all_good_body">Hiçbir uygulama veya ayar normalden fazla pil harcamıyor. Voltwise her oturumdan sonra yeniden kontrol eder.</string>
     <string name="insights_never_title">Henüz analiz yok</string>
@@ -134,7 +134,7 @@
     <string name="insights_action_enable_high_battery_alert">Yüksek pil seviyesi uyarısını aç</string>
 
     <!-- ActionType: exact effect -->
-    <string name="insights_effect_restrict_background">Bu uygulamanın arka planda çalışma iznini kapatır. Yalnızca sen kullanırken çalışır.</string>
+    <string name="insights_effect_restrict_background">Bu uygulamaya Android\'in arka plan etkinliği kısıtlamasını uygular. Android muafiyetleri arka plan etkinliğine yine de izin verebilir.</string>
     <string name="insights_effect_standby_restricted">Bu uygulamayı Android\'in Kısıtlı bekleme grubuna alır: işleri ve alarmları en fazla günde bir kez çalışır.</string>
     <string name="insights_effect_standby_rare">Bu uygulamayı Android\'in Nadir bekleme grubuna alır: işleri ve alarmları saatlerce ertelenir.</string>
     <string name="insights_effect_force_stop">Bu uygulamayı ve arka plan işlerini hemen durdurur. Bir sonraki açışında normal şekilde başlar.</string>

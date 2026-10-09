@@ -52,6 +52,8 @@ data class AppliedInsightAction(
     val effect: InsightFindingState?,
     /** REVERTED because the setting had already changed outside Voltwise; the device wasn't touched. */
     val changedExternally: Boolean = false,
+    /** Existing journal target, used to name the actual applied bucket even after an Android upgrade. */
+    val targetState: String? = null,
 )
 
 @Immutable

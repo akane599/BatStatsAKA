@@ -1,5 +1,6 @@
 package com.akane.voltwise.ui.screens.insights
 
+import android.os.Build
 import androidx.annotation.StringRes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
@@ -124,6 +125,32 @@ internal fun ActionType.sideEffectsRes(): Int = when (this) {
     ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS -> R.string.insights_side_open_battery_optimization
     ActionType.ENABLE_HIGH_BATTERY_ALERT -> R.string.insights_side_enable_high_battery_alert
 }
+
+/** Copy shared by recommendation buttons, consent and applied history. */
+internal data class InsightActionPresentation(
+    @param:StringRes val labelRes: Int,
+    @param:StringRes val effectRes: Int,
+    @param:StringRes val sideEffectsRes: Int,
+)
+
+internal fun ActionType.presentation(
+    sdkInt: Int = Build.VERSION.SDK_INT,
+    targetState: String? = null,
+): InsightActionPresentation {
+    // A known journal target remains authoritative after an OS upgrade. Requests keep their original enum.
+    val effective = when {
+        this == ActionType.STANDBY_BUCKET_RESTRICTED || this == ActionType.STANDBY_BUCKET_RARE -> when (targetState) {
+            "RARE" -> ActionType.STANDBY_BUCKET_RARE
+            "RESTRICTED" -> ActionType.STANDBY_BUCKET_RESTRICTED
+            else -> if (this == ActionType.STANDBY_BUCKET_RESTRICTED && sdkInt in 28..29) ActionType.STANDBY_BUCKET_RARE else this
+        }
+        else -> this
+    }
+    return InsightActionPresentation(effective.labelRes(), effective.effectRes(), effective.sideEffectsRes())
+}
+
+internal fun AppliedInsightAction.presentation(sdkInt: Int = Build.VERSION.SDK_INT): InsightActionPresentation? =
+    action?.presentation(sdkInt, targetState)
 
 @StringRes
 internal fun Severity.labelRes(): Int = when (this) {

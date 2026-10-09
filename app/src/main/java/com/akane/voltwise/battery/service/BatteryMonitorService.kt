@@ -17,6 +17,7 @@ import com.akane.voltwise.battery.apps.SessionSnapshotCollector
 import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.BatteryRepository
+import com.akane.voltwise.battery.data.MONITORING_STOPPED_CLOSE_REASON
 import com.akane.voltwise.battery.drain.DrainNotificationManager
 import com.akane.voltwise.battery.drain.NotificationIssue
 import com.akane.voltwise.battery.util.ShellRunner
@@ -239,7 +240,11 @@ internal suspend fun refreshOnFinalizedSessions(
     }
     val closed = launch(start = CoroutineStart.UNDISPATCHED) {
         closedSessions.collect {
-            if (it.type != SessionType.DISCHARGE) pending.trySend(Unit)
+            // Stop cancels the service's snapshot collector before this application writer commits.
+            // Its ordinary device measurements are ready now; other discharges await finalization.
+            if (it.type != SessionType.DISCHARGE || it.closeReason == MONITORING_STOPPED_CLOSE_REASON) {
+                pending.trySend(Unit)
+            }
         }
     }
     // A synchronously failing source cancels this scope before registration can be ready.

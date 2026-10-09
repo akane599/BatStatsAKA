@@ -43,7 +43,7 @@ fun InsightApplyDialog(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val label = stringResource(action.labelRes())
+    val label = stringResource(action.presentation().labelRes)
     AlertDialog(
         onDismissRequest = onDismiss,
         modifier = modifier,
@@ -64,9 +64,10 @@ fun InsightApplyDetails(
     modifier: Modifier = Modifier,
 ) {
     val spacing = MaterialTheme.spacing
+    val presentation = action.presentation()
     Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
         subjectName?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface) }
-        Text(stringResource(action.effectRes()), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
+        Text(stringResource(presentation.effectRes), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
         Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(spacing.xxs)) {
             Text(
                 stringResource(R.string.insights_apply_side_effects),
@@ -74,7 +75,7 @@ fun InsightApplyDetails(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                stringResource(action.sideEffectsRes()),
+                stringResource(presentation.sideEffectsRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

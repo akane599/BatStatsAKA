@@ -17,7 +17,7 @@
     <string name="insights_access_set_up">Configurar acceso</string>
     <string name="insights_learning_title">Aún aprendiendo tu uso</string>
     <string name="insights_learning_body">%1$d de %2$d sesiones con datos de apps para comparar. Los hallazgos sobre apps empiezan cuando Voltwise tenga %2$d.</string>
-    <string name="insights_learning_body_no_access">%1$d de %2$d sesiones con datos de apps para comparar. Voltwise solo registra datos de apps con Shizuku o root, así que los hallazgos sobre apps necesitan uno de los dos.</string>
+    <string name="insights_learning_body_no_access">%1$d de %2$d sesiones con datos de apps para comparar. Voltwise puede registrar datos de apps con acceso ADB compatible, Shizuku o root. Aplicar restricciones a las apps requiere Shizuku o root.</string>
     <string name="insights_all_good_title">Nada requiere atención</string>
     <string name="insights_all_good_body">Ninguna app ni ajuste gasta más de lo habitual. Voltwise vuelve a comprobarlo tras cada sesión.</string>
     <string name="insights_never_title">Aún no hay análisis</string>
@@ -135,7 +135,7 @@
     <string name="insights_action_enable_high_battery_alert">Activar aviso de batería alta</string>
 
     <!-- ActionType: exact effect -->
-    <string name="insights_effect_restrict_background">Quita el permiso de esta app para ejecutarse en segundo plano. Solo se ejecuta mientras la usas.</string>
+    <string name="insights_effect_restrict_background">Aplica la restricción de actividad en segundo plano de Android a esta app. Las exenciones de Android pueden seguir permitiendo actividad en segundo plano.</string>
     <string name="insights_effect_standby_restricted">Pasa esta app al grupo de espera Restringida de Android: sus tareas y alarmas se ejecutan como mucho una vez al día.</string>
     <string name="insights_effect_standby_rare">Pasa esta app al grupo de espera Poco frecuente de Android: sus tareas y alarmas se retrasan horas.</string>
     <string name="insights_effect_force_stop">Detiene esta app y su trabajo en segundo plano ahora mismo. Se inicia con normalidad la próxima vez que la abras.</string>

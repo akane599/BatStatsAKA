@@ -57,6 +57,8 @@ object BatteryStatsParser {
         val wakeupReasons: List<WakeupReasonStats> = emptyList(),
         /** Whether consumed session app metrics can certify a cumulative baseline or delta. */
         val appMeasurementsComplete: Boolean = true,
+        /** Whether consumed device-waker records can certify absent names as zero. */
+        val deviceWakersComplete: Boolean = true,
     ) {
         val hasValidWindow: Boolean get() = startedAt != null && startCount != null &&
             batteryRealtimeMs != null && batteryUptimeMs != null && batteryUptimeMs <= batteryRealtimeMs
@@ -268,6 +270,14 @@ object BatteryStatsParser {
     fun parseCheckin(lines: Sequence<String>, sdkInt: Int = 28): FullSnapshot {
         val mappings = mutableMapOf<Int, LinkedHashSet<String>>()
         var rejected = 0
+        var deviceWakersComplete = true
+        // kwl is consumed for any UID; wr is only a global row. An invalid UID cannot
+        // establish that a malformed wr belongs to an unconsumed per-UID scope.
+        fun consumedDeviceWaker(header: List<String>): Boolean = when (header.getOrNull(3)) {
+            "kwl" -> true
+            "wr" -> header.int(1).let { it == null || it == 0 }
+            else -> false
+        }
         val malformedAppHeaders = mutableListOf<Int?>()
         val appTags = setOf("pwi", "cpu", "fg", "fgs", "awl", "st", "nt", "wl", "wua", "jb", "sy", "sr")
         // One iteration over the lines: bucket "i,uid" mappings and "l" data rows as they are
@@ -279,6 +289,10 @@ object BatteryStatsParser {
             if (p.size < 4 || p[2] !in setOf("i", "l", "u", "c")) {
                 // Name framing may reject a row before UID grouping; retain its app provenance.
                 val header = line.split(',', limit = 6)
+                if (consumedDeviceWaker(header) &&
+                    (header.getOrNull(2) == "l" || header.getOrNull(2) !in setOf("i", "u", "c"))) {
+                    deviceWakersComplete = false
+                }
                 if (header.getOrNull(3) in appTags &&
                     (header.getOrNull(3) != "pwi" || header.getOrNull(4) == "uid") &&
                     (header.getOrNull(2) == "l" || header.getOrNull(2) !in setOf("i", "u", "c"))) {
@@ -316,7 +330,11 @@ object BatteryStatsParser {
         var doze: DozeStats? = null
         var frequencies = emptyList<Long>()
         rows.forEach { p ->
-            val uid = p.int(1) ?: run { rejected++; return@forEach }
+            val uid = p.int(1) ?: run {
+                rejected++
+                if (consumedDeviceWaker(p)) deviceWakersComplete = false
+                return@forEach
+            }
             val pkgs = packagesFor(uid, mappings)
             val label = displayNameFor(uid, pkgs)
             tags += p[3]
@@ -358,11 +376,13 @@ object BatteryStatsParser {
                 }
                 "kwl" -> {
                     val name = p.getOrNull(4); val time = p.long(5); val count = p.int(6)
-                    if (name != null && time != null && count != null) kernel += KernelWakelockStats(name, count, time, maxTimeMs = p.long(8)) else rejected++
+                    if (name != null && time != null && count != null) kernel += KernelWakelockStats(name, count, time, maxTimeMs = p.long(8))
+                    else { rejected++; deviceWakersComplete = false }
                 }
                 "wr" -> if (uid == 0) {
                     val name = p.getOrNull(4); val time = p.long(5); val count = p.int(6)
-                    if (name != null && time != null && count != null) wakeupReasons += WakeupReasonStats(name, count, time) else rejected++
+                    if (name != null && time != null && count != null) wakeupReasons += WakeupReasonStats(name, count, time)
+                    else { rejected++; deviceWakersComplete = false }
                 }
                 "wua" -> {
                     val name = p.getOrNull(4); val count = p.int(5)
@@ -511,7 +531,8 @@ object BatteryStatsParser {
         }
         return snapshot.copy(apps = enriched.sortedByDescending { it.powerMah }, componentEstimatesMah = components,
             reportedTags = tags, rejectedRecords = rejected, appPowerRecords = appPowerRecords,
-            rejectedAppPowerRecords = appPowerRecords - apps.size, appMeasurementsComplete = appMeasurementsComplete, wakelocks = locks.sortedByDescending { it.totalTimeMs },
+            rejectedAppPowerRecords = appPowerRecords - apps.size, appMeasurementsComplete = appMeasurementsComplete,
+            deviceWakersComplete = deviceWakersComplete, wakelocks = locks.sortedByDescending { it.totalTimeMs },
             kernelWakelocks = kernel.sortedByDescending { it.totalTimeMs }, wakeupReasons = wakeupReasons.sortedByDescending { it.totalTimeMs },
             alarms = alarms.sortedByDescending { it.count },
             jobs = jobs.sortedByDescending { it.totalTimeMs }, syncs = syncs.sortedByDescending { it.totalTimeMs },

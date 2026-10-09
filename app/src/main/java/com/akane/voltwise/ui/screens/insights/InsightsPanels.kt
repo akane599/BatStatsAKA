@@ -278,7 +278,7 @@ private fun RecommendationControl(
     val rec = finding.primaryRecommendation() ?: return
     when {
         rec.available -> {
-            val label = stringResource(rec.action.labelRes())
+            val label = stringResource(rec.action.presentation().labelRes)
             // Read as "Restrict background for Chrome": in a list of findings the label alone doesn't say whose.
             val description = subjectName?.let { stringResource(R.string.insights_apply_description, label, it) }
             FilledTonalButton(
@@ -397,7 +397,7 @@ private fun AppliedFixRow(action: AppliedInsightAction, labels: Map<String, AppL
     val formatter = rememberTimeAxisFormatter()
     val subject = action.packageName?.let { Subject.App(-1, it) } ?: Subject.Device
     val name = subjectName(subject, labels)
-    val actionLabel = action.action?.let { stringResource(it.labelRes()) }
+    val actionLabel = action.presentation()?.let { stringResource(it.labelRes) }
     val status = stringResource(action.statusLabelRes())
     Row(
         Modifier

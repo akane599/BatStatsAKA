@@ -105,5 +105,6 @@ internal fun actionStates(
         findings.firstOrNull { it.type == FindingType.ACTION_EFFECT && it.key.endsWith(":${row.id}") &&
             (it.subject as? Subject.App)?.packageName == row.packageName },
         changedExternally = row.status == InsightActionStatus.REVERTED && row.message == "CHANGED_EXTERNALLY",
+        targetState = row.targetState,
     )
 }.insightSnapshot()
