@@ -103,6 +103,22 @@ class AppDetectorTest(private val type: FindingType) {
         }
     }
 
+    @Test fun currentWindowOlderThanSevenDaysDoesNotProduceAppFindings() {
+        val input = detectorInputs(type)
+        val currentEnd = input.sessions.last().appWindow!!.captureEndMs
+        val stale = input.copy(nowMs = currentEnd + 7 * 24 * HOUR + 1)
+        assertTrue("Stale eligible windows must not produce any app finding", appFindings(stale).isEmpty())
+    }
+
+    @Test fun currentWindowWithinSevenDaysStillProducesFinding() {
+        val input = detectorInputs(type)
+        val currentEnd = input.sessions.last().appWindow!!.captureEndMs
+        for (age in listOf(7 * 24 * HOUR - 1, 7 * 24 * HOUR)) {
+            val recent = input.copy(nowMs = currentEnd + age)
+            assertEquals(type, detected(recent).single().type)
+        }
+    }
+
     @Test fun normalUsageDoesNotTrigger() {
         val input = detectorInputs(type)
         val normal = input.copy(appSessions = input.appSessions.map { row(it.sessionId).copy(uid = it.uid, packageName = it.packageName) })

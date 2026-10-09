@@ -267,6 +267,46 @@ class AppWindowsTest {
         assertFalse(AppWindows.point(window, subject, Metric.POWER_MAH_PER_H)!!.present)
     }
 
+    @Test fun screenOffOnlyDrainUsesMeasuredEnergyEvenWithNoLevelDrop() {
+        for (coverage in listOf(0L, null)) {
+            for (endLevel in listOf(79, 80)) {
+                val session = session(0, 2 * HOUR).copy(
+                    screenOnUah = null, screenOnCoveredMs = coverage,
+                    screenOffUah = 150_000, startLevel = 80, endLevel = endLevel,
+                )
+                val window = AppWindows.select(inputs(listOf(session), emptyList())).single()
+                assertEquals(150.0, AppWindows.drainMah(window, 4_000_000)!!, 0.0)
+            }
+        }
+    }
+
+    @Test fun screenOnOnlyDrainUsesMeasuredEnergy() {
+        for (coverage in listOf(0L, null)) {
+            val session = session(0, 2 * HOUR).copy(
+                screenOnMs = 2 * HOUR, screenOnCoveredMs = 2 * HOUR, screenOnUah = 150_000,
+                screenOffMs = 0, screenOffCoveredMs = coverage, screenOffUah = null,
+                startLevel = 80, endLevel = 79,
+            )
+            val window = AppWindows.select(inputs(listOf(session), emptyList())).single()
+            assertEquals(150.0, AppWindows.drainMah(window, 4_000_000)!!, 0.0)
+        }
+    }
+
+    @Test fun occurredScreenStateWithMissingEnergyStillUsesLevelFallback() {
+        val session = session(0, 2 * HOUR).copy(
+            screenOnMs = HOUR, screenOnCoveredMs = HOUR,
+            screenOffMs = HOUR, screenOffCoveredMs = HOUR,
+            screenOnUah = 150_000, screenOffUah = 150_000,
+            startLevel = 80, endLevel = 79,
+        )
+        for (missingOn in listOf(true, false)) {
+            val incomplete = if (missingOn) session.copy(screenOnUah = null) else session.copy(screenOffUah = null)
+            val window = AppWindows.select(inputs(listOf(incomplete), emptyList())).single()
+            assertEquals(40.0, AppWindows.drainMah(window, 4_000_000)!!, 0.0)
+            assertNull(AppWindows.drainMah(window, null))
+        }
+    }
+
     @Test fun totalDrainRequiresCoveredEnergyOrCapacityAndLevelDrop() {
         val session = session(0)
         val window = AppWindows.select(inputs(listOf(session), listOf(highRow(session.id)))).single()
