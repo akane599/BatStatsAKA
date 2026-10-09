@@ -11,7 +11,9 @@ import com.akane.voltwise.battery.insights.engine.findingOrder
 import com.akane.voltwise.battery.insights.model.*
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -46,16 +48,29 @@ class InsightRepository(
     private val mutex = Mutex()
     private val mutableReport = MutableStateFlow<InsightReport?>(null)
     val report: StateFlow<InsightReport?> = mutableReport.asStateFlow()
-    private val mutableLastAnalyzedAt = MutableStateFlow(store.getString(LAST_ANALYZED_AT)?.toLongOrNull())
+    private val mutableLastAnalyzedAt = MutableStateFlow<Long?>(null)
     val lastAnalyzedAt: StateFlow<Long?> = mutableLastAnalyzedAt.asStateFlow()
+    private val initialization: Deferred<Unit>
 
     init {
+        initialization = scope.async(ioDispatcher) {
+            mutex.withLock {
+                mutableLastAnalyzedAt.value = store.getString(LAST_ANALYZED_AT)?.toLongOrNull()
+            }
+        }
         scope.launch(ioDispatcher) {
+            initialization.await()
             insightDao.findings().collect {
                 // Re-read under the same lock: a buffered emission must not overwrite a newer refresh/dismiss.
                 mutex.withLock { publish(insightDao.findingsOnce()) }
             }
         }
+    }
+
+    /** Startup decisions must distinguish an unloaded timestamp from an absent one. */
+    suspend fun awaitLastAnalyzedAt(): Long? {
+        initialization.await()
+        return lastAnalyzedAt.value
     }
 
     suspend fun refresh(liveDump: Boolean = false) = mutex.withLock {
@@ -107,18 +122,29 @@ class InsightRepository(
     }
 
     suspend fun dismiss(key: String) = mutex.withLock {
+        val generation = maintenance.generation
+        if (maintenance.isClearing) return@withLock
         withContext(ioDispatcher) {
-            insightDao.setStatus(key, InsightFindingStatus.DISMISSED)
-            publish(insightDao.findingsOnce())
+            maintenance.mutations.withLock write@ {
+                if (maintenance.isClearing || maintenance.generation != generation) return@write
+                insightDao.setStatus(key, InsightFindingStatus.DISMISSED)
+                publish(insightDao.findingsOnce())
+            }
         }
     }
 
     suspend fun notAProblem(key: String) = mutex.withLock {
+        val generation = maintenance.generation
+        if (maintenance.isClearing) return@withLock
         withContext(ioDispatcher) {
-            val old = insightDao.findingsOnce().firstOrNull { it.key == key } ?: return@withContext
-            insightDao.upsertFindings(listOf(old.copy(status = InsightFindingStatus.DISMISSED,
-                feedbackMultiplier = (old.feedbackMultiplier * 1.5).coerceAtMost(4.0))))
-            publish(insightDao.findingsOnce())
+            maintenance.mutations.withLock write@ {
+                if (maintenance.isClearing || maintenance.generation != generation) return@write
+                val old = insightDao.findingsOnce().firstOrNull { it.key == key } ?: return@write
+                if (maintenance.isClearing || maintenance.generation != generation) return@write
+                insightDao.upsertFindings(listOf(old.copy(status = InsightFindingStatus.DISMISSED,
+                    feedbackMultiplier = (old.feedbackMultiplier * 1.5).coerceAtMost(4.0))))
+                publish(insightDao.findingsOnce())
+            }
         }
     }
 
