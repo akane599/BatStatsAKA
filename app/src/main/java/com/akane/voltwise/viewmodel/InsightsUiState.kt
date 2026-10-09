@@ -9,6 +9,13 @@ import java.util.Collections
 // Match the adopted project's unmodifiable List snapshots; no new collection dependency.
 internal fun <T> Iterable<T>.insightSnapshot(): List<T> = Collections.unmodifiableList(toList())
 
+/**
+ * A finding Insights lists under "What changed" and Now counts as a change to review: informational, with a
+ * direction (trends, the capacity decline). An applied fix's measured effect is shown with that fix instead.
+ */
+internal fun isInsightChange(type: FindingType, severity: Severity, direction: Direction?): Boolean =
+    severity == Severity.INFO && direction != null && type != FindingType.ACTION_EFFECT
+
 @Immutable
 data class InsightFindingState(
     val key: String,

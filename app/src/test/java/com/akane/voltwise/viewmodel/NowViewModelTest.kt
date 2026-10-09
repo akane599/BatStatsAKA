@@ -84,7 +84,7 @@ class NowViewModelTest {
         runCurrent()
         assertEquals(InsightsSummary(null, 0), state().insightsSummary)
         assertTrue(state().insightsSummary!!.allGood)
-        repo.insights.value = InsightReport(T0, listOf(finding(Severity.INFO)), null)
+        repo.insights.value = InsightReport(T0, listOf(actionEffect), null)
         runCurrent()
         assertTrue(state().insightsSummary!!.allGood)
         assertEquals(0, state().insightsSummary!!.activeFindingCount)
@@ -93,7 +93,7 @@ class NowViewModelTest {
     @Test fun insightsMapHeadlineIdentityAndCountOnlyActiveNonInformationalFindings() = runTest {
         repo.lastAnalyzedAt.value = T0
         val headline = finding(Severity.HIGH)
-        repo.insights.value = InsightReport(T0, listOf(headline, finding(Severity.LOW), finding(Severity.INFO)), headline)
+        repo.insights.value = InsightReport(T0, listOf(headline, finding(Severity.LOW), actionEffect), headline)
         val (_, state) = start()
         assertEquals(InsightsSummary(InsightHeadline(headline.key, headline.type, Severity.HIGH, CHROME), 2), state().insightsSummary)
         assertFalse(state().insightsSummary!!.allGood)
@@ -111,8 +111,8 @@ class NowViewModelTest {
         val (_, state) = start()
         assertFalse("1 of 5 comparable sessions is not 'all good'", state().insightsSummary!!.allGood)
         assertEquals(InsightsSummary(null, 0, learning = true), state().insightsSummary)
-        // Informational findings don't count as findings here either.
-        repo.insights.value = InsightReport(T0, listOf(finding(Severity.INFO)), null)
+        // An action effect (informational, shown with its fix) is neither a finding nor a change here either.
+        repo.insights.value = InsightReport(T0, listOf(actionEffect), null)
         runCurrent()
         assertTrue(state().insightsSummary!!.learning)
         assertFalse(state().insightsSummary!!.allGood)
@@ -163,6 +163,26 @@ class NowViewModelTest {
         assertTrue(state().insightsSummary!!.allGood)
     }
 
+    // R10-4: the capacity decline is informational and directional, so Insights lists it under Changes; Now counts it.
+    @Test fun anActiveHealthDeclineIsAChangeToReviewButAnActionEffectIsNot() = runTest {
+        repo.insights.value = InsightReport(T0, listOf(healthDecline), null)
+        repo.lastAnalyzedAt.value = 1
+        repo.eligible.value = 5
+        val (_, state) = start()
+        assertFalse("a falling capacity is not 'nothing is draining more than usual'", state().insightsSummary!!.allGood)
+        assertEquals(InsightsSummary(null, 0, changeCount = 1), state().insightsSummary)
+        // It needs no app windows: without Shizuku or root the change still wins over "still learning".
+        repo.eligible.value = 0
+        runCurrent()
+        assertEquals(InsightsSummary(null, 0, changeCount = 1), state().insightsSummary)
+        // Negative control: an applied fix's measured effect is shown with the fix, never counted as a change.
+        repo.eligible.value = 5
+        repo.insights.value = InsightReport(T0, listOf(actionEffect), null)
+        runCurrent()
+        assertEquals(InsightsSummary(null, 0), state().insightsSummary)
+        assertTrue(state().insightsSummary!!.allGood)
+    }
+
     @Test fun anActiveFindingWinsOverLearning() = runTest {
         val headline = finding(Severity.HIGH)
         repo.insights.value = InsightReport(T0, listOf(headline), headline)
@@ -179,6 +199,20 @@ class NowViewModelTest {
         severity = severity, confidence = Confidence.HIGH, score = 1.0,
         subject = Subject.App(10_001, CHROME), direction = Direction.UP,
         evidence = emptyList(), series = emptyList(), recommendations = emptyList(),
+    )
+
+    /** What ChargingHealth emits for a falling capacity: device-wide, INFO and DOWN, no baseline. */
+    private val healthDecline = Finding(
+        key = "HEALTH_DECLINE:device", type = FindingType.HEALTH_DECLINE,
+        severity = Severity.INFO, confidence = Confidence.MEDIUM, score = 50.0,
+        subject = Subject.Device, direction = Direction.DOWN,
+        evidence = listOf(Evidence(Metric.CAPACITY_CHANGE_PCT_PER_YEAR, -6.0, null, MetricUnit.PCT_PER_YEAR, 6)),
+        series = emptyList(), recommendations = emptyList(),
+    )
+
+    /** An applied fix's measured effect: INFO and directional, but listed with the fix under Applied fixes. */
+    private val actionEffect = finding(Severity.INFO).copy(
+        key = "ACTION_EFFECT:$CHROME:POWER_MAH_PER_H:7", type = FindingType.ACTION_EFFECT, direction = Direction.DOWN,
     )
 
     @Test fun heroAndReadoutsUseTheCalibratedReadingAndHoldTheEtaAcrossACaptureWithoutIt() = runTest {

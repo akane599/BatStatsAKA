@@ -15,7 +15,6 @@ import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.resolveFullUah
 import com.akane.voltwise.battery.data.uah
 import com.akane.voltwise.battery.insights.engine.detectors.app.AppContext
-import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.measurement.CalibrationState
@@ -131,10 +130,8 @@ class NowViewModel(
             topApps = cards.topApps,
             insightsSummary = report?.takeIf { lastAnalyzedAt != null }?.let {
                 val active = it.findings.count { finding -> finding.severity != Severity.INFO }
-                // Informational trends Insights lists under Changes (the non-INFO ones are already active findings).
-                val changes = it.findings.count { finding ->
-                    finding.severity == Severity.INFO && finding.type == FindingType.TREND && finding.direction != null
-                }
+                // What Insights lists under Changes: informational trends and the capacity decline.
+                val changes = it.findings.count { finding -> isInsightChange(finding.type, finding.severity, finding.direction) }
                 InsightsSummary(
                     headline = it.headline?.let { finding ->
                         InsightHeadline(finding.key, finding.type, finding.severity, (finding.subject as? Subject.App)?.packageName)

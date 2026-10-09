@@ -117,8 +117,9 @@ class InsightsViewModelTest {
         val key = insightFinding()
         val up = key.copy(key = "trend.up", type = FindingType.TREND, severity = Severity.INFO, direction = Direction.UP)
         val down = up.copy(key = "trend.down", direction = Direction.DOWN)
-        val info = key.copy(key = "info", severity = Severity.INFO)
-        val effect = info.copy(key = "ACTION_EFFECT:example.app:POWER_MAH_PER_H:7", type = FindingType.ACTION_EFFECT)
+        // Informational without a direction: neither a key finding nor a change.
+        val info = key.copy(key = "info", severity = Severity.INFO, direction = null)
+        val effect = info.copy(key = "ACTION_EFFECT:example.app:POWER_MAH_PER_H:7", type = FindingType.ACTION_EFFECT, direction = Direction.UP)
         source.report.value = InsightReport(100, listOf(key, up, down, info, effect), key)
         source.actions.value = InsightActionStatus.entries.mapIndexed { index, status -> insightAction((index + 7).toLong(), status) }
         source.lastAnalyzedAt.value = 100
@@ -126,7 +127,7 @@ class InsightsViewModelTest {
         val vm = start()
         assertEquals(key.key, vm.state.value.headline?.key)
         assertEquals(listOf(key.key), vm.state.value.keyFindings.map { it.key })
-        assertEquals(listOf(Direction.UP, Direction.DOWN), vm.state.value.changes.map { it.direction })
+        assertEquals(listOf("trend.up", "trend.down"), vm.state.value.changes.map { it.key })
         assertEquals(listOf(InsightActionStatus.APPLIED, InsightActionStatus.UNKNOWN), vm.state.value.appliedActions.filter { it.undoable }.map { it.status })
         assertEquals(effect.key, vm.state.value.appliedActions.first().effect?.key)
         assertEquals(100L, vm.state.value.lastAnalyzedAt)
@@ -137,6 +138,29 @@ class InsightsViewModelTest {
         runCurrent()
         assertFalse(vm.state.value.lowData)
         assertTrue(vm.state.value.empty)
+    }
+
+    // R10-4: ChargingHealth's decline is INFO and DOWN, not a TREND; it must still reach "What changed".
+    @Test fun anActiveHealthDeclineIsListedUnderChangesButAnActionEffectIsNot() = runTest {
+        val decline = insightFinding().copy(
+            key = "HEALTH_DECLINE:device", type = FindingType.HEALTH_DECLINE, severity = Severity.INFO,
+            subject = Subject.Device, direction = Direction.DOWN, recommendations = emptyList(),
+            evidence = listOf(Evidence(Metric.CAPACITY_CHANGE_PCT_PER_YEAR, -6.0, null, MetricUnit.PCT_PER_YEAR, 6)),
+        )
+        val effect = insightFinding().copy(
+            key = "ACTION_EFFECT:example.app:POWER_MAH_PER_H:7", type = FindingType.ACTION_EFFECT,
+            severity = Severity.INFO, direction = Direction.DOWN,
+        )
+        source.report.value = InsightReport(100, listOf(decline, effect), null)
+        source.lastAnalyzedAt.value = 100
+        source.eligibleSessionCount.value = 5
+        val vm = start()
+        assertEquals(listOf(decline.key), vm.state.value.changes.map { it.key })
+        assertTrue("an informational finding is not a key finding", vm.state.value.keyFindings.isEmpty())
+        // Negative control: the action effect stays out of Changes (Applied fixes shows it with its fix).
+        source.report.value = InsightReport(101, listOf(effect), null)
+        runCurrent()
+        assertTrue(vm.state.value.changes.isEmpty())
     }
 
     // R9-5: app detectors baseline on the windows before the current one, so 4 eligible windows is still learning.
@@ -240,6 +264,44 @@ class InsightsViewModelTest {
         assertNull(vm.state.value.error)
         assertSame("recovery must not consume a newer apply outcome", newer, results.latest.value)
         assertSame(newer, vm.state.value.apply.lastResult)
+    }
+
+    // R10-5: the failure's notice (error) dies with the VM, so its held snackbar must not greet the next VM.
+    @Test fun clearingTheViewModelRetiresItsHeldAnalysisFailure() = runTest {
+        source.lastAnalyzedAt.value = 100
+        val vm1 = start()
+        val store = ViewModelStore().apply { put("insights", vm1) }
+        source.analyzeFailure = true
+        vm1.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        assertEquals(InsightMessageCode.ANALYSIS_FAILED, results.latest.value?.code)
+
+        store.clear()
+        source.analyzeFailure = false
+        source.lastAnalyzedAt.value = 101
+        val vm2 = start()
+        assertNull(vm2.state.value.error)
+        assertNull("a new screen must not show 'Couldn't analyze' under a fresh analysis", vm2.state.value.apply.lastResult)
+    }
+
+    @Test fun clearingTheViewModelKeepsANewerApplyResult() = runTest {
+        source.lastAnalyzedAt.value = 100
+        val vm1 = start()
+        val store = ViewModelStore().apply { put("insights", vm1) }
+        source.analyzeFailure = true
+        vm1.onEvent(InsightsEvent.AnalyzeNow)
+        runCurrent()
+        val failure = checkNotNull(results.latest.value)
+        source.result = ActionResult.Reverted
+        vm1.onEvent(InsightsEvent.Undo(7))
+        runCurrent()
+        val newer = checkNotNull(results.latest.value)
+        assertTrue(newer.seq > failure.seq)
+
+        store.clear()
+        val vm2 = start()
+        assertSame("clearing must consume only its own failure, never a newer outcome", newer, results.latest.value)
+        assertSame(newer, vm2.state.value.apply.lastResult)
     }
 
     @Test fun unchangedOrOlderAnalysisTimestampKeepsAnalysisFailure() = runTest {

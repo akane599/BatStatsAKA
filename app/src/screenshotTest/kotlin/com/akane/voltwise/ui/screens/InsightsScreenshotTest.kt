@@ -218,6 +218,35 @@ fun InsightsLearningNoAccessPreview() {
     }
 }
 
+/**
+ * No Shizuku or root, yet the capacity is falling: the device-only decline is listed under "What changed" (no
+ * baseline, a yearly rate) while the learning notice still explains the missing app data.
+ */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun InsightsHealthDeclineNoAccessPreview() {
+    ScreenshotTheme {
+        InsightsPreviewContent(
+            InsightsUiState(
+                loaded = true,
+                changes = listOf(
+                    finding(
+                        FindingType.HEALTH_DECLINE, Subject.Device, Severity.INFO, Confidence.MEDIUM,
+                        Evidence(Metric.CAPACITY_CHANGE_PCT_PER_YEAR, -6.4, null, Metric.CAPACITY_CHANGE_PCT_PER_YEAR.unit, 7),
+                        direction = Direction.DOWN,
+                    ),
+                ),
+                lastAnalyzedAt = FIXED_TIME_MS - 10 * MINUTE,
+                privileged = false,
+                empty = false,
+                eligibleSessionCount = 0,
+                lowData = true,
+            ),
+        )
+    }
+}
+
 /** Before the first report (also right after a restore): only the header, saying it's loading, no "still learning". */
 @PreviewTest
 @PhonePreview

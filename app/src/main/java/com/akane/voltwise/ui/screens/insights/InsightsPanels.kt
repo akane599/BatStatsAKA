@@ -311,7 +311,10 @@ private fun RecommendationControl(
     }
 }
 
-/** Trends: up or down, who and which measure, and the old → new median. Each row opens the finding. */
+/**
+ * Trends and the capacity decline: up or down, who and which measure, and the old → new median (only the value
+ * when there is no baseline, like the yearly capacity change). Each row opens the finding.
+ */
 @Composable
 internal fun ChangesPanel(
     changes: List<InsightFindingState>,
