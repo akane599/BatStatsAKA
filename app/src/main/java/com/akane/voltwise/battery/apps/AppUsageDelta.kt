@@ -52,15 +52,31 @@ object AppUsageDelta {
         return endTotal < baselineTotal - POWER_EPSILON
     }
 
+    /** Legacy fields clamp decreases to zero; extended fields require baseline support and
+     * observation of that counter in either dump before sparse absence can mean zero. */
     private fun clampedDelta(baselineRows: List<AppUsageRow>, endRows: List<AppUsageRow>): List<AppUsageRow> {
         val baselineByUid = baselineRows.associateBy { it.uid }
         // Schema-v6 baselines have every extended column null. Without a support marker,
-        // keep those snapshots unknown; otherwise absent sparse checkin records mean zero.
+        // keep those snapshots unknown even when the end reports extended counters.
         val extendedCountersSupported = baselineRows.any { row ->
             row.wakeupAlarms != null || row.partialWakelockCount != null || row.partialWakelockBgMs != null ||
                 row.jobCount != null || row.jobMs != null || row.syncCount != null || row.fgServiceMs != null ||
                 row.topMs != null || row.mobileActiveMs != null || row.gpsMs != null || row.sensorMs != null
         }
+        // whittle: a counter no app used in either dump stays unknown; upgrade with a per-SDK support table.
+        fun counterSupported(field: (AppUsageRow) -> Long?): Boolean = extendedCountersSupported &&
+            (baselineRows.any { field(it) != null } || endRows.any { field(it) != null })
+        val alarmsSupported = counterSupported(AppUsageRow::wakeupAlarms)
+        val wakelockCountSupported = counterSupported(AppUsageRow::partialWakelockCount)
+        val wakelockBgSupported = counterSupported(AppUsageRow::partialWakelockBgMs)
+        val jobCountSupported = counterSupported(AppUsageRow::jobCount)
+        val jobMsSupported = counterSupported(AppUsageRow::jobMs)
+        val syncSupported = counterSupported(AppUsageRow::syncCount)
+        val fgsSupported = counterSupported(AppUsageRow::fgServiceMs)
+        val topSupported = counterSupported(AppUsageRow::topMs)
+        val mobileActiveSupported = counterSupported(AppUsageRow::mobileActiveMs)
+        val gpsSupported = counterSupported(AppUsageRow::gpsMs)
+        val sensorSupported = counterSupported(AppUsageRow::sensorMs)
         return endRows.map { end ->
             val base = baselineByUid[end.uid]
             end.copy(
@@ -71,17 +87,17 @@ object AppUsageDelta {
                 wakelockTimeMs = clampField(end.wakelockTimeMs, base?.wakelockTimeMs),
                 mobileBytes = clampField(end.mobileBytes, base?.mobileBytes),
                 wifiBytes = clampField(end.wifiBytes, base?.wifiBytes),
-                wakeupAlarms = nullableDelta(end.wakeupAlarms, base?.wakeupAlarms, extendedCountersSupported),
-                partialWakelockCount = nullableDelta(end.partialWakelockCount, base?.partialWakelockCount, extendedCountersSupported),
-                partialWakelockBgMs = nullableDelta(end.partialWakelockBgMs, base?.partialWakelockBgMs, extendedCountersSupported),
-                jobCount = nullableDelta(end.jobCount, base?.jobCount, extendedCountersSupported),
-                jobMs = nullableDelta(end.jobMs, base?.jobMs, extendedCountersSupported),
-                syncCount = nullableDelta(end.syncCount, base?.syncCount, extendedCountersSupported),
-                fgServiceMs = nullableDelta(end.fgServiceMs, base?.fgServiceMs, extendedCountersSupported),
-                topMs = nullableDelta(end.topMs, base?.topMs, extendedCountersSupported),
-                mobileActiveMs = nullableDelta(end.mobileActiveMs, base?.mobileActiveMs, extendedCountersSupported),
-                gpsMs = nullableDelta(end.gpsMs, base?.gpsMs, extendedCountersSupported),
-                sensorMs = nullableDelta(end.sensorMs, base?.sensorMs, extendedCountersSupported),
+                wakeupAlarms = nullableDelta(end.wakeupAlarms, base?.wakeupAlarms, alarmsSupported),
+                partialWakelockCount = nullableDelta(end.partialWakelockCount, base?.partialWakelockCount, wakelockCountSupported),
+                partialWakelockBgMs = nullableDelta(end.partialWakelockBgMs, base?.partialWakelockBgMs, wakelockBgSupported),
+                jobCount = nullableDelta(end.jobCount, base?.jobCount, jobCountSupported),
+                jobMs = nullableDelta(end.jobMs, base?.jobMs, jobMsSupported),
+                syncCount = nullableDelta(end.syncCount, base?.syncCount, syncSupported),
+                fgServiceMs = nullableDelta(end.fgServiceMs, base?.fgServiceMs, fgsSupported),
+                topMs = nullableDelta(end.topMs, base?.topMs, topSupported),
+                mobileActiveMs = nullableDelta(end.mobileActiveMs, base?.mobileActiveMs, mobileActiveSupported),
+                gpsMs = nullableDelta(end.gpsMs, base?.gpsMs, gpsSupported),
+                sensorMs = nullableDelta(end.sensorMs, base?.sensorMs, sensorSupported),
             )
         }
     }
@@ -92,9 +108,11 @@ object AppUsageDelta {
         else -> ((end ?: 0L) - (base ?: 0L)).coerceAtLeast(0L)
     }
 
-    /** Sparse baseline records start at zero; unsupported snapshots/endpoints and resets stay unknown. */
-    private fun nullableDelta(end: Long?, base: Long?, extendedCountersSupported: Boolean): Long? = when {
-        end == null || !extendedCountersSupported -> null
+    /** For a supported, observed counter, sparse absence on both sides is zero and a missing
+     * baseline subtracts zero. Unsupported counters, lost end records and decreases stay unknown. */
+    private fun nullableDelta(end: Long?, base: Long?, counterSupported: Boolean): Long? = when {
+        !counterSupported -> null
+        end == null -> if (base == null) 0L else null
         else -> (end - (base ?: 0L)).takeIf { it >= 0L }
     }
 
