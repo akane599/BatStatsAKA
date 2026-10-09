@@ -102,6 +102,7 @@ data class AppliedActionInput(
     val uid: Int?,
     val appliedAtMs: Long?,
     val status: ActionStatus,
+    val metric: Metric? = null,
 )
 
 data class InsightReport(val generatedAtMs: Long, val findings: List<Finding>, val headline: Finding?)

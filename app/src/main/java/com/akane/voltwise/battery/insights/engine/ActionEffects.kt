@@ -70,6 +70,7 @@ object ActionEffects {
     }
 
     private fun metric(action: AppliedActionInput): Metric {
+        action.metric?.let { return it }
         val explicit = action.findingKey.split(':').getOrNull(2)
         Metric.entries.firstOrNull { it.name == explicit }?.let { return it }
         return when (action.findingKey.substringBefore(':')) {

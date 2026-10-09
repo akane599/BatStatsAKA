@@ -10,6 +10,36 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ActionEffectsTest {
+    @Test fun `sync sourced job storm effect follows syncs rather than rising jobs`() {
+        val sessions = (0..3).map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(
+                syncCount = if (index < 2) 60 else 2,
+                jobCount = if (index < 2) 1 else 2,
+            )
+        }
+        val action = AppliedActionInput(4, "JOB_STORM:$APP", ActionType.RESTRICT_BACKGROUND,
+            APP, UID, sessions[1].endMs + HOUR, ActionStatus.APPLIED, metric = Metric.SYNCS_PER_H)
+        val input = inputs(sessions, rows).copy(actions = listOf(action))
+        val effect = ActionEffects.detect(input).single()
+        assertEquals(Metric.SYNCS_PER_H, effect.evidence.single().metric)
+        assertEquals(Direction.DOWN, effect.direction)
+        assertEquals(60.0, effect.evidence.single().baseline!!, 0.0)
+        assertEquals(2.0, effect.evidence.single().observed, 0.0)
+
+        // Stored evidence takes precedence over the legacy metric suffix, too.
+        assertEquals(effect, ActionEffects.detect(input.copy(actions = listOf(
+            action.copy(findingKey = "JOB_STORM:$APP:JOBS_PER_H"),
+        ))).single())
+        val fallback = ActionEffects.detect(input.copy(actions = listOf(action.copy(metric = null)))).single()
+        assertEquals(Metric.JOBS_PER_H, fallback.evidence.single().metric)
+        assertEquals(Direction.UP, fallback.direction)
+        val explicit = ActionEffects.detect(input.copy(actions = listOf(
+            action.copy(metric = null, findingKey = "JOB_STORM:$APP:SYNCS_PER_H"),
+        ))).single()
+        assertEquals(effect, explicit)
+    }
+
     @Test fun `charging actions compare charging metrics rather than unrelated discharge drain`() {
         for ((type, kind, metric) in listOf(
             Triple("HOT_CHARGING", SessionKind.CHARGE, Metric.TEMPERATURE_C),
