@@ -343,6 +343,40 @@ class InsightsViewModelTest {
         assertTrue(source.applied.isEmpty())
     }
 
+    @Test fun openSettingsDoesNotConsumeAnotherFlowsAppliedOutcome() = runTest {
+        for (previous in listOf(null, ActionResult.Refused(RefusalCode.PROTECTED))) {
+            val sharedResults = InsightApplyResults()
+            val applyingSource = FakeInsightsRepository()
+            val settingsSource = FakeInsightsRepository()
+            val applying = InsightApplyFlow(applyingSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+            val settings = InsightApplyFlow(settingsSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+            val effects = mutableListOf<InsightUiEffect>()
+            backgroundScope.launch { settings.effects.collect { effects += it } }
+            if (previous != null) {
+                settingsSource.result = previous
+                settings.onEvent(InsightsEvent.Undo(9))
+                runCurrent()
+            }
+            applying.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
+            applying.onEvent(InsightsEvent.ConfirmApply)
+            runCurrent()
+            val expected = InsightActionMessage(InsightMessageCode.APPLIED, 7)
+            assertEquals(expected, sharedResults.latest.value)
+            assertEquals(expected, settings.state.value.lastResult)
+
+            val spec = IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", "example.app")
+            settingsSource.result = ActionResult.OpenSettings(spec)
+            settings.onEvent(InsightsEvent.RequestApply("finding", ActionType.OPEN_APP_SETTINGS))
+            settings.onEvent(InsightsEvent.ConfirmApply)
+            runCurrent()
+
+            assertEquals(InsightUiEffect.OpenSettings(spec), effects.last())
+            assertEquals("opening settings must preserve another flow's unconsumed APPLIED outcome", expected, sharedResults.latest.value)
+            assertEquals(expected, applying.state.value.lastResult)
+            assertEquals(expected, settings.state.value.lastResult)
+        }
+    }
+
     @Test fun consumingAnOlderObservedResultDoesNotEraseTheLatestOutcome() {
         val older = InsightActionMessage(InsightMessageCode.PROTECTED)
         val latest = InsightActionMessage(InsightMessageCode.ROLE_HOLDER)
