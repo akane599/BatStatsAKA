@@ -216,6 +216,40 @@ class InsightInputsBuilderTest {
         assertEquals(1.5, inputs.feedback[testFinding().key]!!, 0.0)
     }
 
+    @Test fun capacityExcludesSourceMarkedImportsButKeepsLocalEstimate() {
+        val local = CapacityEstimateRow("local", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80,
+            4_400, "HIGH", "COUNTER_SPAN", source = "local")
+        val imported = local.copy(sessionId = "old-phone", endTime = NOW - 26 * 24 * HOUR,
+            capacityEstimateMah = 4_600, source = "import:x")
+
+        assertEquals(listOf(CapacityPointInput(NOW, 4_400.0, 3)), build(capacity = listOf(imported, local)).capacity)
+    }
+
+    @Test fun capacityExcludesIdMarkedImportsButKeepsLocalEstimate() {
+        val local = CapacityEstimateRow("local", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80,
+            4_400, "HIGH", "COUNTER_SPAN", source = "local")
+        val imported = local.copy(sessionId = "import:old-phone", capacityEstimateMah = 4_600)
+
+        assertEquals(listOf(CapacityPointInput(NOW, 4_400.0, 3)), build(capacity = listOf(imported, local)).capacity)
+    }
+
+    @Test fun capacityDoesNotFallBackToImportsWhenThereAreNoLocalEstimates() {
+        val imported = CapacityEstimateRow("old-phone", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80,
+            4_600, "HIGH", "COUNTER_SPAN", source = "import:x")
+
+        assertTrue(build(capacity = listOf(imported, imported.copy(sessionId = "import:old-phone", source = "legacy"))).capacity.isEmpty())
+    }
+
+    @Test fun localAndLegacyCapacityEstimatesKeepTheirValuesConfidenceAndOrder() {
+        val local = CapacityEstimateRow("local", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80,
+            4_400, "HIGH", "COUNTER_SPAN", source = "local")
+        val legacy = local.copy(sessionId = "legacy", endTime = NOW - HOUR, capacityEstimateMah = 4_500,
+            capacityConfidence = "MEDIUM", source = "legacy")
+
+        assertEquals(listOf(CapacityPointInput(NOW, 4_400.0, 3), CapacityPointInput(NOW - HOUR, 4_500.0, 2)),
+            build(capacity = listOf(local, legacy)).capacity)
+    }
+
     @Test fun capacityAndActionsUseOnlySupportedClosedAppliedRecords() {
         val point = CapacityEstimateRow("local", SessionType.CHARGE, NOW - HOUR, NOW, null, 20, 80, 4_000, "HIGH", "COUNTER_SPAN")
         val action = InsightActionEntity(1, testFinding().key, ActionType.FORCE_STOP.name, userId = 0,

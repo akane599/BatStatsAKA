@@ -115,7 +115,7 @@ interface SessionDao {
     fun session(id: String): Flow<ChargeSession?>
 
     /** The newest [limit] sessions that stored a capacity estimate, newest first (the Health trend). */
-    @Query("SELECT sessionId, type, startTime, endTime, lastSampleTime, startLevel, endLevel, capacityEstimateMah, capacityConfidence, capacityBasis FROM charge_sessions WHERE capacityEstimateMah IS NOT NULL ORDER BY startTime DESC, sessionId LIMIT :limit")
+    @Query("SELECT sessionId, type, startTime, endTime, lastSampleTime, startLevel, endLevel, capacityEstimateMah, capacityConfidence, capacityBasis, source FROM charge_sessions WHERE capacityEstimateMah IS NOT NULL ORDER BY startTime DESC, sessionId LIMIT :limit")
     fun capacityEstimates(limit: Int): Flow<List<CapacityEstimateRow>>
 
     @Query("DELETE FROM battery_samples WHERE sessionId = :id")

@@ -79,6 +79,7 @@ object InsightInputsBuilder {
                 DeviceWakerInput(it.sessionId, kind, it.name, it.count, it.totalMs)
             },
             capacity.mapNotNull {
+                if (it.source.startsWith("import:") || it.sessionId.startsWith("import:")) return@mapNotNull null
                 val at = it.endTime ?: return@mapNotNull null
                 if (at !in (nowMs - HISTORY_MS)..nowMs) return@mapNotNull null
                 val estimate = HealthSummary.storedEstimate(it.capacityEstimateMah, it.capacityConfidence, it.capacityBasis)

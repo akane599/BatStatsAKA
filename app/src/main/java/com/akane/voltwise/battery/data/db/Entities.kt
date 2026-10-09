@@ -98,6 +98,7 @@ data class CapacityEstimateRow(
     val capacityEstimateMah: Int,
     val capacityConfidence: String?,
     val capacityBasis: String?,
+    val source: String = "legacy",
 )
 
 /** Bounded representative chart rows; bucket discontinuities must remain visible. */
