@@ -16,7 +16,7 @@ class FindingDetailsViewModel(
     private val applicationScope: CoroutineScope,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
-    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle)
+    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope)
     private val key = savedStateHandle.getStateFlow("key", "")
     val effects = flow.effects
     private val content = combine(source.report, source.actions, source.privileged, key) { report, actions, privileged, key ->
@@ -26,6 +26,7 @@ class FindingDetailsViewModel(
             if (packageName != null) row.packageName == packageName else row.findingKey == key
         }
         FindingDetailsUiState(
+            loaded = true,
             finding = finding?.toInsightState(privileged, actions),
             relatedActions = actionStates(related, report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }),
             privileged = privileged,
