@@ -317,6 +317,55 @@ class InsightRepositoryTest {
         assertTrue(repo.report.value!!.findings.isEmpty())
     }
 
+    @Test fun completedClearPublishesEmptyReportBeforeSuspendedRefreshReturns() = runTest {
+        val fixture = Fixture()
+        fixture.insights.rows.value = listOf(FindingCodec.encode(testFinding(), 1))
+        val repo = fixture.repository(this)
+        runCurrent()
+        assertEquals(listOf(testFinding()), repo.report.value!!.findings)
+        val dumpGate = CompletableDeferred<Unit>()
+        fixture.dump = { dumpGate.await() }
+        val refresh = async { repo.refresh(liveDump = true) }
+        try {
+            runCurrent()
+            assertEquals(listOf("dump"), fixture.events)
+            fixture.maintenance.clear({}, { fixture.insights.clearFindings() })
+            runCurrent()
+            assertFalse("Refresh must still be suspended", refresh.isCompleted)
+            assertTrue("Clear must remove published findings before refresh returns",
+                repo.report.value!!.findings.isEmpty())
+        } finally {
+            dumpGate.complete(Unit)
+        }
+        refresh.await()
+        assertTrue("Stale refresh must not repopulate cleared findings", fixture.insights.rows.value.isEmpty())
+        assertNull(repo.lastAnalyzedAt.value)
+    }
+
+    @Test fun startupPublishesStoredReportBeforeSuspendedRefreshReturns() = runTest {
+        val fixture = Fixture()
+        fixture.store.edit(mapOf(InsightRepository.LAST_ANALYZED_AT to "123"))
+        fixture.insights.rows.value = listOf(FindingCodec.encode(testFinding(), 1))
+        val dumpGate = CompletableDeferred<Unit>()
+        fixture.dump = { dumpGate.await() }
+        val repo = fixture.repository(this)
+        assertNull(repo.report.value)
+        // Acquire the analysis mutex before initialization or the first Room emission runs.
+        val refresh = async(start = CoroutineStart.UNDISPATCHED) { repo.refresh(liveDump = true) }
+        try {
+            runCurrent()
+            assertEquals(listOf("dump"), fixture.events)
+            assertFalse("Refresh must still be suspended", refresh.isCompleted)
+            assertNotNull("Room must publish a report before refresh returns", repo.report.value)
+            assertEquals(listOf(testFinding()), repo.report.value!!.findings)
+            assertEquals("Initialization must load without waiting for analysis", 123L, repo.lastAnalyzedAt.value)
+            assertEquals(123L, repo.report.value!!.generatedAtMs)
+        } finally {
+            dumpGate.complete(Unit)
+        }
+        refresh.await()
+    }
+
     @Test fun completedClearDuringAnalysisDiscardsStaleFindingsAndTimestamp() = runTest {
         val fixture = Fixture()
         val repo = fixture.repository(this)
