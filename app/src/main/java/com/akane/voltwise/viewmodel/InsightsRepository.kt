@@ -13,6 +13,8 @@ import com.akane.voltwise.battery.util.ShellRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
@@ -20,7 +22,8 @@ import kotlinx.coroutines.flow.map
 interface InsightsRepository {
     val report: StateFlow<InsightReport?>
     val actions: Flow<List<InsightActionEntity>>
-    val privileged: Flow<Boolean>
+    /** Null until access detection completes; false means detection found no Shizuku/root. */
+    val privileged: Flow<Boolean?>
     val lastAnalyzedAt: Flow<Long?>
     val eligibleSessionCount: Flow<Int>
     suspend fun analyzeNow()
@@ -40,7 +43,11 @@ class DefaultInsightsRepository(
     override val report = insights.report
     override val actions = actionRepository.actions
     override val lastAnalyzedAt = insights.lastAnalyzedAt
-    override val privileged = shellRunner.access.map { it == ShellRunner.Mode.SHIZUKU || it == ShellRunner.Mode.ROOT }
+    override val privileged: Flow<Boolean?> = flow {
+        emit(null)
+        shellRunner.detectMode()
+        emitAll(shellRunner.access.map { it == ShellRunner.Mode.SHIZUKU || it == ShellRunner.Mode.ROOT })
+    }
     override val eligibleSessionCount = sessionDao.filteredSessions(null, "", Int.MAX_VALUE).map { sessions ->
         val inputs = InsightInputsBuilder.build(
             clock(), 0, null, false, sessions, emptyList(), emptyList(), emptyList(), emptyList(),

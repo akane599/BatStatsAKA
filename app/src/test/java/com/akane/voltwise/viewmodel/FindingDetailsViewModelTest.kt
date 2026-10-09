@@ -81,6 +81,31 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         assertNull(restored.state.value.apply.pending)
     }
 
+    @Test fun restoredPendingSurvivesUnknownPrivilegeUntilDetectionCompletes() = runTest {
+        source.report.value = null
+        source.privileged.value = null
+        val request = PendingInsightApply("finding", ActionType.RESTRICT_BACKGROUND)
+        val saved = SavedStateHandle(mapOf(
+            "key" to request.key,
+            "insights.pending.key" to request.key,
+            "insights.pending.action" to request.action.name,
+        ))
+        val vm = start(saved)
+        source.report.value = InsightReport(2, listOf(insightFinding()), insightFinding())
+        runCurrent()
+        assertFalse("unknown access is not visually privileged", vm.state.value.privileged)
+        assertEquals("unknown access must not invalidate a restored dialog", request, vm.state.value.apply.pending)
+        source.privileged.value = true
+        runCurrent()
+        assertTrue(vm.state.value.privileged)
+        assertEquals("successful detection must preserve the restored request", request, vm.state.value.apply.pending)
+        assertTrue("restoration and detection must never apply", source.applied.isEmpty())
+        source.privileged.value = false
+        runCurrent()
+        assertNull("confirmed access loss must still invalidate pending", vm.state.value.apply.pending)
+        assertNull(saved.get<String>("insights.pending.key"))
+    }
+
     @Test fun undoUsesSharedRefusalMappingAndChangedOutsideResult() = runTest {
         val vm = start()
         val effects = mutableListOf<InsightUiEffect>()
@@ -224,7 +249,7 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         assertEquals("restoring or consuming must not replay actions", listOf(7L, 8L), source.undone)
     }
 
-    @Test fun loadedWaitsForFirstContentEmissionEvenWithNullReport() = runTest {
+    @Test fun loadedWaitsForNonNullReportAndActions() = runTest {
         source.report.value = null
         val actions = kotlinx.coroutines.flow.MutableSharedFlow<List<com.akane.voltwise.battery.data.db.InsightActionEntity>>(replay = 1)
         val delayed = object : InsightsRepository by source { override val actions = actions }
@@ -235,7 +260,11 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         assertFalse(vm.state.value.loaded)
         actions.emit(emptyList())
         runCurrent()
-        assertTrue("first null report is loaded, not loading", vm.state.value.loaded)
+        assertFalse("a null report remains loading after actions emit", vm.state.value.loaded)
+        assertNull(vm.state.value.finding)
+        source.report.value = InsightReport(2, emptyList(), null)
+        runCurrent()
+        assertTrue("a published report with a missing finding is loaded", vm.state.value.loaded)
         assertNull(vm.state.value.finding)
     }
 

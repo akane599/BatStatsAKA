@@ -15,6 +15,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import com.akane.voltwise.battery.insights.actions.*
 import com.akane.voltwise.battery.insights.model.*
 import kotlinx.coroutines.CompletableDeferred
@@ -83,16 +85,22 @@ class InsightsViewModelTest {
             override fun packagesForUid(uid: Int): List<String> = error("unexpected inspection")
             override fun roleHolders(): Set<String> = error("unexpected inspection")
         }, { now }, {})
-        var mode = ShellRunner.Mode.NONE
-        val shell = ShellRunner({ mode }, { _, _ -> error("unexpected shell call") }, { false }, { 0L })
+        var mode = ShellRunner.Mode.SHIZUKU
+        var probes = 0
+        val shell = ShellRunner({ probes++; mode }, { _, _ -> error("unexpected shell call") }, { false }, { 0L })
         val adapter = DefaultInsightsRepository(insights, journal, shell, sessionDao, { now })
         assertSame(insights.report, adapter.report)
         assertEquals(1, adapter.eligibleSessionCount.first())
         assertEquals(0, dumps)
+        assertEquals("constructing the adapter must not probe", 0, probes)
+        assertEquals("collecting privilege must discover cold-start Shizuku after unknown", listOf(null, true), adapter.privileged.take(2).toList())
+        assertEquals(1, probes)
+        assertEquals(true, adapter.privileged.first { it != null })
+        assertEquals("a second collection must reuse cached detection", 1, probes)
         for (next in ShellRunner.Mode.entries) {
             mode = next
             shell.detectMode(forceRefresh = true)
-            assertEquals(next == ShellRunner.Mode.ROOT || next == ShellRunner.Mode.SHIZUKU, adapter.privileged.first())
+            assertEquals(next == ShellRunner.Mode.ROOT || next == ShellRunner.Mode.SHIZUKU, adapter.privileged.first { it != null })
         }
         adapter.analyzeNow()
         assertEquals(1, dumps)
@@ -190,6 +198,31 @@ class InsightsViewModelTest {
         runCurrent()
         assertEquals(0, source.applied.size)
         assertNull(restored.state.value.apply.pending)
+    }
+
+    @Test fun restoredPendingSurvivesUnknownPrivilegeUntilDetectionCompletes() = runTest {
+        source.report.value = null
+        source.privileged.value = null
+        val request = PendingInsightApply("finding", ActionType.RESTRICT_BACKGROUND)
+        val saved = SavedStateHandle(mapOf(
+            "insights.pending.key" to request.key,
+            "insights.pending.action" to request.action.name,
+        ))
+        val vm = start(saved)
+        source.report.value = InsightReport(2, listOf(insightFinding()), insightFinding())
+        runCurrent()
+        assertFalse("unknown access is not visually privileged", vm.state.value.privileged)
+        assertEquals("unknown access must not invalidate a restored dialog", request, vm.state.value.apply.pending)
+        source.privileged.value = true
+        runCurrent()
+        assertTrue(vm.state.value.privileged)
+        assertEquals("successful detection must preserve the restored request", request, vm.state.value.apply.pending)
+        assertEquals(request.key, saved.get<String>("insights.pending.key"))
+        assertTrue("restoration and detection must never apply", source.applied.isEmpty())
+        source.privileged.value = false
+        runCurrent()
+        assertNull("confirmed access loss must still invalidate pending", vm.state.value.apply.pending)
+        assertNull(saved.get<String>("insights.pending.key"))
     }
 
     @Test fun dismissalFeedbackAndNavigationUseTheirOwnPaths() = runTest {
@@ -329,7 +362,7 @@ class InsightsViewModelTest {
         assertEquals("restoring or consuming must not replay actions", listOf(7L, 8L), source.undone)
     }
 
-    @Test fun loadedWaitsForFirstContentAndStatusEmissionEvenWithNullReport() = runTest {
+    @Test fun loadedWaitsForNonNullReportAndStatus() = runTest {
         source.report.value = null
         val actions = kotlinx.coroutines.flow.MutableSharedFlow<List<InsightActionEntity>>(replay = 1)
         val count = kotlinx.coroutines.flow.MutableSharedFlow<Int>(replay = 1)
@@ -347,8 +380,11 @@ class InsightsViewModelTest {
         assertFalse("status has not emitted yet", vm.state.value.loaded)
         count.emit(0)
         runCurrent()
-        assertTrue("first null report and status are loaded, not loading", vm.state.value.loaded)
+        assertFalse("a null report remains loading after other sources emit", vm.state.value.loaded)
         assertTrue(vm.state.value.lowData)
+        source.report.value = InsightReport(2, emptyList(), null)
+        runCurrent()
+        assertTrue("a published empty report is loaded", vm.state.value.loaded)
         assertTrue(vm.state.value.empty)
     }
 
@@ -371,7 +407,7 @@ class InsightsViewModelTest {
 internal class FakeInsightsRepository : InsightsRepository {
     override val report = MutableStateFlow<InsightReport?>(InsightReport(1, listOf(insightFinding()), insightFinding()))
     override val actions = MutableStateFlow<List<InsightActionEntity>>(emptyList())
-    override val privileged = MutableStateFlow(true)
+    override val privileged = MutableStateFlow<Boolean?>(true)
     override val lastAnalyzedAt = MutableStateFlow<Long?>(null)
     override val eligibleSessionCount = MutableStateFlow(0)
     val applied = mutableListOf<Pair<Finding, Recommendation>>()
