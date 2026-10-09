@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import androidx.annotation.PluralsRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -240,7 +241,7 @@ fun FindingDetailsContent(
                     }
                 }
                 FindingExplanation(finding.type, Modifier.fillMaxWidth())
-                if (finding.evidence.isNotEmpty()) EvidencePanel(finding.type, finding.evidence, Modifier.fillMaxWidth())
+                if (finding.evidence.isNotEmpty()) EvidencePanel(finding.type, finding.subject, finding.evidence, Modifier.fillMaxWidth())
                 // The series measures the finding's first evidence metric, so that evidence names its unit.
                 val measured = finding.evidence.firstOrNull()
                 if (finding.series.isNotEmpty() && measured != null) {
@@ -359,19 +360,24 @@ private fun ExplanationPart(title: String, body: String) {
     }
 }
 
-/** Each measure: what it was against usual, and how many sessions back it. */
+/** Each measure: what it was against usual, and how many sessions (or days) back it. */
 @Composable
-private fun EvidencePanel(type: FindingType, evidence: List<Evidence>, modifier: Modifier = Modifier) {
+private fun EvidencePanel(type: FindingType, subject: Subject, evidence: List<Evidence>, modifier: Modifier = Modifier) {
     Panel(modifier, title = stringResource(R.string.finding_evidence)) {
         evidence.forEachIndexed { i, item ->
             if (i > 0) HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            EvidenceRow(type, item)
+            EvidenceRow(type, subject, item)
         }
     }
 }
 
+/** What [Evidence.sessions] counts: a device trend is built from daily points, so its count is days. */
+@PluralsRes
+internal fun evidenceCountRes(type: FindingType, subject: Subject): Int =
+    if (type == FindingType.TREND && subject == Subject.Device) R.plurals.finding_days else R.plurals.finding_sessions
+
 @Composable
-private fun EvidenceRow(type: FindingType, evidence: Evidence) {
+private fun EvidenceRow(type: FindingType, subject: Subject, evidence: Evidence) {
     val spacing = MaterialTheme.spacing
     val joined = stringResource(R.string.insights_joined)
     val details = buildList {
@@ -380,7 +386,7 @@ private fun EvidenceRow(type: FindingType, evidence: Evidence) {
         } else {
             evidence.baseline?.takeIf { it.isFinite() }?.let { add(stringResource(R.string.finding_usually, metricValueText(it, evidence.unit))) }
         }
-        if (evidence.sessions > 0) add(pluralStringResource(R.plurals.finding_sessions, evidence.sessions, evidence.sessions))
+        if (evidence.sessions > 0) add(pluralStringResource(evidenceCountRes(type, subject), evidence.sessions, evidence.sessions))
     }
     Column(
         Modifier

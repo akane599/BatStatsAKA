@@ -15,6 +15,10 @@
         <item quantity="one">%d oturum</item>
         <item quantity="other">%d oturum</item>
     </plurals>
+    <plurals name="finding_days">
+        <item quantity="one">%d gün</item>
+        <item quantity="other">%d gün</item>
+    </plurals>
 
     <string name="finding_unit_hours">sa</string>
     <string name="finding_chart_usual_range">Olağan aralık</string>
