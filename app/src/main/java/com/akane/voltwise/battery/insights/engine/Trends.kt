@@ -67,12 +67,14 @@ object Trends {
         if (before.size < 4 || after.size < 4) return null
         val effect = EffectSize.between(before, after) ?: return null
         if (abs(effect.absolute) < floor || (effect.relative != null && abs(effect.relative) < MIN_RELATIVE)) return null
+        val direction = if (effect.absolute < 0) Direction.DOWN else Direction.UP
         return finding(
             FindingType.TREND,
             listOf(Evidence(metric, effect.after, effect.before, metric.unit, before.size + after.size)),
             subject = subject, severity = Severity.INFO,
-            direction = if (effect.absolute < 0) Direction.DOWN else Direction.UP,
-            score = (abs(effect.absolute) / floor * 10.0).coerceAtMost(100.0), series = series, suffix = metric.name,
+            direction = direction,
+            score = (abs(effect.absolute) / floor * 10.0).coerceAtMost(100.0), series = series,
+            suffix = "${metric.name}:${direction.name}",
         )
     }
 
