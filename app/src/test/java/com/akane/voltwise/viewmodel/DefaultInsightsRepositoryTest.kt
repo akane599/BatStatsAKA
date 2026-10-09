@@ -3,6 +3,7 @@ package com.akane.voltwise.viewmodel
 import com.akane.voltwise.battery.data.HistoryMaintenance
 import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.data.db.InsightActionEntity
+import com.akane.voltwise.battery.data.db.InsightActionStatus
 import com.akane.voltwise.battery.data.db.InsightFindingEntity
 import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
@@ -13,6 +14,9 @@ import com.akane.voltwise.battery.insights.UnusedInsightDao
 import com.akane.voltwise.battery.insights.UnusedSessionDao
 import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.insights.actions.TargetInspector
+import com.akane.voltwise.battery.insights.model.ActionType
+import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.Recommendation
 import com.akane.voltwise.battery.util.ShellRunner
 import java.time.Clock
 import kotlinx.coroutines.CompletableDeferred
@@ -28,10 +32,43 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DefaultInsightsRepositoryTest {
+    @Test fun liveDozeWhitelistFindingAllowsRemovalAgainDespiteUndoableRow() {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        for (status in listOf(InsightActionStatus.APPLIED, InsightActionStatus.UNKNOWN)) {
+            val row = insightAction(status = status).copy(
+                type = ActionType.REMOVE_DOZE_WHITELIST.name,
+                priorState = "PRESENT",
+                targetState = "ABSENT",
+            )
+
+            val recommendation = finding.toInsightState(privileged = true, listOf(row)).recommendations.single()
+            assertTrue("live whitelist must keep removal available despite $status", recommendation.available)
+            assertFalse("live whitelist proves $status removal no longer holds", recommendation.alreadyApplied)
+
+            val withoutPrivilege = finding.toInsightState(privileged = false, listOf(row)).recommendations.single()
+            assertFalse("removal still requires privileged access", withoutPrivilege.available)
+            assertFalse("lack of privilege must not claim removal is applied", withoutPrivilege.alreadyApplied)
+        }
+    }
+
+    @Test fun appliedBackgroundRestrictionRemainsAppliedAndUnavailable() {
+        val finding = insightFinding().copy(
+            recommendations = listOf(Recommendation(ActionType.RESTRICT_BACKGROUND, true, true)),
+        )
+
+        val recommendation = finding.toInsightState(privileged = true, listOf(insightAction())).recommendations.single()
+        assertFalse("applied background restriction must remain unavailable", recommendation.available)
+        assertTrue("background restriction must retain applied state", recommendation.alreadyApplied)
+    }
+
     @Test fun establishedPrivilegeIsImmediateOnEveryCollectionWithoutWaitingForStaleProbe() = runTest {
         for (mode in listOf(ShellRunner.Mode.SHIZUKU, ShellRunner.Mode.ROOT)) {
             val probe = FakeProbe(mode)
