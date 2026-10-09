@@ -88,7 +88,15 @@ class NowRecoveryDeviceTest {
             fixture.context.missingBattery = true
             compose.setContent {
                 MainTheme(dynamicColor = false) {
-                    NowScreen(onOpenHistory = {}, onOpenHealth = {}, onOpenApps = {}, onOpenApp = { _, _ -> }, vm = current.value)
+                    NowScreen(
+                        onOpenHistory = {},
+                        onOpenHealth = {},
+                        onOpenApps = {},
+                        onOpenApp = { _, _ -> },
+                        onOpenInsights = {},
+                        onOpenFinding = {},
+                        vm = current.value,
+                    )
                 }
             }
             runBlocking { fixture.refresh() }
