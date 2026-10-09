@@ -33,8 +33,9 @@ object Recommender {
                 !(finding.type == FindingType.DOZE_WHITELISTED_DRAINER && it.type == ActionType.REMOVE_DOZE_WHITELIST)
         }.map { it.type }.toSet()
         return finding.copy(recommendations = actions.filterNot { action ->
-            action in applied || (sdkInt < 28 &&
-                (action == ActionType.STANDBY_BUCKET_RESTRICTED || action == ActionType.STANDBY_BUCKET_RARE))
+            action in applied || (action == ActionType.ENABLE_HIGH_BATTERY_ALERT && inputs.highBatteryAlertEnabled) ||
+                (sdkInt < 28 &&
+                    (action == ActionType.STANDBY_BUCKET_RESTRICTED || action == ActionType.STANDBY_BUCKET_RARE))
         }.map { action ->
             Recommendation(action, action != ActionType.FORCE_STOP, action in privilegedActions)
         })

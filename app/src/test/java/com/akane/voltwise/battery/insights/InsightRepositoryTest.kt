@@ -79,6 +79,7 @@ class InsightRepositoryTest {
         var duringAnalysis: () -> Unit = {}
         val maintenance = HistoryMaintenance()
         var whitelist = setOf("old.whitelist")
+        var highBatteryAlertEnabled = false
         val store = CountingStore()
         val insights = MemoryInsights()
         val clock = object : Clock() {
@@ -114,6 +115,7 @@ class InsightRepositoryTest {
             clock, { events += "whitelist"; whitelist }, { true }, { events += "dump"; dump() }, store,
             maintenance = maintenance,
             capacityReading = { 2_000_000L to 50 },
+            highBatteryAlertEnabled = { highBatteryAlertEnabled },
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
             analyzeDispatcher = StandardTestDispatcher(scope.testScheduler),
             analyze = {
@@ -122,6 +124,20 @@ class InsightRepositoryTest {
                 duringAnalysis()
                 InsightReport(it.nowMs, output, output.firstOrNull())
             })
+    }
+
+    @Test fun refreshReadsLiveHighBatteryAlertSettingForEachAnalysis() = runTest {
+        val fixture = Fixture()
+        fixture.highBatteryAlertEnabled = true
+        val repo = fixture.repository(this)
+
+        repo.refresh()
+        assertTrue("Enabled setting must reach the analyzer", fixture.seen.single().highBatteryAlertEnabled)
+
+        fixture.highBatteryAlertEnabled = false
+        repo.refresh()
+        assertEquals(2, fixture.seen.size)
+        assertFalse("Disabling the alert must reach the next analysis", fixture.seen.last().highBatteryAlertEnabled)
     }
 
     @Test fun constructorDefersPreferenceReadUntilIoInitialization() = runTest {
