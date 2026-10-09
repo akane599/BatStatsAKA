@@ -446,6 +446,43 @@ class InsightRepositoryTest {
         assertNull(repo.lastAnalyzedAt.value)
     }
 
+    @Test fun repeatedNotAProblemOnlyMultipliesActiveFindingOnce() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row().status)
+
+        repo.notAProblem(testFinding().key)
+        repo.notAProblem(testFinding().key)
+
+        assertEquals(1.5, fixture.insights.row().feedbackMultiplier, 0.0)
+        assertEquals(InsightFindingStatus.DISMISSED, fixture.insights.row().status)
+    }
+
+    @Test fun singleNotAProblemMultipliesAndDismissesActiveFinding() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row().status)
+
+        repo.notAProblem(testFinding().key)
+
+        assertEquals(1.5, fixture.insights.row().feedbackMultiplier, 0.0)
+        assertEquals(InsightFindingStatus.DISMISSED, fixture.insights.row().status)
+    }
+
+    @Test fun notAProblemCapsActiveFindingFeedbackMultiplier() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        repo.refresh()
+        fixture.insights.rows.value = listOf(fixture.insights.row().copy(feedbackMultiplier = 3.375))
+
+        repo.notAProblem(testFinding().key)
+
+        assertEquals(4.0, fixture.insights.row().feedbackMultiplier, 0.0)
+        assertEquals(InsightFindingStatus.DISMISSED, fixture.insights.row().status)
+    }
+
     @Test fun missingDismissedFindingRemainsDismissedAndFeedbackFlowsIntoNextAnalysis() = runTest {
         val fixture = Fixture()
         val repo = fixture.repository(this)
@@ -458,7 +495,7 @@ class InsightRepositoryTest {
         assertEquals(InsightFindingStatus.DISMISSED, fixture.insights.row().status)
         repeat(5) { repo.notAProblem(testFinding().key) }
         repo.refresh()
-        assertEquals(4.0, fixture.seen.last().feedback[testFinding().key]!!, 0.0)
+        assertEquals(1.5, fixture.seen.last().feedback[testFinding().key]!!, 0.0)
         repo.notAProblem("missing")
         repo.dismiss("missing")
         assertEquals(1, fixture.insights.rows.value.size)

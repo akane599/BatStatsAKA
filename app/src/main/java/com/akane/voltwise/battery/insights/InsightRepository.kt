@@ -146,6 +146,7 @@ class InsightRepository(
             maintenance.mutations.withLock write@ {
                 if (maintenance.isClearing || maintenance.generation != generation) return@write
                 val old = insightDao.findingsOnce().firstOrNull { it.key == key } ?: return@write
+                if (old.status != InsightFindingStatus.ACTIVE) return@write
                 if (maintenance.isClearing || maintenance.generation != generation) return@write
                 insightDao.upsertFindings(listOf(old.copy(status = InsightFindingStatus.DISMISSED,
                     feedbackMultiplier = (old.feedbackMultiplier * 1.5).coerceAtMost(4.0))))
