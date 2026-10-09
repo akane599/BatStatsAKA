@@ -84,7 +84,7 @@ class InsightActionRepository(
             if (confirmed.value != operation.target) {
                 if (confirmed.value != prior.value) return@withLock unknown(saved)
                 dao.updateAction(saved.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
-                return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
+                return@withLock ActionResult.Failed(FailureCode.NOT_APPLIED)
             }
             dao.updateAction(saved.copy(status = APPLIED, appliedAt = clock()))
             if (rec.action == ActionType.STANDBY_BUCKET_RESTRICTED && inspector.sdkInt < 30) {
@@ -115,7 +115,7 @@ class InsightActionRepository(
                 return@withLock ActionResult.Reverted
             }
             dao.updateAction(row.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
-            return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
+            return@withLock ActionResult.Failed(FailureCode.NOT_APPLIED)
         }
         if (current.value != row.targetState) {
             dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))

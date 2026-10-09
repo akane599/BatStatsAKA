@@ -179,6 +179,7 @@
     <string name="insights_message_one_shot">Yapıldı.</string>
     <string name="insights_message_read_failed">Uygulamanın geçerli ayarı okunamadı. Hiçbir şey değiştirilmedi.</string>
     <string name="insights_message_execution_failed">Android değişikliği kabul etmedi.</string>
+    <string name="insights_message_not_applied">Ayar değişmedi, hâlâ eski değerinde.</string>
     <string name="insights_message_state_mismatch">Ayar eski haline dönmedi. Geri al\'a yeniden dokun.</string>
     <string name="insights_message_not_undoable">Bu düzeltme geri alınamaz.</string>
     <string name="insights_message_invalid_journal">Bu düzeltmenin kaydı eksik; geri alınamaz.</string>

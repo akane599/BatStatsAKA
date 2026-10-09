@@ -186,6 +186,7 @@
     <string name="insights_message_one_shot">Done.</string>
     <string name="insights_message_read_failed">Couldn\'t read the app\'s current setting. Nothing was changed.</string>
     <string name="insights_message_execution_failed">Android didn\'t accept the change.</string>
+    <string name="insights_message_not_applied">The setting didn\'t change and is still at its original value.</string>
     <string name="insights_message_state_mismatch">The setting didn\'t change back. Try Undo again.</string>
     <string name="insights_message_not_undoable">This fix can\'t be undone.</string>
     <string name="insights_message_invalid_journal">This fix\'s record is incomplete, so it can\'t be undone.</string>

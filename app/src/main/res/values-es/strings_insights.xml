@@ -180,6 +180,7 @@
     <string name="insights_message_one_shot">Hecho.</string>
     <string name="insights_message_read_failed">No se pudo leer el ajuste actual de la app. No se cambió nada.</string>
     <string name="insights_message_execution_failed">Android no aceptó el cambio.</string>
+    <string name="insights_message_not_applied">El ajuste no cambió y sigue con su valor original.</string>
     <string name="insights_message_state_mismatch">El ajuste no volvió a su valor anterior. Vuelve a pulsar Deshacer.</string>
     <string name="insights_message_not_undoable">Esta corrección no se puede deshacer.</string>
     <string name="insights_message_invalid_journal">El registro de esta corrección está incompleto, así que no se puede deshacer.</string>

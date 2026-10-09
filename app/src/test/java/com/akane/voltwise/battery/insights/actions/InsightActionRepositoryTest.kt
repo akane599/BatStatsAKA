@@ -479,7 +479,7 @@ class InsightActionRepositoryTest {
             assertEquals(ActionResult.Unknown, f.apply()); assertEquals(UNKNOWN, f.row().status)
         }
         val f = Fixture(); f.reply("No operations.", "", "No operations.")
-        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.apply())
+        assertEquals(ActionResult.Failed(FailureCode.NOT_APPLIED), f.apply())
         assertEquals(FAILED, f.row().status)
         val failed = Fixture(); failed.replies += failure()
         assertEquals(ActionResult.Failed(FailureCode.READ_FAILED), failed.apply()); assertTrue(failed.dao.rows.value.isEmpty())
@@ -809,11 +809,32 @@ class InsightActionRepositoryTest {
         val f = Fixture(); f.reply("active", "", "garbage")
         assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
         f.reply("active")
-        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.repo.undo(1))
+        assertEquals(ActionResult.Failed(FailureCode.NOT_APPLIED), f.repo.undo(1))
         assertEquals(FAILED, f.row().status)
         assertEquals("STATE_MISMATCH", f.row().message)
         assertEquals(4, f.commands.size)
         assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+    }
+
+    /** Only a restore that left the target keeps Undo, so only it may promise "Try Undo again". */
+    @Test fun nonUndoableFailuresReportNotAppliedWhileRestoreLeftTargetKeepsStateMismatch() = runTest {
+        val applyAtPrior = Fixture(); applyAtPrior.reply("active", "", "active")
+        assertEquals(ActionResult.Failed(FailureCode.NOT_APPLIED), applyAtPrior.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(FAILED, applyAtPrior.row().status)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), applyAtPrior.repo.undo(1))
+
+        val unknownUndoAtPrior = Fixture(); unknownUndoAtPrior.replies.addAll(listOf(ok("active"), ok(), failure()))
+        assertEquals(ActionResult.Unknown, unknownUndoAtPrior.apply(ActionType.STANDBY_BUCKET_RARE))
+        unknownUndoAtPrior.reply("active")
+        assertEquals(ActionResult.Failed(FailureCode.NOT_APPLIED), unknownUndoAtPrior.repo.undo(1))
+        assertEquals(FAILED, unknownUndoAtPrior.row().status)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), unknownUndoAtPrior.repo.undo(1))
+
+        val restoreLeftTarget = Fixture(); restoreLeftTarget.reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), restoreLeftTarget.apply(ActionType.STANDBY_BUCKET_RARE))
+        restoreLeftTarget.reply("rare", "", "rare")
+        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), restoreLeftTarget.repo.undo(1))
+        assertEquals(APPLIED, restoreLeftTarget.row().status)
     }
 
     @Test fun concurrentApplyAndUndoAreSerializedAcrossPreparationAndReadback() = runTest {

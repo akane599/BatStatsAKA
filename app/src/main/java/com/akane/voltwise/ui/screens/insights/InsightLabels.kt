@@ -163,6 +163,7 @@ internal fun InsightMessageCode.messageRes(): Int = when (this) {
     InsightMessageCode.ONE_SHOT -> R.string.insights_message_one_shot
     InsightMessageCode.READ_FAILED -> R.string.insights_message_read_failed
     InsightMessageCode.EXECUTION_FAILED -> R.string.insights_message_execution_failed
+    InsightMessageCode.NOT_APPLIED -> R.string.insights_message_not_applied
     InsightMessageCode.STATE_MISMATCH -> R.string.insights_message_state_mismatch
     InsightMessageCode.NOT_UNDOABLE -> R.string.insights_message_not_undoable
     InsightMessageCode.INVALID_JOURNAL -> R.string.insights_message_invalid_journal

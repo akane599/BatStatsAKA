@@ -18,7 +18,11 @@ enum class RefusalCode {
     NOT_PRIVILEGED, PROTECTED, NOT_INSTALLED, UID_MISMATCH, SHARED_UID, ROLE_HOLDER,
     UNSUPPORTED_SDK, INVALID_SUBJECT, INVALID_PACKAGE, UNRESTORABLE_PRIOR, INSPECTION_FAILED, ALREADY_AT_TARGET,
 }
-enum class FailureCode { READ_FAILED, EXECUTION_FAILED, STATE_MISMATCH, NOT_UNDOABLE, INVALID_JOURNAL }
+/**
+ * NOT_APPLIED: the setting is still at its prior value and no Undo remains. STATE_MISMATCH: an undo's restore
+ * left the target in place, so Undo stays available. Journal rows keep the persisted STATE_MISMATCH message for both.
+ */
+enum class FailureCode { READ_FAILED, EXECUTION_FAILED, NOT_APPLIED, STATE_MISMATCH, NOT_UNDOABLE, INVALID_JOURNAL }
 enum class FallbackCode { RESTRICTED_TO_RARE }
 
 sealed interface ActionResult {
