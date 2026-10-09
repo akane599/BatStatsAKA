@@ -49,6 +49,35 @@ class InsightEngineTest {
         assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(packageName = "other.app"))), sdkInt = 37).recommendations.size)
     }
 
+    @Test fun `applied actions for another uid retain app recommendations`() {
+        val actions = listOf(ActionType.RESTRICT_BACKGROUND, ActionType.STANDBY_BUCKET_RESTRICTED)
+        val input = inputs(emptyList(), emptyList()).copy(actions = actions.mapIndexed { index, action ->
+            AppliedActionInput(index.toLong(), "old", action, APP, UID + 1, 0, ActionStatus.APPLIED)
+        })
+        for (type in listOf(FindingType.APP_DRAIN_ANOMALY, FindingType.BACKGROUND_RUNAWAY)) {
+            val candidate = finding(type, emptyList(), Subject.App(UID, APP))
+            val recommended = Recommender.recommend(candidate, input, sdkInt = 37).recommendations.map { it.action }
+            for (action in actions) {
+                assertTrue("$type retains $action for a different uid", action in recommended)
+            }
+        }
+    }
+
+    @Test fun `applied actions for the same uid suppress app recommendations`() {
+        val actions = listOf(ActionType.RESTRICT_BACKGROUND, ActionType.STANDBY_BUCKET_RESTRICTED)
+        val input = inputs(emptyList(), emptyList()).copy(actions = actions.mapIndexed { index, action ->
+            AppliedActionInput(index.toLong(), "old", action, APP, UID, 0, ActionStatus.APPLIED)
+        })
+        for (type in listOf(FindingType.APP_DRAIN_ANOMALY, FindingType.BACKGROUND_RUNAWAY)) {
+            val candidate = finding(type, emptyList(), Subject.App(UID, APP))
+            val recommended = Recommender.recommend(candidate, input, sdkInt = 37).recommendations.map { it.action }
+            for (action in actions) {
+                assertFalse("$type suppresses $action for the same uid", action in recommended)
+            }
+            assertTrue(ActionType.OPEN_APP_SETTINGS in recommended)
+        }
+    }
+
     @Test fun `live whitelisted drainer retains removal despite an applied journal row`() {
         val candidate = finding(FindingType.DOZE_WHITELISTED_DRAINER, emptyList(), Subject.App(UID, APP))
         val applied = AppliedActionInput(1, "old", ActionType.REMOVE_DOZE_WHITELIST, APP, UID, 0, ActionStatus.APPLIED)
