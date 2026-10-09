@@ -51,6 +51,29 @@ class FindingDetailsViewModelTest {
         assertEquals(false, restriction?.available)
     }
 
+    @Test fun relatedActionsMatchBothUidAndPackageAcrossProfiles() = runTest {
+        val personal = insightAction()
+        val work = insightAction(8).copy(uid = 1_010_042, userId = 10)
+        val sameUidOtherPackage = insightAction(9).copy(packageName = "other.app")
+        val unknownUid = insightAction(10).copy(uid = null)
+        source.actions.value = listOf(personal, work, sameUidOtherPackage, unknownUid)
+        val vm = start()
+        assertEquals("personal finding excludes actions from another profile or without its uid", listOf(7L), vm.state.value.relatedActions.map { it.id })
+
+        val workFinding = insightFinding().copy(subject = Subject.App(1_010_042, "example.app"))
+        source.report.value = InsightReport(2, listOf(workFinding), workFinding)
+        runCurrent()
+        assertEquals("work finding excludes the personal-profile action", listOf(8L), vm.state.value.relatedActions.map { it.id })
+    }
+
+    @Test fun deviceFindingStillMatchesRelatedActionsByFindingKey() = runTest {
+        val deviceFinding = insightFinding().copy(subject = Subject.Device)
+        source.report.value = InsightReport(2, listOf(deviceFinding), deviceFinding)
+        source.actions.value = listOf(insightAction(), insightAction(8).copy(findingKey = "another.finding"))
+        val vm = start()
+        assertEquals(listOf(7L), vm.state.value.relatedActions.map { it.id })
+    }
+
     @Test fun notPrivilegedDisablesPrivilegedApplyAndKeepsManualPath() = runTest {
         source.privileged.value = false
         val vm = start()
