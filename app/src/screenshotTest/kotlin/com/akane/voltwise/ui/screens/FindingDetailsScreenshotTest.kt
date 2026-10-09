@@ -132,6 +132,27 @@ private val device = FindingDetailsUiState(
     privileged = true,
 )
 
+/** Capacity estimates about every 10 days, 4,612 down to 4,540 mAh: the chart reads mAh, the evidence the yearly change. */
+private val capacityDecline = FindingDetailsUiState(
+    loaded = true,
+    finding = InsightFindingState(
+        key = "HEALTH_DECLINE:device",
+        type = FindingType.HEALTH_DECLINE,
+        severity = Severity.INFO,
+        confidence = Confidence.MEDIUM,
+        score = 1.0,
+        subject = Subject.Device,
+        direction = Direction.DOWN,
+        evidence = listOf(Evidence(Metric.CAPACITY_CHANGE_PCT_PER_YEAR, -8.1, null, MetricUnit.PCT_PER_YEAR, 8)),
+        series = listOf(4_612.0, 4_604.0, 4_597.0, 4_583.0, 4_580.0, 4_566.0, 4_551.0, 4_540.0).mapIndexed { i, value ->
+            SeriesPoint(FIXED_TIME_MS - (7 - i) * 10 * DAY - 5 * HOUR, value, null, null)
+        },
+        recommendations = emptyList(),
+        attributions = emptyList(),
+    ),
+    privileged = true,
+)
+
 @Composable
 private fun FindingDetailsPreviewContent(state: FindingDetailsUiState) {
     FindingDetailsContent(state = state, labels = labels, nowMs = FIXED_TIME_MS, onEvent = {}, onBack = {}, onOpenAccessSetup = {})
@@ -183,6 +204,14 @@ fun FindingDetailsNotPrivilegedWidePreview() {
 @Composable
 fun FindingDetailsDevicePreview() {
     ScreenshotTheme { FindingDetailsPreviewContent(device) }
+}
+
+/** A capacity decline: the capacity estimates under a mAh caption, no usual line; the evidence gives the change per year. */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun FindingDetailsCapacityDeclinePreview() {
+    ScreenshotTheme { FindingDetailsPreviewContent(capacityDecline) }
 }
 
 @PreviewTest

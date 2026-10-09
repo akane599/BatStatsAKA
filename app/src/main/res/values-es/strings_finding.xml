@@ -67,7 +67,7 @@
     <string name="finding_seen_trend">En los últimos 7 días esto cambió respecto a las 3 semanas anteriores.</string>
     <string name="finding_seen_charging_at_full">El teléfono estuvo enchufado al 100 por ciento durante horas varias veces en las últimas dos semanas.</string>
     <string name="finding_seen_hot_charging">La batería se calentó mientras cargaba varias veces últimamente.</string>
-    <string name="finding_seen_health_decline">La capacidad estimada de la batería está bajando más rápido de lo habitual.</string>
+    <string name="finding_seen_health_decline">La capacidad estimada de la batería lleva semanas bajando de forma constante.</string>
     <string name="finding_seen_background_location">Esta app usó la ubicación en segundo plano más de lo habitual.</string>
     <string name="finding_seen_background_radio">Esta app mantuvo activa la radio móvil o transfirió datos en segundo plano más de lo habitual.</string>
     <string name="finding_seen_lingering_foreground_service">Esta app mantuvo un servicio en primer plano mucho después de que dejaras de usarla.</string>
@@ -85,7 +85,7 @@
     <string name="finding_matters_trend">Un cambio duradero aparece aquí antes de que se note en el día a día.</string>
     <string name="finding_matters_charging_at_full">Estar al 100 por ciento durante mucho tiempo envejece la batería más rápido, sobre todo si está caliente.</string>
     <string name="finding_matters_hot_charging">El calor es lo que más desgasta una batería. Cargar en caliente lo acelera.</string>
-    <string name="finding_matters_health_decline">Un descenso más rápido significa menos autonomía antes. Los hábitos de carga pueden frenarlo.</string>
+    <string name="finding_matters_health_decline">Menos capacidad significa menos autonomía por carga. Toda batería se desgasta con el tiempo, pero los hábitos de carga pueden frenarlo.</string>
     <string name="finding_matters_background_location">La ubicación en segundo plano mantiene encendidos el GPS y las radios, de lo más costoso que puede hacer una app.</string>
     <string name="finding_matters_background_radio">La radio móvil activa consume mucho y sigue encendida un rato después de cada transferencia.</string>
     <string name="finding_matters_lingering_foreground_service">Un servicio en primer plano mantiene la app viva y con permiso para trabajar, aunque creas que está cerrada.</string>

@@ -242,11 +242,10 @@ fun FindingDetailsContent(
                 }
                 FindingExplanation(finding.type, Modifier.fillMaxWidth())
                 if (finding.evidence.isNotEmpty()) EvidencePanel(finding.type, finding.subject, finding.evidence, Modifier.fillMaxWidth())
-                // The series measures the finding's first evidence metric, so that evidence names its unit.
-                val measured = finding.evidence.firstOrNull()
-                if (finding.series.isNotEmpty() && measured != null) {
+                val measure = chartMeasure(finding.type, finding.evidence)
+                if (finding.series.isNotEmpty() && measure != null) {
                     Panel(Modifier.fillMaxWidth(), title = stringResource(R.string.finding_over_time)) {
-                        FindingChart(finding.series, measured.unit, stringResource(measured.metric.labelRes()), measured.baseline)
+                        FindingChart(finding.series, measure.metric.unit, stringResource(measure.metric.labelRes()), measure.usual)
                     }
                 }
             }
