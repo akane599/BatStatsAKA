@@ -1,6 +1,6 @@
 # Privileged Shell and Per-App Stats
 
-*Last Updated: 2026-10-08*
+*Last Updated: 2026-10-09*
 
 Per-app battery use needs `dumpsys batterystats`, which normal apps can't run. Everything that needs
 privilege goes through one path. Paths below are under `app/src/main/java/com/akane/voltwise/battery/`.
@@ -23,7 +23,7 @@ BatteryStatsParser (util/BatteryStatsParser.kt) → FullSnapshot / AppPowerStats
 | File | Role |
 | --- | --- |
 | `shizuku/ShizukuBridge.kt` | Binds the Shizuku user service (`SERVICE_VERSION`, bind timeout), runs commands over a pipe (`runViaPipe`), retries ping, and unbinds after `IDLE_UNBIND_MS` (60 s) idle (`IdleCountdown`, `HelperBinding`). `RunResult.Success/Error(Failure)`; `classifyAfterRead` separates lost access (not running / no permission) from transport and command failures. Exposes a `blocked` flow when the user denied permission permanently (`shizukuPermissionBlocked`); `requestPermission` is then a no-op. |
-| `shizuku/ShellUserService.kt` | A `Binder` running in the Shizuku helper process. It allow-lists only `dumpsys batterystats -c --charged` and `dumpsys battery`. Transactions: `TRANSACTION_RUN_PIPE`, `TRANSACTION_CANCEL`, `TRANSACTION_DESTROY` (the literal 16777115, pinned against Shizuku's constant by `ShellUserServiceTest`). |
+| `shizuku/ShellUserService.kt` | A `Binder` running in the Shizuku helper process. It runs only what `battery/actions/CommandPolicy.allows` admits (`ShellUserService.allows`): `dumpsys batterystats -c --charged`, `dumpsys battery`, `dumpsys deviceidle`, and the Insights action templates from `battery/actions/PrivilegedCommand.kt` (`am get/set-standby-bucket`, `am force-stop`, `cmd appops get/set` with allow/ignore only, `cmd deviceidle whitelist [+/-pkg]`), each with a validated package name; protected/system packages are refused (`CommandPolicy.isProtected`). Transactions: `TRANSACTION_RUN_PIPE`, `TRANSACTION_CANCEL`, `TRANSACTION_DESTROY` (the literal 16777115, pinned against Shizuku's constant by `ShellUserServiceTest`). |
 | `util/CommandProtocol.kt`, `util/CommandOutput.kt` | Bounded process execution and the pipe framing between the helper and the app. `CommandOutput.Result.accessFailure` (`DENIED` / `EXECUTABLE_UNAVAILABLE`) classifies a su denial or missing `su`; `ShellRunner` then drops the cached ROOT mode and reports `NoAccess` (`rootAccessLost`). An ordinary command failure keeps the mode. |
 | `util/DumpOutput.kt` | Recognizes refusal/failure text in dump output. |
 | `util/RootStatsCollector.kt` | Root probe (`su -c id`) and the one root sysfs read (`charge_full_design` from `/sys/class/power_supply/battery/uevent`) used by `data/DesignCapacitySource.kt`. |
@@ -34,7 +34,7 @@ BatteryStatsParser (util/BatteryStatsParser.kt) → FullSnapshot / AppPowerStats
 | `viewmodel/ShizukuState.kt` | UI-facing Shizuku state (`running`, `granted`, `blocked`). A blocked permission shows an Open Shizuku action instead of Allow (Apps, AppDetails, Status). |
 
 ## Gotchas
-- Never add a command to `ShellUserService.COMMANDS` casually: it is the privilege boundary.
+- Never widen `CommandPolicy.allows` casually: it is the privilege boundary for both the Shizuku helper and the Insights actions (see [insights.md](insights.md)).
 - `BatteryStatsParser.parseCheckin(..., sdkInt)` picks process-state columns by SDK (background/cached at 8/9
   before API 28, 7/10 after); `AppStatsRepository` passes `Build.VERSION.SDK_INT`.
 - `ShellRunner.access` / `lastError` feed the notification issue line and the Status screen.

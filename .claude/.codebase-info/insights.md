@@ -1,0 +1,74 @@
+# Insights
+
+*Last Updated: 2026-10-09*
+
+Insights (story US-6) turns the recorded discharge sessions and per-app batterystats snapshots into ranked
+**findings** ("Chrome is draining more than usual"), each with evidence against a per-device baseline and
+optional **recommendations** that can apply a privileged system setting and undo it later. Method,
+thresholds and limits are written up for users in `docs/MEASUREMENTS.md` ("Insights") and the privileged
+side in `docs/PLATFORM_NOTES.md` ("Privileged actions in Insights", "Rolling back"). Paths below are under
+`app/src/main/java/com/akane/voltwise/`.
+
+## Flow
+
+```
+Room (sessions, session_app_usage, *_device_wakers, insight_*)
+  └─ battery/insights/InsightInputsBuilder.kt      builds one immutable input set
+       └─ battery/insights/engine/InsightEngine.kt  pure: detectors → rank → take(12)
+            └─ battery/insights/InsightRepository.kt  persists findings, keeps `report: StateFlow<InsightReport?>`
+                 ├─ viewmodel/InsightsRepository.kt (DefaultInsightsRepository) → InsightsViewModel / FindingDetailsViewModel
+                 ├─ viewmodel/NowRepository.kt → NowUiState.insightsSummary (Now card)
+                 ├─ viewmodel/AppDetailsViewModel.kt → AppFinding rows (App details "Findings")
+                 └─ battery/insights/InsightNotifier.kt  one HIGH finding per 24 h
+```
+
+`InsightRepository.refresh()` runs under a mutex; `dismiss(key)` / `notAProblem(key)` write user feedback
+(a down-weighting multiplier) that the next refresh honours. Inputs cover the last
+`InsightInputsBuilder.HISTORY_DAYS` (90) days; stale findings are purged together with history retention
+(`purgeFindingsSeenBefore`, called from `battery/data/HistoryPolicy.kt`).
+
+## Packages
+
+| Path | Contents |
+| --- | --- |
+| `battery/insights/model/InsightModels.kt` | `Finding`, `FindingType`, `Severity`, `Confidence`, `Evidence`, `Recommendation`, `ActionType`, `InsightReport` |
+| `battery/insights/engine/` | `InsightEngine.kt` (entry; ranks and caps at 12), `AppFindings.kt`, `ActionEffects.kt` (before/after association for applied actions), `Trends.kt` (7-day vs 21-day) |
+| `engine/eligibility/AppWindows.kt` | Which DISCHARGE windows are comparable (≥ 1 h, READY/DELTA basis; censoring) |
+| `engine/stats/` | `RobustBaseline.kt` (decayed median/MAD, `MAD_SCALE = 1.4826`), `EffectSize.kt`, `TheilSen.kt` |
+| `engine/detectors/app/` | Per-app detectors on process-state proxies: `AppDrainAnomaly`, `BackgroundRunaway`, `BackgroundLocation`, `BackgroundRadio`, `StuckWakelock`, `WakeupStorm`, `JobStorm`, `LingeringForegroundService`, `NewHeavyApp`; shared thresholds in `AppContext.kt` |
+| `engine/detectors/device/` | `DeviceDetectors.kt`, `DeviceMeasurements.kt` (Doze / deep sleep), `Attributions.kt` (device wakers), `ChargingHealth.kt` |
+| `engine/recommend/Recommender.kt` | Maps findings to `Recommendation`s (standby bucket, background op, Doze whitelist removal, force-stop, OPEN_* settings intents) |
+| `battery/insights/FindingCodec.kt` | Finding ⇄ `InsightFindingEntity` (JSON evidence) |
+| `battery/insights/actions/` | `InsightActionRepository.kt` (apply / undo / `reconcile()` over a PREPARED→APPLIED/FAILED/UNKNOWN journal in `insight_actions`), `ActionExecutor.kt`, `TargetInspector.kt` (revalidates the target package/uid before acting) |
+| `battery/actions/` | `PrivilegedCommand.kt` (fixed argv templates: `am get/set-standby-bucket`, `cmd appops get/set`, `cmd deviceidle whitelist [+/-pkg]`, `am force-stop`, `dumpsys deviceidle`), `CommandPolicy.kt` (allow-list + protected packages, shared with `ShellUserService`), `ActionReadback.kt` (reads the state back; UNKNOWN on unparseable OEM output) |
+| `battery/insights/InsightNotifier.kt` | `InsightNotificationPolicy` (HIGH severity, confidence ≥ MEDIUM, 24 h cooldown, last key in the `insights` prefs) and the `insights` channel (IMPORTANCE_LOW); content intent opens the Insights tab via `Destinations.INSIGHTS` |
+
+## UI
+
+| Screen | Files | ViewModel |
+| --- | --- | --- |
+| Insights tab | `ui/screens/insights/InsightsScreen.kt`, `InsightsPanels.kt` (`SeverityChip`), `InsightLabels.kt` (type titles, `evidenceLine`), `InsightApplyDialog.kt` | `viewmodel/InsightsViewModel.kt` (state in `InsightsUiState.kt`) |
+| Finding details | `ui/screens/insights/FindingDetailsScreen.kt`, `FindingChart.kt` (usual band vs observed; one TalkBack summary) | `viewmodel/FindingDetailsViewModel.kt` (feedback runs on the injected application scope so it survives the screen popping) |
+| Now card | `ui/screens/now/NowInsights.kt` (`InsightsPanel`: headline / all good / not analysed; hidden with no data) | `NowViewModel` (`NowUiState.insightsSummary`) |
+| App details | "Findings" panel in `ui/screens/AppDetailsScreen.kt` | `AppDetailsViewModel` (`AppFinding.evidence`, `AppDetailsEvent.OpenFinding`) |
+
+Strings: `res/values*/strings_insights.xml`, `strings_finding.xml`, `strings_insights_notification.xml`.
+
+## Wiring and lifecycle
+- Koin (`di/AppModules.kt`): `InsightDao`, the action executor and inspector, `InsightActionRepository`,
+  `InsightRepository`, `DefaultInsightsRepository`, and a plain lazy `InsightNotifier` single (not
+  `createdAtStart`: an eager single needs an Android context in JVM tests and would resolve
+  Android-backed dependencies on the main thread at `startKoin`). All share the app-wide `appScope` (SupervisorJob + fixed-code failure handler).
+- Startup (`battery/BatteryApp.kt`, `startInsightNotifications` on `Dispatchers.IO`): after `SettingsMigrator.awaitMigrated()`, `InsightActionRepository.reconcile()`,
+  then a catch-up `refresh()` when the last analysis is missing, older than 6 h or in the future, then
+  `startInsightNotifications` collects `InsightRepository.report`.
+- `battery/service/BatteryMonitorService.kt` refreshes insights when sessions finalise
+  (`refreshOnFinalizedSessions`, conflated; failures recorded as a fixed diagnostic code).
+- Privileged actions need Shizuku or root (`ShellRunner.detectMode()`); without them recommendations show
+  "needs Shizuku or root" and OPEN_* settings intents still work.
+
+## Tests
+JVM tests mirror the packages under `app/src/test/java/com/akane/voltwise/battery/insights/` and
+`battery/actions/`, plus `viewmodel/Insights*`, `FindingDetailsViewModelTest`, `di/InsightsWiringTest`,
+`InsightNotifierPolicyTest`. Screenshot tests: `InsightsScreenshotTest`, `FindingDetailsScreenshotTest`,
+the Now card previews in `NowScreenScreenshotTest`, the Findings previews in `AppDetailsScreenshotTest`.

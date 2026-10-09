@@ -1,12 +1,12 @@
 # Database
 
-*Last Updated: 2026-10-08*
+*Last Updated: 2026-10-09*
 
-Room database `battery.db`, **version 6**, `exportSchema = true`.
+Room database `battery.db`, **version 7**, `exportSchema = true`.
 - Definition and migrations: `app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt`
-- Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`
+- Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`, `data/db/InsightTables.kt`
 - DAOs: `data/db/Dao.kt`
-- Exported schemas: `app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`
+- Exported schemas: `app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`, `7.json`
   (KSP arg `room.schemaLocation` in `app/build.gradle.kts`)
 
 ## Tables
@@ -18,7 +18,11 @@ Room database `battery.db`, **version 6**, `exportSchema = true`.
 | `daily_summaries` | `DailySummary` | `epochDay` | Per-local-day screen on/off time and discharge, charged µAh, min/max level, peak temperature, and (v6) nullable `screenOnCoveredMs` / `screenOffCoveredMs`; a day without coverage shows as unmeasured ("—") in History/Now. Upserted with each persisted sample (`DailySummaryAggregator`). |
 | `app_snapshots` | `AppSnapshot` | `id` autoinc; idx `sessionId` | BASELINE / END batterystats snapshot headers (`AppSnapshotKind`). |
 | `app_snapshot_uids` | `AppSnapshotUid` | (`snapshotId`,`uid`), FK → `app_snapshots` ON DELETE CASCADE | Per-UID power, CPU, foreground/background, wakelock, data bytes. |
-| `session_app_usage` | `SessionAppUsage` | (`sessionId`,`rank`), FK → `charge_sessions` ON DELETE CASCADE | The ranked per-session app breakdown (top-N plus an `isOthers` row) with `basis`. |
+| `session_app_usage` | `SessionAppUsage` | (`sessionId`,`rank`), FK → `charge_sessions` ON DELETE CASCADE | The ranked per-session app breakdown (top-N plus an `isOthers` row) with `basis`. v7 adds nullable process-state proxies (wakeup alarms, partial wakelocks, jobs, syncs, FGS/top time, mobile radio, GPS, sensors), also on `app_snapshot_uids`. |
+| `snapshot_device_wakers` | `SnapshotDeviceWaker` | (`snapshotId`,`kind`,`name`), FK → `app_snapshots` ON DELETE CASCADE | v7: device-level wakeup sources per snapshot (count, total ms). |
+| `session_device_wakers` | `SessionDeviceWaker` | (`sessionId`,`kind`,`name`), FK → `charge_sessions` ON DELETE CASCADE | v7: per-session device waker deltas. |
+| `insight_findings` | `InsightFindingEntity` | `key` (stable finding key); idx `status` | v7: current/past findings: type, uid/package, severity, confidence, score, first/last seen, status, `feedbackMultiplier` (default 1.0), versioned `evidenceJson` (`battery/insights/FindingCodec.kt`). |
+| `insight_actions` | `InsightActionEntity` | `id` autoinc; idx `status` | v7: privileged-action journal (PREPARED→APPLIED/FAILED/UNKNOWN, undo): finding key, type, package/uid/user, prior and target state; reconciled at startup (`InsightActionRepository.reconcile()`). |
 
 ## DAOs (`Dao.kt`)
 - `BatteryDao`: sample insert/lookups, chart queries (`chartSamples`, `sessionChartSamples` bucketed), `latestSamplesBetween` (newest N, returned ascending), `boundStorage`, `purge`, `clearAll`. `ExportImport.kt`'s `BatteryDao.exportSamples` uses it for an ALL export, so that export holds the newest `MAX_SAMPLES`.
@@ -26,6 +30,7 @@ Room database `battery.db`, **version 6**, `exportSchema = true`.
 - `PersistDao`: `persistSample(sample, session, days)` is the single transactional write the repository uses per persisted capture.
 - `DailySummaryDao`: per-day upsert/read/range, `purgeBefore`.
 - `AppUsageDao`: snapshot header + UID rows, session app usage.
+- `InsightDao`: findings (flow/once, upsert, status, feedback, clear, `purgeFindingsSeenBefore`) and the action journal (`actions`, `actionsOnce`, `actionsWithStatus`, …).
 
 `EnumConverters` (in `BatteryDatabase.kt`) never uses `valueOf`: unknown enum text reads as null, or
 as a documented fallback for the two NOT NULL enum columns.
@@ -38,6 +43,7 @@ as a documented fallback for the two NOT NULL enum columns.
 | 3→4 | rebuilds `battery_samples` and `charge_sessions` with range-sanitised copies; legacy sessions get a close reason |
 | 4→5 | **irreversible**: drops `alarm_rules` and `app_energy_stats`, adds the v5 session columns and creates `daily_summaries`, `app_snapshots`, `app_snapshot_uids`, `session_app_usage` (DDL copied from `5.json`). No 5→4 path. |
 | 5→6 | additive: four nullable `screen{On,Off}CoveredMs` columns on `charge_sessions` and `daily_summaries` (`MIGRATION_5_6`). |
+| 6→7 | additive, forward-only: Doze / app-capture columns on `charge_sessions` and `daily_summaries`, process-state proxy columns on `app_snapshot_uids` and `session_app_usage`, new tables `snapshot_device_wakers`, `session_device_wakers`, `insight_findings`, `insight_actions` (`MIGRATION_6_7`). Reverting the app does not downgrade `battery.db`. |
 
 There's no destructive fallback: every version needs an explicit `MIGRATION_a_b` registered in `get()`.
 

@@ -1,6 +1,6 @@
 # Directory Structure
 
-*Last Updated: 2026-10-08*
+*Last Updated: 2026-10-09*
 
 The app source is organized by feature under `battery/`, plus layer packages (`ui/`, `viewmodel/`,
 `settings/`, `di/`). See [modules.md](modules.md) for each package.
@@ -16,12 +16,13 @@ BatStatsAKA/
 │       │   ├── AndroidManifest.xml
 │       │   ├── java/com/akane/voltwise/
 │       │   │   ├── battery/        # BatteryApp, BatteryMainActivity + feature packages:
-│       │   │   │   ├── apps/  data/{db,sampling}/  diagnostics/  drain/  measurement/
+│       │   │   │   ├── actions/  apps/  data/{db,sampling}/  diagnostics/  drain/  measurement/
+│       │   │   │   ├── insights/{engine/{detectors,eligibility,recommend,stats},actions,model}/
 │       │   │   │   └── service/  shizuku/  tile/  util/  widget/
 │       │   │   ├── data/Constants.kt
 │       │   │   ├── di/AppModules.kt
 │       │   │   ├── settings/
-│       │   │   ├── ui/{NavGraph.kt, TestTags.kt, components/{chart/}, format/, navigation/, screens/{now/}, theme/}
+│       │   │   ├── ui/{NavGraph.kt, TestTags.kt, components/{chart/}, format/, navigation/, screens/{now/,insights/}, theme/}
 │       │   │   └── viewmodel/
 │       │   ├── res/                # values{,-es,-tr}/strings_<screen>.xml, layout/ (widgets, notification),
 │       │   │                       # xml/ (widget providers, backup rules, locales, filepaths), drawable/, font/, mipmap-*/

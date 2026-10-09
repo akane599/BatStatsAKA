@@ -1,6 +1,6 @@
 # Patterns, Conventions and Testing
 
-*Last Updated: 2026-10-08*
+*Last Updated: 2026-10-09*
 
 Project-wide rules (Kotlin/Compose conventions, ticketing, Gradle discipline) live in
 `.claude/live-rules/rules/` and are injected into every session. This page covers what the code
@@ -18,6 +18,11 @@ actually does.
 - **Single writer.** `BatteryRepository` serializes every write through `HistoryWriter` (FIFO).
   `SamplingController` confines sampler state to its `HandlerThread`. `ShellRunner` serializes commands
   with a `Mutex`, and `AppStatsRepository` shares one in-flight dump between callers.
+  `InsightRepository` and `InsightActionRepository` also serialize under a `Mutex`.
+- **Work that must outlive a screen** (finding feedback) runs on the injected application
+  `CoroutineScope`, never `viewModelScope` (`viewmodel/FindingDetailsViewModel.kt`).
+- **Privileged writes are journalled**: record PREPARED, run a `CommandPolicy`-checked command, read the
+  state back, then mark APPLIED/FAILED/UNKNOWN; startup `reconcile()` settles leftovers (see [insights.md](insights.md)).
 - **Pure logic split out** into `battery/measurement/` and small `internal` helpers (e.g.
   `selectShellMode`, `shouldMarkContinuityLoss`, `IdleCountdown`) so they can be JVM-tested.
 - **Seams for Android types:** `KeyValueStore` (SharedPreferences), `StatsShell` (shell),
