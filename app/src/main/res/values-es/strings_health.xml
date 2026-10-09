@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Health screen (ui/screens/HealthScreen.kt). Machine-quality translation; flagged for native review. -->
+<resources>
+    <string name="health_title">Salud de la batería</string>
+    <string name="health_label">Salud</string>
+    <string name="health_of_design">de la capacidad de diseño</string>
+    <string name="health_capacity">Capacidad</string>
+    <string name="health_design">Diseño</string>
+    <string name="health_cycles">Ciclos</string>
+    <string name="health_confidence_low">Confianza baja</string>
+    <string name="health_confidence_medium">Confianza media</string>
+    <string name="health_confidence_high">Confianza alta</string>
+    <string name="health_capacity_none">Aún sin medir</string>
+    <string name="health_design_settings">Indicada en Ajustes</string>
+    <string name="health_design_battery">Informada por la batería</string>
+    <string name="health_design_not_set">Sin definir</string>
+    <string name="health_design_checking">Comprobando…</string>
+    <string name="health_cycles_not_reported">No informado</string>
+    <string name="health_no_estimate">Aún no hay estimación</string>
+    <string name="health_no_estimate_body">Aparece cuando Voltwise registra una carga o descarga larga con la supervisión activada.</string>
+    <string name="health_needs_design">Falta la capacidad de diseño</string>
+    <string name="health_needs_design_body">Introdúcela en mAh según las especificaciones de tu teléfono. Con root, Voltwise la lee de la batería.</string>
+    <string name="health_checking_design">Comprobando la capacidad de diseño que informa la batería…</string>
+    <string name="health_set_design">Definir capacidad de diseño</string>
+    <string name="health_info_title">Acerca de la salud de la batería</string>
+    <string name="health_info_body">Voltwise estima la capacidad total de tu batería a partir de lo que registra: la carga que entró o salió durante una carga o descarga, dividida por cuánto cambió el nivel.\n\nCada estimación tiene una confianza. Alta: el nivel cambió al menos un 40 por ciento y el contador de carga informó casi todo el tiempo. Media: al menos un 20 por ciento. Baja: al menos un 10 por ciento. Las sesiones más cortas no dan estimación.\n\nLa capacidad mostrada combina las estimaciones de las 50 sesiones más recientes y da más peso a las más fiables, así que una sesión rara apenas la mueve.\n\nLa salud compara esa capacidad con la de diseño: la que indicas en Ajustes o, con root, la que informa la batería. Una batería nueva puede superar el 100 por ciento. Es una estimación, no una prueba de laboratorio.</string>
+    <string name="health_trend_title">Capacidad a lo largo del tiempo</string>
+    <string name="health_trend_series">Capacidad</string>
+    <string name="health_trend_design">Diseño</string>
+    <string name="health_trend_empty_title">Aún no hay tendencia</string>
+    <string name="health_trend_empty_body">Cada carga o descarga larga añade un punto.</string>
+    <string name="health_trend_one_title">Una estimación por ahora</string>
+    <string name="health_trend_one_body">La tendencia empieza con la segunda.</string>
+    <string name="health_estimates_title">Últimas estimaciones</string>
+    <string name="health_estimate_charge">Carga · %1$s %%–%2$s %%</string>
+    <string name="health_estimate_discharge">Descarga · %1$s %%–%2$s %%</string>
+    <string name="health_estimate_charge_plain">Carga</string>
+    <string name="health_estimate_discharge_plain">Descarga</string>
+    <string name="health_estimate_session">Sesión</string>
+    <string name="health_estimate_open">Abrir sesión</string>
+</resources>

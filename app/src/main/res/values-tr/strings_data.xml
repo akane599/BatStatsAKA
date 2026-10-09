@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ayarlar › Veriler (ui/screens/DataScreen.kt). "Ölçümler" pil örnekleridir. -->
+<resources>
+    <string name="data_title">Veriler</string>
+
+    <!-- Kayıtlı geçmiş -->
+    <string name="data_stored_title">Kayıtlı geçmiş</string>
+    <string name="data_stored_readings">Ölçümler</string>
+    <string name="data_stored_sessions">Oturumlar</string>
+    <string name="data_stored_limit">/ %1$s</string>
+    <string name="data_stored_info_title">Kayıtlı geçmiş hakkında</string>
+    <string name="data_stored_info_body">Voltwise bu telefonda en fazla 100.000 ölçüm ve 10.000 oturum tutar; önce en eskiler silinir. Saklama ayarı onları daha erken silebilir.\n\nTemizleme ölçümleri, oturumları ve uygulama istatistiklerini siler. Ayarlarınız ve geçerli kalibrasyon kalır. Android\'in kendi pil istatistikleri etkilenmez.</string>
+
+    <!-- Dışa aktar -->
+    <string name="data_export_title">Geçmişi dışa aktar</string>
+    <string name="data_export_period">Dönem</string>
+    <string name="data_range_all">Tümü</string>
+    <string name="data_range_week">7 gün</string>
+    <string name="data_range_month">30 gün</string>
+    <string name="data_export_include">Dahil et</string>
+    <string name="data_include_readings">Ölçümler</string>
+    <string name="data_include_sessions">Oturumlar</string>
+    <string name="data_export_nothing">Ölçümleri, oturumları ya da ikisini seçin.</string>
+    <string name="data_export_json">JSON olarak kaydet</string>
+    <string name="data_export_csv">CSV olarak kaydet</string>
+    <string name="data_export_info_title">Dışa aktarma hakkında</string>
+    <string name="data_export_info_body">JSON her şeyi birimler ve UTC saatleriyle tek dosyada tutar. CSV seçtiğiniz klasöre tablo başına bir dosya yazar.\n\nDönem, dışa aktarma başladığında biter. Dönemle çakışan oturumlar kırpılmadan bütün olarak aktarılır.\n\nDışa aktarımlar telefonunuzu ne zaman ve nasıl kullandığınızı gösterir. Yalnızca seçtiğiniz kişilerle paylaşın.</string>
+    <string name="data_exported_json">JSON olarak kaydedildi.</string>
+    <string name="data_exported_csv">CSV dosyaları olarak kaydedildi.</string>
+
+    <!-- İçe aktar -->
+    <string name="data_import_title">Geçmişi içe aktar</string>
+    <string name="data_import_json">JSON içe aktar</string>
+    <string name="data_import_csv">CSV içe aktar</string>
+    <string name="data_import_info_title">İçe aktarma hakkında</string>
+    <string name="data_import_info_body">İçe aktarılanlar geçmişinize eklenir ve izlemeyi asla başlatmaz. Aynı kayıtlar atlanır. Kayıtlı verilerle çakışan ya da geçersiz kayıt içeren bir dosya bütünüyle reddedilir; böylece hiçbir şey yarım aktarılmaz.\n\nBir CSV dosyası ölçümleri, oturumları ya da uygulama kullanımını içerir; dosyaları tek tek aktarın. 64 MiB\'a kadar dosyalar kabul edilir.</string>
+    <string name="data_imported">Eklenen ölçüm: %1$s · eklenen oturum: %2$s · uzatılan: %3$s · değişmeyen: %4$s</string>
+
+    <!-- Ayar yedeği -->
+    <string name="data_settings_title">Ayar yedeği</string>
+    <string name="data_settings_save">Ayarları kaydet</string>
+    <string name="data_settings_restore">Ayarları geri yükle</string>
+    <string name="data_settings_info_title">Ayar yedekleri hakkında</string>
+    <string name="data_settings_info_body">Yedek, birim ve işaret düzeltmeleri dahil ayarlarınızı içerir. Pil geçmişini ya da Voltwise\'ın bu telefonda algıladığı kalibrasyonu asla içermez.\n\nGeri yükleme önce dosyanın tamamını denetler. İçinde bir hata varsa hiçbir ayar değişmez.</string>
+    <string name="data_settings_saved">Ayarlar kaydedildi.</string>
+    <string name="data_settings_restored">Ayarlar geri yüklendi · uygulanan: %1$s · atlanan: %2$s · uygulanamayan: %3$s</string>
+
+    <!-- Temizle -->
+    <string name="data_clear_action">Tüm verileri temizle</string>
+    <string name="data_clear_hint">Ölçümleri, oturumları ve uygulama istatistiklerini siler. Ayarlar ve kalibrasyon kalır.</string>
+    <string name="data_clear_title">Tüm veriler temizlensin mi?</string>
+    <string name="data_clear_body">Bu işlem izlemeyi durdurur ve tüm ölçümleri, oturumları ve uygulama istatistiklerini kalıcı olarak siler. Ayarlarınız ve geçerli kalibrasyon kalır.\n\nBir kopya istiyorsanız önce dışa aktarın.</string>
+    <string name="data_clear_confirm">Her şeyi sil</string>
+    <string name="data_clear_cancel">İptal</string>
+    <string name="data_clear_failed">Geçmiş temizlenemedi. Yeniden deneyin.</string>
+    <string name="data_clear_done">Tüm geçmiş silindi.</string>
+
+    <!-- Hatalar -->
+    <string name="data_failed_export">Dışa aktarım kaydedilmedi. %1$s</string>
+    <string name="data_failed_import">Hiçbir şey içe aktarılmadı. %1$s</string>
+    <string name="data_failed_not_export">Hiçbir şey içe aktarılmadı. Bu bir Voltwise geçmiş dışa aktarımı değil.</string>
+    <string name="data_failed_read">Bu dosya okunamadı. Hiçbir şey değişmedi.</string>
+    <string name="data_failed_write">Bu konuma yazılamadı. Başka bir konum seçin.</string>
+    <string name="data_failed_settings_invalid">Bu geçerli bir ayar yedeği değil. Hiçbir ayar değişmedi.</string>
+    <string name="data_failed_settings_other_app">Bu yedek başka bir uygulamaya ait. Hiçbir ayar değişmedi.</string>
+    <string name="data_failed_settings_too_new">Bu yedek daha yeni bir Voltwise sürümünden. Hiçbir ayar değişmedi.</string>
+    <string name="data_failed_settings_damaged">Bu yedek düzenlenmiş ya da bozuk. Hiçbir ayar değişmedi.</string>
+    <string name="data_failed_no_picker">Bu telefonda dosya seçebilen bir uygulama yok.</string>
+    <string name="data_failed_unexpected">Bir sorun oluştu. Yeniden deneyin.</string>
+    <string name="data_working">İşleniyor…</string>
+    <string name="data_back_busy">Çıkmadan önce işlemin bitmesini bekleyin.</string>
+</resources>

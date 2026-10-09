@@ -1,0 +1,15 @@
+android-kit 2026.10.03.3
+Validated 2026-10-03
+
+Offline regression suite: 36 tests, OK
+Command: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -q
+
+Sidequest integration: PASS
+Upstream version: 5.6.0
+Upstream commit: 03ef4050f75f549f03f8c1531b5cc1516fb90621
+Cases: profile create/idempotence; board binding; Astra route persistence; stock hard tier disabled; test routing split; Claude fallback with no GPT catalog; user edits preserved; explicit reset; custom board profile preserved.
+Command: python3 tests/check_sidequest.py /path/to/sidequest.js
+
+Not run: real Claude plugin installation/validation, live Model Gateway/OAuth, Android/JDK build, emulator, LSP binary installation. Community plugin commit availability not confirmed; original pins retained.
+
+Follow-up: CLI version/failure/validator/stderr fixtures passed; real Termux execution not available. Routing integration result above is retained from the prior run; routing behavior is unchanged.

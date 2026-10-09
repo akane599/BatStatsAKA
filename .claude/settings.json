@@ -1,0 +1,51 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./gradlew:*)",
+      "Bash(adb:*)",
+      "Bash(emulator:*)",
+      "Bash(avdmanager:*)",
+      "Bash(sdkmanager:*)",
+      "Bash(git status:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(gh pr:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": [
+      "Read(./local.properties)",
+      "Read(./**/*.jks)",
+      "Read(./**/*.keystore)",
+      "Read(./**/google-services.json)",
+      "Read(./.env*)",
+      "Bash(git push --force:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.claude-plugin-config.json)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-res-db.sh\"",
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write"
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "command": "if [ -f PROGRESS.md ]; then echo '--- PROGRESS.md (Now/Next/Blockers) ---'; sed -n '/^## Now/,/^## Recently done/p' PROGRESS.md | head -60; fi",
+            "type": "command"
+          }
+        ]
+      }
+    ]
+  }
+}

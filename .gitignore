@@ -16,3 +16,22 @@
 .externalNativeBuild
 .cxx
 google-services.json
+
+.kotlin/
+**/build/
+*.keystore
+/artifacts/
+
+# Overhaul before/after screenshots (local only, ~14 MB)
+/design/
+
+# Local agent workspaces (plan ledgers, reports, worktrees)
+/.superpowers/
+/.claude/worktrees/
+# --- android-kit
+local.properties
+.remember/
+.claude-plugin-config.json
+android-qa-output/
+design/before/
+design/after/

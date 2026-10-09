@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Apps and AppDetails (ui/screens/AppsScreen.kt, AppDetailsScreen.kt). Keys prefixed apps_. -->
+<resources>
+    <!-- Units and joins (not translated). -->
+    <string name="apps_unit_bytes" translatable="false">B</string>
+    <string name="apps_unit_kb" translatable="false">kB</string>
+    <string name="apps_unit_mb" translatable="false">MB</string>
+    <string name="apps_unit_gb" translatable="false">GB</string>
+    <string name="apps_details_joined" translatable="false">%1$s · %2$s</string>
+    <string name="apps_details_traffic" translatable="false">↓ %1$s · ↑ %2$s</string>
+
+    <!-- Apps -->
+    <string name="apps_unit_seconds">s</string>
+    <string name="apps_title">Apps</string>
+    <string name="apps_refresh">Refresh app stats</string>
+    <string name="apps_loading">Reading Android\'s battery stats…</string>
+    <string name="apps_loading_description">Loading apps</string>
+    <string name="apps_updated">Updated %1$s</string>
+
+    <string name="apps_access_title">Per-app stats need access</string>
+    <string name="apps_access_not_set_up">Android keeps per-app battery stats behind Shizuku, root or ADB access. None is set up yet.</string>
+    <string name="apps_access_shizuku">Shizuku is running, but it hasn\'t allowed Voltwise yet.</string>
+    <string name="apps_access_adb">On this Android version, ADB-granted access doesn\'t cover per-app stats. Use Shizuku or root instead.</string>
+    <string name="apps_access_refused">Android refused per-app stats to the current access.</string>
+    <string name="apps_access_set_up">Set up access</string>
+    <string name="apps_access_allow">Allow in Shizuku</string>
+    <string name="apps_access_shizuku_blocked">Voltwise is blocked in Shizuku (“Deny and don\'t ask again”), so Shizuku won\'t ask again. Open Shizuku, go to its authorized apps and switch Voltwise on.</string>
+    <string name="apps_access_open_shizuku">Open Shizuku</string>
+
+    <string name="apps_failed_title">Couldn\'t read Android\'s stats</string>
+    <string name="apps_failed_format">Android answered in a format Voltwise can\'t read.</string>
+    <string name="apps_failed_shizuku">The read through Shizuku failed. Try again, or restart Shizuku.</string>
+    <string name="apps_failed_other">The read failed. Try again in a moment.</string>
+    <string name="apps_retry">Try again</string>
+
+    <string name="apps_summary_title">Android stats</string>
+    <string name="apps_summary_title_since">Android stats since %1$s</string>
+    <string name="apps_summary_on_battery">On battery</string>
+    <string name="apps_summary_screen_on">Screen on</string>
+    <string name="apps_summary_screen_off">Screen off</string>
+    <string name="apps_summary_used">%1$s%% used</string>
+    <string name="apps_summary_deep_doze">Deep doze</string>
+    <string name="apps_summary_light_doze">Light doze</string>
+    <string name="apps_summary_capacity">Capacity</string>
+    <string name="apps_summary_info_title">About Android stats</string>
+    <string name="apps_summary_info_body">These numbers come from Android\'s own battery stats. Android starts counting when the phone is unplugged after a full charge, and starts over at the next full charge.\n\nPer-app mAh are Android\'s estimates from its power model, not measurements. Screen on and off show the time and the share of the battery used in each. Doze is the time the phone spent idle with the screen off: deep doze saves the most.\n\nCapacity is Android\'s own estimate of the battery\'s full charge.</string>
+
+    <string name="apps_no_access_title">Apps appear here</string>
+    <string name="apps_no_access_body">Once access is set up, each app\'s battery use shows here, largest first.</string>
+
+    <string name="apps_search">Search apps</string>
+    <string name="apps_search_clear">Clear search</string>
+    <string name="apps_sort_label">Sort by</string>
+    <string name="apps_sort_battery">Battery</string>
+    <string name="apps_sort_cpu">CPU</string>
+    <string name="apps_sort_foreground">Foreground</string>
+    <string name="apps_sort_background">Background</string>
+    <string name="apps_sort_network">Network</string>
+    <string name="apps_system_toggle">System apps</string>
+    <plurals name="apps_count">
+        <item quantity="one">%d app</item>
+        <item quantity="other">%d apps</item>
+    </plurals>
+    <!-- Under an Apps row whose uid several packages share: its figures are theirs together. -->
+    <plurals name="apps_shared_uid">
+        <item quantity="one">Shared UID · %d app</item>
+        <item quantity="other">Shared UID · %d apps</item>
+    </plurals>
+
+    <string name="apps_empty_search_title">No apps match “%1$s”</string>
+    <string name="apps_empty_search_body">Check the spelling, or search by package name.</string>
+    <plurals name="apps_empty_search_system">
+        <item quantity="one">%d system app matches.</item>
+        <item quantity="other">%d system apps match.</item>
+    </plurals>
+    <string name="apps_show_system">Show system apps</string>
+    <string name="apps_empty_only_system_title">Only system apps used the battery</string>
+    <string name="apps_empty_title">No app use counted yet</string>
+    <string name="apps_empty_body">Android hasn\'t counted any app use since its stats last started over.</string>
+
+    <!-- AppDetails -->
+    <string name="apps_details_app_info">App info</string>
+    <string name="apps_details_caption_since">Since %1$s · updated %2$s</string>
+    <string name="apps_details_battery">Battery used</string>
+    <string name="apps_details_share">Share of all apps</string>
+    <string name="apps_details_not_counted">Android hasn\'t counted any use of this app since its stats last started over.</string>
+
+    <string name="apps_details_time_title">Time by state</string>
+    <string name="apps_details_time_foreground">Foreground</string>
+    <string name="apps_details_time_fgs">Foreground service</string>
+    <string name="apps_details_time_background">Background</string>
+    <string name="apps_details_time_cached">Cached</string>
+    <string name="apps_details_time_info_title">About time by state</string>
+    <string name="apps_details_time_info_body">Foreground is time with the app open on screen. A foreground service keeps working with a notification showing, such as music or navigation.\n\nBackground is time running without either. Cached means Android kept the app in memory, paused, so it opens faster; it uses little battery.</string>
+
+    <string name="apps_details_cpu_title">CPU</string>
+    <string name="apps_details_cpu_time">CPU time</string>
+    <string name="apps_details_kept_awake">Kept awake</string>
+    <string name="apps_details_no_background_work">No wakelocks, alarms, jobs or syncs since Android\'s stats started over.</string>
+
+    <string name="apps_details_wakelocks_title">Wakelocks</string>
+    <string name="apps_details_wakelocks_info_title">About wakelocks</string>
+    <string name="apps_details_wakelocks_info_body">A wakelock keeps the phone from sleeping while an app works. Each is named by the app. Long CPU wakelocks with the screen off are a common cause of drain.\n\nTimes are pooled: when several apps hold wakelocks at once, Android splits the time between them.</string>
+    <string name="apps_details_wakelock_cpu">keeps the CPU on</string>
+    <string name="apps_details_wakelock_screen">keeps the screen on</string>
+    <plurals name="apps_details_times">
+        <item quantity="one">%d time</item>
+        <item quantity="other">%d times</item>
+    </plurals>
+    <string name="apps_details_show_all">Show all %1$d</string>
+    <string name="apps_details_show_fewer">Show fewer</string>
+
+    <string name="apps_details_alarms_title">Alarms</string>
+    <plurals name="apps_details_wakeups">
+        <item quantity="one">%d wakeup</item>
+        <item quantity="other">%d wakeups</item>
+    </plurals>
+    <string name="apps_details_jobs_title">Jobs</string>
+    <plurals name="apps_details_runs">
+        <item quantity="one">%d run</item>
+        <item quantity="other">%d runs</item>
+    </plurals>
+    <string name="apps_details_syncs_title">Syncs</string>
+    <plurals name="apps_details_syncs">
+        <item quantity="one">%d sync</item>
+        <item quantity="other">%d syncs</item>
+    </plurals>
+
+    <string name="apps_details_network_title">Network</string>
+    <string name="apps_details_mobile">Mobile data</string>
+    <string name="apps_details_wifi">Wi-Fi</string>
+    <string name="apps_details_radio">Mobile radio on</string>
+
+    <string name="apps_details_hardware_title">Sensors and hardware</string>
+    <string name="apps_details_gps">GPS</string>
+    <string name="apps_details_sensors">Sensors</string>
+    <string name="apps_details_camera">Camera</string>
+    <string name="apps_details_flashlight">Flashlight</string>
+    <string name="apps_details_audio">Audio</string>
+    <string name="apps_details_video">Video</string>
+    <string name="apps_details_bluetooth_scan">Bluetooth scan</string>
+
+    <string name="apps_details_history_title">Sessions on battery</string>
+    <plurals name="apps_details_history_caption">
+        <item quantity="one">Among the top 30 in %1$d of %2$d session</item>
+        <item quantity="other">Among the top 30 in %1$d of %2$d sessions</item>
+    </plurals>
+    <string name="apps_details_history_empty">No sessions with per-app data in the last 30 days.</string>
+    <string name="apps_details_history_failed">Couldn\'t read the saved sessions.</string>
+    <string name="apps_details_history_series">Battery used</string>
+    <string name="apps_details_history_info_title">About sessions on battery</string>
+    <string name="apps_details_history_info_body">Each bar is one time on battery in the last 30 days (up to 14), from unplug to plug-in. Voltwise reads Android\'s stats at both ends when it has access, and keeps the top 30 apps of each.\n\nA session where this app wasn\'t in the top 30 shows as 0.</string>
+    <string name="apps_details_nothing_else">Nothing else recorded for this app.</string>
+    <string name="apps_summary_capacity_source">Android\'s estimate</string>
+</resources>

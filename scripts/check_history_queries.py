@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Exercise actual Room DAO SQL on host SQLite; not a substitute for Android Room tests."""
+import json
+from pathlib import Path
+import re
+import sqlite3
+
+root = Path(__file__).resolve().parents[1]
+dao = (root / 'app/src/main/java/com/akane/voltwise/battery/data/db/Dao.kt').read_text()
+schemas = (root / 'app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase').glob('*.json')
+schema = json.loads(max(schemas, key=lambda p: int(p.stem)).read_text())['database']  # newest version
+
+def query(method, interface=None):
+    section = dao if interface is None else dao.split('interface ' + interface + ' {')[1].split('\n}\n')[0]
+    found = re.search(r'@Query\("([^"\n]+)"\)\s+(?:suspend )?fun ' + method + r'\(', section)
+    assert found, 'Cannot locate actual DAO query: ' + method
+    return found[1]
+
+with sqlite3.connect(':memory:') as db:
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for at, origin, observation, row_id in [(1500, 'BatteryManager', 'local', 1),
+                                           (1600, 'import:BatteryManager', 'import:foreign', -100),
+                                           (1700, 'legacy', None, 2)]:
+        db.execute('INSERT INTO battery_samples(id,timestamp,status,screenOn,source,observationId,elapsedMs) VALUES(?,?,3,1,?,?,?)',
+                   (row_id, at, origin, observation, at))
+    rows = db.execute(query('chartSamples'), {'from': 0, 'to': 3000, 'bucketMs': 1}).fetchall()
+    assert len(rows) == 1 and rows[0][0] == 1, 'Local chart mixed imported or legacy data'
+    assert db.execute('SELECT COUNT(*) FROM battery_samples').fetchone()[0] == 3, 'Filtering deleted history'
+    db.execute('INSERT INTO battery_samples(timestamp,status,screenOn) VALUES(1800,3,1)')
+    assert db.execute('SELECT id FROM battery_samples WHERE timestamp=1800').fetchone()[0] > 0, 'Imported IDs corrupted local AUTOINCREMENT'
+    db.commit()
+    try:
+        with db:
+            db.execute('INSERT INTO battery_samples(timestamp,status,screenOn,observationId,elapsedMs) VALUES(1900,3,1,\'new\',1900)')
+            db.execute('INSERT INTO battery_samples(timestamp,status,screenOn,observationId,elapsedMs) VALUES(2000,3,1,\'new\',1900)')
+    except sqlite3.IntegrityError:
+        pass
+    else:
+        raise AssertionError('Observed-point uniqueness not enforced')
+    assert db.execute("SELECT COUNT(*) FROM battery_samples WHERE observationId='new'").fetchone()[0] == 0
+    assert db.execute("SELECT COUNT(*) FROM battery_samples").fetchone()[0] == 4, "Rollback removed pre-existing records"
+    for i in range(20):
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,activeKey) VALUES(?,'DISCHARGE',?,?,?)",
+                   (str(i), i * 1000, None if i == 0 else (i + 1) * 1000, 1 if i == 0 else None))
+    overlaps = db.execute(query('sessionsBetween'), {'from': 1500, 'to': 1600}).fetchall()
+    assert [row[0] for row in overlaps] == ['1'], 'Overlapping session selection was incorrect'
+    db.execute(query('boundStorage', 'SessionDao'), {'limit': 3})
+    assert db.execute('SELECT COUNT(*) FROM charge_sessions').fetchone()[0] == 3, 'Session bound not enforced'
+    assert db.execute('SELECT sessionId FROM charge_sessions WHERE activeKey=1').fetchone()[0] == '0', 'Old active session was evicted'
+print('PASS actual DAO SQL: source-separated charts, positive local IDs, unique points/rollback, overlapping windows, bounded sessions retaining active state')
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for i in range(125):
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,source) VALUES(?,?,?,?,?)",
+                   (str(i), 'CHARGE' if i == 0 else 'DISCHARGE', i * 1000, i * 1000, 'import:saved_origin' if i == 0 else 'BatteryManager observed interval'))
+    args = {'type': None, 'query': '', 'limit': 51}
+    assert len(db.execute(query('filteredSessions'), args).fetchall()) == 51
+    args['limit'] = 151
+    assert len(db.execute(query('filteredSessions'), args).fetchall()) == 125, 'Older history is inaccessible'
+    args.update({'type': 'CHARGE', 'query': 'SAVED_', 'limit': 51})
+    assert [r['sessionId'] for r in db.execute(query('filteredSessions'), args)] == ['0'], 'Filter only searched recent page or mishandled literal underscore'
+    for i in range(1001):
+        db.execute("INSERT INTO battery_samples(timestamp,status,screenOn,sessionId,observationId,currentNowUa,voltageMv,temperatureDeciC,boundaryReason) VALUES(?,3,1,'chart','o',?,4000,250,?)",
+                   (i * 1000, None if i == 400 else -123, 'interrupted' if i == 501 else None))
+    db.execute("INSERT INTO battery_samples(timestamp,status,screenOn,sessionId,currentNowUa) VALUES(900000,3,1,'foreign',999999)")
+    rows = db.execute(query('sessionChartSamples'), {'sessionId': 'chart', 'from': 0, 'to': 1000000, 'bucketMs': 1000000 // 360 + 1}).fetchall()
+    assert len(rows) <= 361, 'Session chart was unbounded'
+    assert all(r['currentNowUa'] != 999999 for r in rows), 'Session chart mixed unrelated time-overlapping readings'
+    assert sum(r['discontinuity'] for r in rows) >= 2, 'Downsampling hid missing samples or explicit gaps'
+print('PASS actual history UI queries: paging/filter across125 records, bounded session-only charts preserving discontinuities')
+
+with sqlite3.connect(':memory:') as db:
+    db.execute('PRAGMA foreign_keys=ON')  # Room enables it on open because the schema has foreign keys
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,activeKey) VALUES('open','DISCHARGE',5000,NULL,1)")
+    db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,activeKey) VALUES('closed','DISCHARGE',1000,2000,NULL)")
+    def snapshot(session, kind, at):
+        snapshot_id = db.execute('INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES(?,?,?)', (session, kind, at)).lastrowid
+        db.execute("INSERT INTO app_snapshot_uids(snapshotId,uid,packageName,powerMah) VALUES(?,10001,'a',1.0)", (snapshot_id,))
+        return snapshot_id
+    baseline = snapshot('open', 'BASELINE', 100)
+    snapshot('closed', 'BASELINE', 50); snapshot(None, 'END', 10)
+    ends = [snapshot('closed', 'END', 200 + i) for i in range(4)]
+    db.execute(query('pruneSnapshots'), {'keepLatest': 3})
+    kept = [r[0] for r in db.execute('SELECT id FROM app_snapshots ORDER BY capturedAt DESC, id DESC')]
+    assert kept == [ends[3], ends[2], ends[1], baseline], 'Snapshot pruning lost the open baseline or kept too many'
+    assert db.execute('SELECT COUNT(*) FROM app_snapshot_uids').fetchone()[0] == 4, 'Pruned snapshot uids did not cascade'
+    assert db.execute(query('latestSnapshot'), {'sessionId': 'open', 'kind': 'BASELINE'}).fetchone()[0] == baseline
+    for rank in (2, 0, 1):
+        db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('closed',?,?,'p',1.5,?,'DELTA')",
+                   (rank, 10000 + rank, int(rank == 2)))
+    assert [r[1] for r in db.execute(query('sessionUsageRows'), {'sessionId': 'closed'})] == [0, 1, 2], 'App usage not in rank order'
+    assert len(db.execute(query('usageForSessionsBetween'), {'from': 1500, 'to': 1600}).fetchall()) == 3, 'Export missed overlapping session usage'
+    assert db.execute(query('usageForSessionsBetween'), {'from': 6000, 'to': 7000}).fetchall() == [], 'Export mixed in other sessions'
+    db.execute(query('setAppUsageStatus'), {'sessionId': 'closed', 'status': 'READY', 'basis': 'DELTA'})
+    assert db.execute("SELECT appUsageStatus, appUsageBasis FROM charge_sessions WHERE sessionId='closed'").fetchone() == ('READY', 'DELTA')
+    try:
+        db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('missing',0,1,'p',1,0,'DELTA')")
+    except sqlite3.IntegrityError:
+        pass
+    else:
+        raise AssertionError('App usage accepted a missing session')
+    db.execute(query('purge', 'SessionDao'), {'olderThan': 3000})
+    assert db.execute('SELECT COUNT(*) FROM session_app_usage').fetchone()[0] == 0, 'Deleting a session left its app usage'
+    db.execute(query('pruneOrphanSnapshots'))
+    assert [r[0] for r in db.execute('SELECT id FROM app_snapshots')] == [baseline], 'Orphaned snapshots survived retention'
+    for day in (-1, 0, 5):
+        db.execute('INSERT INTO daily_summaries(epochDay,screenOnMs,screenOffMs,screenOnDischargeUah,screenOffDischargeUah,chargedUah,updatedAt) VALUES(?,0,0,0,0,0,0)', (day,))
+    assert [r[0] for r in db.execute(query('between', 'DailySummaryDao'), {'fromDay': -1, 'toDay': 4})] == [-1, 0]
+    db.execute(query('purgeBefore'), {'epochDay': 0})
+    assert [r[0] for r in db.execute('SELECT epochDay FROM daily_summaries ORDER BY epochDay')] == [0, 5], 'Day retention wrong'
+print('PASS actual v5 DAO SQL: snapshot pruning keeps the open baseline + last 3 with uid cascade, ranked usage, export join, FK/cascade, orphan and day retention')
+
+with sqlite3.connect(':memory:') as db:
+    db.row_factory = sqlite3.Row
+    db.execute('PRAGMA foreign_keys=ON')
+    for entity in schema['entities']:
+        db.execute(entity['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+        for index in entity.get('indices', []):
+            db.execute(index['createSql'].replace('${TABLE_NAME}', entity['tableName']))
+    for i in range(12):
+        db.execute("INSERT INTO charge_sessions(sessionId,type,startTime,endTime,capacityEstimateMah,capacityConfidence,capacityBasis) VALUES(?,'DISCHARGE',?,?,?,?,?)",
+                   ('s%02d' % i, i * 1000, i * 1000 + 500, None if i % 3 == 0 else 4000 + i, None if i % 3 == 0 else 'HIGH', 'COUNTER_SPAN'))
+    trend = db.execute(query('capacityEstimates'), {'limit': 5}).fetchall()
+    assert [r['sessionId'] for r in trend] == ['s11', 's10', 's08', 's07', 's05'], 'Trend not newest-first estimates only, or unbounded'
+    assert set(trend[0].keys()) == {'sessionId', 'type', 'startTime', 'endTime', 'lastSampleTime', 'startLevel', 'endLevel',
+                                    'capacityEstimateMah', 'capacityConfidence', 'capacityBasis'}, 'Trend projection columns drifted'
+    # Per-session delete (SessionDao.deleteSession): snapshots, samples, then the row; uids and app usage cascade.
+    snapshot_id = db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('s07','BASELINE',1)").lastrowid
+    db.execute("INSERT INTO app_snapshot_uids(snapshotId,uid,packageName,powerMah) VALUES(?,10001,'a',1.0)", (snapshot_id,))
+    db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('s08','BASELINE',2)")
+    db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('s07',0,10001,'a',1.0,0,'DELTA')")
+    db.execute("INSERT INTO session_app_usage(sessionId,rank,uid,packageName,powerMah,isOthers,basis) VALUES('s08',0,10001,'a',1.0,0,'DELTA')")
+    for at, session in [(7100, 's07'), (7200, 's07'), (8100, 's08')]:
+        db.execute('INSERT INTO battery_samples(timestamp,status,screenOn,sessionId) VALUES(?,3,1,?)', (at, session))
+    for method in ('deleteSessionSnapshots', 'deleteSessionSamples', 'deleteSessionRow'):
+        db.execute(query(method), {'id': 's07'})
+    counts = {table: db.execute("SELECT COUNT(*) FROM %s" % table).fetchone()[0]
+              for table in ('charge_sessions', 'app_snapshots', 'app_snapshot_uids', 'session_app_usage', 'battery_samples')}
+    assert counts == {'charge_sessions': 11, 'app_snapshots': 1, 'app_snapshot_uids': 0, 'session_app_usage': 1, 'battery_samples': 1}, \
+        'Per-session delete missed rows or touched another session: %s' % counts
+print('PASS actual trend/delete SQL: bounded newest-first estimate projection, per-session delete with snapshot-uid and app-usage cascade')

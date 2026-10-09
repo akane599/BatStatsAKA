@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared UI components (ui/components/**). Screen strings live in strings_<screen>.xml. -->
+<resources>
+    <string name="component_chart_empty">No readings yet</string>
+    <string name="component_chart_summary_range">From %1$s to %2$s.</string>
+    <string name="component_chart_summary_series">%1$s: latest %2$s, low %3$s, high %4$s.</string>
+    <string name="component_bar_summary">Highest: %1$s, %2$s. Latest: %3$s, %4$s.</string>
+    <string name="component_bar_select">Select %1$s</string>
+    <string name="component_bar_clear">Clear selection</string>
+    <string name="component_bar_selected">Selected: %1$s, %2$s</string>
+    <string name="component_breakdown_item">%1$s: %2$s</string>
+    <string name="component_app_system_process">System process</string>
+    <string name="component_app_unknown">Unknown app</string>
+    <string name="component_info_open">About %1$s</string>
+    <string name="component_no_value" translatable="false">—</string>
+    <string name="calibration_notice_title">Current readings corrected</string>
+    <string name="calibration_notice_unit">This phone reports current in milliamps. Values are now converted.</string>
+    <string name="calibration_notice_sign">This phone reports drain as positive. The sign is now flipped.</string>
+    <string name="calibration_notice_both">This phone reports current in milliamps and drain as positive. Values are now converted and flipped.</string>
+    <string name="calibration_notice_same">The current reading was checked against the charge counter and adjusted.</string>
+    <string name="calibration_notice_undo">Undo</string>
+    <string name="calibration_notice_keep">Keep</string>
+    <string name="percent_value">%1$s%%</string>
+    <string name="value_unit" translatable="false">%1$s %2$s</string>
+</resources>

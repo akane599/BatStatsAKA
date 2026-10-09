@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ayarlar › Durum (ui/screens/StatusScreen.kt). -->
+<resources>
+    <string name="status_title">Durum</string>
+
+    <!-- Kalibrasyon düzeltme bildirimi -->
+
+    <!-- Gelişmiş erişim -->
+    <string name="status_access_title">Gelişmiş erişim</string>
+    <string name="status_access_shizuku">Shizuku</string>
+    <string name="status_access_root">Root</string>
+    <string name="status_access_adb">ADB izinleri</string>
+    <string name="status_access_none">Yok</string>
+    <string name="status_access_checking">Erişim denetleniyor…</string>
+    <string name="status_access_on">Uygulama başına istatistikler kullanılabilir.</string>
+    <string name="status_access_off">Uygulama başına istatistikler için Shizuku, root ya da ADB izinleri gerekir.</string>
+    <string name="status_access_adb_limited">Yalnızca pil ayrıntıları. Bu Android sürümünde uygulama başına istatistikler için Shizuku ya da root gerekir.</string>
+    <string name="status_access_authorize_hint">Shizuku çalışıyor. Kullanmak için Voltwise\'a izin verin.</string>
+    <string name="status_access_authorize">Shizuku\'ya izin ver</string>
+    <string name="status_access_blocked_hint">Voltwise Shizuku\'da engellendi (“Reddet ve bir daha sorma”). Shizuku\'yu açın, yetkili uygulamalarına gidin ve Voltwise\'ı açın.</string>
+    <string name="status_access_open_shizuku">Shizuku\'yu aç</string>
+    <string name="status_access_check">Yeniden denetle</string>
+    <string name="status_access_checking_short">Denetleniyor…</string>
+    <string name="status_access_info_title">Gelişmiş erişim hakkında</string>
+    <string name="status_access_info_body">Sıradan pil ölçümleri özel erişim gerektirmez. Uygulama başına istatistikler Android\'in pil raporundan gelir; bu rapor Shizuku, root ya da ADB ile verilen izinler gerektirir.\n\nAndroid bu istatistikleri kendi son sıfırlamasından beri sayar; bu, Voltwise oturumlarından farklı olabilir.</string>
+
+    <!-- Kurulum -->
+    <string name="status_setup_show">Kurulum adımlarını göster</string>
+    <string name="status_setup_hide">Kurulum adımlarını gizle</string>
+    <string name="status_setup_intro">Bunlardan birini kullanın:</string>
+    <string name="status_setup_shizuku_title">Shizuku</string>
+    <string name="status_setup_shizuku_body">Shizuku\'yu yükleyip başlatın, ardından Voltwise\'a izin verin.</string>
+    <string name="status_setup_root_title">Root</string>
+    <string name="status_setup_root_body">Root yöneticiniz sorduğunda Voltwise\'a izin verin, ardından yeniden denetleyin.</string>
+    <string name="status_setup_adb_title">ADB</string>
+    <string name="status_setup_adb_body">ADB kurulu bir bilgisayardan bu komutları çalıştırın, ardından yeniden denetleyin.</string>
+    <string name="status_setup_adb_limited">Android 16 ve sonrasında bu izinler pil ayrıntılarını kapsar, uygulama başına istatistikleri kapsamaz.</string>
+    <string name="status_setup_copy">Komutları kopyala</string>
+    <string name="status_setup_copied">Kopyalandı</string>
+    <string name="status_setup_commands">ADB komutları</string>
+
+    <!-- Kalibrasyon -->
+    <string name="status_calibration_title">Akım kalibrasyonu</string>
+    <string name="status_calibration_unit">Birim</string>
+    <string name="status_calibration_unit_ua">Mikroamper</string>
+    <string name="status_calibration_unit_ma">Miliamper</string>
+    <string name="status_calibration_sign">Deşarj işareti</string>
+    <string name="status_calibration_negative">Negatif</string>
+    <string name="status_calibration_positive">Pozitif</string>
+    <string name="status_calibration_standard">Android standardı</string>
+    <string name="status_calibration_flipped">Gösterimde çevriliyor</string>
+    <string name="status_calibration_detected">Şarj sayacı denetlenerek algılandı.</string>
+    <string name="status_calibration_override">Ayarlar\'da belirlendi.</string>
+    <string name="status_calibration_default">Henüz denetlenmedi. Yeterli ölçüm olana kadar Android standardı kullanılır.</string>
+    <string name="status_calibration_info_title">Kalibrasyon hakkında</string>
+    <string name="status_calibration_info_body">Telefonlar pil akımını farklı biçimlerde bildirir: bazıları mikroamper yerine miliamper, bazıları deşarjı pozitif sayı olarak. Voltwise izleme sırasında bildirilen akımı şarj sayacıyla karşılaştırır ve gösterimi düzeltir.\n\nBirimi ve işareti Ayarlar\'da kendiniz belirleyebilir, algılamayı orada sıfırlayabilirsiniz.</string>
+
+    <!-- Son sorunlar -->
+    <string name="status_issues_title">Son sorunlar</string>
+    <string name="status_issues_none">Kayıtlı sorun yok.</string>
+    <string name="status_issues_show_all">Tümünü göster (%1$s)</string>
+    <string name="status_issues_show_fewer">Daha az göster</string>
+    <string name="status_issues_repeated">%1$s · %2$s kez</string>
+    <string name="status_issues_log_unavailable">Sorun günlüğü şu anda kaydedilemiyor. Son kayıtlar kaybolabilir.</string>
+    <string name="status_issues_info_title">Son sorunlar hakkında</string>
+    <string name="status_issues_info_body">Voltwise bu telefonda en fazla 60 olay tutar ve tekrarları gruplar. Olaylar asla uygulama listeleri, ham sistem raporları ya da cihaz kimlikleri içermez ve telefondan yalnızca paylaştığınız bir raporla çıkar.</string>
+    <string name="status_issue_start_failed">İzleme başlatılamadı</string>
+    <string name="status_issue_battery_unavailable">Android pil ölçümü vermedi</string>
+    <string name="status_issue_battery_failed">Bir pil ölçümü başarısız oldu</string>
+    <string name="status_issue_state_events">Ekran ve şarj cihazı olayları alınamadı</string>
+    <string name="status_issue_history_failed">Geçmiş kaydedilemedi</string>
+    <string name="status_issue_gap">İzleme duraklatıldı; aradaki süre sayılmadı</string>
+    <string name="status_issue_charge_counter">Şarj sayacı yoktu ya da sıfırlandı</string>
+    <string name="status_issue_advanced_failed">Uygulama başına istatistikler okunamadı</string>
+    <string name="status_issue_format_invalid">Android\'in pil raporu anlaşılamadı</string>
+    <string name="status_issue_interrupted">Uygulama başına istatistiklerin okunması yarıda kesildi</string>
+    <string name="status_issue_alert_failed">Bir pil uyarısı gösterilemedi</string>
+    <string name="status_issue_notification_failed">Bildirim ya da bir widget güncellenemedi</string>
+    <string name="status_issue_log_failed">Kayıtlı sorunlar okunamadı</string>
+
+    <!-- Rapor -->
+    <string name="status_report_title">Rapor</string>
+    <string name="status_report_body">Sorun gidermek için düz metin özet: ölçümler, erişim, kalibrasyon ve son olaylar. Uygulama listesi, ham sistem raporu ya da cihaz kimliği içermez.</string>
+    <string name="status_report_share">Raporu paylaş</string>
+    <string name="status_report_subject">Voltwise durum raporu</string>
+    <string name="status_report_unavailable">Bu telefonda raporu paylaşabilecek bir uygulama yok.</string>
+</resources>

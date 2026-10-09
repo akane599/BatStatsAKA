@@ -1,0 +1,9 @@
+# --- android-kit
+local.properties
+.remember/
+.claude-plugin-config.json
+android-qa-output/
+design/before/
+design/after/
+*.jks
+*.keystore

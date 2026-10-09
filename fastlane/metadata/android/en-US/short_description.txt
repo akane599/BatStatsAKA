@@ -1,1 +1,1 @@
-Battery Statisics Viewer
+Battery health, charging insights, per-app drain and automatic calibration

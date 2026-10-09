@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Spacing of the ongoing notification's RemoteViews layouts (notification_collapsed / notification_expanded). -->
+<resources>
+    <!-- Between a first line and the level trailing it -->
+    <dimen name="notification_level_gap">8dp</dimen>
+    <!-- Expanded: first line → grid → footer -->
+    <dimen name="notification_section_gap">6dp</dimen>
+    <!-- Expanded: between grid rows, and between grid columns (end padding of a cell; NotificationFitter subtracts it) -->
+    <dimen name="notification_row_gap">4dp</dimen>
+    <dimen name="notification_cell_gap">4dp</dimen>
+    <!-- Expanded: footer → issue line -->
+    <dimen name="notification_issue_gap">2dp</dimen>
+</resources>

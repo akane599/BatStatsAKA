@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Quick Settings tile (battery/tile/**). Units are translatable="false" (base only). -->
+<resources>
+    <string name="tile_label">Battery monitor</string>
+    <string name="tile_off">Off</string>
+    <string name="tile_unit_ma" translatable="false">mA</string>
+    <string name="tile_unit_w" translatable="false">W</string>
+</resources>

@@ -9,6 +9,8 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
 }
 
+ksp { arg("room.schemaLocation", "$projectDir/schemas") }
+
 kotlin {
     jvmToolchain(21)
     compilerOptions {
@@ -27,14 +29,15 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "org.mlm.batstats"
+        applicationId = "com.akane.voltwise"
         minSdk = 26
-        targetSdk = 37
-        versionCode = 734
-        versionName = "6.2.6"
+        targetSdk = 36
+        versionCode = 736
+        versionName = "6.2.7-dev"
+        manifestPlaceholders["appLabel"] = "Voltwise"
 
         androidResources {
-            localeFilters += setOf("en", "ar", "de", "es-rES", "es-rUS", "fr", "hr", "hu", "in", "it", "ja", "pl", "pt-rBR", "ru-rRU", "sv", "tr", "uk", "zh")
+            localeFilters += setOf("en", "es", "tr")
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
@@ -61,6 +64,18 @@ android {
     }
 
     signingConfigs {
+        val previewVariables = listOf("PREVIEW_KEYSTORE_PATH", "PREVIEW_STORE_PASSWORD", "PREVIEW_KEY_ALIAS", "PREVIEW_KEY_PASSWORD")
+        if (previewVariables.any { !System.getenv(it).isNullOrBlank() }) {
+            require(previewVariables.all { !System.getenv(it).isNullOrBlank() }) {
+                "Preview signing requires all four PREVIEW_* signing variables; see docs/BUILD_AND_INSTALL.md"
+            }
+            create("preview") {
+                storeFile = file(System.getenv("PREVIEW_KEYSTORE_PATH"))
+                storePassword = System.getenv("PREVIEW_STORE_PASSWORD")
+                keyAlias = System.getenv("PREVIEW_KEY_ALIAS")
+                keyPassword = System.getenv("PREVIEW_KEY_PASSWORD")
+            }
+        }
         create("release") {
             storeFile = file(System.getenv("KEYSTORE_PATH") ?: "${rootProject.projectDir}/release.keystore")
             storePassword = System.getenv("STORE_PASSWORD")
@@ -86,7 +101,15 @@ android {
             isDebuggable = true
             isMinifyEnabled = false
             applicationIdSuffix = ".debug"
+            manifestPlaceholders["appLabel"] = "Voltwise Debug"
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        }
+        create("preview") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".preview"
+            manifestPlaceholders["appLabel"] = "Voltwise Preview"
+            signingConfig = signingConfigs.findByName("preview") ?: signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
         }
     }
 
@@ -95,8 +118,23 @@ android {
         compose = true
     }
 
-    namespace = "app.batstats"
+    namespace = "com.akane.voltwise"
 
+    testOptions {
+        // Required by the screenshot suite: layoutlib resolves themes/layouts from compiled resources.
+        unitTests.isIncludeAndroidResources = true
+        // Compose Preview Screenshot Testing as an AGP test suite: @PreviewTest previews live in src/screenshotTest.
+        screenshotTests.create("screenshotTest") {
+            engineVersion = libs.versions.screenshot.get()
+            targetVariants.add("debug")
+            dependencies {
+                implementation(libs.androidx.ui.tooling)
+                // @Preview for the @PreviewTest functions; main has no previews.
+                implementation(libs.androidx.ui.tooling.preview)
+                implementation(libs.screenshot.validation.api)
+            }
+        }
+    }
 
     dependenciesInfo {
         includeInApk = false
@@ -104,8 +142,31 @@ android {
     }
 }
 
+// The screenshot suite renders and diffs ~200 previews in one test JVM; the default heap runs out.
+tasks.withType<Test>().configureEach {
+    if (name.endsWith("ScreenshotTestDefaultTestSuite")) maxHeapSize = "2g"
+}
+
 apkDist {
     artifactNamePrefix = "batstats"
+    // Keep distribution copies separate from AGP artifacts consumed by device tests/install tasks.
+    distDirectory.set(layout.buildDirectory.dir("outputs/distribution"))
+}
+
+androidComponents {
+    beforeVariants(selector().withBuildType("preview")) { variant ->
+        // AGP 9 defaults host tests to the instrumentation build type (debug).
+        variant.hostTests[com.android.build.api.variant.HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
+    }
+}
+
+// Screenshot suites render in the host test JVM: pin timezone/locale so formatted dates match on every machine.
+tasks.withType<Test>().configureEach {
+    if (name.contains("ScreenshotTest")) {
+        systemProperty("user.timezone", "UTC")
+        systemProperty("user.language", "en")
+        systemProperty("user.country", "US")
+    }
 }
 
 // Configure all tasks that are instances of AbstractArchiveTask
@@ -117,20 +178,11 @@ tasks.withType<AbstractArchiveTask>().configureEach {
 dependencies {
 
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.animation)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.documentfile)
     ksp(libs.androidx.room.compiler)
-    implementation(fileTree(mapOf("dir" to "libs", "include" to listOf("*.jar"))))
-    implementation(libs.kotlin.stdlib)
     implementation(libs.core.ktx)
-
-    // Android lifecycle
-    implementation(libs.lifecycle.viewmodel.ktx)
-
-    // Work Manager
-    implementation(libs.work.runtime.ktx)
 
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.kotlinx.serialization.json)
@@ -142,21 +194,17 @@ dependencies {
     implementation(libs.kmp.settings.ui.compose)
     ksp(libs.kmp.settings.ksp)
 
-    //Material dependencies
-    implementation(libs.material)
+    // Material 3 (Compose); the XML theme parent is the platform's Theme.Material, so no MDC library.
     implementation(libs.material3.android)
 
     // Compose dependencies
-    val composeBom = platform(libs.androidx.compose.bom)
+    // Settings UI otherwise upgrades Material3 alone to an alpha with an incompatible Style ABI.
+    // Its Material3 references are available in the stable BOM; enforce the same set in app/tests.
+    val composeBom = enforcedPlatform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.lifecycle.viewmodel.compose)
-    implementation(libs.navigation.compose)
-    implementation(libs.constraintlayout.compose.android)
-    implementation(libs.androidbrowserhelper)
-    implementation(libs.androidx.datastore.preferences.core)
 
     // Shizuku
     implementation(libs.api)
@@ -166,12 +214,18 @@ dependencies {
     implementation(libs.androidx.navigation3.ui)
     implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 
-    // Testing
-//    androidTestImplementation(libs.androidx.ui.test.junit4)
+    // JVM regression tests and device integration/UI checks.
+    testImplementation(libs.junit)
+    testImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
+    androidTestImplementation(libs.androidx.test.junit)
+    androidTestImplementation(libs.androidx.test.uiautomator)
+    androidTestImplementation(composeBom)
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    debugImplementation(libs.compose.ui.test.manifest)
     debugImplementation(libs.androidx.ui.tooling)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
-
-    implementation(libs.androidx.lifecycle.runtime.ktx)
 
     implementation(platform(libs.koin.bom))
     implementation(libs.koin.android)

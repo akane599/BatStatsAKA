@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ongoing notification, collapsed (DecoratedCustomViewStyle; RemoteViews-safe views only). "−612 mA · 2.4 W" with
+     the level trailing, then line 2. Collapsed custom content can be as short as 48 dp: two lines are ≈ 35 dp at
+     1.0x font and ≈ 45 dp at 1.3x; above 1.3x line 2 is hidden (NotificationFitter.rows). Set by
+     DrainNotificationManager.build. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center_vertical"
+    android:orientation="vertical">
+
+    <LinearLayout style="@style/BatStatsNotification.Row">
+
+        <TextView
+            android:id="@+id/notification_headline"
+            style="@style/BatStatsNotification.Lead" />
+
+        <TextView
+            android:id="@+id/notification_level"
+            style="@style/BatStatsNotification.Level" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/notification_summary"
+        style="@style/BatStatsNotification.Line2" />
+</LinearLayout>

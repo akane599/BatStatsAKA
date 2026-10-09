@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ongoing notification, expanded (DecoratedCustomViewStyle; RemoteViews-safe views only): state with the level
+     trailing, a 3×3 grid (Current, Power, Temp / Voltage, Screen on, Screen off / Deep sleep, Session, Time left),
+     the "Since … · updated …" footer and, only when needed, one issue line. ≈ 160–170 dp at 1.0x font and ≤ 235 dp
+     at 1.3x with the issue line, under the 252 dp minimum expanded height; above 1.3x the footer is hidden so the issue
+     line keeps its room (NotificationFitter.rows). Set by DrainNotificationManager.build. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout style="@style/BatStatsNotification.Row">
+
+        <TextView
+            android:id="@+id/notification_state"
+            style="@style/BatStatsNotification.Lead" />
+
+        <TextView
+            android:id="@+id/notification_level"
+            style="@style/BatStatsNotification.Level" />
+    </LinearLayout>
+
+    <LinearLayout
+        style="@style/BatStatsNotification.GridRow"
+        android:layout_marginTop="@dimen/notification_section_gap">
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_1_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_1_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_2_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_2_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_3_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_3_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout style="@style/BatStatsNotification.GridRow">
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_4_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_4_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_5_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_5_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_6_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_6_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout style="@style/BatStatsNotification.GridRow">
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_7_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_7_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_8_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_8_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/BatStatsNotification.Cell">
+            <TextView android:id="@+id/notification_cell_9_label" style="@style/BatStatsNotification.Label" />
+            <TextView android:id="@+id/notification_cell_9_value" style="@style/BatStatsNotification.Value" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/notification_footer"
+        style="@style/BatStatsNotification.Line2"
+        android:layout_marginTop="@dimen/notification_section_gap" />
+
+    <TextView
+        android:id="@+id/notification_issue"
+        style="@style/BatStatsNotification.Line2"
+        android:layout_marginTop="@dimen/notification_issue_gap"
+        android:visibility="gone" />
+</LinearLayout>

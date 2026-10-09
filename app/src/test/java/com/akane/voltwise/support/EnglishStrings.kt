@@ -1,0 +1,24 @@
+package com.akane.voltwise.support
+
+import com.akane.voltwise.R
+import java.io.File
+import java.util.Locale
+import javax.xml.parsers.DocumentBuilderFactory
+
+/** Exercise real English resource templates in JVM presentation tests without an Android runtime. */
+object EnglishStrings {
+    private val strings by lazy {
+        val dir = listOf(File("src/main/res/values"), File("app/src/main/res/values")).first { it.exists() }
+        val names = dir.listFiles { file -> file.name.startsWith("strings") && file.name.endsWith(".xml") }
+            .orEmpty()
+            .flatMap { file ->
+                val elements = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file).getElementsByTagName("string")
+                (0 until elements.length).map { index ->
+                    val element = elements.item(index) as org.w3c.dom.Element
+                    element.getAttribute("name") to element.textContent.replace("\\'", "'").replace("\\n", "\n")
+                }
+            }.toMap()
+        R.string::class.java.fields.mapNotNull { field -> names[field.name]?.let { field.getInt(null) to it } }.toMap()
+    }
+    fun get(id: Int, arguments: Array<out Any>): String = String.format(Locale.US, strings.getValue(id), *arguments)
+}

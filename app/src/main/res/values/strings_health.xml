@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Health screen (ui/screens/HealthScreen.kt). -->
+<resources>
+    <string name="health_unit_mah" translatable="false">mAh</string>
+    <!-- An estimate's capacity: the number, then the quieter unit -->
+    <string name="health_estimate_mah" translatable="false">%1$s mAh</string>
+    <string name="health_title">Battery health</string>
+    <string name="health_label">Health</string>
+    <!-- The health figure: the number, then a quieter percent sign, in the locale's order -->
+    <string name="health_of_design">of design capacity</string>
+    <string name="health_capacity">Capacity</string>
+    <string name="health_design">Design</string>
+    <string name="health_cycles">Cycles</string>
+    <string name="health_confidence_low">Low confidence</string>
+    <string name="health_confidence_medium">Medium confidence</string>
+    <string name="health_confidence_high">High confidence</string>
+    <string name="health_capacity_none">Not measured yet</string>
+    <string name="health_design_settings">Set in Settings</string>
+    <string name="health_design_battery">Reported by the battery</string>
+    <string name="health_design_not_set">Not set</string>
+    <string name="health_design_checking">Checking…</string>
+    <string name="health_cycles_not_reported">Not reported</string>
+    <string name="health_no_estimate">No estimate yet</string>
+    <string name="health_no_estimate_body">It appears after Voltwise records a long charge or discharge with monitoring on.</string>
+    <string name="health_needs_design">Design capacity needed</string>
+    <string name="health_needs_design_body">Enter it in mAh from your phone\'s specifications. With root, Voltwise reads it from the battery.</string>
+    <string name="health_checking_design">Checking the design capacity the battery reports…</string>
+    <string name="health_set_design">Set design capacity</string>
+    <string name="health_info_title">About battery health</string>
+    <string name="health_info_body">Voltwise estimates your battery\'s full capacity from what it records: the charge that flowed in or out during a charge or discharge, divided by how far the level moved.\n\nEvery estimate comes with a confidence. High: the level moved at least 40 percent and the charge counter reported nearly all the time. Medium: at least 20 percent. Low: at least 10 percent. Shorter sessions give no estimate.\n\nThe capacity shown combines the estimates of the newest 50 sessions and weighs confident ones more, so one odd session can\'t move it much.\n\nHealth compares that capacity with the design capacity: the one you set in Settings or, with root, the one the battery reports. A new battery can read above 100 percent. It is an estimate, not a lab test.</string>
+    <string name="health_trend_title">Capacity over time</string>
+    <string name="health_trend_series">Capacity</string>
+    <string name="health_trend_design">Design</string>
+    <string name="health_trend_empty_title">No trend yet</string>
+    <string name="health_trend_empty_body">Each long charge or discharge adds a point.</string>
+    <string name="health_trend_one_title">One estimate so far</string>
+    <string name="health_trend_one_body">The trend starts with the second.</string>
+    <string name="health_estimates_title">Latest estimates</string>
+    <string name="health_estimate_charge">Charge · %1$s%%–%2$s%%</string>
+    <string name="health_estimate_discharge">Discharge · %1$s%%–%2$s%%</string>
+    <string name="health_estimate_charge_plain">Charge</string>
+    <string name="health_estimate_discharge_plain">Discharge</string>
+    <string name="health_estimate_session">Session</string>
+    <string name="health_estimate_open">Open session</string>
+</resources>

@@ -1,0 +1,290 @@
+{
+  "_comment": "android-kit's Sidequest routing profile. setup.sh applies it as profile 'android-kit' (copied from Sidequest's 'coding' profile, then patched) and points each project's board at it. Edit here and re-run android-kit, or edit the profile in Sidequest (then the kit leaves it alone until android-kit --reset-routing). Stock category text comes from 'coding'; description_append/contract_append add to it, description/contract replace it. GPT slugs come from Model Gateway's catalog (sidequest models); while a GPT route isn't available, its ticket runs on the Claude fallback. 'from' copies a base category's text into a new id. 'enabled': false switches a category off in this profile; 'retired' ids are removed from it. Sidequest 5.5+ moves every category route on codex-gpt-6-astra to codex-gpt-6-1-sol whenever it loads, except in categories whose id contains 'frontier'. So the hard tier lives in *.frontier categories and Sidequest's own coding.hard and experiment are switched off here.",
+  "profile": {
+    "id": "android-kit",
+    "name": "Android kit",
+    "base": "coding",
+    "description": "android-kit routing. GPT via Model Gateway implements (mechanical GPT-6 Luna, default GPT-6.1 Sol, hard GPT-6 Astra in the *.frontier categories); Claude owns UI, review, escalation and research (Opus, Sonnet, Fable only after Opus stalls)."
+  },
+  "tiers": {
+    "mechanical": "GPT-6 Luna \u00b7 medium",
+    "default": "GPT-6.1 Sol \u00b7 high",
+    "hard": "GPT-6 Astra \u00b7 high (coding.hard.frontier, experiment.frontier, plan-review.frontier)",
+    "orchestrate": "Opus \u00b7 high (main session) / review",
+    "ui": "Claude only",
+    "frontier": "Fable \u00b7 xhigh, only after Opus stalls",
+    "research": "Sonnet \u00b7 medium"
+  },
+  "categories": {
+    "coding.easy": {
+      "tier": "mechanical",
+      "route": [
+        "codex-gpt-6-luna",
+        "medium"
+      ],
+      "fallback": [
+        "sonnet",
+        "medium"
+      ],
+      "description_append": "Android: never for UI (composables, theme, UI resources, screenshot references): a mechanical UI change is ui.tweak, which stays on Claude."
+    },
+    "codebase-exploration": {
+      "tier": "default",
+      "route": [
+        "codex-gpt-6-1-sol",
+        "high"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ]
+    },
+    "implementation-explanation": {
+      "tier": "mechanical",
+      "route": [
+        "codex-gpt-6-luna",
+        "medium"
+      ],
+      "fallback": [
+        "sonnet",
+        "medium"
+      ],
+      "description_append": "Use this lightweight route only for a bounded explanation of known code. Cross-module reasoning, lifecycle/concurrency analysis, or uncertain behavior belongs to codebase-exploration or spike-investigation."
+    },
+    "behavior-verification": {
+      "tier": "default",
+      "route": [
+        "codex-gpt-6-1-sol",
+        "high"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ],
+      "description_append": "Android: design or repair JVM/Robolectric regression tests, boundary cases, coroutine/lifecycle tests and interpret failures. Only running an existing exact command belongs to test-execution. Screenshot references and Compose previews belong to a Claude UI ticket."
+    },
+    "coding.normal": {
+      "tier": "default",
+      "route": [
+        "codex-gpt-6-1-sol",
+        "high"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ],
+      "description_append": "Android: logic only (data, domain, ViewModel, DI, build, navigation wiring). A feature that also changes screens is split: this ticket for the logic, an interaction-design-implementation ticket for the UI that depends on it. Where this text says coding.hard, the category here is coding.hard.frontier."
+    },
+    "debugging": {
+      "tier": "default",
+      "route": [
+        "codex-gpt-6-1-sol",
+        "high"
+      ],
+      "fallback": [
+        "opus",
+        "high"
+      ],
+      "description_append": "Android: a defect whose fix is in UI code (layout, rendering, recomposition, theming) is interaction-design-implementation."
+    },
+    "spike-investigation": {
+      "tier": "default",
+      "route": [
+        "codex-gpt-6-1-sol",
+        "high"
+      ],
+      "fallback": [
+        "opus",
+        "high"
+      ]
+    },
+    "coding.hard": {
+      "tier": "hard",
+      "enabled": false,
+      "route": [
+        "codex-gpt-6-1-sol",
+        "xhigh"
+      ],
+      "fallback": [
+        "opus",
+        "xhigh"
+      ]
+    },
+    "coding.hard.frontier": {
+      "tier": "hard",
+      "from": "coding.hard",
+      "name": "Hard coding (Astra)",
+      "route": [
+        "codex-gpt-6-astra",
+        "high"
+      ],
+      "fallback": [
+        "opus",
+        "xhigh"
+      ],
+      "description_append": "Android: this replaces coding.hard here (same rules, routed to GPT-6 Astra). Never for UI work; hard UI problems are interaction-design-implementation."
+    },
+    "experiment": {
+      "tier": "hard",
+      "enabled": false,
+      "route": [
+        "codex-gpt-6-1-sol",
+        "xhigh"
+      ],
+      "fallback": [
+        "opus",
+        "high"
+      ]
+    },
+    "experiment.frontier": {
+      "tier": "hard",
+      "from": "experiment",
+      "name": "Experiment (Astra)",
+      "route": [
+        "codex-gpt-6-astra",
+        "high"
+      ],
+      "fallback": [
+        "opus",
+        "high"
+      ],
+      "description_append": "Android: this replaces experiment here (same rules, routed to GPT-6 Astra). Visual or interaction experiments (comparing screen designs) are interaction-design-implementation."
+    },
+    "plan-review.frontier": {
+      "tier": "hard",
+      "route": [
+        "codex-gpt-6-astra",
+        "high"
+      ],
+      "fallback": [
+        "opus",
+        "high"
+      ],
+      "readonly": true,
+      "name": "Plan review",
+      "description": "Audit an implementation PLAN before any code exists: grounding in the repo, Android omissions, whether it splits into executable Sidequest tickets, contrarian risks. Filed by /plan-audit with the plan's path and .claude/kit/android-plan-checklist.md. Routed to GPT-6 Astra so a Claude-written plan gets a review from the other model family. Code and diffs are review-audit.",
+      "contract": "Read the plan and the checklist fully before judging. Verify every claim the plan makes about the repo against files and symbols, and cite them. Report in the checklist's format: findings with severity, evidence and the fix to the plan. Do not edit anything."
+    },
+    "review-audit": {
+      "tier": "orchestrate",
+      "route": [
+        "opus",
+        "high"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ],
+      "description_append": "Android: runs on Claude, so code written on a GPT route gets a review from the other model family. Plans are plan-review.frontier.",
+      "contract_append": "Android: use the checklist the ticket names (the bug checklist for code, the plan checklist for plans) and its report format. Every code finding needs file:line, a concrete failing scenario and the test that would catch it."
+    },
+    "visual-evaluation": {
+      "tier": "orchestrate",
+      "route": [
+        "opus",
+        "medium"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ],
+      "description": "Judge a rendered Android UI from screenshot-test PNGs or emulator screenshots as a first-time user would see it: confusing representations, misleading labels, weak hierarchy, contrast, touch targets, layout and flow problems. Visual judgement needs a multimodal model; the review-only deliverable keeps effort at medium. Claude-only. Source-code evidence belongs in review-audit.",
+      "contract": "Strictly read-only: read the screenshot PNGs the ticket names (or, only when the ticket says a device is available, capture with adb exec-out screencap -p). Never edit files, never fix. Deliver prioritized findings, worst first, each naming the exact element and what a user would misunderstand."
+    },
+    "escalation": {
+      "tier": "orchestrate",
+      "route": [
+        "opus",
+        "xhigh"
+      ],
+      "fallback": null,
+      "name": "Escalation (Opus)",
+      "description": "Take over a ticket that failed or stalled twice on a GPT route (coding.*, debugging, spike-investigation, experiment). Filed only by the orchestrator, linked to the failed ticket, with both attempts' evidence. Never a first route.",
+      "contract": "Read the failed attempts' evidence before anything else and do not repeat their approach. State your hypothesis and plan in a comment before the first edit. Prove the result with the ticket's verify command."
+    },
+    "interaction-design-implementation": {
+      "tier": "ui",
+      "route": [
+        "opus",
+        "high"
+      ],
+      "fallback": [
+        "sonnet",
+        "high"
+      ],
+      "description": "Build or substantially reshape Android UI where visual hierarchy, interaction design and implementation must work together: Compose screens and components, theme and design tokens, XML layouts, drawables, styles, icons, motion, and their previews and screenshot references. Claude-only: UI never routes to a GPT category, however large the change or hard the logic around it. Use ui.tweak for a mechanically obvious UI change.",
+      "contract_append": "Android: follow the compose-design skill and the theme tokens (no literal colors or dimensions). Update the affected @PreviewTest screenshots with updateDebugScreenshotTest and read at least one PNG to check the rendering. For adopted projects use the existing screenshot framework/tasks; do not invent Compose screenshot tasks or add the plugin implicitly. If no renderer/device is available, explicitly report visual validation as not run."
+    },
+    "ui.tweak": {
+      "tier": "ui",
+      "route": [
+        "sonnet",
+        "medium"
+      ],
+      "fallback": [
+        "opus",
+        "medium"
+      ],
+      "name": "UI tweak",
+      "description": "A mechanically obvious Android UI change where the pattern already exists: a padding or token swap, wiring an existing string or icon, reordering composables, refreshing screenshot references after an approved change. Claude-only. Anything that needs a visual decision is interaction-design-implementation.",
+      "contract": "Make the smallest change that follows the design tokens (no literal colors or dimensions). Update the affected @PreviewTest screenshots with updateDebugScreenshotTest and name them in the submit. For adopted projects use the existing screenshot framework/tasks; do not invent Compose screenshot tasks or add the plugin implicitly. If no renderer/device is available, explicitly report visual validation as not run."
+    },
+    "frontier": {
+      "tier": "frontier",
+      "route": [
+        "fable",
+        "xhigh"
+      ],
+      "fallback": [
+        "opus",
+        "xhigh"
+      ],
+      "name": "Frontier (Fable)",
+      "description": "Last resort: only for a ticket whose escalation (Opus) attempt also failed or stalled. Filed only by the orchestrator with the full attempt history linked. Deliberately rare.",
+      "contract": "Read every earlier attempt's evidence first; name what each got wrong before proposing anything. State the hypothesis before the first edit and prove the result with the ticket's verify command."
+    },
+    "evidence-research": {
+      "tier": "research",
+      "route": [
+        "sonnet",
+        "medium"
+      ],
+      "fallback": null
+    },
+    "source-lookup": {
+      "tier": "research",
+      "route": [
+        "sonnet",
+        "medium"
+      ],
+      "fallback": null
+    },
+    "general": {
+      "tier": "research",
+      "route": [
+        "sonnet",
+        "high"
+      ],
+      "fallback": null
+    },
+    "test-execution": {
+      "tier": "mechanical",
+      "from": "behavior-verification",
+      "name": "Run existing checks",
+      "route": [
+        "codex-gpt-6-luna",
+        "medium"
+      ],
+      "fallback": [
+        "sonnet",
+        "medium"
+      ],
+      "readonly": true,
+      "description": "Run an existing, exact verify command and report its exit code and evidence. No test design, no source/test fixes, no screenshot reference updates. Unexpected failures go to debugging or behavior-verification.",
+      "contract": "Run the named check; preserve its exit status and report the full-log path. Do not alter source, tests, versions or expected results to make it pass. Generated build/test outputs are expected."
+    }
+  },
+  "retired": [
+    "plan-review"
+  ]
+}

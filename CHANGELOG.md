@@ -1,3 +1,35 @@
+## 6.2.7-dev — UI and measurement overhaul (unreleased)
+
+### Added
+- Four-tab navigation: Now, History, Apps, Settings, replacing the previous screen layout.
+- Health card (Now) and a dedicated Health screen: full-charge capacity and a health percentage estimated from observed charge/discharge sessions.
+- A daily summary of today's charge and discharge, and today's top-draining apps, on Now.
+- Automatic per-device detection of `CURRENT_NOW` readings reported in the wrong unit or with an inverted sign, applied only once the evidence is consistent, with a dismissible, undoable notice when it changes a reading; Settings can still set the unit/sign by hand.
+- A per-app battery breakdown recorded automatically for every finished discharge session, in addition to the existing on-demand Apps tab.
+- A Quick Settings tile showing live current/power while the shade is open, and toggling monitoring.
+- An OLED (pure black) display option and opt-in dynamic (Material You) color on Android 12+.
+- Spanish and Turkish translations (machine-quality; flagged for native-speaker review).
+
+### Changed
+- Charging time-to-full now prefers Android's own estimate where the device supports it, and otherwise learns an 80→100% taper per charger instead of a flat estimate.
+- Discharge time-to-empty now uses a time-weighted average of the observed drain rate, seeded from the app's own 7-day typical rate before enough live data has accrued.
+- Sampling cadence is now fixed (2 seconds while a screen needs a live reading, 30 seconds with the screen on, 300 seconds with it off) instead of a user-adjustable interval.
+- Per-app dumps are on-demand and event-triggered only (a screen asking, or a session's start/end), cached for 60 seconds; nothing polls per-app data on a timer.
+- Reworked validated readings, observed intervals, automatic sessions, Shizuku/access recovery and Android 16 statistics parsing.
+- Reworked history migrations/import/export, diagnostics, alerts, and the monitoring notification and widgets for the new UI.
+
+### Removed
+- The Kernel/System detail tabs.
+- The in-app "Reset Android battery statistics" action.
+- The theme picker (light/dark selection) — the app is dark-only, with the new OLED toggle in its place.
+- The user-configurable sampling-interval setting.
+
+### Fixed
+- Now's Health card and the Health screen always show the same health percentage: both read one app-wide design-capacity value, checked once instead of per screen, so reopening Health no longer re-prompts for root or flashes a "Checking" state.
+- A discharge session's per-app breakdown is no longer captured from a plug/unplug that immediately reverses: the start and end dumps are debounced, so a quick plug cycle doesn't waste a privileged dump or record a misleading breakdown.
+
+Historical validation note for this 2026-09-27 checkpoint: reset-dialog/notification changes were then unverified and saved APKs predated them. This is not a statement of current validation; see the [historical validation record](docs/VALIDATION.md) and current guidance in [README](README.md).
+
 ## v6.2.6
 
 - Cleanup old data and show Shared UIDs as System

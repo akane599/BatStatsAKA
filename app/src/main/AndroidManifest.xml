@@ -3,24 +3,26 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions"/>
-    <uses-permission android:name="android.permission.BATTERY_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.DUMP" tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" tools:targetApi="33"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
-    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.VIBRATE"/>
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23"/>
+    <!-- Per-app battery use names and draws every app batterystats reports, including ones with no launcher entry. -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
 
     <application
         android:name=".battery.BatteryApp"
         android:allowBackup="true"
-        android:label="BatStats"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:label="${appLabel}"
         android:supportsRtl="true"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
-        android:theme="@style/Theme.Material3.DayNight.NoActionBar">
+        android:theme="@style/Theme.BatStats">
 
         <activity
             android:name=".battery.BatteryMainActivity"
@@ -29,12 +31,31 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+            <!-- Lets the QS tile shade reserve long-press on the tile to open this activity. -->
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE_PREFERENCES"/>
+            </intent-filter>
         </activity>
 
         <service
             android:name=".battery.service.BatteryMonitorService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started continuous battery monitoring with a persistent live notification; sampling stops when the user stops monitoring." />
+        </service>
+
+        <service
+            android:name=".battery.tile.MonitorTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_battery"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE"/>
+            </intent-filter>
+        </service>
 
         <receiver
             android:name=".battery.service.BootReceiver"
@@ -42,7 +63,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
             </intent-filter>
         </receiver>
 
@@ -63,7 +84,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_level"/>
         </receiver>
@@ -73,7 +94,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_temp"/>
         </receiver>
@@ -83,7 +104,7 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="app.batstats.battery.widget.ACTION_REFRESH"/>
+                <action android:name="com.akane.voltwise.battery.widget.ACTION_REFRESH"/>
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_battery_time"/>
         </receiver>
@@ -92,7 +113,8 @@
             android:name=".battery.drain.DrainNotificationReceiver"
             android:exported="false">
             <intent-filter>
-                <action android:name="app.batstats.battery.drain.ACTION_RESET" />
+                <action android:name="com.akane.voltwise.battery.drain.ACTION_RESET" />
+                <action android:name="com.akane.voltwise.battery.drain.ACTION_STOP" />
             </intent-filter>
         </receiver>
     </application>

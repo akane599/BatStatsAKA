@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Settings screen (ui/screens/SettingsScreen.kt). Unit templates that never change are translatable="false" (base only). -->
+<resources>
+    <!-- Value templates: %1$s is a number formatted for the locale -->
+    <string name="settings_value_ma" translatable="false">%1$s mA</string>
+    <string name="settings_value_mah" translatable="false">%1$s mAh</string>
+    <string name="settings_value_celsius" translatable="false">%1$s °C</string>
+    <string name="settings_value_fahrenheit" translatable="false">%1$s °F</string>
+    <string name="settings_unit_mah" translatable="false">mAh</string>
+
+    <!-- Page -->
+    <string name="settings_dismiss">Dismiss</string>
+    <string name="settings_save">Save</string>
+    <string name="settings_cancel">Cancel</string>
+
+    <!-- Monitoring -->
+    <string name="settings_monitoring_title">Monitoring</string>
+    <string name="settings_auto_start">Start after reboot</string>
+    <string name="settings_status_link">Status</string>
+    <string name="settings_status_link_summary">Access mode, calibration and recent issues</string>
+    <string name="settings_monitoring_info_title">About monitoring</string>
+    <string name="settings_monitoring_info_body">Start after reboot: Voltwise resumes monitoring when the phone restarts, if Android allows it. Otherwise a notification lets you start it. Shizuku may need to be restarted separately.\n\nStatus bar icon: what the monitoring notification shows in the status bar.</string>
+
+    <!-- Alerts -->
+    <string name="settings_alerts_title">Alerts</string>
+    <string name="settings_alert_low">Low battery</string>
+    <string name="settings_alert_high">Charge limit</string>
+    <string name="settings_alert_temperature">High temperature</string>
+    <string name="settings_alert_discharge">High drain</string>
+    <string name="settings_alert_full">Fully charged</string>
+    <string name="settings_alert_sound">Alert sound &amp; vibration</string>
+    <string name="settings_alert_sound_summary">In Android’s notification settings</string>
+    <!-- TalkBack for a threshold button: %1$s = alert name, %2$s = value with unit -->
+    <string name="settings_threshold_description">%1$s threshold, %2$s</string>
+    <string name="settings_threshold_low_hint">Alert when the level drops to this.</string>
+    <string name="settings_threshold_high_hint">Alert when charging reaches this level.</string>
+    <string name="settings_threshold_temperature_hint">Alert when the battery gets this warm.</string>
+    <string name="settings_threshold_discharge_hint">Alert when the drain stays above this.</string>
+    <string name="settings_alerts_info_title">About alerts</string>
+    <string name="settings_alerts_info_body">Alerts run only while monitoring is on.\n\nLow battery alerts when the level drops to your threshold. Charge limit alerts when charging reaches yours.\n\nHigh drain needs at least 3 readings above the threshold, spanning at least 1 minute. It doesn’t tell which app used the energy.\n\nThe temperature threshold is kept in °C, whichever unit you display.\n\nSound and vibration belong to Android’s settings for the alert notifications.</string>
+
+    <!-- Measurement -->
+    <string name="settings_measurement_title">Measurement</string>
+    <string name="settings_detected_unit">Detected unit</string>
+    <string name="settings_detected_sign">Detected sign</string>
+    <!-- %1$d = number of agreeing charge-counter windows (3 or more) -->
+    <plurals name="settings_evidence_windows">
+        <item quantity="one">From %1$d matching charge-counter window.</item>
+        <item quantity="other">From %1$d matching charge-counter windows.</item>
+    </plurals>
+    <string name="settings_evidence_sign_only">From positive readings while on battery (sign only).</string>
+    <string name="settings_evidence_none">Not detected yet. Needs monitoring while the phone is in use or charging.</string>
+    <string name="settings_override_note">Your unit or sign setting below overrides the detection.</string>
+    <string name="settings_reset_calibration">Reset calibration</string>
+    <!-- %1$s and %2$s = the limits, formatted for the locale -->
+    <string name="settings_design_capacity_hint">Empty for auto, or %1$s–%2$s mAh</string>
+    <string name="settings_design_capacity_error">Enter %1$s–%2$s mAh, or leave it empty.</string>
+    <string name="settings_measurement_info_title">About measurement</string>
+    <string name="settings_measurement_info_body">Android reports battery current in µA, but some phones use mA or flip the sign. Voltwise compares the readings with the charge counter and corrects them.\n\nCurrent unit and current sign override the detection; Auto uses it.\n\nReset calibration forgets the detection and starts again. Clearing all data keeps it.\n\nA settings export includes your unit and sign settings, never the detected calibration.\n\nDesign capacity is used for battery health. Leave it on Auto to use the capacity Android reports, where it does.</string>
+    <string name="settings_reset_calibration_title">Reset calibration?</string>
+    <string name="settings_reset_calibration_body">Voltwise forgets the detected unit and sign and detects them again from new readings. Your history and settings stay.</string>
+    <string name="settings_reset_calibration_confirm">Reset</string>
+    <string name="settings_calibration_reset_done">Calibration reset</string>
+
+    <!-- Appearance -->
+    <string name="settings_appearance_title">Appearance</string>
+    <string name="settings_pure_black">Pure black</string>
+    <string name="settings_pure_black_summary">For OLED screens</string>
+    <string name="settings_material_you">Material You</string>
+    <string name="settings_material_you_summary">Accent colors from your wallpaper</string>
+    <string name="settings_temperature_unit">Temperature unit</string>
+
+    <!-- Data -->
+    <string name="settings_data_title">Data</string>
+    <string name="settings_retention">Keep history</string>
+    <string name="settings_data_link">Export, import and clear</string>
+    <string name="settings_data_info_title">About data</string>
+    <string name="settings_data_info_body">History older than this is deleted, imported history included.\n\nStorage is also capped at 100,000 samples and 10,000 sessions, even with Forever.</string>
+</resources>
