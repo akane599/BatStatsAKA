@@ -2,7 +2,7 @@
 
 *Last Updated: 2026-10-09*
 
-Room database `battery.db`, **version 7**, `exportSchema = true`.
+Room database `battery.db`, **version 8**, `exportSchema = true`.
 - Definition and migrations: `app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt`
 - Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`, `data/db/InsightTables.kt`
 - DAOs: `data/db/Dao.kt`
@@ -22,7 +22,7 @@ Room database `battery.db`, **version 7**, `exportSchema = true`.
 | `snapshot_device_wakers` | `SnapshotDeviceWaker` | (`snapshotId`,`kind`,`name`), FK → `app_snapshots` ON DELETE CASCADE | v7: device-level wakeup sources per snapshot (count, total ms). |
 | `session_device_wakers` | `SessionDeviceWaker` | (`sessionId`,`kind`,`name`), FK → `charge_sessions` ON DELETE CASCADE | v7: per-session device waker deltas. |
 | `insight_findings` | `InsightFindingEntity` | `key` (stable finding key); idx `status` | v7: current/past findings: type, uid/package, severity, confidence, score, first/last seen, status, `feedbackMultiplier` (default 1.0), versioned `evidenceJson` (`battery/insights/FindingCodec.kt`). |
-| `insight_actions` | `InsightActionEntity` | `id` autoinc; idx `status` | v7: privileged-action journal (PREPARED→APPLIED/FAILED/UNKNOWN, undo): finding key, type, package/uid/user, prior and target state; reconciled at startup (`InsightActionRepository.reconcile()`). |
+| `insight_actions` | `InsightActionEntity` | `id` autoinc; idx `status` | v7: privileged-action journal (PREPARED→APPLIED/FAILED/UNKNOWN, undo): finding key, type, package/uid/user, prior and target state; v8 adds nullable `metric` (the fired finding's lead metric, frozen at apply time for Action effect); reconciled at startup (`InsightActionRepository.reconcile()`). |
 
 ## DAOs (`Dao.kt`)
 - `BatteryDao`: sample insert/lookups, chart queries (`chartSamples`, `sessionChartSamples` bucketed), `latestSamplesBetween` (newest N, returned ascending), `boundStorage`, `purge`, `clearAll`. `ExportImport.kt`'s `BatteryDao.exportSamples` uses it for an ALL export, so that export holds the newest `MAX_SAMPLES`.
@@ -44,6 +44,7 @@ as a documented fallback for the two NOT NULL enum columns.
 | 4→5 | **irreversible**: drops `alarm_rules` and `app_energy_stats`, adds the v5 session columns and creates `daily_summaries`, `app_snapshots`, `app_snapshot_uids`, `session_app_usage` (DDL copied from `5.json`). No 5→4 path. |
 | 5→6 | additive: four nullable `screen{On,Off}CoveredMs` columns on `charge_sessions` and `daily_summaries` (`MIGRATION_5_6`). |
 | 6→7 | additive, forward-only: Doze / app-capture columns on `charge_sessions` and `daily_summaries`, process-state proxy columns on `app_snapshot_uids` and `session_app_usage`, new tables `snapshot_device_wakers`, `session_device_wakers`, `insight_findings`, `insight_actions` (`MIGRATION_6_7`). Reverting the app does not downgrade `battery.db`. |
+| 7→8 | additive, forward-only: nullable `metric` TEXT on `insight_actions` (`MIGRATION_7_8`); pre-v8 rows stay null and fall back to the finding's lead evidence. `scripts/check_migrations.py` checks every 1–7→8 path. |
 
 There's no destructive fallback: every version needs an explicit `MIGRATION_a_b` registered in `get()`.
 

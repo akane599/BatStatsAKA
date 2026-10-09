@@ -25,7 +25,7 @@ against per-device baselines and can apply reversible privileged fixes ([insight
    ├─ InsightActionRepository  battery/insights/actions/           privileged apply/undo journal
    ├─ CalibrationStore, DesignCapacitySource, HistoryRetention, ExportImportManager, DiagnosticStore
    └─ SettingsRepository<AppSettings>  (kmp-settings over DataStore; settings/)
- Persistence             battery/data/db/  Room `battery.db` v7   + DataStore + SharedPreferences
+ Persistence             battery/data/db/  Room `battery.db` v8   + DataStore + SharedPreferences
  Android surfaces        service/ (FGS), drain/ (notification), widget/ (RemoteViews), tile/ (QS tile)
 ```
 
@@ -74,7 +74,7 @@ publishes `report`, which the Insights tab, Finding details, the Now card, App d
 - Insights startup work waits for `SettingsMigrator.awaitMigrated()`, runs on `Dispatchers.IO` on the shared `appScope`;
   `InsightNotifier` is a lazy Koin single (never `createdAtStart`).
 - `battery/actions/CommandPolicy.allows` is the only privileged-command allow-list (helper + actions).
-- `MIGRATION_6_7` is additive and forward-only; reverting the app leaves `battery.db` at v7.
+- `MIGRATION_6_7` and `MIGRATION_7_8` are additive and forward-only; reverting the app leaves `battery.db` at v8.
 - `MIGRATION_4_5` is irreversible: it drops `alarm_rules` and `app_energy_stats`. See [database.md](database.md).
 
 Related: [modules.md](modules.md), [entry-points.md](entry-points.md), [patterns.md](patterns.md).
