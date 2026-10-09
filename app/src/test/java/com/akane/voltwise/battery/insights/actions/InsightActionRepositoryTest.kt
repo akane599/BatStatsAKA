@@ -137,6 +137,68 @@ class InsightActionRepositoryTest {
         assertEquals(PrivilegedCommand.AddDozeWhitelist(pkg), f.commands[4])
     }
 
+    @Test fun reapplyAfterExternalDozeChangeClosesOldRowBeforeWritingAndPreventsOldUndo() = runTest {
+        val f = Fixture()
+        val system = "system,android,1000"
+        val present = "$system\nuser,$pkg,$uid"
+        f.reply(present, "Removed: $pkg", system)
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+        val old = f.row()
+
+        // Settings re-adds the app; the next apply observes that live membership.
+        f.reply(present, "Removed: $pkg", system)
+        f.intercept = {
+            if (it is PrivilegedCommand.RemoveDozeWhitelist) {
+                val closed = f.dao.rows.value.first { row -> row.id == old.id }
+                assertEquals(REVERTED, closed.status)
+                assertEquals("CHANGED_EXTERNALLY", closed.message)
+                assertNotNull(closed.revertedAt)
+                assertEquals(old.appliedAt, closed.appliedAt)
+                assertEquals(PREPARED, f.dao.rows.value.last().status)
+            }
+        }
+        assertEquals(ActionResult.Applied(2), f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+        assertEquals(APPLIED, f.dao.rows.value.last().status)
+        val commandsBeforeUndo = f.commands.size
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+        assertEquals(commandsBeforeUndo, f.commands.size)
+        assertEquals(APPLIED, f.dao.rows.value.last().status)
+
+        f.intercept = {}
+        f.reply(system, "Added: $pkg", present)
+        assertEquals(ActionResult.Reverted, f.repo.undo(2))
+        assertEquals(PrivilegedCommand.AddDozeWhitelist(pkg), f.commands[7])
+    }
+
+    @Test fun applyClosesOnlyAppliedRowsWithMatchingTypeAndPackageAndDifferentTarget() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        val stale = f.row()
+        val retained = listOf(
+            stale.copy(id = 2, packageName = "com.example.other"),
+            stale.copy(id = 3, type = ActionType.STANDBY_BUCKET_RESTRICTED.name),
+            stale.copy(id = 4, status = UNKNOWN),
+            stale.copy(id = 5, targetState = "WORKING_SET"),
+        )
+        f.dao.rows.value += retained
+        f.reply("working_set", "", "rare")
+        assertEquals(ActionResult.Applied(6), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(REVERTED, f.dao.rows.value.first().status)
+        assertEquals("CHANGED_EXTERNALLY", f.dao.rows.value.first().message)
+        assertEquals(retained, f.dao.rows.value.filter { it.id in 2L..5L })
+    }
+
+    @Test fun unknownPriorDoesNotCloseAppliedRows() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        val old = f.row()
+        f.reply("garbage")
+        assertEquals(ActionResult.Failed(FailureCode.READ_FAILED), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(old, f.row())
+    }
+
     @Test fun refusesUnrestorablePriorStatesWithoutMutationOrJournal() = runTest {
         for (mode in listOf("default", "deny", "foreground")) {
             val f = Fixture()

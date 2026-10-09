@@ -55,6 +55,12 @@ class InsightActionRepository(
         val operation = operation(rec.action) ?: return@withLock ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK)
         val prior = read(operation, app.packageName)
         if (prior !is StateRead.Known) return@withLock initialReadFailure(prior)
+        // Retire stale Undo authority before a new write can reach the old target again.
+        for (old in dao.actionsWithStatus(listOf(APPLIED))) {
+            if (old.type == rec.action.name && old.packageName == app.packageName && old.targetState != prior.value) {
+                dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+            }
+        }
         if (!operation.restorable(prior.value, inspector.sdkInt)) {
             return@withLock ActionResult.Refused(RefusalCode.UNRESTORABLE_PRIOR)
         }

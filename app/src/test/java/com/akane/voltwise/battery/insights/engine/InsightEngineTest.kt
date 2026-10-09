@@ -49,6 +49,17 @@ class InsightEngineTest {
         assertEquals(3, Recommender.recommend(candidate, input.copy(actions = listOf(action.copy(packageName = "other.app"))), sdkInt = 37).recommendations.size)
     }
 
+    @Test fun `live whitelisted drainer retains removal despite an applied journal row`() {
+        val candidate = finding(FindingType.DOZE_WHITELISTED_DRAINER, emptyList(), Subject.App(UID, APP))
+        val applied = AppliedActionInput(1, "old", ActionType.REMOVE_DOZE_WHITELIST, APP, UID, 0, ActionStatus.APPLIED)
+        val input = inputs(emptyList(), emptyList()).copy(actions = listOf(applied))
+
+        assertEquals(
+            listOf(ActionType.REMOVE_DOZE_WHITELIST, ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS),
+            Recommender.recommend(candidate, input, sdkInt = 37).recommendations.map { it.action },
+        )
+    }
+
     @Test fun `standby recommendations require API 28 and preserve fallback and other actions`() {
         val input = inputs(emptyList(), emptyList())
         for (sdk in listOf(26, 27, 28, 29, 30, 37)) {
