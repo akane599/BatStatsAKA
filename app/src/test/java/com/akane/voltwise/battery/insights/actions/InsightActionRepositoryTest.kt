@@ -257,6 +257,60 @@ class InsightActionRepositoryTest {
         }
     }
 
+    @Test fun reapplyAfterReinstallSettlesStaleUnknownRowAsChangedExternally() = runTest {
+        for (appliedAt in listOf(null, 90L)) {
+            val f = Fixture()
+            f.replies.addAll(listOf(ok("active"), denied()))
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+            assertEquals(UNKNOWN, f.row().status)
+            assertEquals("ACTIVE", f.row().priorState)
+            f.dao.updateAction(f.row().copy(appliedAt = appliedAt))
+            val old = f.row()
+            f.inspector.installed = uid + 1
+            f.reply("active", "", "restricted")
+            f.intercept = {
+                if (it is PrivilegedCommand.SetStandbyBucket) {
+                    val settled = f.dao.rows.value.first()
+                    assertEquals("CHANGED_EXTERNALLY", settled.message)
+                    assertEquals(REVERTED, settled.status)
+                    assertNotNull(settled.revertedAt)
+                    assertEquals(old.uid, settled.uid)
+                    assertEquals(appliedAt, settled.appliedAt)
+                }
+            }
+
+            assertEquals(ActionResult.Applied(2), f.repo.apply(
+                finding(Subject.App(uid + 1, pkg)), rec(ActionType.STANDBY_BUCKET_RESTRICTED),
+            ))
+            assertEquals(APPLIED, f.dao.rows.value.last().status)
+            assertEquals(uid + 1, f.dao.rows.value.last().uid)
+            val commandsBeforeUndo = f.commands.size
+            assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+            assertEquals(commandsBeforeUndo, f.commands.size)
+        }
+    }
+
+    @Test fun reapplyAfterReinstallSettlesStaleAppliedRowEvenWhenTargetMatchesRead() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "restricted")
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        val old = f.row()
+        f.inspector.installed = uid + 1
+        f.reply("restricted")
+
+        assertEquals(ActionResult.Refused(RefusalCode.ALREADY_AT_TARGET), f.repo.apply(
+            finding(Subject.App(uid + 1, pkg)), rec(ActionType.STANDBY_BUCKET_RESTRICTED),
+        ))
+        assertEquals("CHANGED_EXTERNALLY", f.row().message)
+        assertEquals(REVERTED, f.row().status)
+        assertNotNull(f.row().revertedAt)
+        assertEquals(old.uid, f.row().uid)
+        assertEquals(old.appliedAt, f.row().appliedAt)
+        assertEquals(4, f.commands.size)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+        assertEquals(4, f.commands.size)
+    }
+
     @Test fun applyLeavesUnknownRowsWithDifferentPriorTypeOrPackageUntouched() = runTest {
         val f = Fixture()
         f.replies.addAll(listOf(ok("active"), denied()))

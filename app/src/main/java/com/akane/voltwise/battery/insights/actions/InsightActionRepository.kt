@@ -59,6 +59,10 @@ class InsightActionRepository(
             // Retire stale Undo authority before a new write can reach the old target again.
             for (old in dao.actionsWithStatus(listOf(APPLIED, UNKNOWN))) {
                 if (old.type != rec.action.name || old.packageName != app.packageName) continue
+                if (old.uid != app.uid) {
+                    dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+                    continue
+                }
                 if (old.status == APPLIED && old.targetState != prior.value) {
                     dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
                 } else if (old.status == UNKNOWN && old.priorState == prior.value) {
