@@ -1,5 +1,7 @@
 package com.akane.voltwise.battery.insights.engine
 
+import com.akane.voltwise.battery.insights.engine.detectors.app.WakeupStorm
+import com.akane.voltwise.battery.insights.engine.stats.RobustBaseline
 import com.akane.voltwise.battery.insights.model.Confidence
 import com.akane.voltwise.battery.insights.model.Finding
 import com.akane.voltwise.battery.insights.model.FindingType
@@ -43,6 +45,62 @@ class AppDetectorTest(private val type: FindingType) {
         assertEquals(34.0, finding.score, 1e-9)
         assertTrue(finding.score <= flat.score)
         assertEquals(35.0, finding.evidence.single().observed, 0.0)
+    }
+
+    @Test fun flatWakeupUsualRangeUsesDetectionFloor() {
+        org.junit.Assume.assumeTrue(type == FindingType.WAKEUP_STORM)
+        val alarms = listOf(1L, 1L, 1L, 2L, 1L, 1L, 40L)
+        val sessions = alarms.indices.map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(wakeupAlarms = alarms[index])
+        }
+        val input = inputs(sessions, rows)
+        for (multiplier in listOf(1.0, 1.2)) {
+            val finding = detected(input.copy(feedback = mapOf("${type.name}:$APP" to multiplier))).single()
+            val median = finding.evidence.single().baseline!!
+            assertEquals(1.0, median, 0.0)
+            assertEquals(alarms.size, finding.series.size)
+            finding.series.forEach { point ->
+                assertTrue("Every high edge must include the detection floor", point.baselineHigh!! >= median + WakeupStorm.ALARMS_FLOOR_PER_H)
+                assertEquals(median + WakeupStorm.ALARMS_FLOOR_PER_H, point.baselineHigh!!, 0.0)
+                assertEquals((median - WakeupStorm.ALARMS_FLOOR_PER_H).coerceAtLeast(0.0), point.baselineLow!!, 0.0)
+            }
+        }
+    }
+
+    @Test fun nearFlatWakeupUsualRangeUsesDetectionFloor() {
+        org.junit.Assume.assumeTrue(type == FindingType.WAKEUP_STORM)
+        val alarms = listOf(0L, 0L, 1L, 1L, 2L, 35L)
+        val sessions = alarms.indices.map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(wakeupAlarms = alarms[index])
+        }
+        val finding = detected(inputs(sessions, rows)).single()
+        assertEquals(1.0, finding.evidence.single().baseline!!, 0.0)
+        assertEquals(alarms.size, finding.series.size)
+        finding.series.forEach { point ->
+            assertEquals(31.0, point.baselineHigh!!, 0.0)
+            assertEquals(0.0, point.baselineLow!!, 0.0)
+        }
+    }
+
+    @Test fun wideWakeupUsualRangeKeepsMadBand() {
+        org.junit.Assume.assumeTrue(type == FindingType.WAKEUP_STORM)
+        val alarms = listOf(140L, 160L, 180L, 200L, 220L, 240L, 400L)
+        val sessions = alarms.indices.map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(wakeupAlarms = alarms[index])
+        }
+        val finding = detected(inputs(sessions, rows)).single()
+        val median = finding.evidence.single().baseline!!
+        val band = RobustBaseline.Z_THRESHOLD * RobustBaseline.MAD_SCALE * 20.0
+        assertEquals(200.0, median, 0.0)
+        assertTrue(band > WakeupStorm.ALARMS_FLOOR_PER_H)
+        assertEquals(alarms.size, finding.series.size)
+        finding.series.forEach { point ->
+            assertEquals(median + band, point.baselineHigh!!, 1e-9)
+            assertEquals(median - band, point.baselineLow!!, 1e-9)
+        }
     }
 
     @Test fun normalUsageDoesNotTrigger() {
