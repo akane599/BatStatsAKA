@@ -3,10 +3,11 @@ package com.akane.voltwise.battery.apps
 import androidx.room.withTransaction
 import com.akane.voltwise.battery.data.db.AppSnapshot
 import com.akane.voltwise.battery.data.db.AppSnapshotKind
+import com.akane.voltwise.battery.data.db.AppUsageDao
 import com.akane.voltwise.battery.data.db.BatteryDatabase
-import com.akane.voltwise.battery.data.db.SessionType
+import com.akane.voltwise.battery.data.db.SessionDao
 import com.akane.voltwise.battery.data.db.SessionDeviceWaker
-import com.akane.voltwise.battery.data.db.SnapshotDeviceWaker
+import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.db.toRow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -45,9 +46,12 @@ interface SessionSnapshotStore {
     suspend fun pendingClosedDischarges(): List<String>
 }
 
-class RoomSessionSnapshotStore(private val db: BatteryDatabase) : SessionSnapshotStore {
-    private val sessions = db.sessionDao()
-    private val usage = db.appUsageDao()
+class RoomSessionSnapshotStore internal constructor(
+    private val sessions: SessionDao,
+    private val usage: AppUsageDao,
+    private val transaction: suspend (suspend () -> Boolean) -> Boolean,
+) : SessionSnapshotStore {
+    constructor(db: BatteryDatabase) : this(db.sessionDao(), db.appUsageDao(), { block -> db.withTransaction { block() } })
 
     override fun openSession(): Flow<OpenSession?> = sessions.activeFlow()
         .map { active -> active?.let { OpenSession(it.sessionId, it.type) } }
@@ -64,17 +68,17 @@ class RoomSessionSnapshotStore(private val db: BatteryDatabase) : SessionSnapsho
             usage.snapshotWakers(header.id).map { DeviceWaker(it.kind, it.name, it.count, it.totalMs) }, header.wakersComplete)
     }
 
-    override suspend fun saveBaseline(sessionId: String, snapshot: AppUsageSnapshot): Boolean = db.withTransaction {
+    override suspend fun saveBaseline(sessionId: String, snapshot: AppUsageSnapshot): Boolean = transaction {
         if (sessions.byId(sessionId) == null || usage.latestSnapshot(sessionId, AppSnapshotKind.BASELINE) != null) {
-            return@withTransaction false
+            return@transaction false
         }
         insert(sessionId, AppSnapshotKind.BASELINE, snapshot)
         true
     }
 
     override suspend fun saveEnd(sessionId: String, end: AppUsageSnapshot, result: AppUsageDeltaResult): Boolean =
-        db.withTransaction {
-            val session = sessions.byId(sessionId) ?: return@withTransaction false
+        transaction {
+            val session = sessions.byId(sessionId) ?: return@transaction false
             insert(sessionId, AppSnapshotKind.END, end)
             sessions.update(session.copy(appCaptureStartMs = result.captureStartMs, appCaptureEndMs = end.capturedAt))
             usage.replaceSessionUsage(sessionId, result.basis, result.rows)
@@ -92,13 +96,10 @@ class RoomSessionSnapshotStore(private val db: BatteryDatabase) : SessionSnapsho
             .filter { it.endTime != null && it.activeKey == null && it.appUsageStatus == AppUsageStatus.PENDING }
             .map { it.sessionId }
 
-    /** insertSnapshot prunes to the open session's baseline + the newest [AppUsageDao.SNAPSHOTS_KEPT]. */
+    /** insertSnapshot retains the open baseline + the last [AppUsageDao.SNAPSHOTS_KEPT] inserted snapshots. */
     private suspend fun insert(sessionId: String, kind: AppSnapshotKind, snapshot: AppUsageSnapshot) {
         val wakers = snapshot.deviceWakers.selectSnapshotWakers()
-        val id = usage.insertSnapshot(snapshot.header(sessionId, kind, wakers), snapshot.rows.collapseByUid())
-        usage.insertSnapshotWakers(wakers.entries.map { waker ->
-            SnapshotDeviceWaker(id, waker.kind, waker.name, waker.count, waker.totalMs)
-        })
+        usage.insertSnapshot(snapshot.header(sessionId, kind, wakers), snapshot.rows.collapseByUid(), wakers.entries)
         usage.pruneOrphanSnapshots()
     }
 
