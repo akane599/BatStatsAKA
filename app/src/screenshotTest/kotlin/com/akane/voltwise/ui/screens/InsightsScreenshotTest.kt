@@ -244,6 +244,36 @@ fun InsightsErrorPreview() {
     }
 }
 
+/** Applied fixes after two undos: one found the setting already changed outside Voltwise, one really undone. */
+@PreviewTest
+@PhonePreview
+@Composable
+fun InsightsUndoHistoryPreview() {
+    ScreenshotTheme {
+        InsightsPreviewContent(
+            InsightsUiState(
+                loaded = true,
+                appliedActions = listOf(
+                    AppliedInsightAction(
+                        7, "BACKGROUND_RUNAWAY:com.spotify.music", ActionType.RESTRICT_BACKGROUND, spotify.packageName,
+                        InsightActionStatus.REVERTED, FIXED_TIME_MS - 2 * DAY - 3 * HOUR, undoable = false, effect = null,
+                        changedExternally = true,
+                    ),
+                    AppliedInsightAction(
+                        3, "BACKGROUND_RUNAWAY:com.google.android.youtube", ActionType.STANDBY_BUCKET_RARE, youtube.packageName,
+                        InsightActionStatus.REVERTED, FIXED_TIME_MS - 5 * DAY, undoable = false, effect = null,
+                    ),
+                ),
+                lastAnalyzedAt = FIXED_TIME_MS - 25 * MINUTE,
+                privileged = true,
+                empty = false,
+                eligibleSessionCount = 9,
+                lowData = false,
+            ),
+        )
+    }
+}
+
 @PreviewTest
 @PhonePreview
 @Composable

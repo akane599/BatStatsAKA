@@ -168,6 +168,7 @@
     <string name="insights_status_failed">No se aplicó</string>
     <string name="insights_status_unknown">Resultado desconocido</string>
     <string name="insights_status_reverted">Deshecha</string>
+    <string name="insights_status_changed_externally">Cambiada fuera de Voltwise</string>
     <string name="insights_status_one_shot">Hecho</string>
 
     <!-- InsightMessageCode -->
