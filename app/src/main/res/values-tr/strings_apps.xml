@@ -75,6 +75,7 @@
     <string name="apps_details_share">Tüm uygulamalardaki payı</string>
     <string name="apps_details_not_counted">Android, istatistikleri baştan başladığından beri bu uygulamanın kullanımını saymadı.</string>
 
+    <string name="apps_details_findings_title">Bulgular</string>
     <string name="apps_details_time_title">Duruma göre süre</string>
     <string name="apps_details_time_foreground">Ön plan</string>
     <string name="apps_details_time_fgs">Ön plan hizmeti</string>

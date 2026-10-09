@@ -75,6 +75,7 @@
     <string name="apps_details_share">Parte del total de apps</string>
     <string name="apps_details_not_counted">Android no ha contado uso de esta app desde que sus estadísticas volvieron a empezar.</string>
 
+    <string name="apps_details_findings_title">Hallazgos</string>
     <string name="apps_details_time_title">Tiempo por estado</string>
     <string name="apps_details_time_foreground">Primer plano</string>
     <string name="apps_details_time_fgs">Servicio en primer plano</string>

@@ -98,6 +98,19 @@ class AppDetailsViewModelTest {
         }
     }
 
+    @Test fun findingsCarryTheirLeadEvidenceOrNullWithoutAny() = runTest {
+        val lead = Evidence(Metric.POWER_MAH_PER_H, 12.4, 3.1, MetricUnit.MAH_PER_H, 6)
+        val second = Evidence(Metric.WAKEUP_ALARMS_PER_H, 40.0, 8.0, MetricUnit.COUNT_PER_H, 6)
+        val withEvidence = finding("chrome", Subject.App(CHROME_UID, CHROME), Direction.UP).copy(evidence = listOf(lead, second))
+        val without = finding("bare", Subject.App(CHROME_UID, CHROME), null)
+        val repository = object : AppDetailsRepository by source {
+            override fun findingsFor(packageName: String) = MutableStateFlow(listOf(withEvidence, without))
+        }
+        val (_, state) = start(repository = repository)
+        assertEquals("the row shows the first evidence only", lead, state().findings[0].evidence)
+        assertNull("a finding without evidence maps to no line, not a crash", state().findings[1].evidence)
+    }
+
     private fun finding(key: String, subject: Subject, direction: Direction?) = Finding(
         key, FindingType.APP_DRAIN_ANOMALY, Severity.HIGH, Confidence.HIGH, 1.0, subject, direction,
         emptyList(), emptyList(), emptyList(),

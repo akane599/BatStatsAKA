@@ -110,12 +110,14 @@ fun NavGraph(
             )
         }
 
+        // AppDetails -> FindingDetails (pushed, from its Findings); its access notice -> Settings › Status
         entry<Routes.AppDetails> { args ->
             AppDetailsScreen(
                 uid = args.uid,
                 packageName = args.packageName,
                 onBack = { popBack(args) },
                 onOpenAccessSetup = { topLevelBackStack.navigate(Routes.SettingsStatus) },
+                onOpenFinding = { key -> topLevelBackStack.navigate(Routes.FindingDetails(key)) },
             )
         }
 

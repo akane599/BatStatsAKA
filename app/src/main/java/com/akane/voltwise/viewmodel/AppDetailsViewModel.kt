@@ -13,6 +13,7 @@ import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.data.db.SessionAppUsage
 import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.insights.model.Direction
+import com.akane.voltwise.battery.insights.model.Evidence
 import com.akane.voltwise.battery.insights.model.Finding
 import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.InsightReport
@@ -91,8 +92,15 @@ class DefaultAppDetailsRepository(
 internal fun InsightReport?.appFindings(packageName: String): List<Finding> =
     this?.findings?.filter { (it.subject as? Subject.App)?.packageName == packageName }.orEmpty()
 
+/** One active finding about this app; [evidence] is the finding's lead evidence (its row's one line), when it has any. */
 @Immutable
-data class AppFinding(val key: String, val type: FindingType, val severity: Severity, val direction: Direction?)
+data class AppFinding(
+    val key: String,
+    val type: FindingType,
+    val severity: Severity,
+    val direction: Direction?,
+    val evidence: Evidence? = null,
+)
 
 /** A wakelock's effect: [CPU] keeps the processor awake (partial); [SCREEN] keeps the display on. */
 enum class WakelockKind { CPU, SCREEN }
@@ -195,6 +203,8 @@ sealed interface AppDetailsEvent {
     data object AllowShizuku : AppDetailsEvent
     /** Reads the history again after [AppHistoryState.Failed]. */
     data object RetryHistory : AppDetailsEvent
+    /** Opens the details of the finding with [key]. */
+    data class OpenFinding(val key: String) : AppDetailsEvent
 }
 
 /**
@@ -242,7 +252,7 @@ class AppDetailsViewModel(
             startedAtMs = snapshot?.startedAt,
             usage = snapshot?.let { details(it, uid, packageName) },
             history = history,
-            findings = Collections.unmodifiableList(findings.map { AppFinding(it.key, it.type, it.severity, it.direction) }),
+            findings = Collections.unmodifiableList(findings.map { AppFinding(it.key, it.type, it.severity, it.direction, it.evidence.firstOrNull()) }),
         )
     }.flowOn(computeDispatcher).stateIn(
         viewModelScope,
@@ -262,7 +272,8 @@ class AppDetailsViewModel(
             }
             AppDetailsEvent.RetryHistory -> loadHistory()
             // Navigation, the App info intent and Shizuku's permission prompt are the screen wrapper's.
-            AppDetailsEvent.Back, AppDetailsEvent.OpenAppInfo, AppDetailsEvent.OpenAccessSetup, AppDetailsEvent.AllowShizuku -> Unit
+            AppDetailsEvent.Back, AppDetailsEvent.OpenAppInfo, AppDetailsEvent.OpenAccessSetup, AppDetailsEvent.AllowShizuku,
+            is AppDetailsEvent.OpenFinding -> Unit
         }
     }
 
