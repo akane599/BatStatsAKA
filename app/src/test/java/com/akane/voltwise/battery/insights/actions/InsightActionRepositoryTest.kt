@@ -220,14 +220,22 @@ class InsightActionRepositoryTest {
         assertEquals(ActionResult.Failed(FailureCode.READ_FAILED), failed.apply()); assertTrue(failed.dao.rows.value.isEmpty())
     }
 
-    @Test fun externalChangeAndUninstallPreventUndoCommand() = runTest {
-        val f = Fixture(); f.reply("active", "", "rare")
-        f.apply(ActionType.STANDBY_BUCKET_RARE)
-        f.reply("frequent")
-        assertEquals(ActionResult.ChangedExternally("FREQUENT"), f.repo.undo(1))
-        assertEquals(APPLIED, f.row().status); assertEquals(4, f.commands.size)
-        f.inspector.installed = null
-        assertEquals(ActionResult.Reverted, f.repo.undo(1)); assertEquals(4, f.commands.size)
+    @Test fun externalChangeSettlesRevertedWithoutMutation() = runTest {
+        for (current in listOf(StandbyBucket.ACTIVE, StandbyBucket.FREQUENT)) {
+            val f = Fixture(); f.reply("active", "", "rare")
+            assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
+            val appliedAt = f.row().appliedAt
+            f.reply(current.token)
+            assertEquals(ActionResult.ChangedExternally(current.name), f.repo.undo(1))
+            assertEquals(REVERTED, f.row().status)
+            assertEquals("CHANGED_EXTERNALLY", f.row().message)
+            assertEquals(appliedAt, f.row().appliedAt)
+            assertNotNull(f.row().revertedAt)
+            assertEquals(4, f.commands.size)
+            assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+            assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+            assertEquals(4, f.commands.size)
+        }
     }
 
     @Test fun undoRevalidatesIdentityAndRejectsInvalidJournal() = runTest {
@@ -266,6 +274,74 @@ class InsightActionRepositoryTest {
             assertEquals(ActionResult.Unknown, f.repo.undo(1))
             assertEquals(UNKNOWN, f.row().status)
         }
+    }
+
+    private suspend fun Fixture.interruptUndoAfterRestore(crash: Boolean) {
+        reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), apply(ActionType.STANDBY_BUCKET_RARE))
+        reply("rare", "")
+        if (crash) {
+            intercept = {
+                if (it is PrivilegedCommand.GetStandbyBucket && commands.count { command -> command is PrivilegedCommand.GetStandbyBucket } == 4) {
+                    throw IllegalStateException("simulated crash after restore")
+                }
+            }
+            try { repo.undo(1); fail("crash required") } catch (_: IllegalStateException) { }
+            intercept = {}
+        } else {
+            replies += denied()
+            assertEquals(ActionResult.Unknown, repo.undo(1))
+        }
+        assertEquals(UNKNOWN, row().status)
+        assertNotNull(row().appliedAt)
+        assertNull(row().revertedAt)
+        assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.ACTIVE), commands[4])
+    }
+
+    @Test fun interruptedUndoAtPriorSettlesRevertedOnRetryWithoutMutation() = runTest {
+        for (crash in listOf(false, true)) {
+            val f = Fixture(); f.interruptUndoAfterRestore(crash)
+            val appliedAt = f.row().appliedAt
+            f.reply("active")
+            assertEquals(ActionResult.Reverted, f.repo.undo(1))
+            assertEquals(REVERTED, f.row().status)
+            assertEquals(appliedAt, f.row().appliedAt)
+            assertNotNull(f.row().revertedAt)
+            assertNull(f.row().message)
+            assertEquals(7, f.commands.size)
+            assertEquals(2, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+        }
+    }
+
+    @Test fun interruptedUndoAtPriorReconcilesRevertedWithoutMutation() = runTest {
+        for (crash in listOf(false, true)) {
+            val f = Fixture(); f.interruptUndoAfterRestore(crash)
+            val appliedAt = f.row().appliedAt
+            f.reply("active")
+            f.repo.reconcile()
+            assertEquals(REVERTED, f.row().status)
+            assertEquals(appliedAt, f.row().appliedAt)
+            assertNotNull(f.row().revertedAt)
+            assertNull(f.row().message)
+            assertEquals(7, f.commands.size)
+            assertEquals(2, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+            f.repo.reconcile()
+            assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+            assertEquals(7, f.commands.size)
+        }
+    }
+
+    @Test fun applyPhaseUnknownAtPriorReconcilesFailedWithoutMutation() = runTest {
+        val f = Fixture(); f.reply("active", "", "garbage")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertNull(f.row().appliedAt)
+        f.reply("active")
+        f.repo.reconcile()
+        assertEquals(FAILED, f.row().status)
+        assertNull(f.row().appliedAt)
+        assertNull(f.row().revertedAt)
+        assertEquals(4, f.commands.size)
+        assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
     }
 
     @Test fun undoReadbackMustProveRestoration() = runTest {
