@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Explicit user actions only. The mutex covers validation, durable preparation and confirmation. */
+/** Explicit user actions only. The mutex covers journaled actions from validation through confirmation. */
 class InsightActionRepository(
     private val dao: InsightDao,
     private val executor: ActionExecutor,
@@ -22,66 +22,68 @@ class InsightActionRepository(
     private val mutex = Mutex()
     val actions: Flow<List<InsightActionEntity>> = dao.actions()
 
-    suspend fun apply(finding: Finding, rec: Recommendation): ActionResult = mutex.withLock {
+    suspend fun apply(finding: Finding, rec: Recommendation): ActionResult {
         val app = finding.subject as? Subject.App
         when (rec.action) {
             ActionType.OPEN_APP_SETTINGS -> {
-                if (app == null) return@withLock ActionResult.Refused(RefusalCode.INVALID_SUBJECT)
-                if (!CommandPolicy.isPackageName(app.packageName)) return@withLock ActionResult.Refused(RefusalCode.INVALID_PACKAGE)
-                return@withLock ActionResult.OpenSettings(IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", app.packageName))
+                if (app == null) return ActionResult.Refused(RefusalCode.INVALID_SUBJECT)
+                if (!CommandPolicy.isPackageName(app.packageName)) return ActionResult.Refused(RefusalCode.INVALID_PACKAGE)
+                return ActionResult.OpenSettings(IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", app.packageName))
             }
-            ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS -> return@withLock ActionResult.OpenSettings(
+            ActionType.OPEN_BATTERY_OPTIMIZATION_SETTINGS -> return ActionResult.OpenSettings(
                 IntentSpec("android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS"),
             )
-            ActionType.ENABLE_HIGH_BATTERY_ALERT -> {
+            else -> Unit
+        }
+        return mutex.withLock {
+            if (rec.action == ActionType.ENABLE_HIGH_BATTERY_ALERT) {
                 alertEnabler()
                 val id = dao.insertAction(row(finding, rec.action, ONE_SHOT).copy(appliedAt = clock()))
                 return@withLock ActionResult.OneShot(id)
             }
-            else -> Unit
-        }
-        if (app == null) return@withLock ActionResult.Refused(RefusalCode.INVALID_SUBJECT)
-        validate(app.packageName, app.uid)?.let { return@withLock ActionResult.Refused(it) }
-        if (rec.action == ActionType.FORCE_STOP) {
-            val outcome = executor.run(PrivilegedCommand.ForceStop(app.packageName))
-            if (outcome is Outcome.NoAccess) return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
-            val success = outcome is Outcome.Success
-            val id = dao.insertAction(row(finding, rec.action, if (success) ONE_SHOT else FAILED).copy(
-                appliedAt = if (success) clock() else null,
-                message = if (success) null else FailureCode.EXECUTION_FAILED.name,
-            ))
-            return@withLock if (success) ActionResult.OneShot(id) else ActionResult.Failed(FailureCode.EXECUTION_FAILED)
-        }
-        val operation = operation(rec.action) ?: return@withLock ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK)
-        val prior = read(operation, app.packageName)
-        if (prior !is StateRead.Known) return@withLock initialReadFailure(prior)
-        // Retire stale Undo authority before a new write can reach the old target again.
-        for (old in dao.actionsWithStatus(listOf(APPLIED))) {
-            if (old.type == rec.action.name && old.packageName == app.packageName && old.targetState != prior.value) {
-                dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+            if (app == null) return@withLock ActionResult.Refused(RefusalCode.INVALID_SUBJECT)
+            validate(app.packageName, app.uid)?.let { return@withLock ActionResult.Refused(it) }
+            if (rec.action == ActionType.FORCE_STOP) {
+                val outcome = executor.run(PrivilegedCommand.ForceStop(app.packageName))
+                if (outcome is Outcome.NoAccess) return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
+                val success = outcome is Outcome.Success
+                val id = dao.insertAction(row(finding, rec.action, if (success) ONE_SHOT else FAILED).copy(
+                    appliedAt = if (success) clock() else null,
+                    message = if (success) null else FailureCode.EXECUTION_FAILED.name,
+                ))
+                return@withLock if (success) ActionResult.OneShot(id) else ActionResult.Failed(FailureCode.EXECUTION_FAILED)
             }
+            val operation = operation(rec.action) ?: return@withLock ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK)
+            val prior = read(operation, app.packageName)
+            if (prior !is StateRead.Known) return@withLock initialReadFailure(prior)
+            // Retire stale Undo authority before a new write can reach the old target again.
+            for (old in dao.actionsWithStatus(listOf(APPLIED))) {
+                if (old.type == rec.action.name && old.packageName == app.packageName && old.targetState != prior.value) {
+                    dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+                }
+            }
+            if (!operation.restorable(prior.value, inspector.sdkInt)) {
+                return@withLock ActionResult.Refused(RefusalCode.UNRESTORABLE_PRIOR)
+            }
+            if (operation.atOrBeyondTarget(prior.value)) {
+                return@withLock ActionResult.Refused(RefusalCode.ALREADY_AT_TARGET)
+            }
+            val prepared = row(finding, rec.action, PREPARED).copy(priorState = prior.value, targetState = operation.target)
+            val saved = prepared.copy(id = dao.insertAction(prepared))
+            val outcome = executor.run(operation.write(app.packageName, operation.target))
+            if (outcome is Outcome.NoAccess) return@withLock unknown(saved)
+            val confirmed = read(operation, app.packageName)
+            if (confirmed !is StateRead.Known) return@withLock unknown(saved)
+            if (confirmed.value != operation.target) {
+                if (confirmed.value != prior.value) return@withLock unknown(saved)
+                dao.updateAction(saved.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
+                return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
+            }
+            dao.updateAction(saved.copy(status = APPLIED, appliedAt = clock()))
+            if (rec.action == ActionType.STANDBY_BUCKET_RESTRICTED && inspector.sdkInt < 30) {
+                ActionResult.AppliedWithFallback(saved.id, FallbackCode.RESTRICTED_TO_RARE)
+            } else ActionResult.Applied(saved.id)
         }
-        if (!operation.restorable(prior.value, inspector.sdkInt)) {
-            return@withLock ActionResult.Refused(RefusalCode.UNRESTORABLE_PRIOR)
-        }
-        if (operation.atOrBeyondTarget(prior.value)) {
-            return@withLock ActionResult.Refused(RefusalCode.ALREADY_AT_TARGET)
-        }
-        val prepared = row(finding, rec.action, PREPARED).copy(priorState = prior.value, targetState = operation.target)
-        val saved = prepared.copy(id = dao.insertAction(prepared))
-        val outcome = executor.run(operation.write(app.packageName, operation.target))
-        if (outcome is Outcome.NoAccess) return@withLock unknown(saved)
-        val confirmed = read(operation, app.packageName)
-        if (confirmed !is StateRead.Known) return@withLock unknown(saved)
-        if (confirmed.value != operation.target) {
-            if (confirmed.value != prior.value) return@withLock unknown(saved)
-            dao.updateAction(saved.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
-            return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
-        }
-        dao.updateAction(saved.copy(status = APPLIED, appliedAt = clock()))
-        if (rec.action == ActionType.STANDBY_BUCKET_RESTRICTED && inspector.sdkInt < 30) {
-            ActionResult.AppliedWithFallback(saved.id, FallbackCode.RESTRICTED_TO_RARE)
-        } else ActionResult.Applied(saved.id)
     }
 
     /** Shell-restored buckets are user-forced by Android until the app is next used. */
