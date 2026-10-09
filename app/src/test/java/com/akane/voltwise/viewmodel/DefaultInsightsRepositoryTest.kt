@@ -73,13 +73,17 @@ class DefaultInsightsRepositoryTest {
             createdAt = 11,
             appliedAt = 9,
         )
-        val recommendation = finding.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
-        assertFalse("old alert row must not block a newer report", recommendation.alreadyApplied)
-        assertTrue("new report may offer enabling the alert again", recommendation.available)
+        val hotCharging = finding.copy(key = "hot-charging", type = FindingType.HOT_CHARGING)
+        for (deviceFinding in listOf(finding, hotCharging)) {
+            val recommendation = deviceFinding.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
+            assertFalse("old alert row must not block ${deviceFinding.type}", recommendation.alreadyApplied)
+            assertTrue("new report may offer enabling the alert again for ${deviceFinding.type}", recommendation.available)
+        }
     }
 
     @Test fun oneShotHighBatteryAlertUsesCreatedAtWhenAppliedAtIsMissing() {
         val finding = insightFinding().copy(
+            key = "hot-charging",
             type = FindingType.HOT_CHARGING,
             subject = Subject.Device,
             recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
@@ -98,21 +102,41 @@ class DefaultInsightsRepositoryTest {
         }
     }
 
-    @Test fun oneShotHighBatteryAlertOnlyAppliesToMatchingDeviceFinding() {
-        val finding = insightFinding().copy(
+    @Test fun oneShotHighBatteryAlertAppliesToEveryDeviceFindingInReport() {
+        val chargingAtFull = insightFinding().copy(
             type = FindingType.CHARGING_AT_FULL,
             subject = Subject.Device,
+            recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
+        )
+        val hotCharging = chargingAtFull.copy(key = "hot-charging", type = FindingType.HOT_CHARGING)
+        val report = InsightReport(10, listOf(chargingAtFull, hotCharging), chargingAtFull)
+        for (appliedAt in listOf(10L, 11L)) {
+            val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
+                findingKey = chargingAtFull.key,
+                type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
+                packageName = null,
+                uid = null,
+                appliedAt = appliedAt,
+            )
+            for (finding in report.findings) {
+                val recommendation = finding.toInsightState(false, listOf(row), report.generatedAtMs).recommendations.single()
+                assertTrue("alert enabled at $appliedAt must count as applied on ${finding.type}", recommendation.alreadyApplied)
+                assertFalse("enabled alert must not be offered again on ${finding.type}", recommendation.available)
+            }
+        }
+    }
+
+    @Test fun oneShotHighBatteryAlertDoesNotApplyToAppFinding() {
+        val finding = insightFinding().copy(
             recommendations = listOf(Recommendation(ActionType.ENABLE_HIGH_BATTERY_ALERT, false, false)),
         )
         val row = insightAction(status = InsightActionStatus.ONE_SHOT).copy(
             type = ActionType.ENABLE_HIGH_BATTERY_ALERT.name,
             appliedAt = 11,
         )
-        for (unmatched in listOf(finding.copy(key = "other"), finding.copy(subject = insightFinding().subject))) {
-            val recommendation = unmatched.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
-            assertFalse("one-shot alert must belong to this Device finding", recommendation.alreadyApplied)
-            assertTrue("unmatched one-shot alert must not block the recommendation", recommendation.available)
-        }
+        val recommendation = finding.toInsightState(false, listOf(row), generatedAtMs = 10).recommendations.single()
+        assertFalse("one-shot alert must not count as applied on an App finding", recommendation.alreadyApplied)
+        assertTrue("one-shot alert must not block an App recommendation", recommendation.available)
     }
 
     @Test fun oneShotForceStopRemainsRepeatableAndUnavailableForUndo() {
