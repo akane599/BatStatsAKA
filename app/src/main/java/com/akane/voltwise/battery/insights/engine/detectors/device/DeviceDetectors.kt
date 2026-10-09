@@ -1,6 +1,7 @@
 package com.akane.voltwise.battery.insights.engine.detectors.device
 
 import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
+import com.akane.voltwise.battery.insights.engine.MAX_CURRENT_WINDOW_AGE_MS
 import com.akane.voltwise.battery.insights.engine.finding
 import com.akane.voltwise.battery.insights.engine.stats.RobustBaseline
 import com.akane.voltwise.battery.insights.engine.stats.TimedValue
@@ -62,6 +63,7 @@ object DeviceDetectors {
     private fun whitelisted(inputs: InsightInputs): List<Finding> {
         val whitelist = inputs.dozeUserWhitelist ?: return emptyList()
         val window = AppWindows.select(inputs).lastOrNull() ?: return emptyList()
+        if (window.atMs < inputs.nowMs - MAX_CURRENT_WINDOW_AGE_MS) return emptyList()
         // Only measured background work is eligible; foreground-only power is not background drain.
         val rows = window.rows.filterNot { it.isOthers }.filter {
             (it.bgMs?.let { bg -> bg > 0 } == true || it.partialWakelockBgMs?.let { bg -> bg > 0 } == true) &&

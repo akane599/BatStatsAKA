@@ -1,5 +1,7 @@
 package com.akane.voltwise.battery.actions
 
+import com.akane.voltwise.battery.util.ExecutionPolicy
+
 enum class StandbyBucket(val token: String, val code: Int) {
     EXEMPTED("exempted", 5),
     ACTIVE("active", 10),
@@ -37,6 +39,11 @@ enum class AppOpMode(val token: String) {
 /** No caller-supplied command text crosses the action boundary. */
 sealed interface PrivilegedCommand {
     val argv: List<String>
+    val executionPolicy: ExecutionPolicy get() = when (this) {
+        is GetStandbyBucket, is GetBackgroundOp, ListDozeWhitelist, DumpDeviceIdle -> ExecutionPolicy.READ_ONLY
+        is SetStandbyBucket, is SetBackgroundOp, is RemoveDozeWhitelist, is AddDozeWhitelist,
+        is ForceStop -> ExecutionPolicy.MUTATION
+    }
 
     data class GetStandbyBucket(val pkg: String) : PrivilegedCommand {
         init { requirePackage(pkg) }

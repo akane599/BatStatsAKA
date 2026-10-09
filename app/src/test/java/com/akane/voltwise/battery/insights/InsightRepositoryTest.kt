@@ -6,6 +6,7 @@ import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
 import com.akane.voltwise.battery.data.sampling.KeyValueStore
 import com.akane.voltwise.battery.insights.model.*
+import com.akane.voltwise.battery.insights.engine.InsightEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -77,6 +78,8 @@ class InsightRepositoryTest {
         var dayWindow: Pair<Long, Long>? = null
         var dump: suspend () -> Unit = {}
         var duringAnalysis: () -> Unit = {}
+        var analyze: ((InsightInputs) -> InsightReport)? = null
+        var appRows: List<SessionAppUsage>? = null
         val maintenance = HistoryMaintenance()
         var whitelist = setOf("old.whitelist")
         var highBatteryAlertEnabled = false
@@ -104,7 +107,7 @@ class InsightRepositoryTest {
         val apps = object : UnusedAppUsageDao() {
             override suspend fun usageRowsForSessions(sessionIds: List<String>): List<SessionAppUsage> {
                 rowChunks += sessionIds
-                return sessionIds.map { testAppRow(it) }
+                return appRows?.filter { it.sessionId in sessionIds } ?: sessionIds.map { testAppRow(it) }
             }
             override suspend fun sessionWakers(sessionIds: List<String>): List<SessionDeviceWaker> {
                 wakerChunks += sessionIds
@@ -122,7 +125,7 @@ class InsightRepositoryTest {
                 seen += it
                 events += "analyze"
                 duringAnalysis()
-                InsightReport(it.nowMs, output, output.firstOrNull())
+                analyze?.invoke(it) ?: InsightReport(it.nowMs, output, output.firstOrNull())
             })
     }
 
@@ -138,6 +141,28 @@ class InsightRepositoryTest {
         repo.refresh()
         assertEquals(2, fixture.seen.size)
         assertFalse("Disabling the alert must reach the next analysis", fixture.seen.last().highBatteryAlertEnabled)
+    }
+
+    @Test fun refreshResolvesExpiredWhitelistFindingAndRemovesItsOffer() = runTest {
+        val fixture = Fixture()
+        fixture.whitelist = setOf("example.app0")
+        fixture.appRows = listOf(testAppRow().copy(backgroundTimeMs = 60_000))
+        fixture.analyze = { InsightEngine.analyze(it, 28) }
+        val repo = fixture.repository(this)
+        repo.refresh()
+        val finding = repo.report.value!!.findings.single()
+        assertEquals(FindingType.DOZE_WHITELISTED_DRAINER, finding.type)
+        assertTrue(finding.recommendations.any { it.action == ActionType.REMOVE_DOZE_WHITELIST })
+        assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row(finding.key).status)
+
+        fixture.now = fixture.sessions.single().appCaptureEndMs!! + 7 * 24 * HOUR
+        repo.refresh()
+        assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row(finding.key).status)
+        fixture.now++
+        repo.refresh()
+        assertEquals(InsightFindingStatus.RESOLVED, fixture.insights.row(finding.key).status)
+        assertTrue("Expired findings and their action offers leave the published report", repo.report.value!!.findings.isEmpty())
+        assertEquals("History remains available to the analyzer", 1, fixture.seen.last().sessions.size)
     }
 
     @Test fun constructorDefersPreferenceReadUntilIoInitialization() = runTest {

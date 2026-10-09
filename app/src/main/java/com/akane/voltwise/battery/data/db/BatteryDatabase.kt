@@ -189,7 +189,7 @@ class EnumConverters {
     }
 
     @TypeConverter fun fromInsightActionStatus(t: InsightActionStatus?): String? = t?.name
-    /** Unknown journal text must never claim success or authorize Undo; reconcile as UNKNOWN. */
+    /** Unknown journal text maps to UNKNOWN without claiming success; recovery requires a valid journal and live-state validation. */
     @TypeConverter fun toInsightActionStatus(s: String?): InsightActionStatus? = s?.let { name ->
         InsightActionStatus.entries.firstOrNull { it.name == name } ?: InsightActionStatus.UNKNOWN
     }

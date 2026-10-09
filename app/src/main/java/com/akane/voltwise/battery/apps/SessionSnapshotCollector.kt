@@ -93,6 +93,10 @@ class SessionSnapshotCollector(
         delay(BASELINE_DEBOUNCE_MS)
         when (val result = stats.snapshot(force = true)) {
             is AppStatsResult.Ready -> {
+                if (!result.snapshot.appMeasurementsComplete || result.snapshot.rejectedAppPowerRecords > 0) {
+                    log("baseline skipped: incomplete app measurements")
+                    return
+                }
                 val saved = writes.withLock { store.saveBaseline(sessionId, result.snapshot.toAppUsageSnapshot()) }
                 if (saved) log("baseline stored session=$sessionId apps=${result.snapshot.apps.size}")
             }
@@ -137,7 +141,11 @@ class SessionSnapshotCollector(
             when (result) {
                 is AppStatsResult.Ready -> {
                     val end = result.snapshot.toAppUsageSnapshot()
-                    val delta = AppUsageDelta.compute(store.baseline(sessionId), end)
+                    val computed = AppUsageDelta.compute(store.baseline(sessionId), end)
+                    // Incomplete app evidence may include UIDs absent from the baseline, so matching UIDs is insufficient.
+                    val delta = if (!result.snapshot.appMeasurementsComplete || result.snapshot.rejectedAppPowerRecords > 0) {
+                        computed.copy(captureStartMs = null)
+                    } else computed
                     if (store.saveEnd(sessionId, end, delta)) {
                         emitFinalized(sessionId)
                         log("end stored session=$sessionId basis=${delta.basis} rows=${delta.rows.size}")

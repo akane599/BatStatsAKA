@@ -114,6 +114,46 @@ class DeviceDetectorsTest {
         assertTrue(DeviceDetectors.detect(input.copy(appSessions = rows.map { it.copy(isOthers = true) })).isEmpty())
     }
 
+    @Test fun `whitelist measurement expires immediately after seven days`() {
+        val session = session(0)
+        val input = inputs(listOf(session), listOf(row(session.id))).copy(dozeUserWhitelist = setOf(APP))
+        val atBoundary = input.copy(nowMs = session.endMs + 7 * 24 * HOUR)
+        assertEquals(FindingType.DOZE_WHITELISTED_DRAINER, DeviceDetectors.detect(atBoundary).single().type)
+        assertTrue("A current whitelist cannot make an expired measurement current",
+            DeviceDetectors.detect(atBoundary.copy(nowMs = atBoundary.nowMs + 1)).isEmpty())
+    }
+
+    @Test fun `seeded stationary whitelist activity expires without suppressing current positive controls`() {
+        val trials = 500
+        for ((mode, seed) in listOf("flat" to 511, "noisy" to 512, "AR1" to 513)) {
+            val random = Random(seed)
+            var staleFindings = 0
+            var currentFindings = 0
+            repeat(trials) {
+                var noise = 0.0
+                val sessions = (0..7).map { session(it) }
+                val rows = sessions.map { s ->
+                    noise = when (mode) {
+                        "flat" -> 0.0
+                        "noisy" -> random.nextDouble(-0.2, 0.2)
+                        else -> 0.5 * noise + random.nextDouble(-0.2, 0.2)
+                    }
+                    row(s.id).copy(bgMs = (60_000 * (1 + noise)).toLong(), powerMah = 5 * (1 + noise))
+                }
+                val input = inputs(sessions, rows).copy(dozeUserWhitelist = setOf(APP))
+                // Whitelist activity intentionally needs one measured window, rather than a baseline anomaly.
+                val age = random.nextLong(8 * 24 * HOUR, 90 * 24 * HOUR + 1)
+                staleFindings += DeviceDetectors.detect(input.copy(nowMs = sessions.last().endMs + age))
+                    .count { it.type == FindingType.DOZE_WHITELISTED_DRAINER }
+                currentFindings += DeviceDetectors.detect(input.copy(nowMs = sessions.last().endMs + 7 * 24 * HOUR))
+                    .count { it.type == FindingType.DOZE_WHITELISTED_DRAINER }
+            }
+            println("Whitelist $mode: $staleFindings/$trials stale findings (bound 0), $currentFindings/$trials current controls (seed $seed)")
+            assertEquals("$mode expired activity must never fire", 0, staleFindings)
+            assertEquals("$mode current measured whitelist activity remains eligible", trials, currentFindings)
+        }
+    }
+
     @Test fun `attributions match evaluated session omit unsupported sources cap and break ties by name`() {
         val base = dozeInput()
         val id = base.sessions.last().id

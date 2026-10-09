@@ -7,7 +7,7 @@
     <string name="finding_evidence">Datos</string>
     <string name="finding_over_time">Con el tiempo</string>
     <string name="finding_causes">Posibles causas</string>
-    <string name="finding_causes_hint">Pistas desde la última carga, no pruebas. Los wakelocks y motivos de activación con nombre indican dónde mirar.</string>
+    <string name="finding_causes_hint">Pistas de esta sesión, no pruebas. Los wakelocks y motivos de activación con nombre indican dónde mirar.</string>
     <string name="finding_what_you_can_do">Qué puedes hacer</string>
 
     <string name="finding_usually">Normalmente %1$s</string>
@@ -60,7 +60,7 @@
     <string name="finding_seen_background_runaway">Esta app pasó mucho más tiempo en segundo plano de lo habitual.</string>
     <string name="finding_seen_stuck_wakelock">Esta app mantuvo el teléfono despierto con wakelocks mucho más tiempo de lo habitual en segundo plano.</string>
     <string name="finding_seen_wakeup_storm">Esta app disparó muchas más alarmas de activación por hora de lo habitual.</string>
-    <string name="finding_seen_job_storm">Esta app ejecutó muchas más tareas en segundo plano por hora de lo habitual.</string>
+    <string name="finding_seen_job_storm">Esta app ejecutó muchas más tareas o sincronizaciones por hora de lo habitual.</string>
     <string name="finding_seen_doze_blocked">Con la pantalla apagada, el teléfono pasó mucho menos tiempo en Doze profundo de lo habitual.</string>
     <string name="finding_seen_doze_whitelisted_drainer">Esta app está exenta de la optimización de batería y tuvo actividad en segundo plano en la última sesión.</string>
     <string name="finding_seen_screen_off_drain_high">La batería se gastó más rápido de lo habitual con la pantalla apagada.</string>
@@ -68,9 +68,9 @@
     <string name="finding_seen_charging_at_full">El teléfono estuvo enchufado al 100 por ciento durante horas varias veces en las últimas dos semanas.</string>
     <string name="finding_seen_hot_charging">La batería se calentó mientras cargaba varias veces últimamente.</string>
     <string name="finding_seen_health_decline">La capacidad estimada de la batería lleva semanas bajando de forma constante.</string>
-    <string name="finding_seen_background_location">Esta app usó la ubicación en segundo plano más de lo habitual.</string>
+    <string name="finding_seen_background_location">Esta app usó la ubicación o los sensores en segundo plano más de lo habitual.</string>
     <string name="finding_seen_background_radio">Esta app mantuvo activa la radio móvil o transfirió datos en segundo plano más de lo habitual.</string>
-    <string name="finding_seen_lingering_foreground_service">Esta app mantuvo un servicio en primer plano mucho después de que dejaras de usarla.</string>
+    <string name="finding_seen_lingering_foreground_service">Esta app tuvo mucha actividad de servicios en primer plano en comparación con su uso en primer plano.</string>
     <string name="finding_seen_action_effect">Compara la app antes y después de una solución que aplicaste en Voltwise.</string>
 
     <string name="finding_matters_app_drain_anomaly">Un aumento repentino suele indicar algo atascado, como un bucle de sincronización o una actualización con errores, más que tu forma de usarla.</string>
@@ -78,7 +78,7 @@
     <string name="finding_matters_background_runaway">El trabajo en segundo plano mantiene ocupados el procesador y las radios, y gasta batería sin que lo veas.</string>
     <string name="finding_matters_stuck_wakelock">Mientras hay un wakelock el teléfono no puede dormir, así que la batería se gasta incluso con la pantalla apagada.</string>
     <string name="finding_matters_wakeup_storm">Cada activación saca al teléfono del reposo. Muchas juntas suman e impiden que entre en Doze.</string>
-    <string name="finding_matters_job_storm">Cada tarea despierta el teléfono y a menudo usa la red. Demasiadas seguidas no lo dejan descansar.</string>
+    <string name="finding_matters_job_storm">Las tareas y sincronizaciones pueden despertar el teléfono y usar la red. La actividad frecuente puede impedir que descanse.</string>
     <string name="finding_matters_doze_blocked">El Doze profundo es como Android ahorra batería por la noche. Sin él, el consumo en reposo es mayor.</string>
     <string name="finding_matters_doze_whitelisted_drainer">Las apps exentas siguen funcionando cuando Android las pausaría, así que su trabajo en segundo plano cuesta más.</string>
     <string name="finding_matters_screen_off_drain_high">El consumo con pantalla apagada es batería que pierdes sin usar el teléfono. Si es mayor de lo habitual, algo lo mantiene despierto.</string>
@@ -86,14 +86,14 @@
     <string name="finding_matters_charging_at_full">Estar al 100 por ciento durante mucho tiempo envejece la batería más rápido, sobre todo si está caliente.</string>
     <string name="finding_matters_hot_charging">El calor es lo que más desgasta una batería. Cargar en caliente lo acelera.</string>
     <string name="finding_matters_health_decline">Menos capacidad significa menos autonomía por carga. Toda batería se desgasta con el tiempo, pero los hábitos de carga pueden frenarlo.</string>
-    <string name="finding_matters_background_location">La ubicación en segundo plano mantiene encendidos el GPS y las radios, de lo más costoso que puede hacer una app.</string>
+    <string name="finding_matters_background_location">La actividad de ubicación y sensores puede consumir batería en segundo plano. El contador medido indica qué actividad se observó.</string>
     <string name="finding_matters_background_radio">La radio móvil activa consume mucho y sigue encendida un rato después de cada transferencia.</string>
     <string name="finding_matters_lingering_foreground_service">Un servicio en primer plano mantiene la app viva y con permiso para trabajar, aunque creas que está cerrada.</string>
     <string name="finding_matters_action_effect">Indica si la solución parece ayudar, para que la mantengas o la deshagas.</string>
 
     <string name="finding_not_app_usage">No prueba que la app falle. Android informa del tiempo y la actividad por app, no de la energía exacta, y también cuenta el uso intenso que elegiste.</string>
     <string name="finding_not_proxy">No mide energía. El tiempo en segundo plano, las activaciones y las tareas son señales de actividad, y la app puede necesitar algunas para mensajes, música o navegación.</string>
-    <string name="finding_not_device">No apunta a una sola app. Los wakelocks y motivos de activación con nombre son pistas desde la última carga, no pruebas de la causa.</string>
+    <string name="finding_not_device">No apunta a una sola app. Los wakelocks y motivos de activación con nombre son pistas de la sesión, no pruebas de la causa.</string>
     <string name="finding_not_trend">No es una causa. Un cambio en cómo usas el teléfono también aparece aquí.</string>
     <string name="finding_not_charging">No es un daño ya hecho. El calor y las horas al 100 por ciento desgastan durante meses; una sesión importa poco.</string>
     <string name="finding_not_health">No es una capacidad exacta. Las estimaciones varían de una carga a otra; importa la tendencia de semanas más que un valor.</string>

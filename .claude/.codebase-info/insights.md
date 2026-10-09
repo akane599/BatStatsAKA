@@ -70,8 +70,7 @@ Strings: `res/values*/strings_insights.xml`, `strings_finding.xml`, `strings_ins
   then a catch-up `refresh()` when the awaited last analysis is missing, older than 6 h or in the future (a failure is
   recorded as `APP_SCOPE_FAILED` and collection still starts), then `startInsightNotifications` collects
   `InsightRepository.report`.
-- `battery/service/BatteryMonitorService.kt` refreshes insights when sessions finalise
-  (`refreshOnFinalizedSessions`, conflated; failures recorded as a fixed diagnostic code).
+- `battery/BatteryApp.kt` owns session refresh in application scope: `startInsightSessionRefresh` subscribes to finalized discharge snapshots and closed non-discharge sessions (`refreshOnFinalizedSessions` in `battery/service/`, coalesced; failures recorded as a fixed diagnostic code). Monitoring awaits subscription readiness before starting producers; service shutdown leaves refresh collection active.
 - Privileged actions need Shizuku or root (`ShellRunner.detectMode()`); without them recommendations show
   "needs Shizuku or root" and OPEN_* settings intents still work.
 

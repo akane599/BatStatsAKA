@@ -55,7 +55,7 @@ BASELINE dump when a discharge session opens and an END dump at plug-in, then st
 `session_app_usage`. See [privileged-shell.md](privileged-shell.md).
 
 **Insights.** Once the settings migration has finished (`SettingsMigrator.awaitMigrated`), `BatteryApp` reconciles (off the main thread) the action journal and runs a catch-up
-refresh; `BatteryMonitorService` refreshes when sessions finalise. `InsightRepository.refresh()` builds
+refresh; its application scope refreshes on finalized discharge snapshots and closed non-discharge sessions, and monitoring awaits those subscriptions before starting producers. `InsightRepository.refresh()` builds
 inputs from Room (`InsightInputsBuilder`), runs the pure `InsightEngine` (detectors → rank → top 12) and
 publishes `report`, which the Insights tab, Finding details, the Now card, App details and
 `InsightNotifier` consume. Applying a fix goes `InsightActionRepository` → `CommandPolicy`-checked

@@ -91,7 +91,7 @@ class InsightsViewModelTest {
         }, { now }, {})
         var mode = ShellRunner.Mode.SHIZUKU
         var probes = 0
-        val shell = ShellRunner({ probes++; mode }, { _, _ -> error("unexpected shell call") }, { false }, { 0L })
+        val shell = ShellRunner({ probes++; mode }, { _, _, _ -> error("unexpected shell call") }, { false }, { 0L })
         val adapter = DefaultInsightsRepository(insights, journal, shell, sessionDao, { now })
         assertSame(insights.report, adapter.report)
         assertEquals(1, adapter.eligibleSessionCount.first())

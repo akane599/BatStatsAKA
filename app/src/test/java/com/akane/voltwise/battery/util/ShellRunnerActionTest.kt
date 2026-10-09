@@ -17,7 +17,7 @@ class ShellRunnerActionTest {
         for (mode in listOf(Mode.ADB, Mode.NONE)) {
             val runner = ShellRunner(
                 probeMode = { mode },
-                runShizuku = { _, _ -> error("Shizuku must not execute") },
+                runShizuku = { _, _, _ -> error("Shizuku must not execute") },
                 runRoot = { _, _ -> error("Root must not execute") },
                 shizukuRunning = { error("No fallback probe") },
                 elapsedMs = { 0L },
@@ -31,7 +31,7 @@ class ShellRunnerActionTest {
         val calls = mutableListOf<Pair<String, Long>>()
         val runner = ShellRunner(
             probeMode = { Mode.ROOT },
-            runShizuku = { _, _ -> error("No fallback") },
+            runShizuku = { _, _, _ -> error("No fallback") },
             runRoot = { text, timeout -> calls += text to timeout; CommandOutput.Result("") },
             shizukuRunning = { false },
             elapsedMs = { 0L },
@@ -48,13 +48,51 @@ class ShellRunnerActionTest {
         val calls = mutableListOf<Pair<String, Long>>()
         val runner = ShellRunner(
             probeMode = { Mode.SHIZUKU },
-            runShizuku = { text, timeout -> calls += text to timeout; ShizukuBridge.RunResult.Success("") },
+            runShizuku = { text, timeout, _ -> calls += text to timeout; ShizukuBridge.RunResult.Success("") },
             runRoot = { _, _ -> error("No fallback") },
             shizukuRunning = { true },
             elapsedMs = { 0L },
         )
         assertEquals(Outcome.Success("", Mode.SHIZUKU), runner.execAction(command))
         assertEquals(listOf(command.argv.joinToString(" ") to 25_000L), calls)
+    }
+
+    @Test fun typedMutationPolicyAndUncertaintyCrossTheProductionShellBoundary() = runTest {
+        val policies = mutableListOf<ExecutionPolicy>()
+        val runner = ShellRunner(probeMode = { Mode.SHIZUKU },
+            runShizuku = { _, _, policy ->
+                policies += policy
+                ShizukuBridge.RunResult.Error("response lost", ShizukuBridge.Failure.TRANSPORT, ExecutionCertainty.UNKNOWN)
+            }, shizukuRunning = { true }, elapsedMs = { 0L })
+        val result = runner.execAction(command) as Outcome.Failure
+        assertEquals(ExecutionCertainty.UNKNOWN, result.certainty)
+        assertEquals(listOf(ExecutionPolicy.MUTATION), policies)
+        runner.execAction(PrivilegedCommand.GetStandbyBucket("com.example"))
+        runner.exec("dumpsys battery")
+        assertEquals(listOf(ExecutionPolicy.MUTATION, ExecutionPolicy.READ_ONLY, ExecutionPolicy.READ_ONLY), policies)
+    }
+
+    @Test fun postDispatchAccessLossRemainsUncertainWhilePreflightDenialRemainsRefusal() = runTest {
+        for (certainty in ExecutionCertainty.entries) {
+            val runner = ShellRunner(probeMode = { Mode.SHIZUKU },
+                runShizuku = { _, _, _ -> ShizukuBridge.RunResult.Error("access lost",
+                    ShizukuBridge.Failure.NO_PERMISSION, certainty) },
+                shizukuRunning = { true }, elapsedMs = { 0L })
+            val result = runner.execAction(command)
+            if (certainty == ExecutionCertainty.UNKNOWN) {
+                assertTrue(result is Outcome.Failure)
+                assertEquals(ExecutionCertainty.UNKNOWN, (result as Outcome.Failure).certainty)
+            } else assertTrue(result is Outcome.NoAccess)
+            assertEquals(Mode.NONE, runner.access.value)
+        }
+    }
+
+    @Test fun rootLostResponseRetainsItsUncertainty() = runTest {
+        val runner = ShellRunner(probeMode = { Mode.ROOT },
+            runShizuku = { _, _, _ -> error("No fallback") },
+            runRoot = { _, _ -> CommandOutput.Result(error = "output lost", certainty = ExecutionCertainty.UNKNOWN) },
+            shizukuRunning = { false }, elapsedMs = { 0L })
+        assertEquals(ExecutionCertainty.UNKNOWN, (runner.execAction(command) as Outcome.Failure).certainty)
     }
 
     @Test fun actionsAndDiagnosticsShareOneLockInBothDirections() = runTest {
@@ -65,7 +103,7 @@ class ShellRunnerActionTest {
             val calls = mutableListOf<String>()
             val runner = ShellRunner(
                 probeMode = { Mode.ROOT },
-                runShizuku = { _, _ -> error("No fallback") },
+                runShizuku = { _, _, _ -> error("No fallback") },
                 runRoot = { text, _ ->
                     calls += text
                     if (calls.size == 1) { entered.complete(Unit); release.await() }
@@ -95,7 +133,7 @@ class ShellRunnerActionTest {
             var result = CommandOutput.Result(error = "Diagnostic failed")
             val runner = ShellRunner(
                 probeMode = { mode },
-                runShizuku = { _, _ ->
+                runShizuku = { _, _, _ ->
                     if (result.error == null) ShizukuBridge.RunResult.Success(result.output)
                     else ShizukuBridge.RunResult.Error(
                         result.error.orEmpty(),
@@ -123,7 +161,7 @@ class ShellRunnerActionTest {
     @Test fun actionFailureDoesNotFallBackOrTurnEmptyErrorIntoSuccess() = runTest {
         val runner = ShellRunner(
             probeMode = { Mode.SHIZUKU },
-            runShizuku = { _, _ -> ShizukuBridge.RunResult.Error("Helper timeout", ShizukuBridge.Failure.COMMAND) },
+            runShizuku = { _, _, _ -> ShizukuBridge.RunResult.Error("Helper timeout", ShizukuBridge.Failure.COMMAND) },
             runRoot = { _, _ -> error("No fallback") },
             shizukuRunning = { true },
             elapsedMs = { 0L },

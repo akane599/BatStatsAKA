@@ -80,7 +80,7 @@
     <string name="insights_type_background_runaway">Muy activa en segundo plano</string>
     <string name="insights_type_stuck_wakelock">Mantiene el teléfono despierto</string>
     <string name="insights_type_wakeup_storm">Despierta el teléfono a menudo</string>
-    <string name="insights_type_job_storm">Ejecuta muchas tareas en segundo plano</string>
+    <string name="insights_type_job_storm">Ejecuta muchas tareas o sincronizaciones</string>
     <string name="insights_type_doze_blocked">Doze no se activa</string>
     <string name="insights_type_doze_whitelisted_drainer">Exenta de Doze y gastando</string>
     <string name="insights_type_screen_off_drain_high">Mucho gasto con la pantalla apagada</string>
@@ -88,7 +88,7 @@
     <string name="insights_type_charging_at_full">Sigue enchufado con la carga completa</string>
     <string name="insights_type_hot_charging">Se calienta al cargar</string>
     <string name="insights_type_health_decline">La capacidad está bajando</string>
-    <string name="insights_type_background_location">Usa la ubicación en segundo plano</string>
+    <string name="insights_type_background_location">Usa ubicación o sensores en segundo plano</string>
     <string name="insights_type_background_radio">Usa la red en segundo plano</string>
     <string name="insights_type_lingering_foreground_service">Un servicio en primer plano sigue activo</string>
     <string name="insights_type_action_effect">Efecto de una corrección</string>
@@ -132,7 +132,7 @@
     <string name="insights_action_remove_doze_whitelist">Quitar exención de Doze</string>
     <string name="insights_action_open_app_settings">Abrir ajustes de la app</string>
     <string name="insights_action_open_battery_optimization">Abrir optimización de batería</string>
-    <string name="insights_action_enable_high_battery_alert">Activar aviso de carga completa</string>
+    <string name="insights_action_enable_high_battery_alert">Activar aviso de batería alta</string>
 
     <!-- ActionType: exact effect -->
     <string name="insights_effect_restrict_background">Quita el permiso de esta app para ejecutarse en segundo plano. Solo se ejecuta mientras la usas.</string>

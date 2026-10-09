@@ -161,7 +161,7 @@ class AppStatsRepositoryTest {
                         adbAvailable = { probes += "adb"; false },
                     )
                 },
-                runShizuku = { command, _ ->
+                runShizuku = { command, _, _ ->
                     commands += command
                     ShizukuBridge.RunResult.Error(message, reason)
                 },
@@ -200,7 +200,7 @@ class AppStatsRepositoryTest {
                     adbAvailable = { error("A cached command failure must not probe ADB") },
                 )
             },
-            runShizuku = { _, _ ->
+            runShizuku = { _, _, _ ->
                 commands++
                 ShizukuBridge.RunResult.Error("command permission denied", ShizukuBridge.Failure.COMMAND)
             },

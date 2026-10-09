@@ -11,7 +11,7 @@ class ShellRunnerActionExecutorTest {
     @Test fun delegatesToActionBoundaryNotDiagnosticAccess() = runTest {
         val runner = ShellRunner(
             probeMode = { ShellRunner.Mode.ADB },
-            runShizuku = { _, _ -> error("must not execute") },
+            runShizuku = { _, _, _ -> error("must not execute") },
             runRoot = { _, _ -> error("must not execute") },
             shizukuRunning = { false }, elapsedMs = { 0L },
         )
@@ -22,7 +22,7 @@ class ShellRunnerActionExecutorTest {
         val calls = mutableListOf<String>()
         val runner = ShellRunner(
             probeMode = { ShellRunner.Mode.ROOT },
-            runShizuku = { _, _ -> error("must not execute") },
+            runShizuku = { _, _, _ -> error("must not execute") },
             runRoot = { command, _ -> calls += command; CommandOutput.Result("") },
             shizukuRunning = { false }, elapsedMs = { 0L },
         )

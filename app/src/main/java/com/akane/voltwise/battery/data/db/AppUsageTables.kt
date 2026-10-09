@@ -61,7 +61,7 @@ data class AppSnapshotUid(
 
 /**
  * A discharge session's per-app breakdown: ranked rows (0 = largest), the top 30 apps plus up to 10 waker candidates and at most one
- * `isOthers` row. Deleted with its session (FK cascade). Exported and imported with the sessions.
+ * `isOthers` row. Deleted with its session (FK cascade). Local evidence excluded from history export/import.
  */
 @Serializable
 @Entity(

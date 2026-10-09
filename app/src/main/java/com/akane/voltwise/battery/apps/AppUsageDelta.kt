@@ -14,18 +14,23 @@ object AppUsageDelta {
     private const val POWER_EPSILON = 1e-6
 
     fun compute(baseline: AppUsageSnapshot?, end: AppUsageSnapshot, topN: Int = 30): AppUsageDeltaResult {
-        val (basis, rawRows) = when {
-            baseline == null -> AppUsageBasis.ABSOLUTE to end.rows
+        val (basis, selected) = when {
+            baseline == null -> AppUsageBasis.ABSOLUTE to TopApps.selectSessionRows(end.rows, topN)
             !sameWindow(baseline, end) || totalDecreased(baseline.rows, end.rows) ->
-                AppUsageBasis.WINDOW_RESET to end.rows
-            else -> AppUsageBasis.DELTA to clampedDelta(baseline.rows, end.rows)
+                AppUsageBasis.WINDOW_RESET to TopApps.selectSessionRows(end.rows, topN)
+            else -> AppUsageBasis.DELTA to clampedDelta(baseline.rows, end.rows, topN)
         }
-        val selected = TopApps.selectSessionRows(rawRows, topN)
         val rows = selected.map { row ->
             val hints = end.tagHints[row.uid]?.takeUnless { row.isOthers }
             row.copy(topWakelockTag = hints?.wakelock, topAlarmTag = hints?.alarm, topJobName = hints?.job)
         }
-        return AppUsageDeltaResult(basis, rows, wakerDelta(baseline, end, basis), baseline?.capturedAt, end.capturedAt)
+        // A baseline UID can disappear because its end power record was rejected. Keep the
+        // accepted deltas for browsing, but do not certify complete capture coverage for Insights.
+        val captureStartMs = baseline?.let { start ->
+            val endUids = end.rows.map { it.uid }.toSet()
+            start.capturedAt.takeIf { basis != AppUsageBasis.DELTA || start.rows.all { it.uid in endUids } }
+        }
+        return AppUsageDeltaResult(basis, rows, wakerDelta(baseline, end, basis), captureStartMs, end.capturedAt)
     }
 
     private fun sameWindow(baseline: AppUsageSnapshot, end: AppUsageSnapshot): Boolean =
@@ -54,7 +59,7 @@ object AppUsageDelta {
 
     /** Legacy fields clamp decreases to zero; extended fields require baseline support and
      * observation of that counter in either dump before sparse absence can mean zero. */
-    private fun clampedDelta(baselineRows: List<AppUsageRow>, endRows: List<AppUsageRow>): List<AppUsageRow> {
+    private fun clampedDelta(baselineRows: List<AppUsageRow>, endRows: List<AppUsageRow>, topN: Int): List<AppUsageRow> {
         val baselineByUid = baselineRows.associateBy { it.uid }
         // Schema-v6 baselines have every extended column null. Without a support marker,
         // keep those snapshots unknown even when the end reports extended counters.
@@ -77,7 +82,7 @@ object AppUsageDelta {
         val mobileActiveSupported = counterSupported(AppUsageRow::mobileActiveMs)
         val gpsSupported = counterSupported(AppUsageRow::gpsMs)
         val sensorSupported = counterSupported(AppUsageRow::sensorMs)
-        return endRows.map { end ->
+        val rows = endRows.map { end ->
             val base = baselineByUid[end.uid]
             end.copy(
                 powerMah = (end.powerMah - (base?.powerMah ?: 0.0)).coerceAtLeast(0.0),
@@ -99,6 +104,21 @@ object AppUsageDelta {
                 gpsMs = nullableDelta(end.gpsMs, base?.gpsMs, gpsSupported),
                 sensorMs = nullableDelta(end.sensorMs, base?.sensorMs, sensorSupported),
             )
+        }
+        // A supported counter that lost its end record or decreased is unknown, even if
+        // every other counter is zero. Keep that row so absence cannot invent a zero.
+        return TopApps.selectSessionRows(rows, topN) { row ->
+            (alarmsSupported && row.wakeupAlarms == null) ||
+                (wakelockCountSupported && row.partialWakelockCount == null) ||
+                (wakelockBgSupported && row.partialWakelockBgMs == null) ||
+                (jobCountSupported && row.jobCount == null) ||
+                (jobMsSupported && row.jobMs == null) ||
+                (syncSupported && row.syncCount == null) ||
+                (fgsSupported && row.fgServiceMs == null) ||
+                (topSupported && row.topMs == null) ||
+                (mobileActiveSupported && row.mobileActiveMs == null) ||
+                (gpsSupported && row.gpsMs == null) ||
+                (sensorSupported && row.sensorMs == null)
         }
     }
 

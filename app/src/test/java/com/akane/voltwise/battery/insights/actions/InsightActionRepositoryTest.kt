@@ -5,6 +5,7 @@ import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.data.db.InsightActionStatus.*
 import com.akane.voltwise.battery.insights.UnusedInsightDao
 import com.akane.voltwise.battery.insights.model.*
+import com.akane.voltwise.battery.util.ExecutionCertainty
 import com.akane.voltwise.battery.util.ShellRunner
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -311,7 +312,135 @@ class InsightActionRepositoryTest {
         assertEquals(4, f.commands.size)
     }
 
-    @Test fun applyLeavesUnknownRowsWithDifferentPriorTypeOrPackageUntouched() = runTest {
+    @Test fun newThirdStatePriorRetiresOldUnknownBeforeWriteAndCannotRestoreOlderPrior() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "working_set")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        val old = f.row()
+        f.reply("working_set", "", "restricted")
+        f.intercept = {
+            if (it is PrivilegedCommand.SetStandbyBucket) {
+                assertEquals("Old Undo authority must be retired before dispatch", REVERTED, f.dao.rows.value.first().status)
+                assertEquals("CHANGED_EXTERNALLY", f.dao.rows.value.first().message)
+            }
+        }
+        assertEquals(ActionResult.Applied(2), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        f.intercept = {}
+        assertEquals("WORKING_SET", f.dao.rows.value.last().priorState)
+        val before = f.commands.size
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+        assertEquals(before, f.commands.size)
+        f.repo.reconcile()
+        assertEquals(before, f.commands.size)
+        assertEquals(REVERTED, f.dao.rows.value.first().status)
+        f.reply("restricted", "", "working_set")
+        assertEquals(ActionResult.Reverted, f.repo.undo(2))
+        assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.WORKING_SET), f.commands[before + 1])
+    }
+
+    @Test fun reapplyBeforeDelayedReconcileRetiresCrashPreparedThirdStateAuthority() = runTest {
+        val f = Fixture()
+        f.reply("active", "")
+        var reads = 0
+        f.intercept = {
+            if (it is PrivilegedCommand.GetStandbyBucket && ++reads == 2) {
+                throw IllegalStateException("simulated process death before committed readback")
+            }
+        }
+        try {
+            f.apply(ActionType.STANDBY_BUCKET_RESTRICTED)
+            fail("crash required")
+        } catch (_: IllegalStateException) { }
+        val old = f.row()
+        assertEquals(PREPARED, old.status)
+        assertEquals("ACTIVE", old.priorState)
+        f.reply("working_set", "", "restricted")
+        f.intercept = {
+            if (it is PrivilegedCommand.SetStandbyBucket) {
+                assertEquals("Retire PREPARED authority before dispatch", REVERTED, f.dao.rows.value.first().status)
+                assertEquals("CHANGED_EXTERNALLY", f.dao.rows.value.first().message)
+            }
+        }
+        assertEquals(ActionResult.Applied(2), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        f.intercept = {}
+        assertEquals("WORKING_SET", f.dao.rows.value.last().priorState)
+        val before = f.commands.size
+        // Startup recovery is delayed until after the newly confirmed apply.
+        f.repo.reconcile()
+        assertEquals(before, f.commands.size)
+        assertEquals(REVERTED, f.dao.rows.value.first().status)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+        assertEquals(before, f.commands.size)
+        f.reply("restricted", "", "working_set")
+        assertEquals(ActionResult.Reverted, f.repo.undo(2))
+        assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.WORKING_SET), f.commands[before + 1])
+    }
+
+    @Test fun reapplySettlesPreparedAtOriginalPriorBeforeDispatch() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "working_set")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        f.dao.updateAction(f.row().copy(status = PREPARED))
+        f.reply("active", "", "restricted")
+        f.intercept = {
+            if (it is PrivilegedCommand.SetStandbyBucket) {
+                assertEquals(FAILED, f.dao.rows.value.first().status)
+                assertEquals(FailureCode.STATE_MISMATCH.name, f.dao.rows.value.first().message)
+            }
+        }
+        assertEquals(ActionResult.Applied(2), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        f.intercept = {}
+        val before = f.commands.size
+        f.repo.reconcile()
+        assertEquals(before, f.commands.size)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+        assertEquals(before, f.commands.size)
+    }
+
+    @Test fun preparedNoWriteAndUnrelatedRowsKeepTheirAuthority() = runTest {
+        for ((live, reason) in listOf("never" to RefusalCode.UNRESTORABLE_PRIOR,
+            "restricted" to RefusalCode.ALREADY_AT_TARGET)) {
+            val f = Fixture()
+            f.reply("active", "", "working_set")
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+            val old = f.row().copy(status = PREPARED)
+            f.dao.updateAction(old)
+            f.reply(live)
+            assertEquals(ActionResult.Refused(reason), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+            assertEquals(old, f.row())
+            assertEquals(4, f.commands.size)
+        }
+        val f = Fixture()
+        f.reply("active", "", "working_set")
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        val old = f.row().copy(status = PREPARED)
+        f.dao.updateAction(old)
+        val unrelated = listOf(
+            old.copy(id = 2, packageName = "com.example.other"),
+            old.copy(id = 3, type = ActionType.STANDBY_BUCKET_RARE.name),
+        )
+        f.dao.rows.value += unrelated
+        f.reply("working_set", "", "restricted")
+        assertEquals(ActionResult.Applied(4), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        assertEquals(REVERTED, f.dao.rows.value.first().status)
+        assertEquals(unrelated, f.dao.rows.value.slice(1..2))
+    }
+
+    @Test fun refusedNewApplyDoesNotRetireThirdStateUnknownAuthority() = runTest {
+        for ((live, reason) in listOf("never" to RefusalCode.UNRESTORABLE_PRIOR,
+            "restricted" to RefusalCode.ALREADY_AT_TARGET)) {
+            val f = Fixture()
+            f.reply("active", "", "working_set")
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+            val old = f.row()
+            f.reply(live)
+            assertEquals(ActionResult.Refused(reason), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+            assertEquals(old, f.row())
+            assertEquals(4, f.commands.size)
+        }
+    }
+
+    @Test fun applyRetiresSameActionThirdStateUnknownButPreservesOtherTypesAndPackages() = runTest {
         val f = Fixture()
         f.replies.addAll(listOf(ok("active"), denied()))
         assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
@@ -323,10 +452,11 @@ class InsightActionRepositoryTest {
         f.dao.rows.value += retained
         f.reply("working_set", "", "rare")
         assertEquals(ActionResult.Applied(4), f.apply(ActionType.STANDBY_BUCKET_RARE))
-        assertEquals(listOf(old) + retained, f.dao.rows.value.take(3))
+        assertEquals(REVERTED, f.dao.rows.value.first().status)
+        assertEquals(retained, f.dao.rows.value.slice(1..2))
     }
 
-    @Test fun applyClosesOnlyAppliedRowsWithMatchingTypeAndPackageAndDifferentTarget() = runTest {
+    @Test fun applyRetiresStaleMatchingAuthorityAndPreservesOtherTypesPackagesAndLiveTargets() = runTest {
         val f = Fixture()
         f.reply("active", "", "rare")
         assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
@@ -342,7 +472,8 @@ class InsightActionRepositoryTest {
         assertEquals(ActionResult.Applied(6), f.apply(ActionType.STANDBY_BUCKET_RARE))
         assertEquals(REVERTED, f.dao.rows.value.first().status)
         assertEquals("CHANGED_EXTERNALLY", f.dao.rows.value.first().message)
-        assertEquals(retained, f.dao.rows.value.filter { it.id in 2L..5L })
+        assertEquals(REVERTED, f.dao.rows.value.first { it.id == 4L }.status)
+        assertEquals(retained.filter { it.id != 4L }, f.dao.rows.value.filter { it.id in listOf(2L, 3L, 5L) })
     }
 
     @Test fun unknownPriorDoesNotCloseAppliedRows() = runTest {
@@ -642,6 +773,33 @@ class InsightActionRepositoryTest {
         f.dao.updateAction(f.row().copy(priorStateVersion = 2))
         assertEquals(ActionResult.Failed(FailureCode.INVALID_JOURNAL), f.repo.undo(1))
         f.repo.reconcile(); assertEquals(3, f.commands.size)
+    }
+
+    @Test fun ambiguousForceStopIsUnknownWithoutUndoOrReconciliationReplayAndCanBeDeliberatelyRetried() = runTest {
+        val f = Fixture()
+        f.replies += ShellRunner.Outcome.Failure(ShellRunner.Mode.SHIZUKU, "response lost", ExecutionCertainty.UNKNOWN)
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.FORCE_STOP))
+        val old = f.row()
+        assertEquals(UNKNOWN, old.status)
+        assertNull(old.appliedAt)
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+        f.repo.reconcile()
+        assertEquals(1, f.commands.size)
+        assertEquals(old, f.row())
+        f.replies += ok()
+        assertEquals(ActionResult.OneShot(2), f.apply(ActionType.FORCE_STOP))
+        assertEquals(2, f.commands.size)
+        assertEquals(ONE_SHOT, f.dao.rows.value.last().status)
+    }
+
+    @Test fun reversibleMutationUncertaintyIsResolvedByApplyAndUndoReadbacks() = runTest {
+        val f = Fixture()
+        val uncertain = ShellRunner.Outcome.Failure(ShellRunner.Mode.SHIZUKU, "response lost", ExecutionCertainty.UNKNOWN)
+        f.replies.addAll(listOf(ok("working_set"), uncertain, ok("restricted")))
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
+        f.replies.addAll(listOf(ok("restricted"), uncertain, ok("working_set")))
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+        assertEquals(6, f.commands.size)
     }
 
     @Test fun forceStopIsOneShotAndFailuresUseFixedCodes() = runTest {

@@ -154,6 +154,17 @@ class DefaultInsightsRepositoryTest {
         assertFalse("one-shot force-stop must not gain Undo", actionStates(listOf(row), listOf(state)).single().undoable)
     }
 
+    @Test fun uncertainForceStopHasNoUndoOrAppliedBadgeAndAllowsDeliberateRetry() {
+        val finding = insightFinding().copy(recommendations = listOf(Recommendation(ActionType.FORCE_STOP, false, true)))
+        val row = insightAction(status = InsightActionStatus.UNKNOWN).copy(
+            type = ActionType.FORCE_STOP.name, appliedAt = null, priorState = null, targetState = null,
+        )
+        val state = finding.toInsightState(true, listOf(row), generatedAtMs = 10)
+        assertFalse(state.recommendations.single().alreadyApplied)
+        assertTrue(state.recommendations.single().available)
+        assertFalse(actionStates(listOf(row), listOf(state)).single().undoable)
+    }
+
     @Test fun dozeRemovalAfterStoredReportIsAppliedAndUnavailable() {
         val finding = insightFinding().copy(
             type = FindingType.DOZE_WHITELISTED_DRAINER,
@@ -365,7 +376,7 @@ class DefaultInsightsRepositoryTest {
                     it.await()
                 } ?: mode
             },
-            runShizuku = { _, _ -> error("unexpected shell call") },
+            runShizuku = { _, _, _ -> error("unexpected shell call") },
             shizukuRunning = { false },
             elapsedMs = { elapsedMs },
         )

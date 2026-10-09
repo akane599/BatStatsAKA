@@ -66,7 +66,7 @@ class DefaultInsightsRepository(
 }
 
 internal fun InsightActionEntity.undoable(): Boolean =
-    status == InsightActionStatus.APPLIED || status == InsightActionStatus.UNKNOWN
+    type != ActionType.FORCE_STOP.name && (status == InsightActionStatus.APPLIED || status == InsightActionStatus.UNKNOWN)
 
 internal fun Finding.toInsightState(
     privileged: Boolean,

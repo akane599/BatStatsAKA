@@ -12,10 +12,15 @@ data class TopApps(val rows: List<TopAppRow>, val basis: AppUsageBasis, val capt
         const val COUNT = 3
 
         /** Power leaders, then additional waking UIDs, then the unselected tail exactly once. */
-        internal fun selectSessionRows(rows: List<AppUsageRow>, topN: Int): List<AppUsageRow> {
+        internal fun selectSessionRows(
+            rows: List<AppUsageRow>,
+            topN: Int,
+            hasUnknownCounters: (AppUsageRow) -> Boolean = { false },
+        ): List<AppUsageRow> {
             val sorted = rows.filter { row -> row.powerMah > 0 ||
                 listOf(row.cpuTimeMs, row.foregroundTimeMs, row.backgroundTimeMs, row.wakelockTimeMs,
-                    row.mobileBytes, row.wifiBytes, row.wakeupAlarms, row.partialWakelockCount, row.partialWakelockBgMs, row.jobCount, row.jobMs, row.syncCount, row.fgServiceMs, row.topMs, row.mobileActiveMs, row.gpsMs, row.sensorMs).any { (it ?: 0L) > 0L }
+                    row.mobileBytes, row.wifiBytes, row.wakeupAlarms, row.partialWakelockCount, row.partialWakelockBgMs, row.jobCount, row.jobMs, row.syncCount, row.fgServiceMs, row.topMs, row.mobileActiveMs, row.gpsMs, row.sensorMs).any { (it ?: 0L) > 0L } ||
+                hasUnknownCounters(row)
             }.sortedByDescending { it.powerMah }
             val power = sorted.take(topN.coerceIn(0, 30))
             val selectedUids = power.map { it.uid }.toSet()
@@ -49,8 +54,11 @@ data class TopApps(val rows: List<TopAppRow>, val basis: AppUsageBasis, val capt
             )
         }
 
-        private fun foldLong(rows: List<AppUsageRow>, field: (AppUsageRow) -> Long?): Long? =
-            rows.mapNotNull(field).takeIf { it.isNotEmpty() }?.sum()
+        private fun foldLong(rows: List<AppUsageRow>, field: (AppUsageRow) -> Long?): Long? {
+            var total = 0L
+            for (row in rows) total += field(row) ?: return null
+            return total
+        }
 
         /**
          * The top [count] real apps of [usage] (the folded "others" row only counts toward the total). [baseline] is

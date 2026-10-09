@@ -74,6 +74,15 @@ object AppWindows {
         if (window.session.appWindow?.fullRowSet != true) {
             return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
         }
+        val tail = window.rows.firstOrNull { it.isOthers }
+        val tailBound = when (metric) {
+            // The tail's aggregate ratio cannot bound an app with less foreground time.
+            Metric.FGS_TO_FOREGROUND_RATIO -> tail?.fgServiceMs
+                ?.takeIf { it >= 0 }?.toDouble()?.div(FOREGROUND_FLOOR_MS * window.hours)
+            else -> tail?.let { value(window, it, metric) }
+        }
+        // Unknown contributors cannot establish a total, a waker cutoff, or an exact zero.
+        if (metric != Metric.POWER_MAH_PER_H && tailBound == null) return null
         val wakers = window.rows.filter { !it.isOthers && it.rank >= 30 }
         // Spare waker slots mean every app with alarms or background wakelock time was kept.
         if ((window.session.appWindow.wakersStored ?: wakers.size) < 10 &&
@@ -84,11 +93,8 @@ object AppWindows {
         val cutoff = when (metric) {
             Metric.POWER_MAH_PER_H -> supported.minOrNull()
             Metric.WAKEUP_ALARMS_PER_H -> wakers.mapNotNull { value(window, it, metric) }.minOrNull()
-            // The tail's aggregate ratio cannot bound an app with less foreground time.
-            Metric.FGS_TO_FOREGROUND_RATIO -> window.rows.firstOrNull { it.isOthers }?.fgServiceMs
-                ?.takeIf { it >= 0 }?.toDouble()?.div(FOREGROUND_FLOOR_MS * window.hours)
             // Remaining supported metrics are additive totals divided by a shared window duration.
-            else -> window.rows.firstOrNull { it.isOthers }?.let { value(window, it, metric) }
+            else -> tailBound
         } ?: return null
         if (cutoff == 0.0) {
             return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)

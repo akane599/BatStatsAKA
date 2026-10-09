@@ -201,6 +201,20 @@ class AppWindowsTest {
         assertFalse(point.present)
     }
 
+    @Test fun unknownWakerTailCannotSupplyAnExactZeroOrBoundWithSpareOrFullSlots() {
+        for (wakerCount in listOf(2, 10)) {
+            val window = truncatedWindow(wakerCount).let { window ->
+                window.copy(rows = window.rows.map {
+                    if (it.isOthers) it.copy(wakeupAlarms = null, partialWakelockBgMs = null) else it
+                })
+            }
+            assertNull("$wakerCount waker slots cannot bound an unknown alarm tail",
+                AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H))
+            assertNull("$wakerCount waker slots cannot bound an unknown background-wakelock tail",
+                AppWindows.point(window, subject, Metric.PARTIAL_WAKELOCK_BG_SHARE))
+        }
+    }
+
     @Test fun fullWakerSlotsUseAlarmCutoffAndOthersWakelockShare() {
         val window = truncatedWindow(wakerCount = 10).let { window ->
             window.copy(rows = window.rows.map {

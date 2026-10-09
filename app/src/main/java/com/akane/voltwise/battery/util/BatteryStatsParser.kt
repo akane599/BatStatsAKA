@@ -55,6 +55,8 @@ object BatteryStatsParser {
         val appPowerRecords: Int = 0,
         val rejectedAppPowerRecords: Int = 0,
         val wakeupReasons: List<WakeupReasonStats> = emptyList(),
+        /** Whether consumed session app metrics can certify a cumulative baseline or delta. */
+        val appMeasurementsComplete: Boolean = true,
     ) {
         val hasValidWindow: Boolean get() = startedAt != null && startCount != null &&
             batteryRealtimeMs != null && batteryUptimeMs != null && batteryUptimeMs <= batteryRealtimeMs
@@ -266,13 +268,24 @@ object BatteryStatsParser {
     fun parseCheckin(lines: Sequence<String>, sdkInt: Int = 28): FullSnapshot {
         val mappings = mutableMapOf<Int, LinkedHashSet<String>>()
         var rejected = 0
+        val malformedAppHeaders = mutableListOf<Int?>()
+        val appTags = setOf("pwi", "cpu", "fg", "fgs", "awl", "st", "nt", "wl", "wua", "jb", "sy", "sr")
         // One iteration over the lines: bucket "i,uid" mappings and "l" data rows as they are
         // seen (mappings may follow the usage records that need them, so lookups happen after).
         val rows = mutableListOf<List<String>>()
         for (line in lines) {
             if (!line.startsWith("9,") || line.startsWith("9,h,")) continue
             val p = splitCheckinLine(line)
-            if (p.size < 4) { rejected++; continue }
+            if (p.size < 4 || p[2] !in setOf("i", "l", "u", "c")) {
+                // Name framing may reject a row before UID grouping; retain its app provenance.
+                val header = line.split(',', limit = 6)
+                if (header.getOrNull(3) in appTags &&
+                    (header.getOrNull(3) != "pwi" || header.getOrNull(4) == "uid") &&
+                    (header.getOrNull(2) == "l" || header.getOrNull(2) !in setOf("i", "u", "c"))) {
+                    malformedAppHeaders += header.int(1)
+                }
+                if (p.size < 4) { rejected++; continue }
+            }
             when {
                 p[2] == "i" && p[3] == "uid" -> {
                     val uid = p.int(4)
@@ -400,6 +413,59 @@ object BatteryStatsParser {
         // Oreo has six states; Pie reordered them and added HEAVY_WEIGHT before CACHED.
         val backgroundStateField = if (sdkInt < 28) 8 else 7
         val cachedStateField = if (sdkInt < 28) 9 else 10
+        // Validate only fields consumed by toAppUsageSnapshot. Whole absent records and optional
+        // tails remain unavailable; missing core values in present records cannot certify zero.
+        var appMeasurementsComplete = appPowerRecords == apps.size
+        fun isPrimaryApp(uid: Int) = uid in FIRST_APPLICATION_UID until PER_USER_RANGE
+        if (malformedAppHeaders.any { it == null || it in apps || isPrimaryApp(it) }) appMeasurementsComplete = false
+        rows.filter { it[3] in appTags && it[3] != "pwi" }.forEach { p ->
+            val uid = p.int(1)
+            if (uid == null) { appMeasurementsComplete = false; return@forEach }
+            if (uid !in apps && !isPrimaryApp(uid)) return@forEach
+            var positive = false
+            fun field(index: Int, count: Boolean = false, consumed: Boolean = true, required: Boolean = true): Long? {
+                val value = if (count) p.int(index)?.toLong() else p.long(index)
+                if ((required || p.getOrNull(index) != null) && value == null) appMeasurementsComplete = false
+                if (consumed && value != null && value > 0) positive = true
+                return value
+            }
+            fun checkedSum(a: Long?, b: Long?) {
+                if (a != null && b != null && sum(a, b) == null) appMeasurementsComplete = false
+            }
+            when (p[3]) {
+                "fg", "fgs", "awl" -> field(4)
+                "cpu" -> checkedSum(field(4), field(5))
+                "st" -> { field(4); field(backgroundStateField) }
+                "wua" -> field(5, count = true)
+                "jb", "sy" -> { field(5, consumed = p[3] == "jb"); field(6, count = true) }
+                "nt" -> {
+                    checkedSum(field(4), field(5))
+                    checkedSum(field(6), field(7))
+                    // microseconds in checkin; retained as milliseconds in session metrics.
+                    field(12, required = false)
+                }
+                "sr" -> {
+                    if (p.getOrNull(4)?.toIntOrNull() == null) appMeasurementsComplete = false
+                    field(5); field(6, count = true, consumed = false)
+                }
+                "wl" -> {
+                    // Every started section needs a known type: a valid full/window timer cannot
+                    // classify a later truncated timer. Their numeric fields remain unconsumed.
+                    if ((5 until p.size step 6).any { p.getOrNull(it + 1) !in setOf("f", "p", "w", "bp") } ||
+                        (6 until p.size step 6).none { p[it] in setOf("f", "p", "w") }) appMeasurementsComplete = false
+                    val partials = (6 until p.size step 6).filter { p[it] == "p" }
+                    partials.forEach { partial -> field(partial - 1); field(partial + 1, count = true) }
+                    val acceptedPartial = partials.any { p.long(it - 1) != null && p.int(it + 1) != null }
+                    (6 until p.size step 6).filter { p[it] == "bp" }.forEach { background ->
+                        val time = field(background - 1)
+                        // The parser attaches background time only to this record's accepted P timer.
+                        if (time != null && time > 0 && !acceptedPartial) appMeasurementsComplete = false
+                    }
+                }
+            }
+            // Valid orphan evidence is retained in the source lists, not counted as a rejection.
+            if (positive && isPrimaryApp(uid) && uid !in apps) appMeasurementsComplete = false
+        }
         // Checkin gives per-UID activity, but only total/screen/proportional UID charge estimates.
         val enriched = apps.map { (uid, app) ->
             val uidRows = perUid[uid].orEmpty()
@@ -411,6 +477,10 @@ object BatteryStatsParser {
             val uidAlarms = alarms.filter { it.uid == uid }
             val uidJobs = jobs.filter { it.uid == uid }
             val uidSyncs = syncs.filter { it.uid == uid }
+            if ((sensorTimes.isNotEmpty() && sensorTimes.reportedSum { it.totalTimeMs } == null) ||
+                (uidJobs.isNotEmpty() && uidJobs.reportedSum { it.totalTimeMs } == null) ||
+                (partialLocks.isNotEmpty() && partialLocks.all { it.backgroundTimeMs != null } &&
+                    partialLocks.reportedSum { it.backgroundTimeMs } == null)) appMeasurementsComplete = false
             app.copy(cpuTimeMs = cpu?.let { sum(it.long(4), it.long(5)) }, wakeLockTimeMs = duration("awl"),
                 foregroundTimeMs = duration("fg"), foregroundServiceTimeMs = duration("fgs"),
                 topTimeMs = state?.long(4), backgroundTimeMs = state?.long(backgroundStateField), cachedTimeMs = state?.long(cachedStateField),
@@ -441,7 +511,7 @@ object BatteryStatsParser {
         }
         return snapshot.copy(apps = enriched.sortedByDescending { it.powerMah }, componentEstimatesMah = components,
             reportedTags = tags, rejectedRecords = rejected, appPowerRecords = appPowerRecords,
-            rejectedAppPowerRecords = appPowerRecords - apps.size, wakelocks = locks.sortedByDescending { it.totalTimeMs },
+            rejectedAppPowerRecords = appPowerRecords - apps.size, appMeasurementsComplete = appMeasurementsComplete, wakelocks = locks.sortedByDescending { it.totalTimeMs },
             kernelWakelocks = kernel.sortedByDescending { it.totalTimeMs }, wakeupReasons = wakeupReasons.sortedByDescending { it.totalTimeMs },
             alarms = alarms.sortedByDescending { it.count },
             jobs = jobs.sortedByDescending { it.totalTimeMs }, syncs = syncs.sortedByDescending { it.totalTimeMs },

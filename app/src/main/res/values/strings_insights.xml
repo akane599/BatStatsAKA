@@ -86,7 +86,7 @@
     <string name="insights_type_background_runaway">Busy in the background</string>
     <string name="insights_type_stuck_wakelock">Keeps the phone awake</string>
     <string name="insights_type_wakeup_storm">Wakes the phone often</string>
-    <string name="insights_type_job_storm">Runs many background jobs</string>
+    <string name="insights_type_job_storm">Runs many jobs or syncs</string>
     <string name="insights_type_doze_blocked">Doze isn\'t kicking in</string>
     <string name="insights_type_doze_whitelisted_drainer">Exempt from Doze and draining</string>
     <string name="insights_type_screen_off_drain_high">High drain with the screen off</string>
@@ -94,7 +94,7 @@
     <string name="insights_type_charging_at_full">Stays plugged in at full</string>
     <string name="insights_type_hot_charging">Gets hot while charging</string>
     <string name="insights_type_health_decline">Capacity is declining</string>
-    <string name="insights_type_background_location">Uses location in the background</string>
+    <string name="insights_type_background_location">Uses location or sensors in the background</string>
     <string name="insights_type_background_radio">Uses the network in the background</string>
     <string name="insights_type_lingering_foreground_service">Foreground service keeps running</string>
     <string name="insights_type_action_effect">Effect of a fix</string>
@@ -138,7 +138,7 @@
     <string name="insights_action_remove_doze_whitelist">Remove Doze exemption</string>
     <string name="insights_action_open_app_settings">Open app settings</string>
     <string name="insights_action_open_battery_optimization">Open battery optimization</string>
-    <string name="insights_action_enable_high_battery_alert">Turn on full-charge alert</string>
+    <string name="insights_action_enable_high_battery_alert">Turn on high-battery alert</string>
 
     <!-- ActionType: exact effect -->
     <string name="insights_effect_restrict_background">Turns off this app\'s permission to run in the background. It only runs while you use it.</string>

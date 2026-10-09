@@ -6,6 +6,7 @@ import com.akane.voltwise.battery.data.db.InsightActionStatus
 import com.akane.voltwise.battery.data.db.InsightActionStatus.*
 import com.akane.voltwise.battery.data.db.InsightDao
 import com.akane.voltwise.battery.insights.model.*
+import com.akane.voltwise.battery.util.ExecutionCertainty
 import com.akane.voltwise.battery.util.ShellRunner.Outcome
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
@@ -47,17 +48,27 @@ class InsightActionRepository(
                 val outcome = executor.run(PrivilegedCommand.ForceStop(app.packageName))
                 if (outcome is Outcome.NoAccess) return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
                 val success = outcome is Outcome.Success
-                val id = dao.insertAction(row(finding, rec.action, if (success) ONE_SHOT else FAILED).copy(
+                val uncertain = outcome is Outcome.Failure && outcome.certainty == ExecutionCertainty.UNKNOWN
+                val id = dao.insertAction(row(finding, rec.action, when {
+                    success -> ONE_SHOT
+                    uncertain -> UNKNOWN
+                    else -> FAILED
+                }).copy(
                     appliedAt = if (success) clock() else null,
-                    message = if (success) null else FailureCode.EXECUTION_FAILED.name,
+                    message = if (success || uncertain) null else FailureCode.EXECUTION_FAILED.name,
                 ))
-                return@withLock if (success) ActionResult.OneShot(id) else ActionResult.Failed(FailureCode.EXECUTION_FAILED)
+                return@withLock when {
+                    success -> ActionResult.OneShot(id)
+                    uncertain -> ActionResult.Unknown
+                    else -> ActionResult.Failed(FailureCode.EXECUTION_FAILED)
+                }
             }
             val operation = operation(rec.action) ?: return@withLock ActionResult.Refused(RefusalCode.UNSUPPORTED_SDK)
             val prior = read(operation, app.packageName)
             if (prior !is StateRead.Known) return@withLock initialReadFailure(prior)
+            val canWrite = operation.restorable(prior.value, inspector.sdkInt) && !operation.atOrBeyondTarget(prior.value)
             // Retire stale Undo authority before a new write can reach the old target again.
-            for (old in dao.actionsWithStatus(listOf(APPLIED, UNKNOWN))) {
+            for (old in dao.actionsWithStatus(listOf(APPLIED, PREPARED, UNKNOWN))) {
                 if (old.type != rec.action.name || old.packageName != app.packageName) continue
                 if (old.uid != app.uid) {
                     dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
@@ -65,12 +76,15 @@ class InsightActionRepository(
                 }
                 if (old.status == APPLIED && old.targetState != prior.value) {
                     dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
-                } else if (old.status == UNKNOWN && old.priorState == prior.value) {
+                } else if (old.status in listOf(PREPARED, UNKNOWN) && old.priorState == prior.value) {
                     if (old.appliedAt != null) {
                         dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = null))
                     } else {
                         dao.updateAction(old.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
                     }
+                } else if (old.status in listOf(PREPARED, UNKNOWN) && old.targetState != prior.value && canWrite) {
+                    // A third live state is the new prior; the old row cannot own a later matching target.
+                    dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
                 }
             }
             if (!operation.restorable(prior.value, inspector.sdkInt)) {
@@ -101,7 +115,9 @@ class InsightActionRepository(
     suspend fun undo(actionId: Long): ActionResult = mutex.withLock {
         val row = dao.actionsOnce().firstOrNull { it.id == actionId }
             ?: return@withLock ActionResult.Failed(FailureCode.NOT_UNDOABLE)
-        if (row.status !in listOf(APPLIED, UNKNOWN)) return@withLock ActionResult.Failed(FailureCode.NOT_UNDOABLE)
+        if (row.type == ActionType.FORCE_STOP.name || row.status !in listOf(APPLIED, UNKNOWN)) {
+            return@withLock ActionResult.Failed(FailureCode.NOT_UNDOABLE)
+        }
         val operation = journalOperation(row) ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
         val pkg = row.packageName ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
         val uid = row.uid ?: return@withLock ActionResult.Failed(FailureCode.INVALID_JOURNAL)
@@ -144,6 +160,8 @@ class InsightActionRepository(
     /** Read-only recovery: never replay a command whose execution was interrupted. */
     suspend fun reconcile() = mutex.withLock {
         for (row in dao.actionsWithStatus(listOf(PREPARED, UNKNOWN))) {
+            // A one-shot has no restorable state/readback; preserve its uncertainty without replay.
+            if (row.type == ActionType.FORCE_STOP.name) continue
             val operation = journalOperation(row)
             val pkg = row.packageName
             val uid = row.uid

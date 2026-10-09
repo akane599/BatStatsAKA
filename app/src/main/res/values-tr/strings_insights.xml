@@ -79,7 +79,7 @@
     <string name="insights_type_background_runaway">Arka planda çok meşgul</string>
     <string name="insights_type_stuck_wakelock">Telefonu uyanık tutuyor</string>
     <string name="insights_type_wakeup_storm">Telefonu sık sık uyandırıyor</string>
-    <string name="insights_type_job_storm">Arka planda çok iş çalıştırıyor</string>
+    <string name="insights_type_job_storm">Çok iş veya senkronizasyon çalıştırıyor</string>
     <string name="insights_type_doze_blocked">Doze devreye girmiyor</string>
     <string name="insights_type_doze_whitelisted_drainer">Doze dışında ve pil harcıyor</string>
     <string name="insights_type_screen_off_drain_high">Ekran kapalıyken yüksek tüketim</string>
@@ -87,7 +87,7 @@
     <string name="insights_type_charging_at_full">Doluyken takılı kalıyor</string>
     <string name="insights_type_hot_charging">Şarj olurken ısınıyor</string>
     <string name="insights_type_health_decline">Kapasite düşüyor</string>
-    <string name="insights_type_background_location">Arka planda konum kullanıyor</string>
+    <string name="insights_type_background_location">Arka planda konum veya sensör kullanıyor</string>
     <string name="insights_type_background_radio">Arka planda ağ kullanıyor</string>
     <string name="insights_type_lingering_foreground_service">Ön plan hizmeti çalışmaya devam ediyor</string>
     <string name="insights_type_action_effect">Bir düzeltmenin etkisi</string>
@@ -131,7 +131,7 @@
     <string name="insights_action_remove_doze_whitelist">Doze muafiyetini kaldır</string>
     <string name="insights_action_open_app_settings">Uygulama ayarlarını aç</string>
     <string name="insights_action_open_battery_optimization">Pil optimizasyonunu aç</string>
-    <string name="insights_action_enable_high_battery_alert">Tam şarj uyarısını aç</string>
+    <string name="insights_action_enable_high_battery_alert">Yüksek pil seviyesi uyarısını aç</string>
 
     <!-- ActionType: exact effect -->
     <string name="insights_effect_restrict_background">Bu uygulamanın arka planda çalışma iznini kapatır. Yalnızca sen kullanırken çalışır.</string>

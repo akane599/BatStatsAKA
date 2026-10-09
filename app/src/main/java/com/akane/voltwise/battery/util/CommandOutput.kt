@@ -29,6 +29,7 @@ object CommandOutput {
         val output: String = "",
         val error: String? = null,
         val accessFailure: AccessFailure? = null,
+        val certainty: ExecutionCertainty = ExecutionCertainty.CONFIRMED,
     ) {
         val successful: Boolean get() = error == null
 
@@ -69,7 +70,7 @@ object CommandOutput {
             val text = read.get((deadline - System.nanoTime()).coerceAtLeast(1), TimeUnit.NANOSECONDS)
             when {
                 !child.waitFor((deadline - System.nanoTime()).coerceAtLeast(1), TimeUnit.NANOSECONDS) ->
-                    Result(error = "Command timed out")
+                    Result(error = "Command timed out", certainty = ExecutionCertainty.UNKNOWN)
                 child.exitValue() != 0 -> Result(
                     error = "Command exited with status ${child.exitValue()}",
                     accessFailure = classifyAccessFailure(text),
@@ -77,19 +78,23 @@ object CommandOutput {
                 else -> Result(output = text)
             }
         } catch (_: TimeoutException) {
-            Result(error = "Command timed out")
+            Result(error = "Command timed out", certainty = ExecutionCertainty.UNKNOWN)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-            Result(error = "Command interrupted")
+            Result(error = "Command interrupted", certainty = ExecutionCertainty.UNKNOWN)
         } catch (_: ExecutionException) {
-            Result(error = "Command output could not be read")
+            Result(error = "Command output could not be read", certainty = ExecutionCertainty.UNKNOWN)
         } catch (e: IOException) {
             Result(
                 error = "IOException",
                 accessFailure = if (process == null) classifyLaunchFailure(e.message.orEmpty()) else null,
+                certainty = if (process == null) ExecutionCertainty.CONFIRMED else ExecutionCertainty.UNKNOWN,
             )
         } catch (e: Exception) {
-            Result(error = e.javaClass.simpleName)
+            Result(
+                error = e.javaClass.simpleName,
+                certainty = if (process == null) ExecutionCertainty.CONFIRMED else ExecutionCertainty.UNKNOWN,
+            )
         } finally {
             reader?.cancel(true)
             // Some JVM pipe implementations block close behind an inherited reader.

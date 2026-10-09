@@ -59,7 +59,7 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 - Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`).
 - SharedPreferences: `CalibrationStore.PREFS_NAME` (calibration) and `SamplerState.PREFS_NAME` (sampler
   state), both wrapped in `SharedPreferencesStore` / `KeyValueStore` (`data/sampling/KeyValueStore.kt`).
-- Export/import: `data/ExportImport.kt` (`BatteryExport` format 4 = `HISTORY_FORMAT_VERSION`, carries the coverage columns; formats 1–3 still import) and
+- Export/import: `data/ExportImport.kt` (`BatteryExport` format 5 = `HISTORY_FORMAT_VERSION`, carries portable battery measurements and excludes local per-app/capture evidence; formats 1–4 still import) and
   `data/HistoryFiles.kt`. Backup rules: `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`.
 - Retention: `data/HistoryRetention.kt`, `data/HistoryPolicy.kt`; `boundStorage` trims to
   `HistoryLimits.SAMPLE_TRIM_TARGET`/`SESSION_TRIM_TARGET` (cap − 200) every `CLEANUP_SAMPLE_INTERVAL` inserts

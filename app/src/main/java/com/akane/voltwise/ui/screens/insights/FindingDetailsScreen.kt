@@ -417,7 +417,7 @@ private fun EvidenceRow(type: FindingType, subject: Subject, evidence: Evidence)
     }
 }
 
-/** Named wakers or apps the engine associates with a device finding: hints since the last charge, never proof. */
+/** Named wakers or apps the engine associates with a device finding: hints from the measured session, never proof. */
 @Composable
 private fun CausesPanel(attributions: List<Attribution>, labels: Map<String, AppLabel>, modifier: Modifier = Modifier) {
     val spacing = MaterialTheme.spacing
