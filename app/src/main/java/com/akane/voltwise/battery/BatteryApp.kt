@@ -70,7 +70,7 @@ class BatteryApp : Application() {
                 catchUp = {
                     reconcileAndCatchUpInsights(
                         reconcile = { insightActions.reconcile() },
-                        lastAnalyzedAt = { insights.lastAnalyzedAt.value },
+                        lastAnalyzedAt = { insights.awaitLastAnalyzedAt() },
                         refresh = { insights.refresh() },
                     )
                 },
@@ -109,7 +109,7 @@ internal suspend fun startInsightNotifications(
 
 internal suspend fun reconcileAndCatchUpInsights(
     reconcile: suspend () -> Unit,
-    lastAnalyzedAt: () -> Long?,
+    lastAnalyzedAt: suspend () -> Long?,
     refresh: suspend () -> Unit,
     clock: () -> Long = System::currentTimeMillis,
 ) {
