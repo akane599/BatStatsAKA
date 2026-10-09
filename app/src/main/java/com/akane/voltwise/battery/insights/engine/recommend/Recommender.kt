@@ -25,8 +25,11 @@ object Recommender {
             FindingType.TREND, FindingType.HEALTH_DECLINE, FindingType.ACTION_EFFECT -> emptyList()
         }
         val pkg = (finding.subject as? Subject.App)?.packageName
-        val applied = inputs.actions.filter { it.status == ActionStatus.APPLIED && it.packageName == pkg }
-            .map { it.type }.toSet()
+        // A live whitelist finding proves an earlier removal no longer holds.
+        val applied = inputs.actions.filter {
+            it.status == ActionStatus.APPLIED && it.packageName == pkg &&
+                !(finding.type == FindingType.DOZE_WHITELISTED_DRAINER && it.type == ActionType.REMOVE_DOZE_WHITELIST)
+        }.map { it.type }.toSet()
         return finding.copy(recommendations = actions.filterNot { action ->
             action in applied || (sdkInt < 28 &&
                 (action == ActionType.STANDBY_BUCKET_RESTRICTED || action == ActionType.STANDBY_BUCKET_RARE))
