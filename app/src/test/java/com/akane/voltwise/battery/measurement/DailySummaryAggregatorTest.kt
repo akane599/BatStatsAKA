@@ -142,6 +142,35 @@ class DailySummaryAggregatorTest {
         assertEquals(60_000L, second.screenOffSuspendMs)
     }
 
+    @Test fun pluggedScreenOffIntervalDoesNotInflateDailyOnBatteryCountersAcrossMidnight() {
+        val start = at("2026-06-10T23:59+02:00")
+        val engine = ObservationEngine()
+        val before = engine.accept(Observation(start, 0, 0, 70, null, null, null,
+            PowerState.PLUGGED, false, true, "one"))
+        val after = engine.accept(before.latest!!.copy(wallMs = start + 120_000,
+            elapsedMs = 120_000, uptimeMs = 40_000))
+        val interval = DailySummaryAggregator.interval(before, after, null)!!
+        assertEquals(0L, interval.screenOffMs)
+        assertEquals(120_000L, interval.dozeMs)
+        assertNull(interval.cpuSuspendMs)
+        assertEquals(0L, interval.screenOffDozeMs)
+        assertEquals(0L, interval.screenOffSuspendMs)
+        val firstDay = day("2026-06-10")
+        val historical = DailySummary(firstDay, screenOffMs = 10_000,
+            screenOffDozeMs = 20_000, screenOffSuspendMs = 15_000)
+        val rows = apply(interval, mapOf(firstDay to historical))
+        val first = rows.getValue(firstDay)
+        val second = rows.getValue(day("2026-06-11"))
+        assertEquals(60_000L, first.dozeMs)
+        assertEquals(historical.screenOffMs, first.screenOffMs)
+        assertEquals(historical.screenOffDozeMs, first.screenOffDozeMs)
+        assertEquals(historical.screenOffSuspendMs, first.screenOffSuspendMs)
+        assertEquals(60_000L, second.dozeMs)
+        assertEquals(0L, second.screenOffMs)
+        assertEquals(0L, second.screenOffDozeMs)
+        assertEquals(0L, second.screenOffSuspendMs)
+    }
+
     @Test fun midnightAndDstSplitNewMetricsWithoutMeasuringEndpointOnlyDays() {
         for ((start, end, shares) in listOf(
             Triple("2026-06-10T23:45+02:00", "2026-06-11T00:15+02:00", listOf(900_000L, 900_000L)),
