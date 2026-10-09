@@ -71,6 +71,34 @@ class AppWindowsTest {
         assertEquals(4.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.upperBound!!, 0.0)
     }
 
+    @Test fun powerCutoffUsesPowerLeadersNotAdditionalWakerRows() {
+        val session = session(0, 2 * HOUR).let { it.copy(appWindow = it.appWindow!!.copy(fullRowSet = true)) }
+        val leaders = (0 until 30).map { rank ->
+            row(session.id).copy(uid = 20_000 + rank, packageName = "example.leader$rank", rank = rank,
+                powerMah = 37.0 - rank, wakeupAlarms = 80)
+        }
+        val waker = row(session.id).copy(uid = 30_000, packageName = "example.waker", rank = 30,
+            powerMah = 0.5, wakeupAlarms = 4)
+        val others = row(session.id).copy(uid = -1, packageName = "", rank = 31, isOthers = true,
+            powerMah = 0.0, wakeupAlarms = 0)
+        // Storage order is rank-based, not the caller's list order.
+        val window = AppWindows.select(inputs(listOf(session), listOf(waker, others) + leaders.reversed())).single()
+        for (powerMah in listOf(0.5, 0.0)) {
+            val withWaker = window.copy(rows = window.rows.map { if (it.uid == waker.uid) it.copy(powerMah = powerMah) else it })
+            val power = AppWindows.point(withWaker, subject, Metric.POWER_MAH_PER_H)!!
+            assertNull(power.value)
+            assertEquals(4.0, power.upperBound!!, 0.0)
+            assertTrue(power.censored)
+            assertFalse(power.present)
+        }
+        assertEquals(2.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.upperBound!!, 0.0)
+        val presentWaker = AppWindows.point(window, Subject.App(waker.uid, waker.packageName), Metric.POWER_MAH_PER_H)!!
+        assertEquals(0.25, presentWaker.value!!, 0.0)
+        assertTrue(presentWaker.present)
+        assertFalse(presentWaker.censored)
+        assertNull(AppWindows.point(window.copy(rows = listOf(waker, others)), subject, Metric.POWER_MAH_PER_H))
+    }
+
     @Test fun nonFullAbsenceIsZeroButPresentNullAndUnsupportedSessionAreExcluded() {
         val session = session(0)
         val absent = row(session.id).copy(uid = 2, packageName = "example.other")

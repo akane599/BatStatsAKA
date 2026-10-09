@@ -64,7 +64,10 @@ object AppWindows {
             val value = value(window, row, metric) ?: return null
             return AppMetricPoint(window.session.id, window.atMs, value, null, present = true)
         }
-        val supported = window.rows.filterNot { it.isOthers }.mapNotNull { value(window, it, metric) }
+        // Stored ranks 0–29 are power leaders; later ranks are additional waker candidates.
+        val supported = window.rows.filter {
+            !it.isOthers && (metric != Metric.POWER_MAH_PER_H || it.rank < 30)
+        }.mapNotNull { value(window, it, metric) }
         // No stored support for a nullable metric means unsupported, even for an absent app.
         if (supported.isEmpty() && (metric != Metric.POWER_MAH_PER_H || window.rows.isNotEmpty())) return null
         return if (window.session.appWindow?.fullRowSet == true) {

@@ -32,20 +32,47 @@ class InsightInputsBuilderTest {
     ) = InsightInputsBuilder.build(NOW, 100, 4_000_000, true, sessions, days, rows, wakers, capacity,
         setOf("example.app0"), actions, listOf(FindingCodec.encode(testFinding(), 1, feedbackMultiplier = 1.5)))
 
-    @Test fun readyWindowCountsOnlyNonOthersAndRequiresFortyForFullRowSet() {
+    @Test fun readyWindowCountsOnlyNonOthersAndUsesOthersForFullRowSet() {
         val rows = (0..38).map { testAppRow(rank = it) } + testAppRow(rank = 39, others = true)
-        val partial = build(rows = rows).sessions.single().appWindow!!
-        assertEquals(39, partial.rowsStored)
-        assertFalse(partial.fullRowSet)
-        val full = build(rows = rows + testAppRow(rank = 40)).sessions.single().appWindow!!
-        assertEquals(40, full.rowsStored)
+        val full = build(rows = rows).sessions.single().appWindow!!
+        assertEquals(39, full.rowsStored)
         assertTrue(full.fullRowSet)
+        val complete = build(rows = rows.filterNot { it.isOthers } + testAppRow(rank = 39))
+            .sessions.single().appWindow!!
+        assertEquals(40, complete.rowsStored)
+        assertFalse(complete.fullRowSet)
         assertEquals(WindowBasis.DELTA, full.basis)
         assertEquals(HOUR, full.captureEndMs - full.captureStartMs)
         for (status in AppUsageStatus.entries.filter { it != AppUsageStatus.READY }) {
             assertNull(build(sessions = listOf(testSession().copy(appUsageStatus = status)), rows = rows).sessions.single().appWindow)
         }
         assertNull(build(sessions = listOf(testSession().copy(appCaptureEndMs = null))).sessions.single().appWindow)
+    }
+
+    @Test fun thirtyPowerRowsWithOthersCensorMissingAppInsteadOfMeasuringZero() {
+        val rows = (0 until 30).map { testAppRow(rank = it).copy(powerMah = 40.0 - it) }
+        val inputs = build(
+            sessions = listOf(testSession(), testSession("complete")),
+            rows = rows + testAppRow(rank = 30, others = true) +
+                rows.map { it.copy(sessionId = "complete") },
+        )
+        val truncated = inputs.sessions.first { it.id == "local" }.appWindow!!
+        assertEquals(30, truncated.rowsStored)
+        assertTrue(truncated.fullRowSet)
+        assertFalse(inputs.sessions.first { it.id == "complete" }.appWindow!!.fullRowSet)
+
+        val missing = Subject.App(20_000, "example.missing")
+        val windows = AppWindows.select(inputs)
+        val cutoff = AppWindows.point(windows.first { it.session.id == "local" }, missing, Metric.POWER_MAH_PER_H)!!
+        assertNull(cutoff.value)
+        assertEquals(11.0, cutoff.upperBound!!, 0.0)
+        assertTrue(cutoff.censored)
+        assertFalse(cutoff.present)
+        val complete = AppWindows.point(windows.first { it.session.id == "complete" }, missing, Metric.POWER_MAH_PER_H)!!
+        assertEquals(0.0, complete.value!!, 0.0)
+        assertNull(complete.upperBound)
+        assertFalse(complete.censored)
+        assertFalse(complete.present)
     }
 
     @Test fun importsOpenUnknownAndOldSessionsCannotFeedAppAnalysis() {
