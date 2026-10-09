@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.res.stringResource
 import com.akane.voltwise.R
+import com.akane.voltwise.battery.apps.AppInfo
+import com.akane.voltwise.battery.apps.AppInfoSource
 import com.akane.voltwise.battery.apps.AppLabel
 import com.akane.voltwise.battery.data.db.InsightActionStatus
 import com.akane.voltwise.battery.insights.model.ActionType
@@ -25,6 +27,7 @@ import com.akane.voltwise.ui.format.mahText
 import com.akane.voltwise.ui.format.valueWithUnit
 import com.akane.voltwise.viewmodel.AppliedInsightAction
 import com.akane.voltwise.viewmodel.InsightMessageCode
+import kotlinx.coroutines.CancellationException
 import kotlin.math.abs
 
 // The engine and the journal speak in enums and fixed codes; every user-visible word for them is mapped here.
@@ -280,6 +283,18 @@ internal fun effectLine(evidence: Evidence): String? {
         change < 0 -> stringResource(R.string.insights_effect_fell, metric, amount)
         else -> stringResource(R.string.insights_effect_rose, metric, amount)
     }
+}
+
+/**
+ * The app's label and install state, or null when the lookup failed. Cancellation propagates: a produceState producer
+ * cancelled by a key change must not resume and overwrite the newer key's labels with "Unknown app".
+ */
+internal suspend fun AppInfoSource.infoOrNull(packageName: String): AppInfo? = try {
+    info(packageName)
+} catch (e: CancellationException) {
+    throw e
+} catch (_: Exception) {
+    null
 }
 
 private const val MINUTE_MS = 60_000.0

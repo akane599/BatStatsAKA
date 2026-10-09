@@ -9,6 +9,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.akane.voltwise.battery.apps.AppInfoSource
 import com.akane.voltwise.battery.apps.AppLabel
 import com.akane.voltwise.battery.service.SamplingDemand
+import com.akane.voltwise.ui.screens.insights.infoOrNull
 import com.akane.voltwise.viewmodel.NowEvent
 import com.akane.voltwise.viewmodel.NowViewModel
 import org.koin.androidx.compose.koinViewModel
@@ -44,7 +45,7 @@ fun NowScreen(
     // The headline carries no uid: -1 never reads as a system process, so an uninstalled app reads "unknown".
     val insightsApp by produceState<AppLabel?>(null, headlinePackage, appInfo) {
         value = null // a new headline never shows the previous one's app name while its own loads
-        value = headlinePackage?.let { AppLabel.of(-1, it, runCatching { appInfo.info(it) }.getOrNull()) }
+        value = headlinePackage?.let { AppLabel.of(-1, it, appInfo.infoOrNull(it)) }
     }
     NowContent(
         state = state,

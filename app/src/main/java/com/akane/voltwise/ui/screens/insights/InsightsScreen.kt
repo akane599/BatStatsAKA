@@ -95,7 +95,7 @@ fun InsightsScreen(
     }
     val subjects = remember(state.headline, state.keyFindings, state.changes, state.appliedActions) { appSubjects(state) }
     val labels by produceState(emptyMap<String, AppLabel>(), subjects, appInfo) {
-        value = subjects.mapValues { (packageName, uid) -> AppLabel.of(uid, packageName, runCatching { appInfo.info(packageName) }.getOrNull()) }
+        value = subjects.mapValues { (packageName, uid) -> AppLabel.of(uid, packageName, appInfo.infoOrNull(packageName)) }
     }
     InsightsContent(
         state = state,
