@@ -19,13 +19,18 @@ object InsightEngine {
         val findings = (appFindings(inputs) + DeviceDetectors.detect(inputs) + Trends.detect(inputs) +
             ChargingHealth.detect(inputs) + ActionEffects.detect(inputs))
             .map { Recommender.recommend(it, inputs, sdkInt) }
-            .sortedWith(findingOrder).take(12)
+            .sortedWith(findingSelectionOrder).take(12).sortedWith(findingOrder)
         return InsightReport(inputs.nowMs, findings, findings.firstOrNull { it.severity != Severity.INFO })
     }
 }
 
 internal val findingOrder = compareByDescending<Finding> { it.severity.ordinal }
     .thenByDescending { it.confidence.ordinal }.thenByDescending { it.score }.thenBy { it.key }
+
+// Keep evidence for applied actions ahead of other INFO findings when selecting the bounded report.
+private val findingSelectionOrder = compareByDescending<Finding> { it.severity.ordinal }
+    .thenByDescending { it.severity == Severity.INFO && it.type == FindingType.ACTION_EFFECT }
+    .then(findingOrder)
 
 internal fun finding(
     type: FindingType,
