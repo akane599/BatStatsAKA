@@ -13,7 +13,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -111,10 +114,14 @@ class InsightRepository(
                         old?.feedbackMultiplier ?: 1.0)
                 } + existing.values.filter { it.status == InsightFindingStatus.ACTIVE && it.key !in produced }
                     .map { it.copy(status = InsightFindingStatus.RESOLVED) }
-                insightDao.upsertFindings(updates)
-                store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
-                mutableLastAnalyzedAt.value = inputs.nowMs
-                publish()
+                currentCoroutineContext().ensureActive()
+                // Once rows can commit, their timestamp and publication must finish with them.
+                withContext(NonCancellable) {
+                    insightDao.upsertFindings(updates)
+                    store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
+                    mutableLastAnalyzedAt.value = inputs.nowMs
+                    publish()
+                }
             }
         }
     }
