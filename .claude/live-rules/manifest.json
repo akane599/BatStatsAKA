@@ -25,7 +25,7 @@
     },
     {
       "path": "rules/android-orchestration.md",
-      "hash": "c6200e2d341bbe1685b8b739842b5a339c2e215d54647372ff6b3fe2e1a505ef",
+      "hash": "5cbcc6423e311dcf82481bc8d5fc13e7bb5ae703bcf5e3eb62d8efd994cb12aa",
       "description": "How Android work is ticketed, routed and dispatched (Sidequest, routing profile android-kit)",
       "globs": [],
       "dirs": [],
@@ -53,6 +53,27 @@
       "dirs": [],
       "prompt": [],
       "priority": 40,
+      "enabled": true,
+      "include": []
+    },
+    {
+      "path": "rules/statistical-detectors.md",
+      "hash": "018628c07649798771f726e2b766a29f9d379f7f8637224aa5d2668bf5c704e3",
+      "description": "Statistical detector changes carry false-positive and power evidence",
+      "globs": [
+        "app/src/main/java/com/akane/voltwise/battery/insights/engine/**"
+      ],
+      "dirs": [],
+      "prompt": [
+        "detector",
+        "false positive",
+        "false-positive",
+        "trend",
+        "baseline",
+        "Theil",
+        "Mann-Kendall"
+      ],
+      "priority": 5,
       "enabled": true,
       "include": []
     }

@@ -14,7 +14,7 @@ Android, developed on Ubuntu from the CLI.
 - DI/DB/Net: Koin / Room / none · Async: coroutines/Flow · Navigation: Navigation 3 · Firebase: no · Version catalog: yes
 - App id: com.akane.voltwise (debug .debug, preview .preview; was org.mlm.batstats before 2026-10-08) · namespace: com.akane.voltwise (was app.batstats) · Launcher: com.akane.voltwise.battery.BatteryMainActivity
 - Tests: JUnit4 + kotlinx-coroutines-test; androidTest present, no Espresso · Lint: Android lint; no detekt/ktlint/spotless
-- Baseline: full gate green on feat/insights @ 82d32ac (2026-10-09): unit 1225/0 fail, androidTest compile, assembleDebug, 259 screenshots/0 fail
+- Baseline: full gate green on feat/insights @ 257ddc4 (2026-10-09): unit 1529/0 fail, androidTest compile, assembleDebug, 272 screenshots/0 fail, migrations; assemblePreview OK
 <!-- STACK:END -->
 
 ## How work flows here
@@ -38,6 +38,7 @@ Android, developed on Ubuntu from the CLI.
 ## Commands
 - Build: `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew :app:assembleDebug --console=plain -q`
 - Unit: `./gradlew :app:testDebugUnitTest --console=plain -q` · Lint: `./gradlew :app:lintDebug --console=plain -q`
+- Preview APK: `JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 ./gradlew :app:assemblePreview --console=plain -q` — minified, debug-key signed unless `PREVIEW_*` env vars are set, installs as `.preview`; split APKs in `app/build/outputs/apk/preview/` (`app-universal-preview.apk`, `app-arm64-v8a-preview.apk`). Release needs `KEYSTORE_PATH`/`STORE_PASSWORD`/`KEY_ALIAS`/`KEY_PASSWORD`.
 - Gradle helper: `bash .claude/kit/gradle-check.sh :app:assembleDebug` (retains full log and actual exit code; uses --console=plain -q).
 - Screenshots: `bash .claude/scripts/run_screenshot_tests.sh` runs `:app:testDebugScreenshotTestDefaultTestSuite --rerun --console=plain -q`; the template's updateDebugScreenshotTest/validateDebugScreenshotTest tasks do not match this AGP suite. Do not update references during bootstrap.
 - Instrumented: `./gradlew :app:connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.notAnnotation=com.akane.voltwise.test.RequiresShizuku --console=plain -q` (requires a device; Shizuku tests are a separate phase).
