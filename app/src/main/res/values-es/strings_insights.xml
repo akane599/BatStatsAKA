@@ -175,7 +175,7 @@
     <!-- InsightMessageCode -->
     <string name="insights_message_applied">Corrección aplicada.</string>
     <string name="insights_message_restricted_to_rare">Android no permite aquí el grupo Restringida, así que la app se limitó a Poco frecuente.</string>
-    <string name="insights_message_unknown">No se pudo confirmar si el cambio se aplicó. Voltwise lo volverá a comprobar.</string>
+    <string name="insights_message_unknown">No se pudo confirmar si el cambio se aplicó.</string>
     <string name="insights_message_reverted">Cambio deshecho.</string>
     <string name="insights_message_changed_externally">Este ajuste se cambió fuera de Voltwise, así que no se deshizo nada.</string>
     <string name="insights_message_one_shot">Hecho.</string>

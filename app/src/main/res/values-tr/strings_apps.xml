@@ -140,7 +140,7 @@
     <string name="apps_details_history_failed">Kaydedilen oturumlar okunamadı.</string>
     <string name="apps_details_history_series">Kullanılan pil</string>
     <string name="apps_details_history_info_title">Pildeki oturumlar hakkında</string>
-    <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. Voltwise, erişimi olduğunda Android istatistiklerini iki uçta da okur ve her birinin ilk 30 uygulamasını saklar.\n\nBu uygulamanın ilk 30 içinde olmadığı bir oturum 0 olarak görünür.</string>
+    <string name="apps_details_history_info_body">Her çubuk, son 30 gündeki bir pil dönemidir (en fazla 14), fişten çekilmeden takılana kadar. Voltwise, erişimi olduğunda Android istatistiklerini iki uçta da okur; en çok pil kullanan 30 uygulamayı ve telefonu uyandıran en fazla 10 ek uygulamayı saklar.\n\nBu uygulamanın ayrı olarak kaydedilmediği bir oturum 0 olarak görünür.</string>
     <string name="apps_details_nothing_else">Bu uygulama için kaydedilen başka bir şey yok.</string>
     <string name="apps_summary_capacity_source">Android tahmini</string>
 </resources>

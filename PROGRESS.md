@@ -2,6 +2,8 @@
 
 _Work items, stories and blockers live on the Sidequest board. This file keeps what outlives tickets._
 
+- 2026-10-09 — Code audit round 3: force-stop writes its durable UNKNOWN attempt before dispatch and settles the same row on a known outcome. Advanced app statistics use bounded binary aggregate proto; app-controlled names remain opaque UID metadata. DB9 retires legacy text certification and attribution while preserving charts, ordinary history, feedback and all action journals. Android 8.0/8.1 lack this structured source and report advanced app statistics unavailable. Unknown-result and top-30 history descriptions now match behavior. Validation is recorded in the publication gate and CI; source-derived framing scenarios are not device exploit claims.
+
 ## Now
 - [x] Bootstrap complete — verify build command
 - [x] US-1 audit fixes (docs/AUDIT_RESULTS_2026-10-07.md, SQ-2..SQ-31) integrated into local feat/overhaul @ 6ca5ffd; full gate green; not pushed

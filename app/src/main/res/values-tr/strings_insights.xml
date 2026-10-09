@@ -174,7 +174,7 @@
     <!-- InsightMessageCode -->
     <string name="insights_message_applied">Düzeltme uygulandı.</string>
     <string name="insights_message_restricted_to_rare">Android burada Kısıtlı gruba izin vermiyor; uygulama bunun yerine Nadir gruba alındı.</string>
-    <string name="insights_message_unknown">Değişikliğin uygulanıp uygulanmadığı doğrulanamadı. Voltwise daha sonra yeniden kontrol eder.</string>
+    <string name="insights_message_unknown">Değişikliğin uygulanıp uygulanmadığı doğrulanamadı.</string>
     <string name="insights_message_reverted">Değişiklik geri alındı.</string>
     <string name="insights_message_changed_externally">Bu ayar Voltwise dışında değiştirildi; hiçbir şey geri alınmadı.</string>
     <string name="insights_message_one_shot">Yapıldı.</string>

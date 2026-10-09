@@ -516,7 +516,7 @@ private fun HistoryFailedPanel(onRetry: () -> Unit, modifier: Modifier = Modifie
     }
 }
 
-/** This app's mAh in each stored session on battery (oldest first; 0 outside a session's top 30), tap to select. */
+/** This app's mAh in each stored session on battery (oldest first; 0 when not individually stored), tap to select. */
 @Composable
 private fun HistoryPanel(history: AppHistory, modifier: Modifier = Modifier) {
     Panel(
@@ -547,7 +547,7 @@ private fun HistoryPanel(history: AppHistory, modifier: Modifier = Modifier) {
 }
 
 /**
- * One bar per session: its mAh (0 when outside the session's top 30). Spoken (and drawn when it fits) by its start
+ * One bar per session: its mAh (0 when not individually stored). Spoken (and drawn when it fits) by its start
  * day and time, so two sessions on one day get distinct TalkBack actions; the day alone under crowded bars.
  */
 internal fun historyBarEntries(sessions: List<AppSessionUsage>, formatter: TimeAxisFormatter): List<BarEntry> =

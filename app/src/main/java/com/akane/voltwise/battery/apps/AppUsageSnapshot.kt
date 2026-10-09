@@ -2,7 +2,7 @@ package com.akane.voltwise.battery.apps
 
 import com.akane.voltwise.battery.util.BatteryStatsParser
 
-/** A per-UID snapshot of one `dumpsys batterystats -c --charged` dump, keyed to the stats
+/** A per-UID snapshot of one structured `dumpsys batterystats --proto --charged` dump, keyed to the stats
  * window it was taken in (`windowStartedAt`/`windowStartCount`) so two snapshots can be told
  * apart from a window reset. A3's `app_snapshots`/`app_snapshot_uids` tables model these fields
  * exactly; do not add or rename fields here without updating that schema. */
@@ -56,7 +56,7 @@ fun BatteryStatsParser.AppPowerStats.identity(): UidIdentity {
     }
 }
 
-/** Maps a full checkin parse to the per-app fields the delta/db layers need. */
+/** Maps a full structured parse to the per-app fields the delta/db layers need. */
 fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
     val wakers = kernelWakelocks.map { DeviceWaker("KERNEL_WAKELOCK", it.name, it.count.toLong(), it.totalTimeMs) } +
         wakeupReasons.map { DeviceWaker("WAKEUP_REASON", it.name, it.count.toLong(), it.totalTimeMs) }

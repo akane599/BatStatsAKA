@@ -10,7 +10,7 @@ import rikka.shizuku.ShizukuApiConstants
 class ShellUserServiceTest {
     @Test fun helperUsesStrictSpaceDelimitedPolicyAndKeepsDiagnostics() {
         for (command in listOf(
-            "dumpsys batterystats -c --charged", "dumpsys battery",
+            "dumpsys batterystats -c --charged", "dumpsys batterystats --proto --charged", "dumpsys battery",
             PrivilegedCommand.ForceStop("com.example").argv.joinToString(" "),
         )) {
             assertTrue(ShellUserService.allows(command))
@@ -18,7 +18,11 @@ class ShellUserServiceTest {
                 assertFalse(bad, ShellUserService.allows(bad))
             }
         }
-        for (command in listOf("am force-stop --user 1 com.example", "cmd deviceidle force-idle", "sh -c id", "dumpsys battery reset")) {
+        for (command in listOf(
+            "am force-stop --user 1 com.example", "cmd deviceidle force-idle", "sh -c id", "dumpsys battery reset",
+            "dumpsys batterystats --proto", "dumpsys batterystats --proto --charged --history",
+            "dumpsys batterystats --proto --charged --checkin",
+        )) {
             assertFalse(ShellUserService.allows(command))
         }
     }

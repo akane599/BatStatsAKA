@@ -10,7 +10,7 @@ BatStatsAKA/
 ├── app/
 │   ├── build.gradle.kts            # the only module: variants, signing, splits, screenshot suite, deps
 │   ├── proguard-rules.pro
-│   ├── schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/{4,5}.json   # Room exported schemas
+│   ├── schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/{4,5,6,7,8,9}.json   # Room exported schemas
 │   └── src/
 │       ├── main/
 │       │   ├── AndroidManifest.xml

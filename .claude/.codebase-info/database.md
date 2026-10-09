@@ -2,11 +2,11 @@
 
 *Last Updated: 2026-10-09*
 
-Room database `battery.db`, **version 8**, `exportSchema = true`.
+Room database `battery.db`, **version 9**, `exportSchema = true`.
 - Definition and migrations: `app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt`
 - Entities: `data/db/Entities.kt`, `data/db/AppUsageTables.kt`, `data/db/DailySummary.kt`, `data/db/InsightTables.kt`
 - DAOs: `data/db/Dao.kt`
-- Exported schemas: `app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`, `7.json`
+- Exported schemas: `app/schemas/com.akane.voltwise.battery.data.db.BatteryDatabase/4.json`, `5.json`, `6.json`, `7.json`, `8.json`, `9.json`
   (KSP arg `room.schemaLocation` in `app/build.gradle.kts`)
 
 ## Tables
@@ -44,7 +44,8 @@ as a documented fallback for the two NOT NULL enum columns.
 | 4→5 | **irreversible**: drops `alarm_rules` and `app_energy_stats`, adds the v5 session columns and creates `daily_summaries`, `app_snapshots`, `app_snapshot_uids`, `session_app_usage` (DDL copied from `5.json`). No 5→4 path. |
 | 5→6 | additive: four nullable `screen{On,Off}CoveredMs` columns on `charge_sessions` and `daily_summaries` (`MIGRATION_5_6`). |
 | 6→7 | additive, forward-only: Doze / app-capture columns on `charge_sessions` and `daily_summaries`, process-state proxy columns on `app_snapshot_uids` and `session_app_usage`, new tables `snapshot_device_wakers`, `session_device_wakers`, `insight_findings`, `insight_actions` (`MIGRATION_6_7`). Reverting the app does not downgrade `battery.db`. |
-| 7→8 | additive, forward-only: nullable `metric` TEXT on `insight_actions` (`MIGRATION_7_8`); pre-v8 rows stay null and fall back to the finding's lead evidence. `scripts/check_migrations.py` checks every 1–7→8 path. |
+| 7→8 | additive, forward-only: nullable `metric` TEXT on `insight_actions` (`MIGRATION_7_8`); pre-v8 rows stay null and fall back to the finding's lead evidence. `scripts/check_migrations.py` checks every migration path. |
+| 8→9 | data-only provenance upgrade: clear legacy app capture markers, discard transient snapshots and device-waker attribution, resolve old ACTIVE findings. Keep per-app chart rows, ordinary history, finding feedback and all action journals. No downgrade path. `scripts/check_migrations.py` checks every 1–8→9 path. |
 
 There's no destructive fallback: every version needs an explicit `MIGRATION_a_b` registered in `get()`.
 

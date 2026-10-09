@@ -7,6 +7,16 @@ import org.junit.Test
 class CommandPolicyTest {
     private val pkg = "com.example_app.A1"
 
+    @Test fun onlyTheFixedChargedProtoDiagnosticIsAllowed() {
+        assertTrue(CommandPolicy.allows(listOf("dumpsys", "batterystats", "--proto", "--charged")))
+        for (command in listOf(
+            "dumpsys batterystats --proto", "dumpsys batterystats --charged --proto",
+            "dumpsys batterystats --proto --charged --history", "dumpsys battery --proto --charged",
+            "dumpsys batterystats --proto --charged;id", "dumpsys batterystats --proto --charged\n",
+            " dumpsys batterystats --proto --charged", "dumpsys  batterystats --proto --charged",
+        )) assertFalse(command, CommandPolicy.allows(command.split(' ')))
+    }
+
     @Test fun everyTemplateRoundTripsWithExactTokens() {
         assertEquals(listOf("active", "working_set", "frequent", "rare", "restricted"), StandbyBucket.supported(30).map { it.token })
         assertEquals(listOf("allow", "ignore", "default", "deny", "foreground"), AppOpMode.entries.map { it.token })

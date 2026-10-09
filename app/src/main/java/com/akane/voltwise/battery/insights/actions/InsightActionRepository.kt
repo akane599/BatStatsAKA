@@ -45,21 +45,25 @@ class InsightActionRepository(
             if (app == null) return@withLock ActionResult.Refused(RefusalCode.INVALID_SUBJECT)
             validate(app.packageName, app.uid)?.let { return@withLock ActionResult.Refused(it) }
             if (rec.action == ActionType.FORCE_STOP) {
+                // Force-stop has no trustworthy readback; interruptions must leave a durable attempt.
+                val attempt = row(finding, rec.action, UNKNOWN)
+                val saved = attempt.copy(id = dao.insertAction(attempt))
                 val outcome = executor.run(PrivilegedCommand.ForceStop(app.packageName))
-                if (outcome is Outcome.NoAccess) return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
                 val success = outcome is Outcome.Success
                 val uncertain = outcome is Outcome.Failure && outcome.certainty == ExecutionCertainty.UNKNOWN
-                val id = dao.insertAction(row(finding, rec.action, when {
-                    success -> ONE_SHOT
-                    uncertain -> UNKNOWN
-                    else -> FAILED
-                }).copy(
+                if (uncertain) return@withLock ActionResult.Unknown
+                dao.updateAction(saved.copy(
+                    status = if (success) ONE_SHOT else FAILED,
                     appliedAt = if (success) clock() else null,
-                    message = if (success || uncertain) null else FailureCode.EXECUTION_FAILED.name,
+                    message = when {
+                        success -> null
+                        outcome is Outcome.NoAccess -> RefusalCode.NOT_PRIVILEGED.name
+                        else -> FailureCode.EXECUTION_FAILED.name
+                    },
                 ))
                 return@withLock when {
-                    success -> ActionResult.OneShot(id)
-                    uncertain -> ActionResult.Unknown
+                    success -> ActionResult.OneShot(saved.id)
+                    outcome is Outcome.NoAccess -> ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
                     else -> ActionResult.Failed(FailureCode.EXECUTION_FAILED)
                 }
             }

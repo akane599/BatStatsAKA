@@ -49,8 +49,8 @@ The database always keeps **raw** `CURRENT_NOW`; calibration (unit/sign) is appl
 `docs/MEASUREMENTS.md`.
 
 **Per-app stats.** `AppsViewModel` / `AppDetailsViewModel` → `AppStatsRepository` → `ShellRunner`
-(mode picked in order SHIZUKU → ROOT → ADB → NONE) → `dumpsys batterystats -c --charged` →
-`util/BatteryStatsParser.kt`. Concurrent callers share one dump. `SessionSnapshotCollector` takes a
+(mode picked in order SHIZUKU → ROOT → ADB → NONE) → `dumpsys batterystats --proto --charged` →
+`util/BatteryStatsProtoParser.kt` → existing `BatteryStatsParser.FullSnapshot` models. The binary collector and helper pipe preserve length-delimited names; concurrent callers share one dump. `SessionSnapshotCollector` takes a
 BASELINE dump when a discharge session opens and an END dump at plug-in, then stores the delta as
 `session_app_usage`. See [privileged-shell.md](privileged-shell.md).
 
@@ -59,7 +59,7 @@ refresh; its application scope refreshes on finalized discharge snapshots and cl
 inputs from Room (`InsightInputsBuilder`), runs the pure `InsightEngine` (detectors → rank → top 12) and
 publishes `report`, which the Insights tab, Finding details, the Now card, App details and
 `InsightNotifier` consume. Applying a fix goes `InsightActionRepository` → `CommandPolicy`-checked
-`PrivilegedCommand` → `ShellRunner`, journalled PREPARED→APPLIED/FAILED/UNKNOWN with readback.
+`PrivilegedCommand` → `ShellRunner`, journalled PREPARED→APPLIED/FAILED/UNKNOWN with readback for reversible actions. Force-stop records UNKNOWN before dispatch, then settles the same attempt without readback or Undo.
 
 **Deep links.** A notification, tile or widget passes `Destinations.EXTRA_DESTINATION` →
 `BatteryMainActivity` → `MainScreen` → `TopLevelBackStack.openDestination` (`ui/navigation/`).

@@ -12,7 +12,7 @@ import com.akane.voltwise.battery.apps.AppUsageStatus
     entities = [BatterySample::class, ChargeSession::class, DailySummary::class,
         AppSnapshot::class, AppSnapshotUid::class, SessionAppUsage::class,
         SnapshotDeviceWaker::class, SessionDeviceWaker::class, InsightFindingEntity::class, InsightActionEntity::class],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class BatteryDatabase : RoomDatabase() {
@@ -150,6 +150,17 @@ abstract class BatteryDatabase : RoomDatabase() {
             }
         }
 
+        /** Legacy checkin text cannot certify app captures or waker attribution; retain browsing and undo history. */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE `charge_sessions` SET `appCaptureStartMs` = NULL, `appCaptureEndMs` = NULL")
+                db.execSQL("DELETE FROM `app_snapshots`")
+                db.execSQL("DELETE FROM `session_device_wakers`")
+                // Device payloads can also carry app attributions from those untrusted captures.
+                db.execSQL("UPDATE `insight_findings` SET `status` = 'RESOLVED' WHERE `status` = 'ACTIVE'")
+            }
+        }
+
         fun get(context: Context): BatteryDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -157,7 +168,7 @@ abstract class BatteryDatabase : RoomDatabase() {
                     BatteryDatabase::class.java,
                     "battery.db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                     .build().also { INSTANCE = it }
             }
     }

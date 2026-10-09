@@ -1,5 +1,7 @@
 package com.akane.voltwise.battery.actions
 
+import com.akane.voltwise.battery.util.BatteryStatsBinaryOutput
+
 /** Shared, fail-closed argv allow-list for the app and the privileged helper process. */
 object CommandPolicy {
     private val packageName = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)+")
@@ -18,6 +20,7 @@ object CommandPolicy {
         if (argv.isEmpty() || argv.any { it.isEmpty() }) return false
         return when (argv.first()) {
             "dumpsys" -> argv == listOf("dumpsys", "batterystats", "-c", "--charged") ||
+                argv == BatteryStatsBinaryOutput.ARGV ||
                 argv == listOf("dumpsys", "battery") || argv == listOf("dumpsys", "deviceidle")
             "am" -> allowsAm(argv)
             "cmd" -> allowsAppOps(argv) || allowsWhitelist(argv)

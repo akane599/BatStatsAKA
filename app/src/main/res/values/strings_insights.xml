@@ -181,7 +181,7 @@
     <!-- InsightMessageCode (results of apply, undo and analysis) -->
     <string name="insights_message_applied">Fix applied.</string>
     <string name="insights_message_restricted_to_rare">Android doesn\'t allow the Restricted bucket here, so the app was limited to Rare instead.</string>
-    <string name="insights_message_unknown">Couldn\'t confirm whether the change took effect. Voltwise checks again later.</string>
+    <string name="insights_message_unknown">Couldn\'t confirm whether the change took effect.</string>
     <string name="insights_message_reverted">Change undone.</string>
     <string name="insights_message_changed_externally">This setting was changed outside Voltwise, so nothing was undone.</string>
     <string name="insights_message_one_shot">Done.</string>

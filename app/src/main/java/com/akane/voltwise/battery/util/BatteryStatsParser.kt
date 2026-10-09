@@ -1,6 +1,8 @@
 package com.akane.voltwise.battery.util
 
-/** Android checkin v9. Field offsets follow android16-release BatteryStats.java.
+/** Legacy Android checkin v9 decoder retained for compatibility fixtures. Production app statistics use
+ * [BatteryStatsProtoParser]; raw checkin name framing cannot establish trustworthy UID measurements.
+ * Field offsets follow android16-release BatteryStats.java.
  * Missing/invalid fields remain null. Activity times are not energy measurements.
  */
 object BatteryStatsParser {

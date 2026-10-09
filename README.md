@@ -20,6 +20,8 @@ Removed since the previous stable release: the old Kernel/System detail tabs, th
 
 ## Advanced access
 
+Advanced per-app statistics require Android 9/API 28 or later. Android 8.0/8.1 support ordinary battery monitoring and history, but do not expose the structured app-statistics source.
+
 Start Shizuku and authorize Voltwise from the app. Shizuku is the preferred source when running and authorized. Its shell mode does not grant every root-only capability. On connection loss, ordinary readings remain available; a failed privileged read is not silently replaced by another source.
 
 For ADB mode, use the installed package (`com.akane.voltwise.debug` for debug builds). Android 16/API 36 requires both permissions below and usage-stat app-op access for the ADB grant, but cross-user refusal still prevents ADB-only access to per-app batterystats; that capability requires Shizuku or root. The grant itself may persist across reboot, but a persistent grant does not restore that capability. For API 36 per-app stats, select Shizuku (when running and authorized) or root; otherwise the ADB path remains available only where platform access permits it.

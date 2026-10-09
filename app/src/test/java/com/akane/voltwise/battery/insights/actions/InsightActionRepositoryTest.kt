@@ -9,8 +9,11 @@ import com.akane.voltwise.battery.util.ExecutionCertainty
 import com.akane.voltwise.battery.util.ShellRunner
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -41,15 +44,19 @@ class InsightActionRepositoryTest {
     }
     private class Dao : UnusedInsightDao() {
         val rows = MutableStateFlow<List<InsightActionEntity>>(emptyList())
+        var beforeInsert: suspend () -> Unit = {}
+        var beforeUpdate: suspend () -> Unit = {}
         override fun actions() = rows
         override suspend fun actionsOnce() = rows.value
         override suspend fun actionsWithStatus(statuses: List<InsightActionStatus>) = rows.value.filter { it.status in statuses }
         override suspend fun insertAction(entity: InsightActionEntity): Long {
+            beforeInsert()
             val id = (rows.value.maxOfOrNull { it.id } ?: 0) + 1
             rows.value += entity.copy(id = id)
             return id
         }
         override suspend fun updateAction(entity: InsightActionEntity) {
+            beforeUpdate()
             check(rows.value.any { it.id == entity.id })
             rows.value = rows.value.map { if (it.id == entity.id) entity else it }
         }
@@ -577,11 +584,9 @@ class InsightActionRepositoryTest {
     }
 
     @Test fun preflightNoAccessWritesNoRow() = runTest {
-        for (type in listOf(ActionType.RESTRICT_BACKGROUND, ActionType.FORCE_STOP)) {
-            val f = Fixture(); f.replies += denied()
-            assertEquals(ActionResult.Refused(RefusalCode.NOT_PRIVILEGED), f.apply(type))
-            assertTrue(f.dao.rows.value.isEmpty())
-        }
+        val f = Fixture(); f.replies += denied()
+        assertEquals(ActionResult.Refused(RefusalCode.NOT_PRIVILEGED), f.apply())
+        assertTrue(f.dao.rows.value.isEmpty())
     }
 
     @Test fun executeNoAccessRetainsUnknownUndoAuthority() = runTest {
@@ -775,6 +780,123 @@ class InsightActionRepositoryTest {
         f.repo.reconcile(); assertEquals(3, f.commands.size)
     }
 
+    @Test fun forceStopInsertFailurePreventsDispatch() = runTest {
+        val f = Fixture()
+        f.replies += ok()
+        f.dao.beforeInsert = { throw IllegalStateException("journal unavailable") }
+
+        try { f.apply(ActionType.FORCE_STOP); fail("insert failure required") } catch (_: IllegalStateException) { }
+
+        assertTrue(f.commands.isEmpty())
+        assertTrue(f.dao.actionsOnce().isEmpty())
+    }
+
+    @Test fun forceStopPersistsUnknownBeforeDispatchAndSettlesTheSameRow() = runTest {
+        val f = Fixture()
+        f.replies += ok()
+        var attempt: InsightActionEntity? = null
+        f.intercept = {
+            assertEquals(PrivilegedCommand.ForceStop(pkg), it)
+            attempt = f.dao.actionsOnce().single()
+            assertEquals(UNKNOWN, attempt!!.status)
+            assertEquals(ActionType.FORCE_STOP.name, attempt!!.type)
+            assertEquals(pkg, attempt!!.packageName)
+            assertEquals(uid, attempt!!.uid)
+            assertNull(attempt!!.appliedAt)
+            assertNull(attempt!!.priorState)
+            assertNull(attempt!!.targetState)
+        }
+
+        assertEquals(ActionResult.OneShot(1), f.apply(ActionType.FORCE_STOP))
+
+        assertEquals(attempt!!.id, f.dao.actionsOnce().single().id)
+        assertEquals(attempt!!.createdAt, f.row().createdAt)
+        assertEquals(ONE_SHOT, f.row().status)
+        assertEquals(101L, f.row().appliedAt)
+        assertNull(f.row().message)
+    }
+
+    @Test fun forceStopExecutorExceptionRetainsUnknownWithoutRecoveryOrUndoCommands() = runTest {
+        val f = Fixture()
+        f.intercept = { throw IllegalStateException("response lost after dispatch") }
+
+        try { f.apply(ActionType.FORCE_STOP); fail("executor failure required") } catch (_: IllegalStateException) { }
+
+        f.assertUnknownForceStopIsNotRecoverable()
+    }
+
+    @Test fun forceStopExecutorCancellationRetainsUnknownWithoutRecoveryOrUndoCommands() = runTest {
+        val f = Fixture()
+        val dispatched = CompletableDeferred<Unit>()
+        f.intercept = { dispatched.complete(Unit); awaitCancellation() }
+        val apply = launch { f.apply(ActionType.FORCE_STOP) }
+        dispatched.await()
+        apply.cancelAndJoin()
+
+        f.assertUnknownForceStopIsNotRecoverable()
+    }
+
+    @Test fun forceStopSettlementFailureRetainsUnknownWithoutRecoveryOrUndoCommands() = runTest {
+        for (outcome in listOf(ok(), failure(), denied())) {
+            val f = Fixture()
+            f.replies += outcome
+            f.dao.beforeUpdate = { throw IllegalStateException("journal unavailable after dispatch") }
+
+            try { f.apply(ActionType.FORCE_STOP); fail("settlement failure required") } catch (_: IllegalStateException) { }
+
+            f.dao.beforeUpdate = {}
+            f.assertUnknownForceStopIsNotRecoverable()
+        }
+    }
+
+    @Test fun forceStopSettlementCancellationRetainsUnknownWithoutRecoveryOrUndoCommands() = runTest {
+        val f = Fixture()
+        f.replies += ok()
+        val settling = CompletableDeferred<Unit>()
+        f.dao.beforeUpdate = { settling.complete(Unit); awaitCancellation() }
+        val apply = launch { f.apply(ActionType.FORCE_STOP) }
+        runCurrent()
+        try {
+            assertTrue("known outcome must update the durable attempt", settling.isCompleted)
+        } finally {
+            apply.cancelAndJoin()
+        }
+
+        f.dao.beforeUpdate = {}
+        f.assertUnknownForceStopIsNotRecoverable()
+    }
+
+    @Test fun forceStopNoAccessSettlesFailedAndPreservesPrivilegeRefusal() = runTest {
+        val f = Fixture()
+        f.replies += denied()
+
+        assertEquals(ActionResult.Refused(RefusalCode.NOT_PRIVILEGED), f.apply(ActionType.FORCE_STOP))
+
+        assertEquals(FAILED, f.row().status)
+        assertEquals("NOT_PRIVILEGED", f.row().message)
+        assertNull(f.row().appliedAt)
+        assertNull(f.row().revertedAt)
+        assertEquals(listOf(PrivilegedCommand.ForceStop(pkg)), f.commands)
+        f.repo.reconcile()
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(f.row().id))
+        assertEquals(1, f.commands.size)
+    }
+
+    private suspend fun Fixture.assertUnknownForceStopIsNotRecoverable() {
+        val saved = dao.actionsOnce().single()
+        assertEquals(UNKNOWN, saved.status)
+        assertNull(saved.appliedAt)
+        assertNull(saved.revertedAt)
+        assertNull(saved.priorState)
+        assertNull(saved.targetState)
+        assertNull(saved.message)
+        assertEquals(listOf(PrivilegedCommand.ForceStop(pkg)), commands)
+        repo.reconcile()
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), repo.undo(saved.id))
+        assertEquals(saved, dao.actionsOnce().single())
+        assertEquals(listOf(PrivilegedCommand.ForceStop(pkg)), commands)
+    }
+
     @Test fun ambiguousForceStopIsUnknownWithoutUndoOrReconciliationReplayAndCanBeDeliberatelyRetried() = runTest {
         val f = Fixture()
         f.replies += ShellRunner.Outcome.Failure(ShellRunner.Mode.SHIZUKU, "response lost", ExecutionCertainty.UNKNOWN)
@@ -810,6 +932,8 @@ class InsightActionRepositoryTest {
         assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
         val failed = Fixture(); failed.replies += failure()
         assertEquals(ActionResult.Failed(FailureCode.EXECUTION_FAILED), failed.apply(ActionType.FORCE_STOP))
+        assertEquals(FAILED, failed.row().status)
+        assertNull(failed.row().appliedAt)
         assertEquals("EXECUTION_FAILED", failed.row().message)
     }
 
