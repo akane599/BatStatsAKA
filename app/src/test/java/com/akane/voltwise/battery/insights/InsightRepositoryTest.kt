@@ -1,9 +1,12 @@
 package com.akane.voltwise.battery.insights
 
+import com.akane.voltwise.battery.data.HistoryMaintenance
 import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
 import com.akane.voltwise.battery.insights.model.*
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -47,6 +50,8 @@ class InsightRepositoryTest {
         var window: Pair<Long, Long>? = null
         var dayWindow: Pair<Long, Long>? = null
         var dump: suspend () -> Unit = {}
+        var duringAnalysis: () -> Unit = {}
+        val maintenance = HistoryMaintenance()
         var whitelist = setOf("old.whitelist")
         val store = FakeKeyValueStore()
         val insights = MemoryInsights()
@@ -81,10 +86,16 @@ class InsightRepositoryTest {
         }
         fun repository(scope: TestScope) = InsightRepository(sessionDao, daily, apps, insights, scope.backgroundScope,
             clock, { events += "whitelist"; whitelist }, { true }, { events += "dump"; dump() }, store,
+            maintenance = maintenance,
             capacityReading = { 2_000_000L to 50 },
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
             analyzeDispatcher = StandardTestDispatcher(scope.testScheduler),
-            analyze = { seen += it; events += "analyze"; InsightReport(it.nowMs, output, output.firstOrNull()) })
+            analyze = {
+                seen += it
+                events += "analyze"
+                duringAnalysis()
+                InsightReport(it.nowMs, output, output.firstOrNull())
+            })
     }
 
     @Test fun startupLoadsOnlyActiveSupportedFindingsAndPersistedAnalysisTime() = runTest {
@@ -134,6 +145,92 @@ class InsightRepositoryTest {
         repo.refresh()
         assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row().status)
         assertEquals(NOW, fixture.insights.row().firstSeenAt)
+    }
+
+    @Test fun dismissedHighFindingStaysDismissedAfterMediumThenHigh() = runTest {
+        assertDismissedSeveritySurvivesImprovement(notAProblem = false)
+    }
+
+    @Test fun notAProblemHighFindingStaysDismissedAfterMediumThenHigh() = runTest {
+        assertDismissedSeveritySurvivesImprovement(notAProblem = true)
+    }
+
+    private suspend fun TestScope.assertDismissedSeveritySurvivesImprovement(notAProblem: Boolean) {
+        val fixture = Fixture()
+        fixture.output = listOf(testFinding(severity = Severity.HIGH))
+        val repo = fixture.repository(this)
+        repo.refresh()
+        if (notAProblem) repo.notAProblem(testFinding().key) else repo.dismiss(testFinding().key)
+        fixture.output = listOf(testFinding(severity = Severity.MEDIUM))
+        repo.refresh()
+        fixture.output = listOf(testFinding(severity = Severity.HIGH))
+        repo.refresh()
+        assertEquals("HIGH must not reactivate a finding dismissed at HIGH",
+            InsightFindingStatus.DISMISSED, fixture.insights.row().status)
+        assertEquals(Severity.HIGH.name, fixture.insights.row().severity)
+        assertEquals(if (notAProblem) 1.5 else 1.0, fixture.insights.row().feedbackMultiplier, 0.0)
+        assertTrue(repo.report.value!!.findings.isEmpty())
+    }
+
+    @Test fun completedClearDuringAnalysisDiscardsStaleFindingsAndTimestamp() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        var clear: Deferred<Unit>? = null
+        fixture.duringAnalysis = {
+            clear = async(start = CoroutineStart.UNDISPATCHED) {
+                fixture.maintenance.clear({}, {
+                    fixture.sessions = emptyList()
+                    fixture.insights.rows.value = emptyList()
+                })
+            }
+            assertTrue("Slow analysis must not hold the history mutation lock", clear!!.isCompleted)
+            assertFalse(fixture.maintenance.isClearing)
+        }
+        repo.refresh()
+        clear!!.await()
+        assertEquals(1, fixture.seen.single().sessions.size)
+        assertTrue("Completed clear must not be repopulated by stale analysis", fixture.insights.rows.value.isEmpty())
+        assertNull(fixture.store.getString(InsightRepository.LAST_ANALYZED_AT))
+        assertNull(repo.lastAnalyzedAt.value)
+        runCurrent()
+        assertTrue(repo.report.value!!.findings.isEmpty())
+        fixture.duringAnalysis = {}
+        fixture.output = emptyList()
+        repo.refresh()
+        assertTrue(fixture.seen.last().sessions.isEmpty())
+        assertEquals(NOW, repo.lastAnalyzedAt.value)
+    }
+
+    @Test fun clearHoldingMutationLockPreventsRefreshFromWriting() = runTest {
+        val fixture = Fixture()
+        val repo = fixture.repository(this)
+        val deleteGate = CompletableDeferred<Unit>()
+        var clear: Deferred<Unit>? = null
+        fixture.duringAnalysis = {
+            clear = async(start = CoroutineStart.UNDISPATCHED) {
+                fixture.maintenance.clear({}, {
+                    deleteGate.await()
+                    fixture.sessions = emptyList()
+                    fixture.insights.rows.value = emptyList()
+                })
+            }
+        }
+        val refresh = async { repo.refresh() }
+        try {
+            runCurrent()
+            assertTrue(fixture.maintenance.isClearing)
+            assertTrue("No write may race a pending clear", fixture.insights.rows.value.isEmpty())
+            assertNull(repo.lastAnalyzedAt.value)
+        } finally {
+            // Clear is non-cancellable, so release its fake deletion even when a regression fails.
+            deleteGate.complete(Unit)
+        }
+        clear!!.await()
+        refresh.await()
+        runCurrent()
+        assertTrue(fixture.insights.rows.value.isEmpty())
+        assertTrue(repo.report.value!!.findings.isEmpty())
+        assertNull(repo.lastAnalyzedAt.value)
     }
 
     @Test fun missingDismissedFindingRemainsDismissedAndFeedbackFlowsIntoNextAnalysis() = runTest {
@@ -224,6 +321,7 @@ class InsightRepositoryTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val repo = InsightRepository(fixture.sessionDao, fixture.daily, fixture.apps, fixture.insights,
             backgroundScope, fixture.clock, { emptySet() }, { false }, {}, fixture.store,
+            maintenance = fixture.maintenance,
             ioDispatcher = dispatcher, analyzeDispatcher = dispatcher)
         repo.refresh()
         assertNotNull(repo.report.value)
