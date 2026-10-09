@@ -77,7 +77,11 @@ internal fun Finding.toInsightState(
     evidence.insightSnapshot(), series.insightSnapshot(),
     recommendations.map { rec ->
         val applied = actions.any { row ->
-            row.type == rec.action.name && row.undoable() &&
+            row.type == rec.action.name &&
+                (row.undoable() ||
+                    (subject == Subject.Device && rec.action == ActionType.ENABLE_HIGH_BATTERY_ALERT &&
+                        row.status == InsightActionStatus.ONE_SHOT &&
+                        (row.appliedAt ?: row.createdAt) >= generatedAtMs)) &&
                 // Only a report analyzed after removal proves that the app is whitelisted again.
                 !(type == FindingType.DOZE_WHITELISTED_DRAINER && rec.action == ActionType.REMOVE_DOZE_WHITELIST &&
                     (row.appliedAt ?: row.createdAt) < generatedAtMs) &&
