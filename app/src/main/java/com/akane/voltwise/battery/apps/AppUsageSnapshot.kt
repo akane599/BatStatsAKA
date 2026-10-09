@@ -108,7 +108,7 @@ fun BatteryStatsParser.FullSnapshot.toAppUsageSnapshot(): AppUsageSnapshot {
     )
 }
 
-// Reserve reason capacity by wake count without exceeding the 200-row snapshot budget.
+// Reserve 150 time-ranked kernels and 50 count-ranked reasons; lend unused slots within the 200-row budget.
 private const val SNAPSHOT_KERNEL_WAKER_LIMIT = 150
 private const val SNAPSHOT_WAKEUP_REASON_LIMIT = 50
 
@@ -119,13 +119,13 @@ internal fun List<DeviceWaker>.selectSnapshotWakers(): SnapshotWakerSelection {
         .partition { it.kind == "KERNEL_WAKELOCK" }
     val selectedKernels = kernels.sortedWith(
         compareByDescending<DeviceWaker> { it.totalMs }.thenBy { it.name },
-    ).take(SNAPSHOT_KERNEL_WAKER_LIMIT)
+    ).take(SNAPSHOT_KERNEL_WAKER_LIMIT + (SNAPSHOT_WAKEUP_REASON_LIMIT - reasons.size).coerceAtLeast(0))
     val selectedReasons = reasons.sortedWith(
         compareByDescending<DeviceWaker> { it.count }.thenBy { it.name },
-    ).take(SNAPSHOT_WAKEUP_REASON_LIMIT)
+    ).take(SNAPSHOT_KERNEL_WAKER_LIMIT + SNAPSHOT_WAKEUP_REASON_LIMIT - selectedKernels.size)
     return SnapshotWakerSelection(
         entries = selectedKernels + selectedReasons,
-        complete = kernels.size <= SNAPSHOT_KERNEL_WAKER_LIMIT && reasons.size <= SNAPSHOT_WAKEUP_REASON_LIMIT,
+        complete = selectedKernels.size == kernels.size && selectedReasons.size == reasons.size,
     )
 }
 
