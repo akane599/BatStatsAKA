@@ -16,6 +16,11 @@
         <item quantity="many">%d sesiones</item>
         <item quantity="other">%d sesiones</item>
     </plurals>
+    <plurals name="finding_days">
+        <item quantity="one">%d día</item>
+        <item quantity="many">%d días</item>
+        <item quantity="other">%d días</item>
+    </plurals>
 
     <string name="finding_unit_hours">h</string>
     <string name="finding_chart_usual_range">Rango habitual</string>

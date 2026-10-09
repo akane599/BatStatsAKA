@@ -18,6 +18,10 @@
         <item quantity="one">%d session</item>
         <item quantity="other">%d sessions</item>
     </plurals>
+    <plurals name="finding_days">
+        <item quantity="one">%d day</item>
+        <item quantity="other">%d days</item>
+    </plurals>
 
     <!-- Chart -->
     <string name="finding_unit_hours">h</string>
