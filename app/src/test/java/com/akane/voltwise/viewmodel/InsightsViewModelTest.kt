@@ -2,6 +2,7 @@ package com.akane.voltwise.viewmodel
 
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModelStore
+import com.akane.voltwise.battery.data.HistoryMaintenance
 import com.akane.voltwise.battery.data.db.InsightActionEntity
 import com.akane.voltwise.battery.data.db.InsightActionStatus
 import com.akane.voltwise.battery.data.db.*
@@ -72,6 +73,7 @@ class InsightsViewModelTest {
             },
             dao, backgroundScope, Clock.fixed(Instant.ofEpochMilli(now), ZoneOffset.UTC),
             { null }, { true }, { dumps++ }, FakeKeyValueStore(),
+            maintenance = HistoryMaintenance(),
             ioDispatcher = dispatcher, analyzeDispatcher = dispatcher,
             analyze = { InsightReport(it.nowMs, listOf(insightFinding()), insightFinding()) },
         )

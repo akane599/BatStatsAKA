@@ -202,6 +202,7 @@ val appModule = module {
             privileged = { shell.access.value == ShellRunner.Mode.SHIZUKU || shell.access.value == ShellRunner.Mode.ROOT },
             liveDump = { stats.snapshot(force = true) },
             store = SharedPreferencesStore(preferences),
+            maintenance = get(),
             capacityReading = {
                 val sample = battery.realtimeFlow.value.sample
                 sample?.chargeCounterUah to sample?.levelPercent

@@ -1,5 +1,6 @@
 package com.akane.voltwise.battery.insights
 
+import com.akane.voltwise.battery.data.HistoryMaintenance
 import com.akane.voltwise.battery.data.db.*
 import com.akane.voltwise.battery.data.resolveFullUah
 import com.akane.voltwise.battery.data.storedFullUah
@@ -34,6 +35,7 @@ class InsightRepository(
     private val privileged: () -> Boolean,
     private val liveDump: suspend () -> Unit,
     private val store: KeyValueStore,
+    private val maintenance: HistoryMaintenance,
     /** Latest charge counter and level, when available; FullCapacity also uses stored estimates. */
     private val capacityReading: () -> Pair<Long?, Int?> = { null to null },
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
@@ -56,6 +58,8 @@ class InsightRepository(
     }
 
     suspend fun refresh(liveDump: Boolean = false) = mutex.withLock {
+        val generation = maintenance.generation
+        if (maintenance.isClearing) return@withLock
         val inputs = withContext(ioDispatcher) {
             if (liveDump) this@InsightRepository.liveDump()
             val now = clock.millis()
@@ -75,23 +79,29 @@ class InsightRepository(
         }
         val analyzed = withContext(analyzeDispatcher) { analyze(inputs) }
         withContext(ioDispatcher) {
-            val existing = insightDao.findingsOnce().associateBy { it.key }
-            val produced = analyzed.findings.map { it.key }.toSet()
-            val updates = analyzed.findings.map { finding ->
-                val old = existing[finding.key]
-                val oldSeverity = enumName<Severity>(old?.severity)
-                val status = if (old?.status == InsightFindingStatus.DISMISSED &&
-                    (oldSeverity == null || finding.severity.ordinal <= oldSeverity.ordinal)) {
-                    InsightFindingStatus.DISMISSED
-                } else InsightFindingStatus.ACTIVE
-                FindingCodec.encode(finding, old?.firstSeenAt ?: inputs.nowMs, inputs.nowMs, status,
-                    old?.feedbackMultiplier ?: 1.0)
-            } + existing.values.filter { it.status == InsightFindingStatus.ACTIVE && it.key !in produced }
-                .map { it.copy(status = InsightFindingStatus.RESOLVED) }
-            insightDao.upsertFindings(updates)
-            store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
-            mutableLastAnalyzedAt.value = inputs.nowMs
-            publish(insightDao.findingsOnce())
+            maintenance.mutations.withLock write@ {
+                if (maintenance.isClearing || maintenance.generation != generation) return@write
+                val existing = insightDao.findingsOnce().associateBy { it.key }
+                val produced = analyzed.findings.map { it.key }.toSet()
+                val updates = analyzed.findings.map { finding ->
+                    val old = existing[finding.key]
+                    val oldSeverity = enumName<Severity>(old?.severity)
+                    val status = if (old?.status == InsightFindingStatus.DISMISSED &&
+                        (oldSeverity == null || finding.severity.ordinal <= oldSeverity.ordinal)) {
+                        InsightFindingStatus.DISMISSED
+                    } else InsightFindingStatus.ACTIVE
+                    val persisted = if (status == InsightFindingStatus.DISMISSED && oldSeverity != null) {
+                        finding.copy(severity = maxOf(oldSeverity, finding.severity))
+                    } else finding
+                    FindingCodec.encode(persisted, old?.firstSeenAt ?: inputs.nowMs, inputs.nowMs, status,
+                        old?.feedbackMultiplier ?: 1.0)
+                } + existing.values.filter { it.status == InsightFindingStatus.ACTIVE && it.key !in produced }
+                    .map { it.copy(status = InsightFindingStatus.RESOLVED) }
+                insightDao.upsertFindings(updates)
+                store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
+                mutableLastAnalyzedAt.value = inputs.nowMs
+                publish(insightDao.findingsOnce())
+            }
         }
     }
 
