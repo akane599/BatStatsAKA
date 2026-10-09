@@ -10,8 +10,10 @@ import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
 import com.akane.voltwise.battery.insights.model.*
 import com.akane.voltwise.battery.util.ShellRunner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 
 /** Screen seam. Observation never analyzes or executes an action. */
@@ -45,7 +47,7 @@ class DefaultInsightsRepository(
             null, emptyList(), emptyList(),
         )
         AppWindows.select(inputs).size
-    }
+    }.flowOn(Dispatchers.Default)
     override suspend fun analyzeNow() = insights.refresh(liveDump = true)
     override suspend fun dismiss(key: String) = insights.dismiss(key)
     override suspend fun notAProblem(key: String) = insights.notAProblem(key)

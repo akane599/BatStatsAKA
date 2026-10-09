@@ -16,7 +16,7 @@ class InsightsViewModel(
     applicationScope: CoroutineScope,
     savedStateHandle: SavedStateHandle = SavedStateHandle(),
 ) : ViewModel() {
-    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle)
+    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope)
     private val analyzing = MutableStateFlow(false)
     private val error = MutableStateFlow<InsightMessageCode?>(null)
     val effects = flow.effects
@@ -24,6 +24,7 @@ class InsightsViewModel(
     private val content = combine(source.report, source.actions, source.privileged) { report, actions, privileged ->
         val findings = report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }
         InsightsUiState(
+            loaded = true,
             headline = report?.headline?.toInsightState(privileged, actions),
             keyFindings = findings.filter { it.type != FindingType.TREND && it.severity != Severity.INFO }.insightSnapshot(),
             changes = findings.filter { it.type == FindingType.TREND && it.direction != null }.insightSnapshot(),
@@ -67,11 +68,12 @@ class InsightsViewModel(
     }
 }
 
-/** Saved strings only; restoring a dialog never executes anything. Action work outlives the screen. */
+/** Saved primitives only; restoring a dialog never executes anything. Action work outlives the screen. */
 internal class InsightApplyFlow(
     private val source: InsightsRepository,
     private val applicationScope: CoroutineScope,
     private val saved: SavedStateHandle,
+    observationScope: CoroutineScope,
 ) {
     private val events = Channel<InsightUiEffect>(Channel.UNLIMITED)
     val effects: Flow<InsightUiEffect> = events.receiveAsFlow()
@@ -81,8 +83,30 @@ internal class InsightApplyFlow(
             saved.get<String>(PENDING_KEY)?.let { key -> action?.let { PendingInsightApply(key, it) } }
         },
         selectedKey = saved[SELECTED_KEY],
+        lastResult = saved.get<String>(RESULT_CODE)?.let { name ->
+            InsightMessageCode.entries.firstOrNull { it.name == name }?.let { code ->
+                InsightActionMessage(code, saved[RESULT_ACTION_ID])
+            }
+        },
     ))
     val state = mutableState.asStateFlow()
+
+    init {
+        // Keep saved dialogs current even while the screen has no state collector.
+        observationScope.launch {
+            combine(source.report, source.actions, source.privileged) { report, actions, privileged ->
+                Triple(report, actions, privileged)
+            }.collect { (report, actions, privileged) ->
+                val request = state.value.pending
+                if (report != null && request != null) {
+                    val available = report.findings.firstOrNull { it.key == request.key }
+                        ?.toInsightState(privileged, actions)?.recommendations
+                        ?.any { it.action == request.action && it.available } == true
+                    if (!available) pending(null)
+                }
+            }
+        }
+    }
 
     fun onEvent(event: InsightsEvent) {
         when (event) {
@@ -91,6 +115,7 @@ internal class InsightApplyFlow(
                 pending(PendingInsightApply(event.key, event.action))
             }
             InsightsEvent.CancelApply -> pending(null)
+            InsightsEvent.ResultShown -> saveResult(null)
             InsightsEvent.ConfirmApply -> confirm()
             is InsightsEvent.Undo -> runAction { source.undo(event.actionId) }
             is InsightsEvent.OpenFinding -> {
@@ -165,7 +190,7 @@ internal class InsightApplyFlow(
                     }))
                     is ActionResult.OneShot -> message(InsightActionMessage(InsightMessageCode.ONE_SHOT, result.actionId))
                     is ActionResult.OpenSettings -> {
-                        mutableState.update { it.copy(lastResult = null) }
+                        saveResult(null)
                         events.trySend(InsightUiEffect.OpenSettings(result.spec))
                     }
                 }
@@ -181,11 +206,19 @@ internal class InsightApplyFlow(
     }
 
     fun message(result: InsightActionMessage) {
-        mutableState.update { it.copy(lastResult = result) }
+        saveResult(result)
         events.trySend(InsightUiEffect.Message(result))
     }
 
+    private fun saveResult(result: InsightActionMessage?) {
+        saved[RESULT_CODE] = result?.code?.name
+        saved[RESULT_ACTION_ID] = result?.actionId
+        mutableState.update { it.copy(lastResult = result) }
+    }
+
     private companion object {
+        const val RESULT_CODE = "insights.result.code"
+        const val RESULT_ACTION_ID = "insights.result.actionId"
         const val PENDING_KEY = "insights.pending.key"
         const val PENDING_ACTION = "insights.pending.action"
         const val SELECTED_KEY = "key"

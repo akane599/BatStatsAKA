@@ -151,6 +151,94 @@ source.actions.value = listOf(insightAction().copy(findingKey = "another.finding
         )
     }
 
+    @Test fun disappearingFindingClearsSavedPendingAndDoesNotResurface() = runTest {
+        val saved = SavedStateHandle(mapOf("key" to "finding"))
+        val vm = start(saved)
+        vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
+        source.report.value = null
+        runCurrent()
+        assertNotNull("an unloaded report must not invalidate a restored dialog", vm.state.value.apply.pending)
+        source.report.value = InsightReport(2, emptyList(), null)
+        runCurrent()
+        assertNull("missing finding must clear pending", vm.state.value.apply.pending)
+        assertNull(saved.get<String>("insights.pending.key"))
+        assertNull(saved.get<String>("insights.pending.action"))
+        source.report.value = InsightReport(3, listOf(insightFinding()), insightFinding())
+        runCurrent()
+        assertNull("returning finding must not resurrect pending", vm.state.value.apply.pending)
+        assertNull(start(SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })).state.value.apply.pending)
+        assertTrue(source.applied.isEmpty())
+    }
+
+    @Test fun pendingIsInvalidatedWithoutAScreenCollector() = runTest {
+        val saved = SavedStateHandle(mapOf("key" to "finding"))
+        val vm = FindingDetailsViewModel(source, backgroundScope, saved)
+        vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
+        runCurrent()
+        assertNotNull(saved.get<String>("insights.pending.key"))
+        source.report.value = InsightReport(2, emptyList(), null)
+        runCurrent()
+        assertNull("saved pending must clear without a UI subscriber", saved.get<String>("insights.pending.key"))
+        source.report.value = InsightReport(3, listOf(insightFinding()), null)
+        assertNull(start(SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })).state.value.apply.pending)
+    }
+
+    @Test fun unavailableRecommendationClearsPending() = runTest {
+        val vm = start()
+        for (reason in listOf("removed", "privilege", "applied")) {
+            source.report.value = InsightReport(1, listOf(insightFinding()), insightFinding())
+            source.privileged.value = true
+            source.actions.value = emptyList()
+            runCurrent()
+            vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
+            runCurrent()
+            assertNotNull(vm.state.value.apply.pending)
+            when (reason) {
+                "removed" -> source.report.value = InsightReport(2, listOf(insightFinding().copy(recommendations = emptyList())), null)
+                "privilege" -> source.privileged.value = false
+                "applied" -> source.actions.value = listOf(insightAction())
+            }
+            runCurrent()
+            assertNull("$reason recommendation must clear pending", vm.state.value.apply.pending)
+        }
+        assertTrue(source.applied.isEmpty())
+    }
+
+    @Test fun latestUnconsumedResultRestoresAndConsumptionIsSaved() = runTest {
+        val saved = SavedStateHandle(mapOf("key" to "finding"))
+        val vm = start(saved)
+        vm.onEvent(InsightsEvent.Undo(7))
+        runCurrent()
+        source.result = ActionResult.OneShot(19)
+        vm.onEvent(InsightsEvent.Undo(8))
+        runCurrent()
+        val expected = InsightActionMessage(InsightMessageCode.ONE_SHOT, 19)
+        assertEquals(expected, vm.state.value.apply.lastResult)
+        val restoredSaved = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
+        val restored = start(restoredSaved)
+        assertEquals("latest unconsumed result must survive recreation", expected, restored.state.value.apply.lastResult)
+        restored.onEvent(InsightsEvent.ResultShown)
+        runCurrent()
+        assertNull(restored.state.value.apply.lastResult)
+        assertNull(start(SavedStateHandle(restoredSaved.keys().associateWith { restoredSaved.get<Any?>(it) })).state.value.apply.lastResult)
+        assertEquals("restoring or consuming must not replay actions", listOf(7L, 8L), source.undone)
+    }
+
+    @Test fun loadedWaitsForFirstContentEmissionEvenWithNullReport() = runTest {
+        source.report.value = null
+        val actions = kotlinx.coroutines.flow.MutableSharedFlow<List<com.akane.voltwise.battery.data.db.InsightActionEntity>>(replay = 1)
+        val delayed = object : InsightsRepository by source { override val actions = actions }
+        val vm = FindingDetailsViewModel(delayed, backgroundScope, SavedStateHandle(mapOf("key" to "finding")))
+        assertFalse(vm.state.value.loaded)
+        backgroundScope.launch { vm.state.collect {} }
+        runCurrent()
+        assertFalse(vm.state.value.loaded)
+        actions.emit(emptyList())
+        runCurrent()
+        assertTrue("first null report is loaded, not loading", vm.state.value.loaded)
+        assertNull(vm.state.value.finding)
+    }
+
     @Test fun deviceActionsAreRelatedByFindingNotNullPackage() = runTest {
         val device = insightFinding().copy(subject = Subject.Device)
         source.report.value = InsightReport(1, listOf(device), device)

@@ -53,11 +53,13 @@ data class InsightApplyState(
     val pending: PendingInsightApply? = null,
     val selectedKey: String? = null,
     val working: Boolean = false,
+    /** Latest unconsumed result; ResultShown clears it and its saved representation. */
     val lastResult: InsightActionMessage? = null,
 )
 
 @Immutable
 data class InsightsUiState(
+    val loaded: Boolean = false,
     val headline: InsightFindingState? = null,
     val keyFindings: List<InsightFindingState> = emptyList(),
     val changes: List<InsightFindingState> = emptyList(),
@@ -74,6 +76,7 @@ data class InsightsUiState(
 
 @Immutable
 data class FindingDetailsUiState(
+    val loaded: Boolean = false,
     val finding: InsightFindingState? = null,
     val relatedActions: List<AppliedInsightAction> = emptyList(),
     val privileged: Boolean = false,
@@ -107,4 +110,5 @@ sealed interface InsightsEvent {
     data class RequestApply(val key: String, val action: ActionType) : InsightsEvent
     data object ConfirmApply : InsightsEvent
     data object CancelApply : InsightsEvent
+    data object ResultShown : InsightsEvent
 }
