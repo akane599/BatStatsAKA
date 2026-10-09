@@ -31,7 +31,7 @@ sealed interface ActionResult {
     data class Failed(val code: FailureCode) : ActionResult
     data object Unknown : ActionResult
     data object Reverted : ActionResult
-    data class ChangedExternally(val current: String) : ActionResult
+    data class ChangedExternally(val current: String?) : ActionResult
     data class Refused(val reason: RefusalCode) : ActionResult
     data class OneShot(val actionId: Long) : ActionResult
     data class OpenSettings(val spec: IntentSpec) : ActionResult
