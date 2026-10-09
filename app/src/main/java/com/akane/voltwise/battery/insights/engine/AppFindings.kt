@@ -19,6 +19,7 @@ import com.akane.voltwise.battery.insights.model.Subject
 fun appFindings(inputs: InsightInputs): List<Finding> {
     val windows = AppWindows.select(inputs)
     val current = windows.lastOrNull() ?: return emptyList()
+    if (current.atMs < inputs.nowMs - MAX_CURRENT_WINDOW_AGE_MS) return emptyList()
     val detectors = listOf(
         AppDrainAnomaly::detect, NewHeavyApp::detect, BackgroundRunaway::detect, StuckWakelock::detect,
         WakeupStorm::detect, JobStorm::detect, BackgroundLocation::detect, BackgroundRadio::detect,
@@ -33,5 +34,8 @@ fun appFindings(inputs: InsightInputs): List<Finding> {
         .sortedWith(findingOrder)
         .take(MAX_APP_FINDINGS)
 }
+
+/** App findings stay current for up to a week without another eligible discharge window. */
+const val MAX_CURRENT_WINDOW_AGE_MS = 7 * 24 * 3_600_000L
 
 private const val MAX_APP_FINDINGS = 12

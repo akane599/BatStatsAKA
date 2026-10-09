@@ -142,10 +142,10 @@ object AppWindows {
     /** Prefer covered device energy, then capacity × level drop; never a stored top-app subtotal. */
     fun drainMah(window: EligibleAppWindow, fullUah: Long?): Double? {
         val session = window.session
-        val on = session.screenOnUah
-        val off = session.screenOffUah
-        val onCoverage = session.screenOnCoveredMs
-        val offCoverage = session.screenOffCoveredMs
+        val on = session.screenOnUah ?: if (session.screenOnMs == 0L) 0L else null
+        val off = session.screenOffUah ?: if (session.screenOffMs == 0L) 0L else null
+        val onCoverage = session.screenOnCoveredMs ?: if (session.screenOnMs == 0L) 0L else null
+        val offCoverage = session.screenOffCoveredMs ?: if (session.screenOffMs == 0L) 0L else null
         if (on != null && off != null && on >= 0 && off >= 0 && onCoverage != null && offCoverage != null &&
             onCoverage >= session.screenOnMs && offCoverage >= session.screenOffMs
         ) {
