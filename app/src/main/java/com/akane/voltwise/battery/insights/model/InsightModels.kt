@@ -45,6 +45,8 @@ data class AppWindowInput(
     val captureEndMs: Long,
     val rowsStored: Int,
     val fullRowSet: Boolean,
+    /** Additional waker rows stored before profile filtering; null for inputs without storage metadata. */
+    val wakersStored: Int? = null,
 )
 
 data class DayInput(

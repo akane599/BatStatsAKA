@@ -33,6 +33,60 @@ class InsightInputsBuilderTest {
     ) = InsightInputsBuilder.build(NOW, 100, 4_000_000, true, sessions, days, rows, wakers, capacity,
         setOf("example.app0"), actions, findings)
 
+    @Test fun workProfileCopyCannotFeedMainProfileAppFindings() {
+        val primary = testAppRow().copy(uid = 10_123, packageName = "example.app")
+        val workProfile = primary.copy(uid = 1_010_123, rank = 1)
+        val others = testAppRow(rank = 2, others = true).copy(uid = -1)
+        val inputs = build(rows = listOf(primary, workProfile, others))
+
+        assertEquals(listOf(10_123), inputs.appSessions.filterNot { it.isOthers }.map { it.uid })
+        assertEquals("example.app", inputs.appSessions.first().packageName)
+        assertEquals(others.powerMah, inputs.appSessions.single { it.isOthers }.powerMah, 0.0)
+        assertEquals(-1, inputs.appSessions.single { it.isOthers }.uid)
+        assertEquals(2, inputs.sessions.single().appWindow!!.rowsStored)
+    }
+
+    @Test fun lonePrimaryProfileAppStillFeedsInputs() {
+        val primary = testAppRow().copy(uid = 10_123, packageName = "example.app")
+        val inputs = build(rows = listOf(primary))
+
+        assertEquals(10_123, inputs.appSessions.single().uid)
+        assertEquals("example.app", inputs.appSessions.single().packageName)
+    }
+
+    @Test fun workProfileFilteringDoesNotCreateSpareStoredWakerSlots() {
+        val missing = Subject.App(20_000, "example.missing")
+        for (wakerCount in listOf(9, 10)) {
+            val rows = (0 until 30 + wakerCount).map { rank ->
+                testAppRow(rank = rank).copy(
+                    uid = if (rank == 30) 1_010_123 else 10_001 + rank,
+                    wakeupAlarms = 30L,
+                    partialWakelockBgMs = 60_000L,
+                )
+            } + testAppRow(rank = 30 + wakerCount, others = true).copy(
+                uid = -1, wakeupAlarms = 300L, partialWakelockBgMs = 600_000L,
+            )
+            val inputs = build(rows = rows)
+            assertFalse(inputs.appSessions.any { it.uid == 1_010_123 })
+            assertEquals(30 + wakerCount, inputs.sessions.single().appWindow!!.rowsStored)
+            assertEquals(wakerCount, inputs.sessions.single().appWindow!!.wakersStored)
+            val window = AppWindows.select(inputs).single()
+            for (metric in listOf(Metric.WAKEUP_ALARMS_PER_H, Metric.PARTIAL_WAKELOCK_BG_SHARE)) {
+                val point = AppWindows.point(window, missing, metric)!!
+                if (wakerCount == 10) {
+                    assertNull(point.value)
+                    assertTrue(point.censored)
+                    val bound = if (metric == Metric.WAKEUP_ALARMS_PER_H) 30.0 else 600_000.0 / HOUR
+                    assertEquals(bound, point.upperBound!!, 0.0)
+                } else {
+                    assertEquals(0.0, point.value!!, 0.0)
+                    assertFalse(point.censored)
+                }
+                assertFalse(point.present)
+            }
+        }
+    }
+
     @Test fun appliedActionMetricComesFromMatchingStoredFindingsLeadEvidence() {
         for ((type, metric) in listOf(
             FindingType.JOB_STORM to Metric.SYNCS_PER_H,

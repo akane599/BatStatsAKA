@@ -61,6 +61,8 @@ The Insights tab (and the Insights card on Now and the Findings list on an app's
 
 ### Data used
 
+App findings cover apps in the main profile only; work-profile and dual-app copies in other Android users are excluded.
+
 - **Eligible per-app windows.** A per-app window is used only if its session is a closed, non-imported discharge session whose stored per-app basis is a delta over that session, whose capture window is at least 1 hour, and whose capture start, end and length each lie within 10% of the session's own span. Sessions without app evidence (no privileged access at unplug/plug-in, imported history, windows that reset or were captured from an absolute total) contribute nothing to app baselines or detections. Imports never carry per-app evidence, so they are always ineligible.
 - **Per-window rates.** Per-app figures are whole-window totals from Android's batterystats, divided by the capture window in hours (or, for time shares, by its length). Rows labelled as Android's "others" bucket are never a subject. A field the device did not report is unsupported and is never read as zero.
 - **Process-state proxies.** Android supplies no per-app screen-off energy and no per-app background CPU. Background behaviour is therefore inferred from proxies: background process time (against foreground plus top time), foreground-service time, background partial-wakelock time, wakeup alarms, job and sync counts, GPS/sensor time and mobile-radio active time. These indicate work, not energy.
