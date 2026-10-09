@@ -9,7 +9,7 @@ import com.akane.voltwise.battery.insights.model.MetricUnit
 import com.akane.voltwise.battery.insights.model.WakerKind
 
 internal fun attributions(inputs: InsightInputs, sessionId: String): List<Attribution> {
-    val device = inputs.deviceWakers.filter { it.sessionId == sessionId }.mapNotNull { waker ->
+    val (kernels, reasons) = inputs.deviceWakers.filter { it.sessionId == sessionId }.mapNotNull { waker ->
         val kernel = waker.kind == WakerKind.KERNEL_WAKELOCK
         val value = if (kernel) waker.totalMs else waker.count
         if (value <= 0) return@mapNotNull null
@@ -17,7 +17,17 @@ internal fun attributions(inputs: InsightInputs, sessionId: String): List<Attrib
             if (kernel) AttributionKind.KERNEL_WAKELOCK else AttributionKind.WAKEUP_REASON,
             waker.name, null, value.toDouble(), if (kernel) MetricUnit.MS else MetricUnit.COUNT, 1,
         )
-    }.sortedWith(compareByDescending<Attribution> { it.value }.thenBy { it.name }.thenBy { it.kind.ordinal }).take(5)
+    }.partition { it.kind == AttributionKind.KERNEL_WAKELOCK }
+    val byRank = compareByDescending<Attribution> { it.value }.thenBy { it.name }.thenBy { it.kind.ordinal }
+    val rankedKernels = kernels.sortedWith(byRank)
+    val rankedReasons = reasons.sortedWith(byRank)
+    val selectedKernels = rankedKernels.take(3)
+    val selectedReasons = rankedReasons.take(2)
+    val remainingSlots = 5 - selectedKernels.size - selectedReasons.size
+    val device = (selectedKernels + selectedReasons +
+        if (selectedKernels.size < 3) rankedReasons.drop(selectedReasons.size).take(remainingSlots)
+        else rankedKernels.drop(selectedKernels.size).take(remainingSlots))
+        .sortedWith(byRank)
     val window = AppWindows.select(inputs).firstOrNull { it.session.id == sessionId } ?: return device
     val apps = window.rows.filterNot { it.isOthers }.mapNotNull { row ->
         val alarms = AppWindows.value(window, row, Metric.WAKEUP_ALARMS_PER_H)
