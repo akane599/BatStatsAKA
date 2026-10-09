@@ -114,7 +114,8 @@ class NowViewModel(
         combine(live, trace, source.settings.map { it.useFahrenheit }.distinctUntilChanged(), source.calibration, ::Now),
         combine(today, health, topApps, source.dischargeSessions(1).map { it.firstOrNull() }, ::Cards),
         source.insights,
-    ) { now, cards, report ->
+        source.lastAnalyzedAt,
+    ) { now, cards, report, lastAnalyzedAt ->
         val fullUah = resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah)
         NowUiState(
             nowMs = now.live.nowMs,
@@ -125,7 +126,7 @@ class NowViewModel(
             today = cards.today?.let { NowMapping.today(it, fullUah) },
             health = cards.health?.let(NowMapping::health),
             topApps = cards.topApps,
-            insightsSummary = report?.let {
+            insightsSummary = report?.takeIf { lastAnalyzedAt != null }?.let {
                 InsightsSummary(
                     headline = it.headline?.let { finding ->
                         InsightHeadline(finding.key, finding.type, finding.severity, (finding.subject as? Subject.App)?.packageName)

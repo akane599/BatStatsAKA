@@ -71,9 +71,16 @@ class NowViewModelTest {
     }
 
     @Test fun insightsDistinguishNotAnalyzedFromAllGoodAndIgnoreInformationalFindings() = runTest {
+        repo.insights.value = InsightReport(0, emptyList(), null)
         val (_, state) = start()
         assertNull(state().insightsSummary)
+        // Report timestamps are not proof of analysis; only lastAnalyzedAt is authoritative.
         repo.insights.value = InsightReport(T0, emptyList(), null)
+        runCurrent()
+        assertNull(state().insightsSummary)
+        repo.insights.value = InsightReport(0, emptyList(), null)
+        runCurrent()
+        repo.lastAnalyzedAt.value = T0
         runCurrent()
         assertEquals(InsightsSummary(null, 0), state().insightsSummary)
         assertTrue(state().insightsSummary!!.allGood)
@@ -84,6 +91,7 @@ class NowViewModelTest {
     }
 
     @Test fun insightsMapHeadlineIdentityAndCountOnlyActiveNonInformationalFindings() = runTest {
+        repo.lastAnalyzedAt.value = T0
         val headline = finding(Severity.HIGH)
         repo.insights.value = InsightReport(T0, listOf(headline, finding(Severity.LOW), finding(Severity.INFO)), headline)
         val (_, state) = start()
@@ -500,6 +508,7 @@ class NowViewModelTest {
         override val calibration = MutableStateFlow(CalibrationState())
         override val settings = MutableStateFlow(AppSettings())
         override val insights = MutableStateFlow<InsightReport?>(null)
+        override val lastAnalyzedAt = MutableStateFlow<Long?>(null)
         override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = cached

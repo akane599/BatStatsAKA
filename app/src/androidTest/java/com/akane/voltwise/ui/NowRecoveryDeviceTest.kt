@@ -52,6 +52,7 @@ class NowRecoveryDeviceTest {
         override val design: Flow<DesignCapacityReading> = flowOf(DesignCapacityReading.Unknown)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = flowOf(null)
         override val insights: Flow<InsightReport?> = flowOf(null)
+        override val lastAnalyzedAt: Flow<Long?> = flowOf(null)
         override val activeSession = repo.activeSessionFlow
         override fun samplesSince(fromMs: Long) = repo.samplesBetween(fromMs, Long.MAX_VALUE)
         override fun day(epochDay: Long) = fixture.database.dailySummaryDao().day(epochDay)
