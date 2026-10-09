@@ -207,3 +207,28 @@ fun AppDetailsFindingsRtlPreview() {
         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) { AppDetailsPreviewContent(withFindings()) }
     }
 }
+
+/**
+ * A fix's measured effect in the Findings panel: "Drain rose 20% since the change", never the pre-fix value read as
+ * "usual" ("1.2× usual"). Drain went from 2.5 to 3.0 mAh/h after the change.
+ */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun AppDetailsActionEffectPreview() {
+    ScreenshotTheme {
+        AppDetailsPreviewContent(
+            full().copy(
+                findings = listOf(
+                    AppFinding(
+                        "ACTION_EFFECT:com.google.android.youtube:POWER_MAH_PER_H:3",
+                        FindingType.ACTION_EFFECT,
+                        Severity.INFO,
+                        Direction.UP,
+                        Evidence(Metric.POWER_MAH_PER_H, 3.0, 2.5, MetricUnit.MAH_PER_H, 4),
+                    ),
+                ),
+            ),
+        )
+    }
+}

@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.LifecycleStartEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.akane.voltwise.R
 import com.akane.voltwise.battery.apps.AppLabel
+import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
 import com.akane.voltwise.ui.components.DetailTopBar
 import com.akane.voltwise.ui.components.AppLabelIcon
@@ -75,6 +76,7 @@ import com.akane.voltwise.ui.format.formatNumber
 import com.akane.voltwise.ui.format.formatMah
 import com.akane.voltwise.ui.format.percentUnit
 import com.akane.voltwise.ui.screens.insights.SeverityChip
+import com.akane.voltwise.ui.screens.insights.effectLine
 import com.akane.voltwise.ui.screens.insights.evidenceLine
 import com.akane.voltwise.ui.screens.insights.titleRes
 import com.akane.voltwise.ui.theme.batColors
@@ -354,7 +356,9 @@ private fun FindingRow(finding: AppFinding, onOpen: () -> Unit) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing.xxs)) {
             Text(stringResource(finding.type.titleRes()), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             finding.evidence?.let { evidence ->
-                Text(evidenceLine(evidence), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                // A fix's effect compares after with before, not with a usual level: "Drain rose 20% since the change".
+                val line = (if (finding.type == FindingType.ACTION_EFFECT) effectLine(evidence) else null) ?: evidenceLine(evidence)
+                Text(line, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         SeverityChip(finding.severity)
