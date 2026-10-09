@@ -153,6 +153,51 @@ class InsightEngineTest {
         assertNull(report.headline)
     }
 
+    @Test fun `report cap retains newest applied effect instead of alphabetically first reverted effect`() {
+        val day = 24 * HOUR
+        val sessions = listOf(28, 29, 41, 42, 94, 95, 97, 98).map { session(it) }
+        val rows = sessions.flatMapIndexed { index, session ->
+            val effects = listOf("a.app", "z.app").mapIndexed { app, packageName ->
+                row(session.id).copy(
+                    packageName = packageName, uid = UID + app,
+                    powerMah = when {
+                        index < 2 -> 40.0
+                        index < 6 -> 20.0
+                        else -> 5.0
+                    },
+                )
+            }
+            effects + (1..11).map { app ->
+                row(session.id).copy(
+                    packageName = "heavy.app$app", uid = UID + 10 + app,
+                    powerMah = if (index == sessions.lastIndex) 40.0 else 5.0,
+                )
+            }
+        }
+        val input = inputs(sessions, rows).copy(
+            nowMs = 100 * day,
+            actions = listOf(
+                AppliedActionInput(1, "APP_DRAIN_ANOMALY:a.app", ActionType.RESTRICT_BACKGROUND,
+                    "a.app", UID, 40 * day, ActionStatus.REVERTED),
+                AppliedActionInput(2, "APP_DRAIN_ANOMALY:z.app", ActionType.RESTRICT_BACKGROUND,
+                    "z.app", UID + 1, 97 * day, ActionStatus.APPLIED),
+            ),
+        )
+        val effects = ActionEffects.detect(input)
+        assertEquals(2, effects.size)
+        assertEquals(11, appFindings(input).count { it.severity != Severity.INFO })
+
+        val report = InsightEngine.analyze(input, sdkInt = 37)
+
+        assertEquals(12, report.findings.size)
+        assertEquals(11, report.findings.count { it.severity != Severity.INFO })
+        assertEquals("Newest applied effect survives the report cap",
+            "ACTION_EFFECT:z.app:POWER_MAH_PER_H:2",
+            report.findings.single { it.type == FindingType.ACTION_EFFECT }.key)
+        assertEquals(report.findings.first { it.severity != Severity.INFO }, report.headline)
+        assertEquals(report, InsightEngine.analyze(input.copy(actions = input.actions.reversed()), sdkInt = 37))
+    }
+
     @Test fun `uncapped action effect and trends keep their original display order`() {
         val input = actionEffectWithAppTrends(appCount = 3)
         val expected = (Trends.detect(input) + ActionEffects.detect(input)).sortedWith(findingOrder)

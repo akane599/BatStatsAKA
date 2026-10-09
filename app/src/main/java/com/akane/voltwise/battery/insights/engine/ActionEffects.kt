@@ -22,7 +22,11 @@ object ActionEffects {
         val sessions = inputs.sessions.filter {
             !it.imported && it.endMs > it.startMs && it.endMs <= inputs.nowMs && it.observedMs > 0
         }.sortedWith(compareBy({ it.endMs }, { it.id }))
-        return inputs.actions.sortedBy { it.id }.mapNotNull { action ->
+        val effects = inputs.actions.sortedWith(
+            compareByDescending<AppliedActionInput> { it.status == ActionStatus.APPLIED }
+                .thenByDescending { it.appliedAtMs }
+                .thenByDescending { it.id },
+        ).mapNotNull { action ->
             val appliedAt = action.appliedAtMs ?: return@mapNotNull null
             if (action.status !in setOf(ActionStatus.APPLIED, ActionStatus.REVERTED) || appliedAt > inputs.nowMs) {
                 return@mapNotNull null
@@ -66,6 +70,10 @@ object ActionEffects {
                 series = (before + after).map { SeriesPoint(it.end, it.value, null, null) },
                 suffix = "${metric.name}:${action.id}",
             )
+        }
+        // Encode action priority for both cap selection and display, without raising the default score.
+        return effects.mapIndexed { index, effect ->
+            effect.copy(score = 50.0 * (effects.size - index) / effects.size)
         }
     }
 

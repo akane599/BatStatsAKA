@@ -3,14 +3,42 @@ package com.akane.voltwise.battery.insights.engine
 import com.akane.voltwise.battery.insights.model.ActionStatus
 import com.akane.voltwise.battery.insights.model.ActionType
 import com.akane.voltwise.battery.insights.model.AppliedActionInput
+import com.akane.voltwise.battery.insights.model.Confidence
 import com.akane.voltwise.battery.insights.model.Direction
 import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.SessionKind
+import com.akane.voltwise.battery.insights.model.Severity
 import org.junit.Assert.*
 import org.junit.Test
 
 class ActionEffectsTest {
+    @Test fun `effect scores rank applied then newest application then numeric action id`() {
+        val sessions = listOf(0, 1, 4, 5).map { session(it) }
+        val rows = sessions.mapIndexed { index, session ->
+            row(session.id).copy(powerMah = if (index < 2) 40.0 else 5.0)
+        }
+        val at = sessions[1].endMs + HOUR
+        val action = AppliedActionInput(9, "APP_DRAIN_ANOMALY:$APP", ActionType.RESTRICT_BACKGROUND,
+            APP, UID, at, ActionStatus.APPLIED)
+        val input = inputs(sessions, rows).copy(actions = listOf(
+            action,
+            action.copy(id = 10, appliedAtMs = at + HOUR),
+            action.copy(id = 2, appliedAtMs = at + HOUR),
+            action.copy(id = 11, appliedAtMs = at + 2 * HOUR, status = ActionStatus.REVERTED),
+        ))
+
+        val effects = ActionEffects.detect(input).sortedWith(findingOrder)
+
+        assertEquals("Status, recency and numeric ID determine display order",
+            listOf(10L, 2L, 9L, 11L), effects.map { it.key.substringAfterLast(':').toLong() })
+        assertTrue(effects.zipWithNext().all { (newer, older) -> newer.score > older.score })
+        assertTrue(effects.all { it.score in 0.0..100.0 })
+        assertTrue(effects.all { it.severity == Severity.INFO })
+        assertTrue(effects.all { it.confidence == Confidence.MEDIUM })
+        assertEquals(effects, ActionEffects.detect(input.copy(actions = input.actions.reversed())).sortedWith(findingOrder))
+    }
+
     @Test fun `new heavy app actions fall back from window drain share to measurable power`() {
         val sessions = (0..3).map { session(it) }
         val rows = sessions.mapIndexed { index, session ->
