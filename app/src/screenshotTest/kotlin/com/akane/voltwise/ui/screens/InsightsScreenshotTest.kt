@@ -206,6 +206,18 @@ fun InsightsLearningPreview() {
     }
 }
 
+/** No Shizuku or root: no session gets app data, so "still learning" says findings about apps need access. */
+@PreviewTest
+@TallPhonePreview
+@Composable
+fun InsightsLearningNoAccessPreview() {
+    ScreenshotTheme {
+        InsightsPreviewContent(
+            InsightsUiState(loaded = true, lastAnalyzedAt = FIXED_TIME_MS - 10 * MINUTE, privileged = false, eligibleSessionCount = 0, lowData = true),
+        )
+    }
+}
+
 /** Before the first report (also right after a restore): only the header, saying it's loading, no "still learning". */
 @PreviewTest
 @PhonePreview

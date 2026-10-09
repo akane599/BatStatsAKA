@@ -16,7 +16,8 @@
     <string name="insights_access_body">Voltwise sigue detectando problemas y abre los ajustes de Android para que los corrijas a mano. Los hallazgos sobre apps concretas y las correcciones con un toque necesitan acceso: instala Shizuku, inícialo y permite Voltwise cuando lo pida (o concede root).</string>
     <string name="insights_access_set_up">Configurar acceso</string>
     <string name="insights_learning_title">Aún aprendiendo tu uso</string>
-    <string name="insights_learning_body">%1$d de %2$d sesiones con batería registradas. Los hallazgos sobre apps empiezan cuando Voltwise tenga %2$d para comparar.</string>
+    <string name="insights_learning_body">%1$d de %2$d sesiones con datos de apps para comparar. Los hallazgos sobre apps empiezan cuando Voltwise tenga %2$d.</string>
+    <string name="insights_learning_body_no_access">%1$d de %2$d sesiones con datos de apps para comparar. Voltwise solo registra datos de apps con Shizuku o root, así que los hallazgos sobre apps necesitan uno de los dos.</string>
     <string name="insights_all_good_title">Nada requiere atención</string>
     <string name="insights_all_good_body">Ninguna app ni ajuste gasta más de lo habitual. Voltwise vuelve a comprobarlo tras cada sesión.</string>
     <string name="insights_never_title">Aún no hay análisis</string>

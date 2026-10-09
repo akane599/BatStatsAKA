@@ -132,6 +132,9 @@ private val dozeHeadline = InsightsSummary(
 
 private val allGood = InsightsSummary(headline = null, activeFindingCount = 0)
 
+/** Analysed, nothing found, but too few sessions with app data to judge apps yet. */
+private val learning = InsightsSummary(headline = null, activeFindingCount = 0, learning = true)
+
 private fun charging() = discharging().copy(
     hero = HeroState(
         hasReading = true,
@@ -262,6 +265,19 @@ private fun InsightsCardStates() {
             InsightsPanel(allGood, null, onOpenInsights = {}, onOpenFinding = {}, modifier = card)
             InsightsPanel(null, null, onOpenInsights = {}, onOpenFinding = {}, modifier = card)
         }
+    }
+}
+
+/** Analysed and quiet, but too few sessions with app data: "still learning" instead of "all good". */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun NowInsightsCardLearningPreview() {
+    ScreenshotTheme {
+        InsightsPanel(
+            learning, null, onOpenInsights = {}, onOpenFinding = {},
+            modifier = Modifier.fillMaxWidth().padding(MaterialTheme.spacing.md),
+        )
     }
 }
 

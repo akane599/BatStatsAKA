@@ -103,6 +103,43 @@ class NowViewModelTest {
         assertNull(state().insightsSummary!!.headline!!.packageName)
     }
 
+    // R8-5: Insights says "still learning" below 4 comparable sessions; Now must not say "all good" meanwhile.
+    @Test fun aQuietReportWithTooFewComparableSessionsIsLearningNotAllGood() = runTest {
+        repo.insights.value = InsightReport(T0, emptyList(), null)
+        repo.lastAnalyzedAt.value = 1
+        repo.eligible.value = 1
+        val (_, state) = start()
+        assertFalse("1 of 4 comparable sessions is not 'all good'", state().insightsSummary!!.allGood)
+        assertEquals(InsightsSummary(null, 0, learning = true), state().insightsSummary)
+        // Informational findings don't count as findings here either.
+        repo.insights.value = InsightReport(T0, listOf(finding(Severity.INFO)), null)
+        runCurrent()
+        assertTrue(state().insightsSummary!!.learning)
+        assertFalse(state().insightsSummary!!.allGood)
+    }
+
+    @Test fun enoughComparableSessionsAndAQuietReportIsAllGood() = runTest {
+        repo.insights.value = InsightReport(T0, emptyList(), null)
+        repo.lastAnalyzedAt.value = 1
+        repo.eligible.value = 1
+        val (_, state) = start()
+        repo.eligible.value = 4
+        runCurrent()
+        assertFalse(state().insightsSummary!!.learning)
+        assertTrue(state().insightsSummary!!.allGood)
+    }
+
+    @Test fun anActiveFindingWinsOverLearning() = runTest {
+        val headline = finding(Severity.HIGH)
+        repo.insights.value = InsightReport(T0, listOf(headline), headline)
+        repo.lastAnalyzedAt.value = 1
+        repo.eligible.value = 1
+        val (_, state) = start()
+        assertEquals(InsightsSummary(InsightHeadline(headline.key, headline.type, Severity.HIGH, CHROME), 1), state().insightsSummary)
+        assertFalse(state().insightsSummary!!.learning)
+        assertFalse(state().insightsSummary!!.allGood)
+    }
+
     private fun finding(severity: Severity) = Finding(
         key = "APP_DRAIN_ANOMALY:$CHROME:$severity", type = FindingType.APP_DRAIN_ANOMALY,
         severity = severity, confidence = Confidence.HIGH, score = 1.0,
@@ -509,6 +546,9 @@ class NowViewModelTest {
         override val settings = MutableStateFlow(AppSettings())
         override val insights = MutableStateFlow<InsightReport?>(null)
         override val lastAnalyzedAt = MutableStateFlow<Long?>(null)
+        // Enough comparable sessions by default, so only the learning tests see "still learning".
+        val eligible = MutableStateFlow(4)
+        override val eligibleSessionCount: Flow<Int> = eligible
         override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)
         override val cachedAppUsage: Flow<AppUsageSnapshot?> = cached

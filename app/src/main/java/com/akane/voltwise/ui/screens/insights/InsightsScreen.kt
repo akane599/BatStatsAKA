@@ -174,6 +174,17 @@ internal fun InsightsUiState.body(): InsightsBody = when {
     else -> InsightsBody.ALL_GOOD
 }
 
+/**
+ * "Still learning" progress: the count is sessions with app data to compare (comparable per-app windows), which only
+ * grows with Shizuku or root, so without access the copy says so instead of promising findings later.
+ */
+@Composable
+private fun learningBody(state: InsightsUiState): String = stringResource(
+    if (state.privileged) R.string.insights_learning_body else R.string.insights_learning_body_no_access,
+    state.eligibleSessionCount,
+    LEARNING_SESSIONS,
+)
+
 /** Key findings under the headline card, without repeating the headline itself. */
 internal fun InsightsUiState.listedFindings(): List<InsightFindingState> = keyFindings.filter { it.key != headline?.key }
 
@@ -239,7 +250,7 @@ fun InsightsContent(
         }
         if (state.lowData && state.hasContent) {
             Notice(
-                message = stringResource(R.string.insights_learning_body, state.eligibleSessionCount, LEARNING_SESSIONS),
+                message = learningBody(state),
                 title = stringResource(R.string.insights_learning_title),
                 tone = NoticeTone.INFO,
                 icon = Icons.Rounded.HourglassTop,
@@ -292,7 +303,7 @@ fun InsightsContent(
                     InsightsBody.ERROR -> Unit
                     InsightsBody.LEARNING -> EmptyState(
                         title = stringResource(R.string.insights_learning_title),
-                        body = stringResource(R.string.insights_learning_body, state.eligibleSessionCount, LEARNING_SESSIONS),
+                        body = learningBody(state),
                         icon = Icons.Rounded.HourglassTop,
                     )
                     InsightsBody.NEVER_ANALYZED -> EmptyState(

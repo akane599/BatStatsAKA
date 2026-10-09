@@ -31,7 +31,10 @@ data class NowUiState(
     /** Null until some session produced a capacity estimate. */
     val health: HealthState? = null,
     val topApps: TopAppsState = TopAppsState.Empty,
-    /** Null until analysis has completed and a report is loaded; [InsightsSummary.allGood] means no active concerns. */
+    /**
+     * Null until analysis has completed and a report is loaded. Like Insights: findings first, then
+     * [InsightsSummary.learning], and only then [InsightsSummary.allGood].
+     */
     val insightsSummary: InsightsSummary? = null,
     /** The applied correction while its notice is pending (Undo / Keep), else null. */
     val calibrationNotice: CurrentCalibration? = null,
@@ -42,8 +45,10 @@ data class NowUiState(
 data class InsightsSummary(
     val headline: InsightHeadline?,
     val activeFindingCount: Int,
+    /** No active findings and too few sessions with app data to judge apps yet: "still learning", not "all good". */
+    val learning: Boolean = false,
 ) {
-    val allGood: Boolean get() = activeFindingCount == 0
+    val allGood: Boolean get() = activeFindingCount == 0 && !learning
 }
 
 @Immutable

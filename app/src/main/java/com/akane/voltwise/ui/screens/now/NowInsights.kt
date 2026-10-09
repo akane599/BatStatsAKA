@@ -36,12 +36,12 @@ import com.akane.voltwise.viewmodel.NowUiState
  * battery (before that there is nothing to analyse, and "all good" or "not analysed yet" would mean nothing).
  */
 internal val NowUiState.showsInsights: Boolean
-    get() = insightsSummary?.allGood == false || sinceUnplug != null
+    get() = (insightsSummary?.activeFindingCount ?: 0) > 0 || sinceUnplug != null
 
 /**
  * The analysis at a glance; the whole panel opens Insights. With concerns: the headline finding (severity, app and
- * what was found; it opens that finding's details) over the number of active findings. Otherwise "all good", or an
- * invitation before the first analysis.
+ * what was found; it opens that finding's details) over the number of active findings. Otherwise "still learning"
+ * while too few sessions have app data to compare, then "all good", or an invitation before the first analysis.
  *
  * @param headlineApp the headline app's label; null for a device finding or while it loads (the line then names
  *   only what was found).
@@ -57,6 +57,7 @@ internal fun InsightsPanel(
     Panel(modifier, title = stringResource(R.string.now_insights_title), trailing = { Chevron() }, onClick = onOpenInsights) {
         when {
             summary == null -> QuietText(stringResource(R.string.now_insights_never))
+            summary.learning -> QuietText(stringResource(R.string.now_insights_learning))
             summary.allGood -> QuietText(stringResource(R.string.now_insights_all_good))
             else -> {
                 summary.headline?.let { headline ->
