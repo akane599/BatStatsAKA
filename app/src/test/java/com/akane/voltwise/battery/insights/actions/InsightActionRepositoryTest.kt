@@ -170,6 +170,66 @@ class InsightActionRepositoryTest {
         assertEquals(PrivilegedCommand.AddDozeWhitelist(pkg), f.commands[7])
     }
 
+    @Test fun reapplySettlesUnknownDozeRowAtPriorBeforeWritingAndPreventsBackdatedAuthority() = runTest {
+        for (appliedAt in listOf(null, 90L)) {
+            val f = Fixture()
+            val system = "system,android,1000"
+            val present = "$system\nuser,$pkg,$uid"
+            f.replies.addAll(listOf(ok(present), denied()))
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+            f.replies += denied()
+            f.repo.reconcile()
+            assertEquals(UNKNOWN, f.row().status)
+            assertNull(f.row().appliedAt)
+            f.dao.updateAction(f.row().copy(appliedAt = appliedAt))
+            val old = f.row()
+            val expectedStatus = if (appliedAt == null) FAILED else REVERTED
+            f.now += 1_000L
+            f.reply(present, "Removed: $pkg", system)
+            f.intercept = {
+                if (it is PrivilegedCommand.RemoveDozeWhitelist) {
+                    val settled = f.dao.rows.value.first()
+                    assertEquals(expectedStatus, settled.status)
+                    assertEquals(appliedAt, settled.appliedAt)
+                    if (appliedAt == null) {
+                        assertEquals("STATE_MISMATCH", settled.message)
+                        assertNull(settled.revertedAt)
+                    } else {
+                        assertNull(settled.message)
+                        assertEquals(1_101L, settled.revertedAt)
+                    }
+                }
+            }
+            assertEquals(ActionResult.Applied(2), f.apply(ActionType.REMOVE_DOZE_WHITELIST))
+            f.intercept = {}
+            val settled = f.dao.rows.value.first()
+            // The live target of the new action must not resurrect the old row.
+            f.repo.reconcile()
+            assertEquals(settled, f.dao.rows.value.first())
+            assertEquals(listOf(2L), f.dao.rows.value.filter { it.status in listOf(APPLIED, UNKNOWN) }.map { it.id })
+            val commandsBeforeUndo = f.commands.size
+            assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(old.id))
+            assertEquals(commandsBeforeUndo, f.commands.size)
+            f.reply(system, "Added: $pkg", present)
+            assertEquals(ActionResult.Reverted, f.repo.undo(2))
+        }
+    }
+
+    @Test fun applyLeavesUnknownRowsWithDifferentPriorTypeOrPackageUntouched() = runTest {
+        val f = Fixture()
+        f.replies.addAll(listOf(ok("active"), denied()))
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        val old = f.row()
+        val retained = listOf(
+            old.copy(id = 2, priorState = "WORKING_SET", packageName = "com.example.other"),
+            old.copy(id = 3, priorState = "WORKING_SET", type = ActionType.STANDBY_BUCKET_RESTRICTED.name),
+        )
+        f.dao.rows.value += retained
+        f.reply("working_set", "", "rare")
+        assertEquals(ActionResult.Applied(4), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(listOf(old) + retained, f.dao.rows.value.take(3))
+    }
+
     @Test fun applyClosesOnlyAppliedRowsWithMatchingTypeAndPackageAndDifferentTarget() = runTest {
         val f = Fixture()
         f.reply("active", "", "rare")
@@ -290,6 +350,72 @@ class InsightActionRepositoryTest {
         assertEquals(APPLIED, f.row().status)
         assertEquals(createdAt, f.row().appliedAt)
         assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+    }
+
+    @Test fun uncertainApplySuccessfulUndoAtTargetPersistsCreatedAtBeforeRestore() = runTest {
+        val f = Fixture()
+        f.replies.addAll(listOf(ok("active"), ok(), failure()))
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertNull(f.row().appliedAt)
+        val createdAt = f.row().createdAt
+        f.now += 1_000L
+        f.intercept = {
+            if (it is PrivilegedCommand.SetStandbyBucket) {
+                assertEquals(UNKNOWN, f.row().status)
+                assertEquals(createdAt, f.row().appliedAt)
+            }
+        }
+        f.reply("rare", "", "active")
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+        assertEquals(REVERTED, f.row().status)
+        assertEquals(createdAt, f.row().appliedAt)
+        assertNotNull(f.row().revertedAt)
+        assertNull(f.row().message)
+    }
+
+    @Test fun uncertainApplyInterruptedUndoReconcilesPriorAsRevertedWithCreatedAt() = runTest {
+        for (crash in listOf(false, true)) {
+            val f = Fixture()
+            f.replies.addAll(listOf(ok("active"), ok(), failure()))
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+            assertNull(f.row().appliedAt)
+            val createdAt = f.row().createdAt
+            f.now += 1_000L
+            f.reply("rare", "")
+            if (crash) {
+                f.intercept = {
+                    if (it is PrivilegedCommand.GetStandbyBucket && f.commands.size == 6) {
+                        throw IllegalStateException("simulated crash after restore")
+                    }
+                }
+                try { f.repo.undo(1); fail("crash required") } catch (_: IllegalStateException) { }
+                f.intercept = {}
+            } else {
+                f.replies += failure()
+                assertEquals(ActionResult.Unknown, f.repo.undo(1))
+            }
+            assertEquals(UNKNOWN, f.row().status)
+            f.reply("active")
+            f.repo.reconcile()
+            assertEquals(REVERTED, f.row().status)
+            assertEquals(createdAt, f.row().appliedAt)
+            assertNotNull(f.row().revertedAt)
+            assertEquals(2, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+        }
+    }
+
+    @Test fun uncertainApplyUndoKeepsCreatedAtWhenWriteOrReadbackIsUnknown() = runTest {
+        for (readback in listOf(null, "garbage", "frequent")) {
+            val f = Fixture()
+            f.replies.addAll(listOf(ok("active"), ok(), failure()))
+            assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+            val createdAt = f.row().createdAt
+            f.reply("rare")
+            if (readback == null) f.replies += denied() else f.reply("", readback)
+            assertEquals(ActionResult.Unknown, f.repo.undo(1))
+            assertEquals(UNKNOWN, f.row().status)
+            assertEquals(createdAt, f.row().appliedAt)
+        }
     }
 
     @Test fun uncertainApplyFailedUndoAtTargetUsesCreatedAt() = runTest {

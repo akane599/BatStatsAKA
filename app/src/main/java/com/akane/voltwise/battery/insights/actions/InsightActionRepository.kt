@@ -57,9 +57,16 @@ class InsightActionRepository(
             val prior = read(operation, app.packageName)
             if (prior !is StateRead.Known) return@withLock initialReadFailure(prior)
             // Retire stale Undo authority before a new write can reach the old target again.
-            for (old in dao.actionsWithStatus(listOf(APPLIED))) {
-                if (old.type == rec.action.name && old.packageName == app.packageName && old.targetState != prior.value) {
+            for (old in dao.actionsWithStatus(listOf(APPLIED, UNKNOWN))) {
+                if (old.type != rec.action.name || old.packageName != app.packageName) continue
+                if (old.status == APPLIED && old.targetState != prior.value) {
                     dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+                } else if (old.status == UNKNOWN && old.priorState == prior.value) {
+                    if (old.appliedAt != null) {
+                        dao.updateAction(old.copy(status = REVERTED, revertedAt = clock(), message = null))
+                    } else {
+                        dao.updateAction(old.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
+                    }
                 }
             }
             if (!operation.restorable(prior.value, inspector.sdkInt)) {
@@ -114,19 +121,20 @@ class InsightActionRepository(
             dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
             return@withLock ActionResult.ChangedExternally(current.value)
         }
-        // Preserve uncertainty if cancellation/process death interrupts restoration.
-        dao.updateAction(row.copy(status = UNKNOWN))
-        val outcome = executor.run(operation.write(pkg, requireNotNull(row.priorState)))
-        if (outcome is Outcome.NoAccess) return@withLock unknown(row)
+        // The target read proves application; preserve it if restoration is interrupted.
+        val restoring = row.copy(status = UNKNOWN, appliedAt = row.appliedAt ?: row.createdAt)
+        dao.updateAction(restoring)
+        val outcome = executor.run(operation.write(pkg, requireNotNull(restoring.priorState)))
+        if (outcome is Outcome.NoAccess) return@withLock unknown(restoring)
         val confirmed = read(operation, pkg)
-        if (confirmed !is StateRead.Known) return@withLock unknown(row)
-        if (confirmed.value == row.priorState) {
-            dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
+        if (confirmed !is StateRead.Known) return@withLock unknown(restoring)
+        if (confirmed.value == restoring.priorState) {
+            dao.updateAction(restoring.copy(status = REVERTED, revertedAt = clock(), message = null))
             ActionResult.Reverted
-        } else if (confirmed.value == row.targetState) {
-            dao.updateAction(row.copy(status = APPLIED, appliedAt = row.appliedAt ?: row.createdAt, message = FailureCode.STATE_MISMATCH.name))
+        } else if (confirmed.value == restoring.targetState) {
+            dao.updateAction(restoring.copy(status = APPLIED, message = FailureCode.STATE_MISMATCH.name))
             ActionResult.Failed(FailureCode.STATE_MISMATCH)
-        } else unknown(row)
+        } else unknown(restoring)
     }
 
     /** Read-only recovery: never replay a command whose execution was interrupted. */
