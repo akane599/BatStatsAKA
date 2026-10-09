@@ -135,6 +135,8 @@ private val allGood = InsightsSummary(headline = null, activeFindingCount = 0)
 /** Analysed, nothing found, but too few sessions with app data to judge apps yet. */
 private val learning = InsightsSummary(headline = null, activeFindingCount = 0, learning = true)
 
+private val changes = InsightsSummary(headline = null, activeFindingCount = 0, changeCount = 1)
+
 private fun charging() = discharging().copy(
     hero = HeroState(
         hasReading = true,
@@ -276,6 +278,19 @@ fun NowInsightsCardLearningPreview() {
     ScreenshotTheme {
         InsightsPanel(
             learning, null, onOpenInsights = {}, onOpenFinding = {},
+            modifier = Modifier.fillMaxWidth().padding(MaterialTheme.spacing.md),
+        )
+    }
+}
+
+/** No concerns, but a trend Insights lists under Changes: a neutral pointer, never "all good". */
+@PreviewTest
+@ComponentPreviews
+@Composable
+fun NowInsightsCardChangesPreview() {
+    ScreenshotTheme {
+        InsightsPanel(
+            changes, null, onOpenInsights = {}, onOpenFinding = {},
             modifier = Modifier.fillMaxWidth().padding(MaterialTheme.spacing.md),
         )
     }

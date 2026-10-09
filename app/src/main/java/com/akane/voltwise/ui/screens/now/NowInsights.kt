@@ -40,7 +40,8 @@ internal val NowUiState.showsInsights: Boolean
 
 /**
  * The analysis at a glance; the whole panel opens Insights. With concerns: the headline finding (severity, app and
- * what was found; it opens that finding's details) over the number of active findings. Otherwise "still learning"
+ * what was found; it opens that finding's details) over the number of active findings. With only informational
+ * changes (trends Insights lists under Changes): "no concerns" and how many to review. Otherwise "still learning"
  * while too few sessions have app data to compare, then "all good", or an invitation before the first analysis.
  *
  * @param headlineApp the headline app's label; null for a device finding or while it loads (the line then names
@@ -59,6 +60,10 @@ internal fun InsightsPanel(
             summary == null -> QuietText(stringResource(R.string.now_insights_never))
             summary.learning -> QuietText(stringResource(R.string.now_insights_learning))
             summary.allGood -> QuietText(stringResource(R.string.now_insights_all_good))
+            // No concerns, but changes Insights lists: a neutral pointer to them, never "all good".
+            summary.activeFindingCount == 0 -> QuietText(
+                pluralStringResource(R.plurals.now_insights_changes, summary.changeCount, summary.changeCount),
+            )
             else -> {
                 summary.headline?.let { headline ->
                     InsightHeadlineRow(headline, headlineApp, onOpen = { onOpenFinding(headline.key) })

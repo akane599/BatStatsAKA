@@ -100,6 +100,10 @@
         <item quantity="one">%d bulgu</item>
         <item quantity="other">%d bulgu</item>
     </plurals>
+    <plurals name="now_insights_changes">
+        <item quantity="one">Sorun yok · incelenecek %d değişiklik</item>
+        <item quantity="other">Sorun yok · incelenecek %d değişiklik</item>
+    </plurals>
 
     <string name="now_eta_estimating_full">Dolma süresi hesaplanıyor</string>
 </resources>

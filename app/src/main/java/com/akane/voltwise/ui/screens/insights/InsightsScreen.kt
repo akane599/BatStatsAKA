@@ -44,6 +44,7 @@ import com.akane.voltwise.R
 import com.akane.voltwise.battery.apps.AppInfoSource
 import com.akane.voltwise.battery.apps.AppLabel
 import com.akane.voltwise.battery.insights.actions.IntentSpec
+import com.akane.voltwise.battery.insights.engine.detectors.app.AppContext
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.ui.components.EmptyState
 import com.akane.voltwise.ui.components.Notice
@@ -63,8 +64,8 @@ import org.koin.compose.koinInject
 /** Two columns from this window width (the Material "expanded" breakpoint): findings start, changes and fixes end. */
 private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 
-/** Sessions on battery the engine needs before it judges apps (the per-app baseline rule). */
-internal const val LEARNING_SESSIONS = 4
+/** Sessions with app data the engine needs before it judges apps: the per-app baseline plus the current one. */
+internal const val LEARNING_SESSIONS = AppContext.MIN_ELIGIBLE_WINDOWS
 
 /**
  * Insights, wired: the Koin [InsightsViewModel], app labels from [AppInfoSource] for every app a finding or fix

@@ -103,13 +103,13 @@ class NowViewModelTest {
         assertNull(state().insightsSummary!!.headline!!.packageName)
     }
 
-    // R8-5: Insights says "still learning" below 4 comparable sessions; Now must not say "all good" meanwhile.
+    // R8-5: Insights says "still learning" below 5 comparable sessions; Now must not say "all good" meanwhile.
     @Test fun aQuietReportWithTooFewComparableSessionsIsLearningNotAllGood() = runTest {
         repo.insights.value = InsightReport(T0, emptyList(), null)
         repo.lastAnalyzedAt.value = 1
         repo.eligible.value = 1
         val (_, state) = start()
-        assertFalse("1 of 4 comparable sessions is not 'all good'", state().insightsSummary!!.allGood)
+        assertFalse("1 of 5 comparable sessions is not 'all good'", state().insightsSummary!!.allGood)
         assertEquals(InsightsSummary(null, 0, learning = true), state().insightsSummary)
         // Informational findings don't count as findings here either.
         repo.insights.value = InsightReport(T0, listOf(finding(Severity.INFO)), null)
@@ -123,9 +123,43 @@ class NowViewModelTest {
         repo.lastAnalyzedAt.value = 1
         repo.eligible.value = 1
         val (_, state) = start()
-        repo.eligible.value = 4
+        repo.eligible.value = 5
         runCurrent()
         assertFalse(state().insightsSummary!!.learning)
+        assertTrue(state().insightsSummary!!.allGood)
+    }
+
+    // R9-5: an app finding needs 4 history windows plus the current one, so 4 eligible windows is still learning.
+    @Test fun fourComparableSessionsAreStillLearningUntilAFifthGivesAppsABaseline() = runTest {
+        repo.insights.value = InsightReport(T0, emptyList(), null)
+        repo.lastAnalyzedAt.value = 1
+        repo.eligible.value = 4
+        val (_, state) = start()
+        assertTrue("4 windows leave only 3 history windows: no app finding is possible yet", state().insightsSummary!!.learning)
+        assertFalse(state().insightsSummary!!.allGood)
+        repo.eligible.value = 5
+        runCurrent()
+        assertFalse(state().insightsSummary!!.learning)
+        assertTrue(state().insightsSummary!!.allGood)
+    }
+
+    // R9-6: Insights lists a directional trend under Changes; Now must not say "nothing is draining more than usual".
+    @Test fun anInformationalDirectionalTrendIsAChangeToReviewNotAllGood() = runTest {
+        val trend = finding(Severity.INFO).copy(key = "TREND:screen_off", type = FindingType.TREND, subject = Subject.Device)
+        repo.insights.value = InsightReport(T0, listOf(trend), null)
+        repo.lastAnalyzedAt.value = 1
+        val (_, state) = start()
+        assertFalse("Insights shows this trend under Changes", state().insightsSummary!!.allGood)
+        assertEquals(InsightsSummary(null, 0, changeCount = 1), state().insightsSummary)
+        // Insights' FINDINGS body (the Changes panel) wins over "still learning"; Now follows.
+        repo.eligible.value = 1
+        runCurrent()
+        assertFalse(state().insightsSummary!!.learning)
+        assertFalse(state().insightsSummary!!.allGood)
+        repo.eligible.value = 5
+        // Negative control: an informational trend without a direction is not listed by Insights, so Now stays all good.
+        repo.insights.value = InsightReport(T0, listOf(trend.copy(direction = null)), null)
+        runCurrent()
         assertTrue(state().insightsSummary!!.allGood)
     }
 
@@ -547,7 +581,7 @@ class NowViewModelTest {
         override val insights = MutableStateFlow<InsightReport?>(null)
         override val lastAnalyzedAt = MutableStateFlow<Long?>(null)
         // Enough comparable sessions by default, so only the learning tests see "still learning".
-        val eligible = MutableStateFlow(4)
+        val eligible = MutableStateFlow(5)
         override val eligibleSessionCount: Flow<Int> = eligible
         override val design = MutableStateFlow<DesignCapacityReading>(DesignCapacityReading.Unknown)
         val cached = MutableStateFlow<AppUsageSnapshot?>(null)

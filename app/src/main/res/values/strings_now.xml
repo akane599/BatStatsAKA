@@ -120,6 +120,11 @@
         <item quantity="one">%d finding</item>
         <item quantity="other">%d findings</item>
     </plurals>
+    <!-- No concerns, but informational changes (trends Insights lists under Changes): %d is how many -->
+    <plurals name="now_insights_changes">
+        <item quantity="one">No concerns · %d change to review</item>
+        <item quantity="other">No concerns · %d changes to review</item>
+    </plurals>
 
     <!-- Current calibration notice -->
     <string name="now_eta_estimating_full">Estimating time to full</string>
