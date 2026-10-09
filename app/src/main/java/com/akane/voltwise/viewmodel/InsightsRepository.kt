@@ -87,7 +87,7 @@ internal fun Finding.toInsightState(
                     (row.appliedAt ?: row.createdAt) < generatedAtMs) &&
                 when (val subject = subject) {
                     is Subject.App -> row.packageName == subject.packageName && row.uid == subject.uid
-                    Subject.Device -> row.findingKey == key
+                    Subject.Device -> rec.action == ActionType.ENABLE_HIGH_BATTERY_ALERT || row.findingKey == key
                 }
         }
         RecommendationState(rec.action, rec.reversible, rec.requiresPrivilege, (!rec.requiresPrivilege || privileged) && !applied, applied)
