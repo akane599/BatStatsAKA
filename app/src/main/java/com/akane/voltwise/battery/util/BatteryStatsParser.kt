@@ -454,7 +454,9 @@ object BatteryStatsParser {
      * Checkin is not escaped CSV: android16 BatteryStats.java dumpLine prints args verbatim.
      * `wl` sanitizes commas, not quotes (L4947); `sy`/`jb` wrap raw names in quotes
      * (L4986/L5002), so frame their names between four header and four numeric tail fields.
-     * Process/kernel records retain their existing offsets; no quote state crosses fields or lines.
+     * `wr`/`kwl` wrap names in quotes; join through the closing quote and retain the
+     * numeric tail verbatim (`kwl` has two or five timer fields, max at index 8).
+     * No quote state crosses lines; process records retain their existing offsets.
      */
     internal fun splitCheckinLine(line: String): List<String> {
         val fields = line.split(',')
@@ -465,7 +467,15 @@ object BatteryStatsParser {
                     .removePrefix("\"").removeSuffix("\"")
                 fields.take(4) + name + fields.takeLast(4)
             }
-            "pr", "kwl" -> fields.mapIndexed { index, field ->
+            "wr", "kwl" -> {
+                if (fields.getOrNull(4)?.startsWith('"') != true) return fields
+                val end = (4 until fields.size).lastOrNull { index ->
+                    fields[index].endsWith('"') && (index > 4 || fields[index].length > 1)
+                } ?: return emptyList()
+                val name = fields.subList(4, end + 1).joinToString(",").removeSurrounding("\"")
+                fields.take(4) + name + fields.drop(end + 1)
+            }
+            "pr" -> fields.mapIndexed { index, field ->
                 if (index == 4) field.removePrefix("\"").removeSuffix("\"") else field
             }
             else -> fields
