@@ -322,6 +322,42 @@ class InsightsViewModelTest {
         assertNull(start(SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })).state.value.apply.pending)
     }
 
+    @Test fun dozeRemovalAfterReportDisablesCardsAndClearsSavedPending() = runTest {
+        val finding = insightFinding().copy(
+            type = FindingType.DOZE_WHITELISTED_DRAINER,
+            recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+        )
+        val report = InsightReport(10, listOf(finding), finding)
+        source.report.value = report
+        val saved = SavedStateHandle(mapOf(
+            "insights.pending.key" to finding.key,
+            "insights.pending.action" to ActionType.REMOVE_DOZE_WHITELIST.name,
+        ))
+        val vm = start(saved)
+        assertNotNull(vm.state.value.apply.pending)
+        source.actions.value = listOf(insightAction().copy(
+            type = ActionType.REMOVE_DOZE_WHITELIST.name, createdAt = 11, appliedAt = 12,
+        ))
+        runCurrent()
+
+        assertSame("applying must not require a refreshed report", report, source.report.value)
+        for (card in listOf(vm.state.value.headline, vm.state.value.keyFindings.single())) {
+            val recommendation = checkNotNull(card).recommendations.single()
+            assertTrue("stale report cards must show removal as applied", recommendation.alreadyApplied)
+            assertFalse("stale report cards must disable removal", recommendation.available)
+        }
+        assertTrue(vm.state.value.appliedActions.single().undoable)
+        assertNull("a post-report removal must invalidate pending", vm.state.value.apply.pending)
+        assertNull(saved.get<String>("insights.pending.key"))
+        assertNull(saved.get<String>("insights.pending.action"))
+        assertTrue("invalidating a dialog must not execute an action", source.applied.isEmpty())
+
+        source.report.value = report.copy(generatedAtMs = 13)
+        runCurrent()
+        assertTrue("a newer live whitelist finding permits removal again", vm.state.value.keyFindings.single().recommendations.single().available)
+        assertNull("a new report must not resurrect the discarded dialog", vm.state.value.apply.pending)
+    }
+
     @Test fun unavailableRecommendationClearsPending() = runTest {
         val vm = start()
         for (reason in listOf("removed", "privilege", "applied")) {

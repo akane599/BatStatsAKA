@@ -25,10 +25,10 @@ class InsightsViewModel(
 
     private val content = combine(source.report, source.actions, source.privileged) { report, actions, access ->
         val privileged = access == true
-        val findings = report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }
+        val findings = report?.findings?.map { it.toInsightState(privileged, actions, report.generatedAtMs) }.orEmpty()
         InsightsUiState(
             loaded = report != null,
-            headline = report?.headline?.toInsightState(privileged, actions),
+            headline = report?.headline?.toInsightState(privileged, actions, report.generatedAtMs),
             keyFindings = findings.filter { it.type != FindingType.TREND && it.severity != Severity.INFO }.insightSnapshot(),
             changes = findings.filter { it.type == FindingType.TREND && it.direction != null }.insightSnapshot(),
             appliedActions = actionStates(actions, findings),
@@ -123,7 +123,7 @@ internal class InsightApplyFlow(
                 val request = state.value.pending
                 if (report != null && privileged != null && request != null) {
                     val available = report.findings.firstOrNull { it.key == request.key }
-                        ?.toInsightState(privileged, actions)?.recommendations
+                        ?.toInsightState(privileged, actions, report.generatedAtMs)?.recommendations
                         ?.any { it.action == request.action && it.available } == true
                     if (!available) pending(null)
                 }

@@ -29,8 +29,8 @@ class FindingDetailsViewModel(
         }
         FindingDetailsUiState(
             loaded = report != null,
-            finding = finding?.toInsightState(privileged, actions),
-            relatedActions = actionStates(related, report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }),
+            finding = report?.let { finding?.toInsightState(privileged, actions, it.generatedAtMs) },
+            relatedActions = actionStates(related, report?.findings?.map { it.toInsightState(privileged, actions, report.generatedAtMs) }.orEmpty()),
             privileged = privileged,
         )
     }

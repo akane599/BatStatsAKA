@@ -68,13 +68,19 @@ class DefaultInsightsRepository(
 internal fun InsightActionEntity.undoable(): Boolean =
     status == InsightActionStatus.APPLIED || status == InsightActionStatus.UNKNOWN
 
-internal fun Finding.toInsightState(privileged: Boolean, actions: List<InsightActionEntity>): InsightFindingState = InsightFindingState(
+internal fun Finding.toInsightState(
+    privileged: Boolean,
+    actions: List<InsightActionEntity>,
+    generatedAtMs: Long,
+): InsightFindingState = InsightFindingState(
     key, type, severity, confidence, score, subject, direction,
     evidence.insightSnapshot(), series.insightSnapshot(),
     recommendations.map { rec ->
         val applied = actions.any { row ->
             row.type == rec.action.name && row.undoable() &&
-                !(type == FindingType.DOZE_WHITELISTED_DRAINER && rec.action == ActionType.REMOVE_DOZE_WHITELIST) &&
+                // Only a report analyzed after removal proves that the app is whitelisted again.
+                !(type == FindingType.DOZE_WHITELISTED_DRAINER && rec.action == ActionType.REMOVE_DOZE_WHITELIST &&
+                    (row.appliedAt ?: row.createdAt) < generatedAtMs) &&
                 when (val subject = subject) {
                     is Subject.App -> row.packageName == subject.packageName && row.uid == subject.uid
                     Subject.Device -> row.findingKey == key
