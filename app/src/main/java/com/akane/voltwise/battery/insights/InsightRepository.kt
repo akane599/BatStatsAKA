@@ -47,6 +47,7 @@ class InsightRepository(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val analyzeDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val analyze: (InsightInputs) -> InsightReport = { InsightEngine.analyze(it, Build.VERSION.SDK_INT) },
+    private val highBatteryAlertEnabled: suspend () -> Boolean = { false },
 ) {
     private val mutex = Mutex()
     private val publishLock = Mutex()
@@ -92,7 +93,7 @@ class InsightRepository(
                 dailyDao.range(today - InsightInputsBuilder.HISTORY_DAYS, today), rows, wakers,
                 sessionDao.capacityEstimates(Int.MAX_VALUE).first(), dozeWhitelist(),
                 insightDao.actionsOnce(), insightDao.findingsOnce(), zone = clock.zone,
-            )
+            ).copy(highBatteryAlertEnabled = highBatteryAlertEnabled())
         }
         val analyzed = withContext(analyzeDispatcher) { analyze(inputs) }
         withContext(ioDispatcher) {

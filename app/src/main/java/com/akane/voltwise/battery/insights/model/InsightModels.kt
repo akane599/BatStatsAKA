@@ -19,6 +19,7 @@ data class InsightInputs(
     val feedback: Map<String, Double>,
     /** Zone used to assign local epoch days; UTC preserves fixtures without a repository clock. */
     val zone: ZoneId = ZoneOffset.UTC,
+    val highBatteryAlertEnabled: Boolean = false,
 )
 
 data class SessionInput(

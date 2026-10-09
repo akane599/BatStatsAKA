@@ -84,6 +84,7 @@ import io.github.mlmgames.settings.core.resources.StringResourceProvider
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
@@ -207,6 +208,7 @@ val appModule = module {
                 val sample = battery.realtimeFlow.value.sample
                 sample?.chargeCounterUah to sample?.levelPercent
             },
+            highBatteryAlertEnabled = { get<SettingsRepository<AppSettings>>().flow.first().highBatteryAlertEnabled },
         )
     }
     single {
