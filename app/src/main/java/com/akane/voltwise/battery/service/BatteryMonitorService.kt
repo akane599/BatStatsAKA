@@ -12,8 +12,10 @@ import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
 import android.util.Log
-import com.akane.voltwise.battery.insights.InsightRepository
+import com.akane.voltwise.battery.BatteryApp
 import com.akane.voltwise.battery.apps.SessionSnapshotCollector
+import com.akane.voltwise.battery.data.db.ChargeSession
+import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.drain.DrainNotificationManager
 import com.akane.voltwise.battery.drain.NotificationIssue
@@ -27,6 +29,7 @@ import com.akane.voltwise.battery.util.UpdateGate
 import com.akane.voltwise.battery.widget.WidgetUpdater
 import com.akane.voltwise.settings.useFahrenheit
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.*
 import org.koin.android.ext.android.inject
 
@@ -36,7 +39,6 @@ class BatteryMonitorService : Service() {
     private val notifications: DrainNotificationManager by inject()
     private val shell: ShellRunner by inject()
     private val sessionSnapshots: SessionSnapshotCollector by inject()
-    private val insights: InsightRepository by inject()
     private val diagnostics: DiagnosticStore by inject()
     private var started = false
     private var monitoringStartedElapsed = 0L
@@ -99,13 +101,16 @@ class BatteryMonitorService : Service() {
         }
         started = true
         monitoringStartedElapsed = SystemClock.elapsedRealtime()
-        repository.startSampling()
-        // Subscribe before snapshots start: a finalized session must not race the refresh collector.
-        serviceScope.launch(start = CoroutineStart.UNDISPATCHED) {
-            refreshOnFinalizedSessions(sessionSnapshots.finalizedSessions, diagnostics::record) { insights.refresh() }
-        }
-        // Per-app baselines/ends at unplug and plug-in; runs (and dumps) only while monitoring runs.
-        serviceScope.launch(Dispatchers.Default) { sessionSnapshots.run() }
+        // Application subscriptions outlive STOP writes and must be ready before either producer.
+        serviceScope.startMonitoringWhenInsightsReady(
+            ready = (application as BatteryApp).insightRefreshReady,
+            startSampling = { repository.startSampling() },
+            snapshots = { sessionSnapshots.run() },
+            onFailure = {
+                diagnostics.record(DiagnosticCode.APP_SCOPE_FAILED)
+                stopSelf()
+            },
+        )
         serviceScope.launch(Dispatchers.IO) {
             // Private, excluded from automatic backup; changes are written only at episode boundaries.
             val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)
@@ -198,19 +203,63 @@ class BatteryMonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 }
 
+/** Keeps synchronous sampling startup on the service lifecycle dispatcher; only snapshots move off main. */
+internal fun CoroutineScope.startMonitoringWhenInsightsReady(
+    ready: Deferred<Unit>,
+    startSampling: () -> Unit,
+    snapshots: suspend () -> Unit,
+    onFailure: () -> Unit,
+    snapshotsDispatcher: CoroutineDispatcher = Dispatchers.Default,
+): Job = launch {
+    try {
+        ready.await()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        onFailure()
+        return@launch
+    }
+    // The service scope uses Main.immediate, serial with onDestroy; no suspension separates this start.
+    startSampling()
+    withContext(snapshotsDispatcher) { snapshots() }
+}
+
 /** Coalesce bursts without cancelling analysis: one refresh runs, and only the latest pending event is kept. */
 internal suspend fun refreshOnFinalizedSessions(
     finalizedSessions: Flow<String>,
     record: (DiagnosticCode) -> Unit,
+    closedSessions: Flow<ChargeSession> = emptyFlow(),
+    onSubscribed: () -> Unit = {},
     refresh: suspend () -> Unit,
-) {
-    finalizedSessions.conflate().collect {
-        try {
-            refresh()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            record(DiagnosticCode.APP_SCOPE_FAILED)
+) = coroutineScope {
+    val pending = Channel<Unit>(Channel.CONFLATED)
+    // UNDISPATCHED makes registration complete before the caller starts event producers.
+    val finalized = launch(start = CoroutineStart.UNDISPATCHED) {
+        finalizedSessions.collect { pending.trySend(Unit) }
+    }
+    val closed = launch(start = CoroutineStart.UNDISPATCHED) {
+        closedSessions.collect {
+            if (it.type != SessionType.DISCHARGE) pending.trySend(Unit)
         }
+    }
+    // A synchronously failing source cancels this scope before registration can be ready.
+    currentCoroutineContext().ensureActive()
+    onSubscribed()
+    launch {
+        joinAll(finalized, closed)
+        pending.close()
+    }
+    try {
+        for (event in pending) {
+            try {
+                refresh()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                record(DiagnosticCode.APP_SCOPE_FAILED)
+            }
+        }
+    } finally {
+        pending.cancel()
     }
 }

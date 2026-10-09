@@ -111,8 +111,11 @@ object DailySummaryAggregator {
                 chargedUah = row.chargedUah + charged[i],
                 cpuSuspendMs = suspend?.let { (row.cpuSuspendMs ?: 0L) + it[i] } ?: row.cpuSuspendMs,
                 dozeMs = contribute(row.dozeMs, doze),
-                screenOffDozeMs = contribute(row.screenOffDozeMs, screenOffDoze),
-                screenOffSuspendMs = contribute(row.screenOffSuspendMs, screenOffSuspend),
+                // Prior unknown screen-off observations cannot be recovered from new numerators.
+                screenOffDozeMs = if (row.screenOffMs > 0 && row.screenOffDozeMs == null) null
+                    else contribute(row.screenOffDozeMs, screenOffDoze),
+                screenOffSuspendMs = if (row.screenOffMs > 0 && row.screenOffSuspendMs == null) null
+                    else contribute(row.screenOffSuspendMs, screenOffSuspend),
                 updatedAt = updatedAt,
             )
             if (day == endDay) added.withReading(interval.endLevelPercent, interval.endTemperatureDeciC) else added

@@ -17,7 +17,7 @@ internal fun share(numerator: Long?, denominator: Long): Double? = numerator
     ?.takeIf { denominator > 0 && it in 0..denominator }?.toDouble()?.div(denominator)
 
 internal fun percentRate(uah: Long?, coveredMs: Long?, fullUah: Long?): Double? {
-    if (uah == null || uah < 0 || coveredMs == null || coveredMs <= 0 || fullUah == null || fullUah <= 0) return null
+    if (uah == null || uah < 0 || coveredMs == null || coveredMs < 60_000 || fullUah == null || fullUah <= 0) return null
     return uah.toDouble() / fullUah * 100.0 / (coveredMs / AppWindows.HOUR_MS)
 }
 

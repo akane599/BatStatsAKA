@@ -9,6 +9,7 @@ import com.akane.voltwise.battery.insights.model.MetricUnit
 import com.akane.voltwise.battery.insights.model.WakerKind
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.random.Random
 
 class DeviceDetectorsTest {
     @Test fun `doze blocked needs two hours both low shares and four baseline sessions`() {
@@ -42,6 +43,50 @@ class DeviceDetectorsTest {
         assertTrue(DeviceDetectors.detect(input.copy(sessions = sessions.map { it.copy(screenOffUah = 40_000) })).isEmpty())
         val partial = input.copy(sessions = sessions.dropLast(1) + sessions.last().copy(screenOffCoveredMs = HOUR / 2))
         assertEquals(8.0, DeviceDetectors.detect(partial).single().evidence.single().observed, 0.0)
+    }
+
+    @Test fun `short covered screen off spike is excluded but sustained drain remains detectable`() {
+        val history = (0..3).map { session(it).copy(screenOffUah = 40_000) }
+        val short = session(4).copy(screenOffCoveredMs = 59_999, screenOffUah = 4_000)
+        assertTrue("A 6 percent per hour spike under one minute is unavailable",
+            DeviceDetectors.detect(inputs(history + short, emptyList())).isEmpty())
+        val sustained = short.copy(screenOffCoveredMs = HOUR / 2, screenOffUah = 60_000)
+        val finding = DeviceDetectors.detect(inputs(history + sustained, emptyList())).single()
+        assertEquals(FindingType.SCREEN_OFF_DRAIN_HIGH, finding.type)
+        assertEquals(3.0, finding.evidence.single().observed, 0.0)
+        val shortHistory = history.map { it.copy(screenOffCoveredMs = 59_999, screenOffUah = 666) }
+        assertTrue("Short history cannot supply four eligible baselines",
+            DeviceDetectors.detect(inputs(shortHistory + sustained, emptyList())).isEmpty())
+    }
+
+    @Test fun `seeded stationary drain stays silent and realistic sustained effect remains detectable`() {
+        val trials = 500
+        for ((mode, seed) in listOf("flat" to 401, "noisy" to 402, "AR1" to 403)) {
+            val random = Random(seed)
+            var falseFindings = 0
+            var detectedEffects = 0
+            repeat(trials) {
+                var noise = 0.0
+                val stationary = (0..7).map { index ->
+                    noise = when (mode) {
+                        "flat" -> 0.0
+                        "noisy" -> random.nextDouble(-0.2, 0.2)
+                        else -> 0.5 * noise + random.nextDouble(-0.2, 0.2)
+                    }
+                    session(index).copy(screenOffUah = (40_000 * (1.0 + noise)).toLong())
+                }
+                if (DeviceDetectors.detect(inputs(stationary, emptyList())).isNotEmpty()) falseFindings++
+                val changed = stationary.dropLast(1) + stationary.last().copy(
+                    screenOffCoveredMs = HOUR / 2, screenOffUah = 60_000,
+                )
+                if (DeviceDetectors.detect(inputs(changed, emptyList())).any {
+                    it.type == FindingType.SCREEN_OFF_DRAIN_HIGH
+                }) detectedEffects++
+            }
+            println("Screen-off $mode: $falseFindings/$trials false findings, $detectedEffects/$trials sustained effects (seed $seed)")
+            assertTrue("$mode false findings $falseFindings/$trials; maximum 10", falseFindings <= 10)
+            assertEquals("$mode must detect a sustained 1 to 3 percent per hour effect", trials, detectedEffects)
+        }
     }
 
     @Test fun `near flat screen off drain history does not amplify score`() {

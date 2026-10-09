@@ -3,7 +3,11 @@ package com.akane.voltwise.di
 import com.akane.voltwise.battery.diagnostics.DiagnosticCode
 import com.akane.voltwise.battery.reconcileAndCatchUpInsights
 import com.akane.voltwise.battery.startInsightNotifications
+import com.akane.voltwise.battery.startInsightSessionRefresh
 import com.akane.voltwise.battery.service.refreshOnFinalizedSessions
+import com.akane.voltwise.battery.service.startMonitoringWhenInsightsReady
+import com.akane.voltwise.battery.data.db.ChargeSession
+import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.db.InsightDao
 import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
@@ -30,6 +34,7 @@ import com.akane.voltwise.viewmodel.InsightsRepository
 import com.akane.voltwise.viewmodel.InsightsViewModel
 import com.akane.voltwise.viewmodel.NowRepository
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -39,9 +44,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -298,6 +305,254 @@ class InsightsWiringTest {
         }
     }
 
+    private fun closedSession(id: String, type: SessionType) = ChargeSession(
+        sessionId = id, type = type, startTime = 0, endTime = 1,
+        startLevel = null, endLevel = null, deltaUah = null,
+        avgCurrentUa = null, estCapacityMah = null,
+    )
+
+    @Test fun committedChargingAndPluggedClosuresRefreshImmediately() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        val closed = MutableSharedFlow<ChargeSession>()
+        var refreshes = 0
+        val collector = launch {
+            refreshOnFinalizedSessions(finalized, { fail("Unexpected failure") }, closed) { refreshes++ }
+        }
+        runCurrent()
+        closed.emit(closedSession("charge", SessionType.CHARGE))
+        runCurrent()
+        assertEquals(1, refreshes)
+        closed.emit(closedSession("plugged", SessionType.PLUGGED))
+        runCurrent()
+        assertEquals(2, refreshes)
+        collector.cancelAndJoin()
+    }
+
+    @Test fun refreshSubscriptionsAreReadyBeforeMonitoringCanStart() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        val closed = MutableSharedFlow<ChargeSession>()
+        val collector = launch(start = CoroutineStart.UNDISPATCHED) {
+            refreshOnFinalizedSessions(finalized, { fail("Unexpected failure") }, closed) { }
+        }
+        assertEquals(1, finalized.subscriptionCount.value)
+        assertEquals(1, closed.subscriptionCount.value)
+        collector.cancelAndJoin()
+    }
+
+    @Test fun applicationRefreshRegistrationPrecedesProducersAndSurvivesServiceStop() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        val closed = MutableSharedFlow<ChargeSession>()
+        val ready = CompletableDeferred<Unit>()
+        var refreshes = 0
+        val appCollector = backgroundScope.launch(start = CoroutineStart.UNDISPATCHED) {
+            startInsightSessionRefresh(ready, { finalized }, { closed },
+                { fail("Unexpected failure") }) { refreshes++ }
+        }
+        assertTrue("Application startup must signal readiness after both subscriptions", ready.isCompleted)
+        assertEquals(1, finalized.subscriptionCount.value)
+        assertEquals(1, closed.subscriptionCount.value)
+        val service = launch {
+            ready.await()
+            // Producer can publish only after application subscriptions are ready.
+            closed.emit(closedSession("running", SessionType.CHARGE))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        runCurrent()
+        assertEquals(1, refreshes)
+        service.cancelAndJoin()
+        // STOP closes in the application writer after the service's own children have been cancelled.
+        closed.emit(closedSession("stopped", SessionType.PLUGGED))
+        runCurrent()
+        assertEquals("Delayed committed stop closure must still refresh", 2, refreshes)
+        assertTrue(appCollector.isActive)
+        appCollector.cancelAndJoin()
+    }
+
+    @Test fun registrationFailureCannotSignalReadyOrLeaveMonitoringWaiting() = runTest {
+        for (providerFailure in listOf(false, true)) {
+            val ready = CompletableDeferred<Unit>()
+            val expected = IllegalStateException("registration failed")
+            try {
+                startInsightSessionRefresh(ready,
+                    finalizedSessions = {
+                        if (providerFailure) throw expected
+                        flow { throw expected }
+                    },
+                    closedSessions = { MutableSharedFlow() },
+                    record = { fail("Startup failure is recorded by application scope") },
+                    refresh = { fail("Failed registration must not refresh") },
+                )
+                fail("Registration must rethrow the original failure")
+            } catch (failure: IllegalStateException) {
+                assertEquals(expected.message, failure.message)
+            }
+            assertTrue("Failed registration must resolve readiness", ready.isCompleted)
+            try {
+                ready.await()
+                fail("Failed registration must not signal successful readiness")
+            } catch (failure: IllegalStateException) {
+                assertEquals(expected.message, failure.message)
+            }
+        }
+    }
+
+    @Test fun cancelledRegistrationUnblocksMonitoringWithoutRecordingFailure() = runTest {
+        val ready = CompletableDeferred<Unit>()
+        val expected = kotlinx.coroutines.CancellationException("cancelled registration")
+        try {
+            startInsightSessionRefresh(ready, finalizedSessions = { throw expected },
+                closedSessions = { MutableSharedFlow() }, record = { fail("Cancellation must not record failure") },
+                refresh = { fail("Cancellation must not refresh") })
+            fail("Cancellation must be rethrown")
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            assertSame(expected, cancelled)
+        }
+        assertTrue(ready.isCancelled)
+    }
+
+    @Test fun destructionWhileWaitingForRefreshReadinessPreventsSampling() = runTest {
+        val main = StandardTestDispatcher(testScheduler)
+        val workers = TestCoroutineScheduler()
+        val serviceJob = Job()
+        val service = CoroutineScope(serviceJob + main)
+        val ready = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        try {
+            service.startMonitoringWhenInsightsReady(ready, { events += "start" }, { events += "snapshots" },
+                { fail("Cancellation must not report startup failure") }, StandardTestDispatcher(workers))
+            runCurrent()
+            workers.runCurrent()
+            // onDestroy stops the independent sampler then cancels all service children.
+            events += "stop"
+            serviceJob.cancel()
+            ready.complete(Unit)
+            runCurrent()
+            workers.runCurrent()
+            assertEquals(listOf("stop"), events)
+        } finally {
+            serviceJob.cancel()
+            workers.runCurrent()
+        }
+    }
+
+    @Test fun destructionAfterReadinessPostedButBeforeStartupRunsPreventsSampling() = runTest {
+        val main = StandardTestDispatcher(testScheduler)
+        val workers = TestCoroutineScheduler()
+        val serviceJob = Job()
+        val service = CoroutineScope(serviceJob + main)
+        val ready = CompletableDeferred<Unit>()
+        val events = mutableListOf<String>()
+        try {
+            service.startMonitoringWhenInsightsReady(ready, { events += "start" }, { events += "snapshots" },
+                { fail("Cancellation must not report startup failure") }, StandardTestDispatcher(workers))
+            runCurrent()
+            workers.runCurrent()
+            ready.complete(Unit)
+            // Readiness has posted the continuation, but main has not run it before onDestroy.
+            events += "stop"
+            serviceJob.cancel()
+            runCurrent()
+            workers.runCurrent()
+            assertEquals(listOf("stop"), events)
+        } finally {
+            serviceJob.cancel()
+            workers.runCurrent()
+        }
+    }
+
+    @Test fun snapshotWorkerCannotStartIndependentSamplerBeforeServiceLifecycleRuns() = runTest {
+        val main = StandardTestDispatcher(testScheduler)
+        val workers = TestCoroutineScheduler()
+        val serviceJob = Job()
+        val service = CoroutineScope(serviceJob + main)
+        val ready = CompletableDeferred(Unit)
+        val events = mutableListOf<String>()
+        try {
+            service.startMonitoringWhenInsightsReady(ready, { events += "start" }, { events += "snapshots" },
+                { fail("Unexpected failure") }, StandardTestDispatcher(workers))
+            workers.runCurrent()
+            assertTrue("Snapshot worker must not independently start the application-owned sampler", events.isEmpty())
+            events += "stop"
+            serviceJob.cancel()
+            runCurrent()
+            workers.runCurrent()
+            assertEquals(listOf("stop"), events)
+        } finally {
+            serviceJob.cancel()
+            workers.runCurrent()
+        }
+    }
+
+    @Test fun successfulServiceStartPrecedesDestructionAndCancelsBackgroundSnapshots() = runTest {
+        val main = StandardTestDispatcher(testScheduler)
+        val workers = TestCoroutineScheduler()
+        val serviceJob = Job()
+        val service = CoroutineScope(serviceJob + main)
+        var sampling = false
+        val events = mutableListOf<String>()
+        try {
+            service.startMonitoringWhenInsightsReady(CompletableDeferred(Unit),
+                { sampling = true; events += "start" },
+                {
+                    events += "snapshots"
+                    try { kotlinx.coroutines.awaitCancellation() } finally { events += "snapshots-cancelled" }
+                }, { fail("Unexpected failure") }, StandardTestDispatcher(workers))
+            runCurrent()
+            assertTrue("Sampling must start with the service lifecycle turn", sampling)
+            assertEquals(listOf("start"), events)
+            workers.runCurrent()
+            assertEquals(listOf("start", "snapshots"), events)
+            // Synchronous onDestroy stop and service cancellation happen on the same main dispatcher.
+            sampling = false
+            events += "stop"
+            serviceJob.cancel()
+            runCurrent()
+            workers.runCurrent()
+            runCurrent()
+            assertFalse("Destruction must leave the independent sampler stopped", sampling)
+            assertEquals(listOf("start", "snapshots", "stop", "snapshots-cancelled"), events)
+        } finally {
+            serviceJob.cancel()
+            workers.runCurrent()
+        }
+    }
+
+    @Test fun failedReadinessStopsServiceBeforeEitherProducerStarts() = runTest {
+        val workers = TestCoroutineScheduler()
+        val serviceJob = Job()
+        val service = CoroutineScope(serviceJob + StandardTestDispatcher(testScheduler))
+        val ready = CompletableDeferred<Unit>().apply { completeExceptionally(IllegalStateException("setup failed")) }
+        val events = mutableListOf<String>()
+        try {
+            service.startMonitoringWhenInsightsReady(ready, { fail("Failed readiness cannot sample") },
+                { fail("Failed readiness cannot collect snapshots") }, { events += "diagnostic"; events += "stop" },
+                StandardTestDispatcher(workers))
+            runCurrent()
+            workers.runCurrent()
+            assertEquals(listOf("diagnostic", "stop"), events)
+        } finally {
+            serviceJob.cancel()
+            workers.runCurrent()
+        }
+    }
+
+    @Test fun dischargeClosureWaitsForItsFinalizedSnapshot() = runTest {
+        val finalized = MutableSharedFlow<String>()
+        val closed = MutableSharedFlow<ChargeSession>()
+        var refreshes = 0
+        val collector = launch {
+            refreshOnFinalizedSessions(finalized, { fail("Unexpected failure") }, closed) { refreshes++ }
+        }
+        runCurrent()
+        closed.emit(closedSession("discharge", SessionType.DISCHARGE))
+        runCurrent()
+        assertEquals(0, refreshes)
+        finalized.emit("discharge")
+        runCurrent()
+        assertEquals(1, refreshes)
+        collector.cancelAndJoin()
+    }
+
     @Test fun refreshFailureIsContainedAndCollectorContinues() = runTest {
         val finalized = MutableSharedFlow<String>()
         var refreshes = 0
@@ -335,14 +590,15 @@ class InsightsWiringTest {
         assertTrue(recorded.isEmpty())
     }
 
-    @Test fun finalizedSessionBurstsCoalesceWithoutConcurrentOrCancelledRefreshes() = runTest {
+    @Test fun mixedSessionBurstsCoalesceWithoutConcurrentOrCancelledRefreshes() = runTest {
         val finalized = MutableSharedFlow<String>()
+        val closed = MutableSharedFlow<ChargeSession>()
         val firstRefresh = CompletableDeferred<Unit>()
         var refreshes = 0
         var active = 0
         var maxActive = 0
         val collector = launch {
-            refreshOnFinalizedSessions(finalized, { fail("Successful refresh must not record a failure") }) {
+            refreshOnFinalizedSessions(finalized, { fail("Successful refresh must not record a failure") }, closed) {
                 refreshes++
                 active++
                 maxActive = maxOf(maxActive, active)
@@ -353,9 +609,9 @@ class InsightsWiringTest {
         runCurrent()
         finalized.emit("first")
         runCurrent()
-        finalized.emit("second")
+        closed.emit(closedSession("second", SessionType.CHARGE))
         finalized.emit("third")
-        finalized.emit("fourth")
+        closed.emit(closedSession("fourth", SessionType.PLUGGED))
         runCurrent()
         assertEquals(1, refreshes)
         assertEquals(1, active)

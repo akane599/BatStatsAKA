@@ -224,6 +224,45 @@ class DefaultInsightsRepositoryTest {
         }
     }
 
+    @Test fun ordinaryFindingsReofferDozeRemovalOnlyAfterOlderMatchingJournalWrites() {
+        for (type in listOf(FindingType.APP_DRAIN_ANOMALY, FindingType.WAKEUP_STORM)) {
+            val finding = insightFinding().copy(
+                type = type,
+                recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+            )
+            for (status in listOf(InsightActionStatus.APPLIED, InsightActionStatus.UNKNOWN)) {
+                for (timestamp in listOf(9L, 10L, 11L)) {
+                    for (appliedAt in listOf(timestamp, null)) {
+                        val row = insightAction(status = status).copy(
+                            type = ActionType.REMOVE_DOZE_WHITELIST.name,
+                            createdAt = timestamp, appliedAt = appliedAt,
+                        )
+                        val recommendation = finding.toInsightState(true, listOf(row), 10).recommendations.single()
+                        assertEquals("$type $status write at $timestamp/$appliedAt", timestamp < 10, recommendation.available)
+                        assertEquals(timestamp >= 10, recommendation.alreadyApplied)
+                        assertFalse("Privilege is still required", finding.toInsightState(false, listOf(row), 10)
+                            .recommendations.single().available)
+                    }
+                }
+            }
+        }
+    }
+
+    @Test fun ordinaryDozeRemovalDoesNotSuppressAnotherPackageOrProfile() {
+        for (type in listOf(FindingType.APP_DRAIN_ANOMALY, FindingType.WAKEUP_STORM)) {
+            val finding = insightFinding().copy(
+                type = type,
+                recommendations = listOf(Recommendation(ActionType.REMOVE_DOZE_WHITELIST, true, true)),
+            )
+            val row = insightAction().copy(type = ActionType.REMOVE_DOZE_WHITELIST.name, appliedAt = 11)
+            for (other in listOf(row.copy(packageName = "other.app"), row.copy(uid = row.uid!! + 100_000))) {
+                val recommendation = finding.toInsightState(true, listOf(other), 10).recommendations.single()
+                assertTrue("Other identity must not suppress $type", recommendation.available)
+                assertFalse(recommendation.alreadyApplied)
+            }
+        }
+    }
+
     @Test fun appliedBackgroundRestrictionRemainsAppliedAndUnavailable() {
         val finding = insightFinding().copy(
             recommendations = listOf(Recommendation(ActionType.RESTRICT_BACKGROUND, true, true)),

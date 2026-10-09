@@ -82,8 +82,8 @@ internal fun Finding.toInsightState(
                     (subject == Subject.Device && rec.action == ActionType.ENABLE_HIGH_BATTERY_ALERT &&
                         row.status == InsightActionStatus.ONE_SHOT &&
                         (row.appliedAt ?: row.createdAt) >= generatedAtMs)) &&
-                // Only a report analyzed after removal proves that the app is whitelisted again.
-                !(type == FindingType.DOZE_WHITELISTED_DRAINER && rec.action == ActionType.REMOVE_DOZE_WHITELIST &&
+                // Reoffering removal in a newer report proves live whitelist membership.
+                !(rec.action == ActionType.REMOVE_DOZE_WHITELIST &&
                     (row.appliedAt ?: row.createdAt) < generatedAtMs) &&
                 when (val subject = subject) {
                     is Subject.App -> row.packageName == subject.packageName && row.uid == subject.uid

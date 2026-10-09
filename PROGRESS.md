@@ -146,6 +146,8 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 - 2026-10-09 — Bug hunt (US-17): TREND keys carry the direction (SQ-292), over a repository rule, because a dismissed INFO trend otherwise hid its reversal forever (one-time reset of existing trend rows accepted); capped action effects rank APPLIED, then newest, then higher id (SQ-286); the engine reads `highBatteryAlertEnabled` so the alert isn't recommended while on (SQ-290); an analysis failure after the Insights VM is cleared isn't published (SQ-291).
 - 2026-10-09 — Bug hunt (US-17): not fixed — the chart band stays independent of the "Not a problem" multiplier (it shows the app's usual range, not the alert threshold; pinned by SQ-278's test); per-tab Navigation 3 ViewModel stores were claimed shared but are keyed by each tab's `key(tab)` composite hash; the HEALTH_DECLINE "N sessions" count is correct (each estimate is a charge session).
 
+- 2026-10-09 — Code audit: finalized-session Insights refresh belongs to application scope, with asynchronous subscription readiness before monitoring starts, because service cancellation can precede the history writer's final CHARGE/PLUGGED commit; discharge refresh still waits for its finalized app snapshot.
+
 ## Audit status
 | Area | Last run | Result | How |
 |---|---|---|---|

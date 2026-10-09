@@ -58,7 +58,7 @@
     <string name="finding_seen_wakeup_storm">Bu uygulama saat başına her zamankinden çok daha fazla uyanma alarmı tetikledi.</string>
     <string name="finding_seen_job_storm">Bu uygulama saat başına her zamankinden çok daha fazla arka plan işi çalıştırdı.</string>
     <string name="finding_seen_doze_blocked">Ekran kapalıyken telefonunuz derin Doze\'da her zamankinden çok daha az zaman geçirdi.</string>
-    <string name="finding_seen_doze_whitelisted_drainer">Bu uygulama pil optimizasyonundan muaf ve arka planda her zamankinden daha meşguldü.</string>
+    <string name="finding_seen_doze_whitelisted_drainer">Bu uygulama pil optimizasyonundan muaf ve son oturumda arka planda etkinlik gösterdi.</string>
     <string name="finding_seen_screen_off_drain_high">Ekran kapalıyken piliniz her zamankinden hızlı tükendi.</string>
     <string name="finding_seen_trend">Son 7 günde bu, önceki 3 haftaya göre değişti.</string>
     <string name="finding_seen_charging_at_full">Telefonunuz son iki haftada birkaç kez saatlerce yüzde 100\'de şarjda kaldı.</string>

@@ -135,7 +135,7 @@ with sqlite3.connect(':memory:') as db:
     trend = db.execute(query('capacityEstimates'), {'limit': 5}).fetchall()
     assert [r['sessionId'] for r in trend] == ['s11', 's10', 's08', 's07', 's05'], 'Trend not newest-first estimates only, or unbounded'
     assert set(trend[0].keys()) == {'sessionId', 'type', 'startTime', 'endTime', 'lastSampleTime', 'startLevel', 'endLevel',
-                                    'capacityEstimateMah', 'capacityConfidence', 'capacityBasis'}, 'Trend projection columns drifted'
+                                    'capacityEstimateMah', 'capacityConfidence', 'capacityBasis', 'source'}, 'Trend projection columns drifted'
     # Per-session delete (SessionDao.deleteSession): snapshots, samples, then the row; uids and app usage cascade.
     snapshot_id = db.execute("INSERT INTO app_snapshots(sessionId,kind,capturedAt) VALUES('s07','BASELINE',1)").lastrowid
     db.execute("INSERT INTO app_snapshot_uids(snapshotId,uid,packageName,powerMah) VALUES(?,10001,'a',1.0)", (snapshot_id,))

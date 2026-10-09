@@ -1,5 +1,10 @@
 package com.akane.voltwise.battery.insights.engine
 
+import com.akane.voltwise.battery.data.db.DailySummary
+import com.akane.voltwise.battery.insights.InsightInputsBuilder
+import com.akane.voltwise.battery.measurement.DailySummaryAggregator
+import com.akane.voltwise.battery.measurement.DayInterval
+import java.time.ZoneOffset
 import com.akane.voltwise.battery.insights.model.DayInput
 import com.akane.voltwise.battery.insights.model.Direction
 import com.akane.voltwise.battery.insights.model.Metric
@@ -49,6 +54,38 @@ class TrendsTest {
         assertEquals(Direction.UP, later.direction)
         assertNotEquals(first.series, later.series)
         assertEquals("Repeated UP changes must keep the same finding identity", first.key, later.key)
+    }
+
+    @Test fun `daily rates exclude short coverage without suppressing sufficient coverage trend`() {
+        val base = deviceInputs(100_000, 200_000)
+        val short = base.copy(days = base.days.map { it.copy(screenOffCoveredMs = 59_999) })
+        assertTrue("Sub-minute daily rates must not produce a trend", Trends.detect(short).isEmpty())
+        val sufficient = base.copy(days = base.days.map { it.copy(screenOffCoveredMs = 60_000) })
+        assertEquals(Metric.SCREEN_OFF_PCT_PER_H, Trends.detect(sufficient).single().evidence.single().metric)
+    }
+
+    @Test fun `measured plugged zeros cannot invent declining shares from unknown historical days`() {
+        val summaries = (76L..79).map { epoch ->
+            DailySummary(epoch, screenOffMs = 8 * HOUR,
+                screenOffDozeMs = 6 * HOUR, screenOffSuspendMs = 7 * HOUR)
+        } + (93L..96).map { epoch ->
+            val legacy = DailySummary(epoch, screenOffMs = 8 * HOUR)
+            DailySummaryAggregator.apply(mapOf(epoch to legacy), DayInterval(
+                epoch * 24 * HOUR + 12 * HOUR, epoch * 24 * HOUR + 12 * HOUR + 60_000,
+                dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 0,
+            ), ZoneOffset.UTC, updatedAt = 1).single()
+        }
+        val input = InsightInputsBuilder.build(
+            nowMs = 100 * 24 * HOUR, todayEpochDay = 100, fullUah = 4_000_000, privileged = false,
+            sessions = emptyList(), days = summaries, appRows = emptyList(), wakers = emptyList(),
+            capacity = emptyList(), dozeWhitelist = null, actions = emptyList(), findings = emptyList(),
+        )
+        assertTrue("Unknown historical shares cannot count as four measured after-days", Trends.detect(input).isEmpty())
+        val measuredZeros = input.copy(days = input.days.map {
+            if (it.epochDay >= 93) it.copy(screenOffDozeMs = 0, screenOffSuspendMs = 0) else it
+        })
+        assertEquals(setOf(Metric.DEEP_DOZE_SHARE, Metric.SCREEN_OFF_DEEP_SLEEP_SHARE),
+            Trends.detect(measuredZeros).map { it.evidence.single().metric }.toSet())
     }
 
     private fun deviceInputs(before: Long, after: Long, dayOffset: Long = 0) =

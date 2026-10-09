@@ -4,19 +4,23 @@ import android.app.Application
 import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import com.akane.voltwise.battery.apps.AppInfoRepository
+import com.akane.voltwise.battery.apps.SessionSnapshotCollector
 import com.akane.voltwise.battery.data.BatteryRepository
 import com.akane.voltwise.battery.data.db.BatteryDatabase
+import com.akane.voltwise.battery.data.db.ChargeSession
 import com.akane.voltwise.battery.diagnostics.DiagnosticCode
 import com.akane.voltwise.battery.diagnostics.DiagnosticStore
 import com.akane.voltwise.battery.insights.InsightNotifier
 import com.akane.voltwise.battery.insights.InsightRepository
 import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.actions.InsightActionRepository
+import com.akane.voltwise.battery.service.refreshOnFinalizedSessions
 import com.akane.voltwise.battery.shizuku.ShizukuBridge
 import com.akane.voltwise.di.appModule
 import com.akane.voltwise.settings.AppSettings
 import com.akane.voltwise.settings.SettingsMigrator
 import io.github.mlmgames.settings.core.SettingsRepository
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -35,6 +39,8 @@ class BatteryApp : Application() {
     private val shizukuBridge: ShizukuBridge by inject()
     private val appInfo: AppInfoRepository by inject()
     private val repository: BatteryRepository by inject()
+    private val sessionSnapshots: SessionSnapshotCollector by inject()
+    internal val insightRefreshReady = CompletableDeferred<Unit>()
     private val insightActions: InsightActionRepository by inject()
     private val insights: InsightRepository by inject()
     private val insightNotifier: InsightNotifier by inject()
@@ -58,6 +64,17 @@ class BatteryApp : Application() {
             @Deprecated("Superseded by onTrimMemory")
             override fun onLowMemory() = appInfo.onTrimMemory()
         })
+
+        // Initialization stays off main; monitoring awaits registration without blocking onCreate.
+        appScope.launch(Dispatchers.IO) {
+            startInsightSessionRefresh(
+                ready = insightRefreshReady,
+                finalizedSessions = { sessionSnapshots.finalizedSessions },
+                closedSessions = { repository.closedSessions },
+                record = diagnostics::record,
+                refresh = { insights.refresh() },
+            )
+        }
 
         // Settings migration; history retention cleanup waits until it has ended.
         appScope.launch {
@@ -85,6 +102,23 @@ class BatteryApp : Application() {
         appScope.launch(Dispatchers.IO) {
             repository.backfillDailySummariesOnce()
         }
+    }
+}
+
+// Providers retain off-main initialization, and readiness failures unblock monitoring with the cause.
+internal suspend fun startInsightSessionRefresh(
+    ready: CompletableDeferred<Unit>,
+    finalizedSessions: () -> Flow<String>,
+    closedSessions: () -> Flow<ChargeSession>,
+    record: (DiagnosticCode) -> Unit,
+    refresh: suspend () -> Unit,
+) {
+    try {
+        refreshOnFinalizedSessions(finalizedSessions(), record, closedSessions(),
+            onSubscribed = { ready.complete(Unit) }, refresh = refresh)
+    } catch (e: Exception) {
+        ready.completeExceptionally(e)
+        throw e
     }
 }
 

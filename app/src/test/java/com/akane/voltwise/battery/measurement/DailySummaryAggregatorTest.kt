@@ -1,6 +1,8 @@
 package com.akane.voltwise.battery.measurement
 
 import com.akane.voltwise.battery.data.db.DailySummary
+import com.akane.voltwise.battery.data.db.BatterySample
+import com.akane.voltwise.battery.data.sampling.DailySummaryReplay
 import org.junit.Assert.*
 import org.junit.Test
 import java.time.LocalDate
@@ -217,6 +219,62 @@ class DailySummaryAggregatorTest {
         assertEquals(0L, retained.dozeMs)
         assertEquals(0L, retained.screenOffDozeMs)
         assertEquals(0L, retained.screenOffSuspendMs)
+    }
+
+    @Test fun legacyScreenOffNumeratorsStayUnknownAfterMeasuredPluggedZeroAndDischarge() {
+        val start = at("2026-06-10T12:00+02:00")
+        val d = day("2026-06-10")
+        val legacy = DailySummary(d, screenOffMs = 28_800_000)
+        val plugged = DayInterval(start, start + 60_000,
+            dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 0)
+        val afterPlugged = apply(plugged, mapOf(d to legacy)).getValue(d)
+        assertNull("A measured plugged zero cannot recover eight hours of unknown Doze", afterPlugged.screenOffDozeMs)
+        assertNull("A measured plugged zero cannot recover eight hours of unknown suspend", afterPlugged.screenOffSuspendMs)
+        val discharge = plugged.copy(screenOffMs = 60_000, screenOffDozeMs = 30_000, screenOffSuspendMs = 45_000)
+        val afterDischarge = apply(discharge, mapOf(d to afterPlugged)).getValue(d)
+        assertNull(afterDischarge.screenOffDozeMs)
+        assertNull(afterDischarge.screenOffSuspendMs)
+        assertEquals(28_860_000L, afterDischarge.screenOffMs)
+    }
+
+    @Test fun replayedEightHourScreenOffRowKeepsUnknownNumeratorsAfterPluggedZero() {
+        val start = at("2026-06-10T00:00+02:00")
+        val replay = DailySummaryReplay(berlin, updatedAt = 1)
+        for (minute in 0..480 step 5) {
+            val offset = minute * 60_000L
+            replay.add(BatterySample(timestamp = start + offset, status = 3, plugged = 0,
+                levelPercent = 80, currentNowUa = null, chargeCounterUah = null, voltageMv = null,
+                temperatureDeciC = null, health = null,
+                screenOn = false, observationId = "run", elapsedMs = offset, uptimeMs = offset,
+                source = DailySummaryReplay.SAMPLE_SOURCE))
+        }
+        val historical = replay.result.single()
+        assertEquals(28_800_000L, historical.screenOffMs)
+        val measured = apply(DayInterval(start + 12 * 3_600_000, start + 12 * 3_600_000 + 60_000,
+            dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 0),
+            mapOf(historical.epochDay to historical)).values.single()
+        assertNull(measured.screenOffDozeMs)
+        assertNull(measured.screenOffSuspendMs)
+    }
+
+    @Test fun zeroScreenOffHistoryInitializesMeasurementsAndKnownZeroAccumulates() {
+        val start = at("2026-06-10T12:00+02:00")
+        val d = day("2026-06-10")
+        val plugged = DayInterval(start, start + 60_000,
+            dozeMs = 0, screenOffDozeMs = 0, screenOffSuspendMs = 0)
+        for (existing in listOf(emptyMap(), mapOf(d to DailySummary(d, screenOnMs = 28_800_000)))) {
+            val zero = apply(plugged, existing).getValue(d)
+            assertEquals(0L, zero.screenOffDozeMs)
+            assertEquals(0L, zero.screenOffSuspendMs)
+            val measured = apply(plugged.copy(screenOffMs = 60_000, screenOffDozeMs = 30_000,
+                screenOffSuspendMs = 45_000), mapOf(d to zero)).getValue(d)
+            assertEquals(30_000L, measured.screenOffDozeMs)
+            assertEquals(45_000L, measured.screenOffSuspendMs)
+        }
+        val mixed = DailySummary(d, screenOffMs = 28_800_000, screenOffDozeMs = 0)
+        val updated = apply(plugged, mapOf(d to mixed)).getValue(d)
+        assertEquals(0L, updated.screenOffDozeMs)
+        assertNull(updated.screenOffSuspendMs)
     }
 
     @Test fun intervalIsTheDifferenceOfTwoEngineSummaries() {

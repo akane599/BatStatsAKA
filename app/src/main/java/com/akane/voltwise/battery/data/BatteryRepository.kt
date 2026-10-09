@@ -146,6 +146,10 @@ class BatteryRepository(
 
     /** Every saved sample (with its row id), emitted after its transaction commits. */
     val persisted: SharedFlow<BatterySample> = _persisted.asSharedFlow()
+    private val _closedSessions = MutableSharedFlow<ChargeSession>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    /** All newly closed session rows, emitted only after their writes commit, including same-power gaps. */
+    val closedSessions: SharedFlow<ChargeSession> = _closedSessions.asSharedFlow()
     private val _powerTransitions = MutableSharedFlow<PowerTransition>(extraBufferCapacity = 16, onBufferOverflow = BufferOverflow.DROP_OLDEST)
 
     /**
@@ -426,7 +430,10 @@ class BatteryRepository(
             _persisted.tryEmit(sample.copy(id = rowId))
             samplesSinceCleanup++
         }
-        if (ended != null) emitTransition(ended, point, updated)
+        if (ended != null) {
+            _closedSessions.tryEmit(ended)
+            emitTransition(ended, point, updated)
+        }
         if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= HistoryLimits.CLEANUP_SAMPLE_INTERVAL || point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             lastCleanupElapsed = point.elapsedMs
             samplesSinceCleanup = 0
@@ -467,8 +474,10 @@ class BatteryRepository(
         if (current != null) {
             try {
                 // Update-or-insert, never REPLACE (see process).
-                sessionDao.upsert(current.copy(endTime = current.lastSampleTime ?: current.startTime,
-                    activeKey = null, closeReason = reason))
+                val closed = current.copy(endTime = current.lastSampleTime ?: current.startTime,
+                    activeKey = null, closeReason = reason)
+                sessionDao.upsert(closed)
+                _closedSessions.tryEmit(closed)
             } catch (e: Exception) {
                 needsSessionRecovery = true
                 throw e

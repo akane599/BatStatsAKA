@@ -66,7 +66,7 @@
     <string name="finding_seen_wakeup_storm">This app set off far more wakeup alarms per hour than it usually does.</string>
     <string name="finding_seen_job_storm">This app ran far more background jobs per hour than it usually does.</string>
     <string name="finding_seen_doze_blocked">With the screen off, your phone spent much less time in deep Doze than usual.</string>
-    <string name="finding_seen_doze_whitelisted_drainer">This app is exempt from battery optimization and was busy in the background more than usual.</string>
+    <string name="finding_seen_doze_whitelisted_drainer">This app is exempt from battery optimization and had background activity in the latest session.</string>
     <string name="finding_seen_screen_off_drain_high">Your battery drained faster than usual while the screen was off.</string>
     <string name="finding_seen_trend">Over the last 7 days this changed compared with the 3 weeks before.</string>
     <string name="finding_seen_charging_at_full">Your phone stayed plugged in at full charge for hours, several times in the last two weeks.</string>
