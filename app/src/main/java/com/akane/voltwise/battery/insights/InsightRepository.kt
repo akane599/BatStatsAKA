@@ -46,6 +46,7 @@ class InsightRepository(
     private val analyze: (InsightInputs) -> InsightReport = { InsightEngine.analyze(it, Build.VERSION.SDK_INT) },
 ) {
     private val mutex = Mutex()
+    private val publishLock = Mutex()
     private val mutableReport = MutableStateFlow<InsightReport?>(null)
     val report: StateFlow<InsightReport?> = mutableReport.asStateFlow()
     private val mutableLastAnalyzedAt = MutableStateFlow<Long?>(null)
@@ -54,16 +55,11 @@ class InsightRepository(
 
     init {
         initialization = scope.async(ioDispatcher) {
-            mutex.withLock {
-                mutableLastAnalyzedAt.value = store.getString(LAST_ANALYZED_AT)?.toLongOrNull()
-            }
+            mutableLastAnalyzedAt.value = store.getString(LAST_ANALYZED_AT)?.toLongOrNull()
         }
         scope.launch(ioDispatcher) {
             initialization.await()
-            insightDao.findings().collect {
-                // Re-read under the same lock: a buffered emission must not overwrite a newer refresh/dismiss.
-                mutex.withLock { publish(insightDao.findingsOnce()) }
-            }
+            insightDao.findings().collect { publish() }
         }
     }
 
@@ -74,6 +70,8 @@ class InsightRepository(
     }
 
     suspend fun refresh(liveDump: Boolean = false) = mutex.withLock {
+        // Load before advancing the timestamp; initialization never waits for analysis.
+        initialization.await()
         val generation = maintenance.generation
         if (maintenance.isClearing) return@withLock
         val inputs = withContext(ioDispatcher) {
@@ -116,7 +114,7 @@ class InsightRepository(
                 insightDao.upsertFindings(updates)
                 store.edit(mapOf(LAST_ANALYZED_AT to inputs.nowMs.toString()))
                 mutableLastAnalyzedAt.value = inputs.nowMs
-                publish(insightDao.findingsOnce())
+                publish()
             }
         }
     }
@@ -128,7 +126,7 @@ class InsightRepository(
             maintenance.mutations.withLock write@ {
                 if (maintenance.isClearing || maintenance.generation != generation) return@write
                 insightDao.setStatus(key, InsightFindingStatus.DISMISSED)
-                publish(insightDao.findingsOnce())
+                publish()
             }
         }
     }
@@ -143,12 +141,14 @@ class InsightRepository(
                 if (maintenance.isClearing || maintenance.generation != generation) return@write
                 insightDao.upsertFindings(listOf(old.copy(status = InsightFindingStatus.DISMISSED,
                     feedbackMultiplier = (old.feedbackMultiplier * 1.5).coerceAtMost(4.0))))
-                publish(insightDao.findingsOnce())
+                publish()
             }
         }
     }
 
-    private fun publish(rows: List<InsightFindingEntity>) {
+    private suspend fun publish() = publishLock.withLock {
+        // Re-read inside the publish lock so buffered emissions cannot overwrite newer feedback.
+        val rows = insightDao.findingsOnce()
         val active = rows.filter { it.status == InsightFindingStatus.ACTIVE }.mapNotNull(FindingCodec::decode)
             .sortedWith(findingOrder)
         mutableReport.value = InsightReport(mutableLastAnalyzedAt.value ?: rows.maxOfOrNull { it.lastSeenAt } ?: 0,
