@@ -55,7 +55,7 @@ data class InsightApplyState(
     val pending: PendingInsightApply? = null,
     val selectedKey: String? = null,
     val working: Boolean = false,
-    /** Latest application-owned unconsumed result; ResultShown consumes it across both destinations. */
+    /** Latest application-owned unconsumed result; ResultShown(this result) consumes it across both destinations. */
     val lastResult: InsightActionMessage? = null,
 )
 
@@ -94,8 +94,12 @@ enum class InsightMessageCode {
     FINDING_UNAVAILABLE, RECOMMENDATION_UNAVAILABLE, ANALYSIS_FAILED, FEEDBACK_FAILED,
 }
 
+/**
+ * [seq] is the publication identity [InsightApplyResults.publish] assigns (0 until published), so two outcomes
+ * with the same [code] stay distinct and only the exact published instance can be consumed.
+ */
 @Immutable
-data class InsightActionMessage(val code: InsightMessageCode, val actionId: Long? = null)
+data class InsightActionMessage(val code: InsightMessageCode, val actionId: Long? = null, val seq: Long = 0)
 
 sealed interface InsightUiEffect {
     data class Message(val result: InsightActionMessage) : InsightUiEffect
@@ -112,5 +116,6 @@ sealed interface InsightsEvent {
     data class RequestApply(val key: String, val action: ActionType) : InsightsEvent
     data object ConfirmApply : InsightsEvent
     data object CancelApply : InsightsEvent
-    data object ResultShown : InsightsEvent
+    /** The UI finished showing [result], the exact instance it received as [InsightApplyState.lastResult]. */
+    data class ResultShown(val result: InsightActionMessage) : InsightsEvent
 }

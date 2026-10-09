@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.akane.voltwise.battery.insights.actions.*
 import com.akane.voltwise.battery.insights.model.*
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
@@ -73,12 +74,17 @@ class InsightsViewModel(
 /** Application-owned latest unconsumed outcome, shared by both Insights destinations. */
 class InsightApplyResults {
     private val mutableResult = MutableStateFlow<InsightActionMessage?>(null)
+    private val nextSeq = AtomicLong()
     val latest = mutableResult.asStateFlow()
 
-    internal fun publish(result: InsightActionMessage) {
-        mutableResult.value = result
-    }
+    /** Publishes [result] under a fresh [InsightActionMessage.seq] and returns that published instance. */
+    internal fun publish(result: InsightActionMessage): InsightActionMessage =
+        result.copy(seq = nextSeq.incrementAndGet()).also { mutableResult.value = it }
 
+    /**
+     * Clears the held outcome only if it is the exact published [result]. Seqs are unique and an unpublished
+     * message has seq 0, so an equal-looking message from another flow or a stale screen never consumes it.
+     */
     internal fun consume(result: InsightActionMessage?) {
         mutableResult.compareAndSet(result, null)
     }
@@ -132,7 +138,7 @@ internal class InsightApplyFlow(
                 pending(PendingInsightApply(event.key, event.action))
             }
             InsightsEvent.CancelApply -> pending(null)
-            InsightsEvent.ResultShown -> results.consume(state.value.lastResult)
+            is InsightsEvent.ResultShown -> results.consume(event.result)
             InsightsEvent.ConfirmApply -> confirm()
             is InsightsEvent.Undo -> runAction { source.undo(event.actionId) }
             is InsightsEvent.OpenFinding -> {
@@ -223,9 +229,9 @@ internal class InsightApplyFlow(
     }
 
     fun message(result: InsightActionMessage) {
-        ownLast = result
-        results.publish(result)
-        events.trySend(InsightUiEffect.Message(result))
+        val published = results.publish(result)
+        ownLast = published
+        events.trySend(InsightUiEffect.Message(published))
     }
 
     private companion object {
