@@ -14,6 +14,7 @@ import com.akane.voltwise.battery.data.db.DailySummary
 import com.akane.voltwise.battery.data.db.SessionType
 import com.akane.voltwise.battery.data.resolveFullUah
 import com.akane.voltwise.battery.data.uah
+import com.akane.voltwise.battery.insights.engine.detectors.app.AppContext
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.measurement.CalibrationState
@@ -115,7 +116,8 @@ class NowViewModel(
         combine(today, health, topApps, source.dischargeSessions(1).map { it.firstOrNull() }, ::Cards),
         source.insights,
         source.lastAnalyzedAt,
-    ) { now, cards, report, lastAnalyzedAt ->
+        source.eligibleSessionCount.distinctUntilChanged(),
+    ) { now, cards, report, lastAnalyzedAt, eligibleSessions ->
         val fullUah = resolveFullUah(now.live.counterUah, now.live.levelPct, cards.health?.estimate?.fullUah)
         NowUiState(
             nowMs = now.live.nowMs,
@@ -127,11 +129,14 @@ class NowViewModel(
             health = cards.health?.let(NowMapping::health),
             topApps = cards.topApps,
             insightsSummary = report?.takeIf { lastAnalyzedAt != null }?.let {
+                val active = it.findings.count { finding -> finding.severity != Severity.INFO }
                 InsightsSummary(
                     headline = it.headline?.let { finding ->
                         InsightHeadline(finding.key, finding.type, finding.severity, (finding.subject as? Subject.App)?.packageName)
                     },
-                    activeFindingCount = it.findings.count { finding -> finding.severity != Severity.INFO },
+                    activeFindingCount = active,
+                    // Insights' rule: findings win, then too few comparable sessions is "still learning".
+                    learning = active == 0 && eligibleSessions < AppContext.MIN_BASELINE_SESSIONS,
                 )
             },
             calibrationNotice = NowMapping.notice(now.calibration),

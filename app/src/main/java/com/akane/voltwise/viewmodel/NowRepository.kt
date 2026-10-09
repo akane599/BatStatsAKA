@@ -34,6 +34,8 @@ interface NowRepository {
     val insights: Flow<InsightReport?>
     /** InsightRepository.lastAnalyzedAt: null until an analysis has completed. */
     val lastAnalyzedAt: Flow<Long?>
+    /** InsightsRepository.eligibleSessionCount: sessions with app data to compare (what the app baseline needs). */
+    val eligibleSessionCount: Flow<Int>
 
     /**
      * The app-wide design capacity shared with Health, only when already known (the Settings override, or a root
@@ -75,6 +77,7 @@ class DefaultNowRepository(
     designCapacity: DesignCapacitySource,
     override val insights: Flow<InsightReport?>,
     override val lastAnalyzedAt: Flow<Long?>,
+    override val eligibleSessionCount: Flow<Int>,
 ) : NowRepository {
     override val realtime = repository.realtimeFlow
     override val calibration = calibrationStore.state
