@@ -56,10 +56,10 @@ class AppDetailsViewModelTest {
         return vm to { vm.state.value }
     }
 
-    @Test fun findingsFilterByPackageNotUidAndUpdateAsActiveReportChanges() = runTest {
+    @Test fun findingsFilterByUidAndPackageAndUpdateAsActiveReportChanges() = runTest {
         val reports = MutableStateFlow<InsightReport?>(null)
         val repository = object : AppDetailsRepository by source {
-            override fun findingsFor(packageName: String) = reports.map { it.appFindings(packageName) }
+            override fun findingsFor(uid: Int, packageName: String) = reports.map { it.appFindings(uid, packageName) }
         }
         val (_, state) = start(repository = repository)
         assertTrue(state().findings.isEmpty())
@@ -69,7 +69,7 @@ class AppDetailsViewModelTest {
         val device = finding("device", Subject.Device, null)
         reports.value = InsightReport(NOW, listOf(chrome, other, device, down), chrome)
         runCurrent()
-        assertEquals(listOf(chrome, down), reports.value.appFindings(CHROME))
+        assertEquals(listOf(chrome, down), reports.value.appFindings(CHROME_UID, CHROME))
         assertEquals(listOf(
             AppFinding(chrome.key, chrome.type, chrome.severity, Direction.UP),
             AppFinding(down.key, down.type, down.severity, Direction.DOWN),
@@ -81,10 +81,29 @@ class AppDetailsViewModelTest {
         assertEquals(2, retained.size)
     }
 
+    @Test fun workProfileCopyDoesNotShowPersonalProfileFindings() = runTest {
+        val personal = finding("personal", Subject.App(CHROME_UID, CHROME), Direction.UP)
+        val reports = MutableStateFlow<InsightReport?>(InsightReport(NOW, listOf(personal), personal))
+        val repository = object : AppDetailsRepository by source {
+            override fun findingsFor(uid: Int, packageName: String) = reports.map { it.appFindings(uid, packageName) }
+        }
+        val workUid = 1_000_000 + CHROME_UID
+        val (_, personalState) = start(repository = repository)
+        val (_, workState) = start(uid = workUid, repository = repository)
+        assertEquals(listOf(personal.key), personalState().findings.map { it.key })
+        assertTrue("work-profile copy must not show the personal-profile finding", workState().findings.isEmpty())
+
+        val work = finding("work", Subject.App(workUid, CHROME), Direction.UP)
+        reports.value = InsightReport(NOW + 1, listOf(personal, work), personal)
+        runCurrent()
+        assertEquals(listOf(personal.key), personalState().findings.map { it.key })
+        assertEquals(listOf(work.key), workState().findings.map { it.key })
+    }
+
     @Test fun findingsAreAnUnmodifiableSnapshot() = runTest {
         val input = mutableListOf(finding("chrome", Subject.App(CHROME_UID, CHROME), null))
         val repository = object : AppDetailsRepository by source {
-            override fun findingsFor(packageName: String) = MutableStateFlow<List<Finding>>(input)
+            override fun findingsFor(uid: Int, packageName: String) = MutableStateFlow<List<Finding>>(input)
         }
         val (_, state) = start(repository = repository)
         val snapshot = state().findings
@@ -104,7 +123,7 @@ class AppDetailsViewModelTest {
         val withEvidence = finding("chrome", Subject.App(CHROME_UID, CHROME), Direction.UP).copy(evidence = listOf(lead, second))
         val without = finding("bare", Subject.App(CHROME_UID, CHROME), null)
         val repository = object : AppDetailsRepository by source {
-            override fun findingsFor(packageName: String) = MutableStateFlow(listOf(withEvidence, without))
+            override fun findingsFor(uid: Int, packageName: String) = MutableStateFlow(listOf(withEvidence, without))
         }
         val (_, state) = start(repository = repository)
         assertEquals("the row shows the first evidence only", lead, state().findings[0].evidence)

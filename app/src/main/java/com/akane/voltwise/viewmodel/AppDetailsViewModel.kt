@@ -43,7 +43,7 @@ data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMa
 /** [AppStatsReader] plus this app's history across stored sessions. */
 interface AppDetailsRepository : AppStatsReader {
     /** InsightRepository.report owns status filtering: DISMISSED and RESOLVED never reach this flow. */
-    fun findingsFor(packageName: String): Flow<List<Finding>>
+    fun findingsFor(uid: Int, packageName: String): Flow<List<Finding>>
 
     /**
      * The sessions overlapping [fromMs]..[toMs] that [inAppHistory] keeps, oldest first, each with this app's row
@@ -75,7 +75,7 @@ class DefaultAppDetailsRepository(
     private val database: BatteryDatabase,
     private val insights: Flow<InsightReport?>,
 ) : AppDetailsRepository, AppStatsReader by reader {
-    override fun findingsFor(packageName: String): Flow<List<Finding>> = insights.map { it.appFindings(packageName) }
+    override fun findingsFor(uid: Int, packageName: String): Flow<List<Finding>> = insights.map { it.appFindings(uid, packageName) }
 
     override suspend fun history(uid: Int, packageName: String, fromMs: Long, toMs: Long): List<AppSessionUsage> = withContext(Dispatchers.IO) {
         val sessions = database.sessionDao().sessionsBetween(fromMs, toMs)
@@ -88,9 +88,12 @@ class DefaultAppDetailsRepository(
     }
 }
 
-/** Selects an app from the active-only report; a shared uid is not a package match. */
-internal fun InsightReport?.appFindings(packageName: String): List<Finding> =
-    this?.findings?.filter { (it.subject as? Subject.App)?.packageName == packageName }.orEmpty()
+/** Selects this uid and package from the active-only report, keeping copies in other profiles separate. */
+internal fun InsightReport?.appFindings(uid: Int, packageName: String): List<Finding> =
+    this?.findings?.filter {
+        val app = it.subject as? Subject.App
+        app != null && app.uid == uid && app.packageName == packageName
+    }.orEmpty()
 
 /** One active finding about this app; [evidence] is the finding's lead evidence (its row's one line), when it has any. */
 @Immutable
@@ -191,7 +194,7 @@ data class AppDetailsUiState(
     val startedAtMs: Long? = null,
     val usage: AppUsageDetails? = null,
     val history: AppHistoryState = AppHistoryState.Loading,
-    /** An unmodifiable snapshot of this package's active findings. */
+    /** An unmodifiable snapshot of this uid and package's active findings. */
     val findings: List<AppFinding> = emptyList(),
 )
 
@@ -238,7 +241,7 @@ class AppDetailsViewModel(
         combine(info, infoLoaded, ::Pair),
         loader.loading,
         loader.problem,
-        combine(history, source.findingsFor(packageName), ::Pair),
+        combine(history, source.findingsFor(uid, packageName), ::Pair),
     ) { snapshot, (info, loaded), loading, problem, (history, findings) ->
         AppDetailsUiState(
             uid = uid,

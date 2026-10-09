@@ -23,9 +23,9 @@ class FindingDetailsViewModel(
     private val content = combine(source.report, source.actions, source.privileged, key) { report, actions, access, key ->
         val privileged = access == true
         val finding = report?.findings?.firstOrNull { it.key == key }
-        val packageName = (finding?.subject as? com.akane.voltwise.battery.insights.model.Subject.App)?.packageName
+        val app = finding?.subject as? com.akane.voltwise.battery.insights.model.Subject.App
         val related = actions.filter { row ->
-            if (packageName != null) row.packageName == packageName else row.findingKey == key
+            if (app != null) row.packageName == app.packageName && row.uid == app.uid else row.findingKey == key
         }
         FindingDetailsUiState(
             loaded = report != null,
