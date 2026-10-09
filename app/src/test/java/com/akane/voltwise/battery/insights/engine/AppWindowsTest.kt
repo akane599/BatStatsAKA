@@ -1,6 +1,7 @@
 package com.akane.voltwise.battery.insights.engine
 
 import com.akane.voltwise.battery.insights.engine.eligibility.AppWindows
+import com.akane.voltwise.battery.insights.engine.eligibility.EligibleAppWindow
 import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.SessionKind
 import com.akane.voltwise.battery.insights.model.Subject
@@ -68,7 +69,7 @@ class AppWindowsTest {
         assertEquals(8.0, power.upperBound!!, 0.0)
         assertTrue(power.censored)
         assertFalse(power.present)
-        assertEquals(4.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.upperBound!!, 0.0)
+        assertEquals(0.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.value!!, 0.0)
     }
 
     @Test fun powerCutoffUsesPowerLeadersNotAdditionalWakerRows() {
@@ -91,12 +92,84 @@ class AppWindowsTest {
             assertTrue(power.censored)
             assertFalse(power.present)
         }
-        assertEquals(2.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.upperBound!!, 0.0)
+        assertEquals(0.0, AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!.value!!, 0.0)
         val presentWaker = AppWindows.point(window, Subject.App(waker.uid, waker.packageName), Metric.POWER_MAH_PER_H)!!
         assertEquals(0.25, presentWaker.value!!, 0.0)
         assertTrue(presentWaker.present)
         assertFalse(presentWaker.censored)
         assertNull(AppWindows.point(window.copy(rows = listOf(waker, others)), subject, Metric.POWER_MAH_PER_H))
+    }
+
+    @Test fun absentAppWithTwoExtraWakersHasExactZeroAlarms() {
+        val point = AppWindows.point(truncatedWindow(), subject, Metric.WAKEUP_ALARMS_PER_H)!!
+        assertEquals(0.0, point.value)
+        assertNull(point.upperBound)
+        assertFalse(point.censored)
+        assertFalse(point.present)
+    }
+
+    @Test fun absentAppJobsAreBoundedByOthersNotPowerLeaders() {
+        val point = AppWindows.point(truncatedWindow(), subject, Metric.JOBS_PER_H)!!
+        assertNull(point.value)
+        assertEquals(40.0, point.upperBound!!, 0.0)
+        assertTrue(point.censored)
+        assertFalse(point.present)
+    }
+
+    @Test fun spareWakerSlotsAlsoMakeBackgroundWakelockAbsenceExactZero() {
+        val point = AppWindows.point(truncatedWindow(), subject, Metric.PARTIAL_WAKELOCK_BG_SHARE)!!
+        assertEquals(0.0, point.value)
+        assertNull(point.upperBound)
+        assertFalse(point.censored)
+        assertFalse(point.present)
+    }
+
+    @Test fun fullWakerSlotsUseAlarmCutoffAndOthersWakelockShare() {
+        val window = truncatedWindow(wakerCount = 10).let { window ->
+            window.copy(rows = window.rows.map {
+                if (it.isOthers) it.copy(wakeupAlarms = 8, partialWakelockBgMs = HOUR) else it
+            })
+        }
+        val alarms = AppWindows.point(window, subject, Metric.WAKEUP_ALARMS_PER_H)!!
+        assertEquals(5.5, alarms.upperBound!!, 0.0)
+        assertNull(alarms.value)
+        val wakelock = AppWindows.point(window, subject, Metric.PARTIAL_WAKELOCK_BG_SHARE)!!
+        assertEquals(0.5, wakelock.upperBound!!, 0.0)
+        assertNull(wakelock.value)
+        assertFalse(wakelock.present)
+    }
+
+    @Test fun absentTruncatedMetricsWithoutStoredSupportOrOthersValueStayUnsupported() {
+        val window = truncatedWindow()
+        val legacy = window.copy(rows = window.rows.map {
+            it.copy(wakeupAlarms = null, partialWakelockBgMs = null)
+        })
+        assertNull(AppWindows.point(legacy, subject, Metric.WAKEUP_ALARMS_PER_H))
+        assertNull(AppWindows.point(legacy, subject, Metric.PARTIAL_WAKELOCK_BG_SHARE))
+        val noJobs = window.copy(rows = window.rows.map { if (it.isOthers) it.copy(jobCount = null) else it })
+        assertNull(AppWindows.point(noJobs, subject, Metric.JOBS_PER_H))
+        val fullWakers = truncatedWindow(wakerCount = 10)
+        val noWakelock = fullWakers.copy(rows = fullWakers.rows.map {
+            if (it.isOthers) it.copy(partialWakelockBgMs = null) else it
+        })
+        assertNull(AppWindows.point(noWakelock, subject, Metric.PARTIAL_WAKELOCK_BG_SHARE))
+    }
+
+    private fun truncatedWindow(wakerCount: Int = 2): EligibleAppWindow {
+        val session = session(0, 2 * HOUR).let {
+            it.copy(appWindow = it.appWindow!!.copy(rowsStored = 30 + wakerCount, fullRowSet = true))
+        }
+        val leaders = (0 until 30).map { rank ->
+            row(session.id).copy(uid = 20_000 + rank, packageName = "example.leader$rank", rank = rank,
+                powerMah = 60.0 - rank, wakeupAlarms = 0, jobCount = 0)
+        }
+        val wakers = (0 until wakerCount).map { index ->
+            row(session.id).copy(uid = 30_000 + index, packageName = "example.waker$index", rank = 30 + index,
+                powerMah = 0.5, wakeupAlarms = (20 - index).toLong())
+        }
+        val others = row(session.id).copy(uid = -1, packageName = "", rank = 30 + wakerCount, isOthers = true,
+            powerMah = 1.0, wakeupAlarms = 0, partialWakelockBgMs = 0, jobCount = 80)
+        return AppWindows.select(inputs(listOf(session), leaders + wakers + others)).single()
     }
 
     @Test fun nonFullAbsenceIsZeroButPresentNullAndUnsupportedSessionAreExcluded() {

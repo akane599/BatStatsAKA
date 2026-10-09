@@ -70,12 +70,23 @@ object AppWindows {
         }.mapNotNull { value(window, it, metric) }
         // No stored support for a nullable metric means unsupported, even for an absent app.
         if (supported.isEmpty() && (metric != Metric.POWER_MAH_PER_H || window.rows.isNotEmpty())) return null
-        return if (window.session.appWindow?.fullRowSet == true) {
-            val cutoff = supported.minOrNull() ?: return null
-            AppMetricPoint(window.session.id, window.atMs, null, cutoff, present = false)
-        } else {
-            AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
+        if (window.session.appWindow?.fullRowSet != true) {
+            return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
         }
+        val wakers = window.rows.filter { !it.isOthers && it.rank >= 30 }
+        // Spare waker slots mean every app with alarms or background wakelock time was kept.
+        if (wakers.size < 10 &&
+            (metric == Metric.WAKEUP_ALARMS_PER_H || metric == Metric.PARTIAL_WAKELOCK_BG_SHARE)
+        ) {
+            return AppMetricPoint(window.session.id, window.atMs, 0.0, null, present = false)
+        }
+        val cutoff = when (metric) {
+            Metric.POWER_MAH_PER_H -> supported.minOrNull()
+            Metric.WAKEUP_ALARMS_PER_H -> wakers.mapNotNull { value(window, it, metric) }.minOrNull()
+            // Power selection does not bound other activity; the unselected tail's total does.
+            else -> window.rows.firstOrNull { it.isOthers }?.let { value(window, it, metric) }
+        } ?: return null
+        return AppMetricPoint(window.session.id, window.atMs, null, cutoff, present = false)
     }
 
     fun value(window: EligibleAppWindow, row: AppSessionInput, metric: Metric): Double? {
