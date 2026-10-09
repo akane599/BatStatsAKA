@@ -7,6 +7,8 @@ import com.akane.voltwise.battery.insights.model.FindingType
 import com.akane.voltwise.battery.insights.model.InsightReport
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -57,6 +59,111 @@ class InsightNotifierPolicyTest {
         assertNull(policy.select(report(finding("a"))))
         assertEquals("b", policy.select(report(finding("a"), finding("b")))?.key)
     }
+
+    @Test
+    fun lastingHighFindingsNotifyOnceUntilTheyResolveAndReturn() {
+        val a = finding("a")
+        val b = finding("b")
+        val first = policy.select(report(a, b))
+        assertEquals("a", first?.key)
+        policy.markNotified(requireNotNull(first))
+
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        val restarted = InsightNotificationPolicy(store) { now }
+        val second = restarted.select(report(a, b))
+        assertEquals("b", second?.key)
+        restarted.markNotified(requireNotNull(second))
+
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        assertNull("Both lasting findings have already notified", restarted.select(report(a, b)))
+        assertNull(restarted.select(report(b)))
+        assertEquals("a", InsightNotificationPolicy(store) { now }.select(report(a, b))?.key)
+    }
+
+    @Test
+    fun resolvedKeysArePrunedDuringCooldownWithoutResettingIt() {
+        policy.markNotified(finding("a"))
+        val notifiedAt = now
+        now += 1
+        assertNull(policy.select(report(finding("b"))))
+        assertEquals(emptySet<String>(), storedKeys())
+        assertEquals(notifiedAt.toString(), store.getString(InsightNotificationPolicy.LAST_AT))
+        assertNull(policy.select(report(finding("a"), finding("b"))))
+
+        now = notifiedAt + InsightNotificationPolicy.COOLDOWN_MS
+        assertEquals("a", InsightNotificationPolicy(store) { now }.select(report(finding("a"), finding("b")))?.key)
+    }
+
+    @Test
+    fun legacyLastKeyMigratesDuringCooldownAndDoesNotReturnAfterResolution() {
+        store.edit(
+            mapOf(
+                InsightNotificationPolicy.LAST_KEY to "a",
+                InsightNotificationPolicy.LAST_AT to now.toString(),
+            ),
+        )
+        assertNull(policy.select(report(finding("a"), finding("b"))))
+        assertEquals(setOf("a"), storedKeys())
+        assertNull(store.getString(InsightNotificationPolicy.LAST_KEY))
+
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        val b = InsightNotificationPolicy(store) { now }.select(report(finding("a"), finding("b")))
+        assertEquals("b", b?.key)
+        policy.markNotified(requireNotNull(b))
+        assertEquals(setOf("a", "b"), storedKeys())
+        assertNull(policy.select(report(finding("b"))))
+        assertEquals(setOf("b"), storedKeys())
+
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        assertEquals("a", InsightNotificationPolicy(store) { now }.select(report(finding("a"), finding("b")))?.key)
+    }
+
+    @Test
+    fun legacyLastKeyIsMergedWithExistingNotifiedKeys() {
+        store.edit(
+            mapOf(
+                InsightNotificationPolicy.LAST_KEY to "a",
+                InsightNotificationPolicy.NOTIFIED_KEYS to Json.encodeToString(setOf("b")),
+            ),
+        )
+        assertNull(policy.select(report(finding("a"), finding("b"))))
+        assertEquals(setOf("a", "b"), storedKeys())
+        assertNull(store.getString(InsightNotificationPolicy.LAST_KEY))
+    }
+
+    @Test
+    fun notifiedKeysStayBoundedToTheTwelveCurrentFindings() {
+        val findings = (1..12).map { finding("key-$it") }.toTypedArray()
+        for (expected in findings) {
+            val selected = policy.select(report(*findings, headline = findings.first()))
+            assertEquals(expected.key, selected?.key)
+            policy.markNotified(requireNotNull(selected))
+            now += InsightNotificationPolicy.COOLDOWN_MS
+        }
+        assertEquals(findings.map { it.key }.toSet(), storedKeys())
+        assertNull(InsightNotificationPolicy(store) { now }.select(report(*findings)))
+        val writes = store.writes
+        assertNull(policy.select(report(*findings)))
+        assertEquals(writes, store.writes)
+
+        assertEquals("new", policy.select(report(finding("new")))?.key)
+        policy.markNotified(finding("new"))
+        assertEquals(setOf("new"), storedKeys())
+        assertNull(policy.select(report()))
+        assertEquals(emptySet<String>(), storedKeys())
+    }
+
+    @Test
+    fun lowerSeverityOrConfidenceDoesNotResolveANotifiedKey() {
+        policy.markNotified(finding("a"))
+        now += InsightNotificationPolicy.COOLDOWN_MS
+        assertNull(policy.select(report(finding("a", Severity.MEDIUM, Confidence.LOW))))
+        assertNull(policy.select(report(finding("a"))))
+        assertEquals(setOf("a"), storedKeys())
+    }
+
+    private fun storedKeys(): Set<String> =
+        Json.decodeFromString(requireNotNull(store.getString(InsightNotificationPolicy.NOTIFIED_KEYS)))
 
     @Test
     fun stateSurvivesANewPolicyOverTheSameStore() {
