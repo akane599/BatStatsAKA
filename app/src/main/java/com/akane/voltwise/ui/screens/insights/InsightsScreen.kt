@@ -114,9 +114,10 @@ internal fun silentResultCodes(error: InsightMessageCode?): Set<InsightMessageCo
     setOfNotNull(error).intersect(NOTICE_CODES)
 
 /**
- * Shows the ViewModel's held [result] in [snackbar] (codes in [silentCodes] skip it), then consumes it with
- * [InsightsEvent.ResultShown] once it was shown or dismissed. A rotation mid-snackbar cancels this before the
- * consume, so the result shows again on the new screen instead of being lost.
+ * Shows the ViewModel's held [result] in [snackbar] (codes in [silentCodes] skip it), then consumes that exact
+ * result with [InsightsEvent.ResultShown] once it was shown or dismissed, so a newer result published meanwhile
+ * stays held. A rotation mid-snackbar cancels this before the consume, so the result shows again on the new
+ * screen instead of being lost.
  */
 @Composable
 internal fun ResultSnackbar(
@@ -130,7 +131,7 @@ internal fun ResultSnackbar(
     LaunchedEffect(result) {
         if (result == null || text == null) return@LaunchedEffect
         if (result.code !in silentCodes) snackbar.showSnackbar(text)
-        currentOnEvent(InsightsEvent.ResultShown)
+        currentOnEvent(InsightsEvent.ResultShown(result))
     }
 }
 

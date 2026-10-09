@@ -360,8 +360,8 @@ class InsightsViewModelTest {
             applying.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
             applying.onEvent(InsightsEvent.ConfirmApply)
             runCurrent()
-            val expected = InsightActionMessage(InsightMessageCode.APPLIED, 7)
-            assertEquals(expected, sharedResults.latest.value)
+            val expected = checkNotNull(sharedResults.latest.value)
+            assertEquals(InsightActionMessage(InsightMessageCode.APPLIED, 7), expected.copy(seq = 0))
             assertEquals(expected, settings.state.value.lastResult)
 
             val spec = IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", "example.app")
@@ -377,13 +377,72 @@ class InsightsViewModelTest {
         }
     }
 
+    @Test fun openSettingsDoesNotConsumeAnotherFlowsEqualOutcome() = runTest {
+        val sharedResults = InsightApplyResults()
+        val detailsSource = FakeInsightsRepository()
+        val insightsSource = FakeInsightsRepository()
+        val details = InsightApplyFlow(detailsSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+        val insights = InsightApplyFlow(insightsSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+        detailsSource.result = ActionResult.Failed(FailureCode.EXECUTION_FAILED)
+        details.onEvent(InsightsEvent.Undo(1))
+        runCurrent()
+        details.onEvent(InsightsEvent.ResultShown(checkNotNull(details.state.value.lastResult)))
+        runCurrent()
+        assertNull("details showed and consumed its own failure", sharedResults.latest.value)
+
+        insightsSource.result = ActionResult.Failed(FailureCode.EXECUTION_FAILED)
+        insights.onEvent(InsightsEvent.Undo(2))
+        runCurrent()
+        val insightsOutcome = checkNotNull(sharedResults.latest.value)
+        assertEquals(InsightMessageCode.EXECUTION_FAILED, insightsOutcome.code)
+
+        detailsSource.result = ActionResult.OpenSettings(IntentSpec("android.settings.APPLICATION_DETAILS_SETTINGS", "example.app"))
+        details.onEvent(InsightsEvent.Undo(3))
+        runCurrent()
+        assertSame("opening settings must not consume another flow's equal, unseen outcome",
+            insightsOutcome, sharedResults.latest.value)
+        assertSame(insightsOutcome, insights.state.value.lastResult)
+    }
+
+    @Test fun resultShownConsumesOnlyTheResultThatWasShown() = runTest {
+        val pairs = listOf(
+            ActionResult.Refused(RefusalCode.PROTECTED) to ActionResult.Refused(RefusalCode.ROLE_HOLDER),
+            ActionResult.Failed(FailureCode.EXECUTION_FAILED) to ActionResult.Failed(FailureCode.EXECUTION_FAILED),
+        )
+        for ((first, second) in pairs) {
+            val sharedResults = InsightApplyResults()
+            val firstSource = FakeInsightsRepository().apply { result = first }
+            val secondSource = FakeInsightsRepository().apply { result = second }
+            val shower = InsightApplyFlow(firstSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+            val other = InsightApplyFlow(secondSource, backgroundScope, SavedStateHandle(), backgroundScope, sharedResults)
+            shower.onEvent(InsightsEvent.Undo(1))
+            runCurrent()
+            val shown = checkNotNull(shower.state.value.lastResult)
+            other.onEvent(InsightsEvent.Undo(2))
+            runCurrent()
+            val unseen = checkNotNull(sharedResults.latest.value)
+            assertSame("the observer moved to the newer outcome", unseen, shower.state.value.lastResult)
+
+            // The snackbar for the older result ends one frame after lastResult moved on.
+            shower.onEvent(InsightsEvent.ResultShown(shown))
+            runCurrent()
+            assertSame("$first then $second: showing the older result must not consume the newer one",
+                unseen, sharedResults.latest.value)
+
+            shower.onEvent(InsightsEvent.ResultShown(unseen))
+            runCurrent()
+            assertNull("showing the current result consumes it", sharedResults.latest.value)
+            assertNull(other.state.value.lastResult)
+        }
+    }
+
     @Test fun consumingAnOlderObservedResultDoesNotEraseTheLatestOutcome() {
-        val older = InsightActionMessage(InsightMessageCode.PROTECTED)
-        val latest = InsightActionMessage(InsightMessageCode.ROLE_HOLDER)
-        results.publish(older)
-        results.publish(latest)
+        val older = results.publish(InsightActionMessage(InsightMessageCode.PROTECTED))
+        val latest = results.publish(InsightActionMessage(InsightMessageCode.ROLE_HOLDER))
         results.consume(older)
         assertEquals("a stale screen receipt must not erase a newer outcome", latest, results.latest.value)
+        results.consume(InsightActionMessage(InsightMessageCode.ROLE_HOLDER))
+        assertEquals("an equal but unpublished message must not consume the outcome", latest, results.latest.value)
         results.consume(latest)
         assertNull(results.latest.value)
         results.consume(latest)
@@ -398,12 +457,12 @@ class InsightsViewModelTest {
         source.result = ActionResult.OneShot(19)
         vm.onEvent(InsightsEvent.Undo(8))
         runCurrent()
-        val expected = InsightActionMessage(InsightMessageCode.ONE_SHOT, 19)
-        assertEquals(expected, vm.state.value.apply.lastResult)
+        val expected = checkNotNull(vm.state.value.apply.lastResult)
+        assertEquals(InsightActionMessage(InsightMessageCode.ONE_SHOT, 19), expected.copy(seq = 0))
         val restoredSaved = SavedStateHandle(saved.keys().associateWith { saved.get<Any?>(it) })
         val restored = start(restoredSaved)
         assertEquals("latest unconsumed result must survive recreation", expected, restored.state.value.apply.lastResult)
-        restored.onEvent(InsightsEvent.ResultShown)
+        restored.onEvent(InsightsEvent.ResultShown(checkNotNull(restored.state.value.apply.lastResult)))
         runCurrent()
         assertNull(restored.state.value.apply.lastResult)
         assertNull("consumption must clear the original observer too", vm.state.value.apply.lastResult)
