@@ -8,6 +8,7 @@ import com.akane.voltwise.battery.insights.model.ActionType
 import com.akane.voltwise.battery.insights.model.AppliedActionInput
 import com.akane.voltwise.battery.insights.model.Confidence
 import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.InsightInputs
 import com.akane.voltwise.battery.insights.model.SessionKind
 import com.akane.voltwise.battery.insights.model.Severity
 import com.akane.voltwise.battery.insights.model.Subject
@@ -134,6 +135,52 @@ class InsightEngineTest {
         val score = confidence.copy(key = "score", score = 2.0)
         val tie = score.copy(key = "aaa")
         assertEquals(listOf(tie, score, confidence, high, low), listOf(low, high, score, tie, confidence).sortedWith(findingOrder))
+    }
+
+    @Test fun `report cap retains applied action effect ahead of higher scoring app trends`() {
+        val input = actionEffectWithAppTrends(appCount = 13)
+        val trends = Trends.detect(input)
+        val effect = ActionEffects.detect(input).single()
+        assertEquals(13, trends.size)
+        assertTrue(trends.all { it.severity == Severity.INFO && it.score > effect.score })
+
+        val report = InsightEngine.analyze(input, sdkInt = 37)
+
+        assertEquals(12, report.findings.size)
+        assertTrue("Applied action effect survives the report cap", report.findings.contains(effect))
+        assertEquals(11, report.findings.count { it.type == FindingType.TREND })
+        assertEquals(report.findings.sortedWith(findingOrder), report.findings)
+        assertNull(report.headline)
+    }
+
+    @Test fun `uncapped action effect and trends keep their original display order`() {
+        val input = actionEffectWithAppTrends(appCount = 3)
+        val expected = (Trends.detect(input) + ActionEffects.detect(input)).sortedWith(findingOrder)
+
+        val report = InsightEngine.analyze(input, sdkInt = 37)
+
+        assertEquals(4, expected.size)
+        assertEquals(expected, report.findings)
+        assertEquals(FindingType.ACTION_EFFECT, report.findings.last().type)
+        assertNull(report.headline)
+    }
+
+    private fun actionEffectWithAppTrends(appCount: Int): InsightInputs {
+        val sessions = (75..78).map { session(it) } + (92..95).map { session(it) }
+        val rows = sessions.flatMapIndexed { index, session ->
+            (0 until appCount).map { app ->
+                row(session.id).copy(
+                    packageName = if (app == 0) APP else "example.app$app",
+                    uid = UID + app,
+                    powerMah = if (index < 4) 20.0 else 5.0,
+                )
+            }
+        }
+        val action = AppliedActionInput(
+            7, "APP_DRAIN_ANOMALY:$APP", ActionType.RESTRICT_BACKGROUND, APP, UID,
+            sessions[3].endMs + HOUR, ActionStatus.APPLIED,
+        )
+        return inputs(sessions, rows).copy(actions = listOf(action))
     }
 
     @Test fun `analyze globally caps ranks and selects noninformational headline deterministically`() {
