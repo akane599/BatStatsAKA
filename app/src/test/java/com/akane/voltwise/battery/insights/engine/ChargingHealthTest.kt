@@ -1,8 +1,6 @@
 package com.akane.voltwise.battery.insights.engine
 
 import com.akane.voltwise.battery.insights.engine.detectors.device.ChargingHealth
-import com.akane.voltwise.battery.insights.engine.stats.TheilSen
-import com.akane.voltwise.battery.insights.engine.stats.TimedValue
 import com.akane.voltwise.battery.insights.model.CapacityPointInput
 import com.akane.voltwise.battery.insights.model.Direction
 import com.akane.voltwise.battery.insights.model.FindingType
@@ -36,6 +34,29 @@ class ChargingHealthTest {
         assertTrue(ChargingHealth.detect(input.copy(sessions = sessions.map { it.copy(kind = SessionKind.DISCHARGE) })).isEmpty())
     }
 
+    @Test fun `steady five percent annual decline with two percent scatter over eighty nine daily points fires`() {
+        val day = 24 * HOUR
+        val points = (0 until 89).map { index ->
+            val scatter = if (index % 2 == 0) 0.02 else -0.02
+            CapacityPointInput(index * day, 4500.0 * (1.0 - 0.05 * index / 365.25 + scatter), 2)
+        }
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 88 * day, capacity = points)
+        val findings = ChargingHealth.detect(input)
+        assertEquals("A realistic noisy five percent annual decline must fire", 1, findings.size)
+        assertEquals(FindingType.HEALTH_DECLINE, findings.single().type)
+        assertTrue(findings.single().evidence.single().observed <= -3.0)
+    }
+
+    @Test fun `flat capacity with the same two percent daily scatter stays silent`() {
+        val day = 24 * HOUR
+        val points = (0 until 89).map { index ->
+            val scatter = if (index % 2 == 0) 0.02 else -0.02
+            CapacityPointInput(index * day, 4500.0 * (1.0 + scatter), 2)
+        }
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 88 * day, capacity = points)
+        assertTrue("Flat estimates with identical scatter must stay silent", ChargingHealth.detect(input).isEmpty())
+    }
+
     @Test fun `flat capacity estimate noise does not indicate health decline`() {
         val points = listOf(4000.0, 4080.0, 3920.0, 4040.0, 3960.0).mapIndexed { index, mah ->
             CapacityPointInput(index * 180 * HOUR, mah, 2)
@@ -67,53 +88,45 @@ class ChargingHealthTest {
         assertTrue("A steady decline must retain negative annual evidence", finding.evidence.single().observed < 0.0)
     }
 
-    @Test fun `health requires at least seventy five percent negative pairwise slopes`() {
+    @Test fun `health requires a statistically significant decline`() {
         val day = 24 * HOUR
-        // Seven of 28 pairs rise; the remaining 21 decline, exactly 75%.
-        val points = listOf(3, 6, 5, 4, 7, 2, 1, 0).mapIndexed { index, value ->
-            CapacityPointInput(index * 7 * day, 4000.0 + value * 10, 2)
+        // S = -17, z = -16 / sqrt(133 / 3) = -2.403, just beyond the -2.33 gate.
+        val points = listOf(1, 2, 0, 3, 4, 5, 6).mapIndexed { index, value ->
+            CapacityPointInput(index * 7 * day, 4000.0 - value * 10, 2)
         }
-        val input = inputs(emptyList(), emptyList()).copy(nowMs = 49 * day, capacity = points)
+        val input = inputs(emptyList(), emptyList()).copy(nowMs = 42 * day, capacity = points)
         assertEquals(FindingType.HEALTH_DECLINE, ChargingHealth.detect(input).single().type)
-        val belowThreshold = points.mapIndexed { index, point ->
+        // One additional rising pair yields S = -15 and z = -2.103.
+        val notSignificant = points.mapIndexed { index, point ->
             when (index) {
-                6 -> point.copy(mah = points[7].mah)
-                7 -> point.copy(mah = points[6].mah)
+                0 -> point.copy(mah = points[1].mah)
+                1 -> point.copy(mah = points[0].mah)
                 else -> point
             }
         }
-        assertTrue("Twenty of 28 negative pairs are not a clear decline", ChargingHealth.detect(input.copy(capacity = belowThreshold)).isEmpty())
+        assertTrue("A material but insignificant decline must stay silent", ChargingHealth.detect(input.copy(capacity = notSignificant)).isEmpty())
     }
 
     @Test fun `health requires a material annual decline even when every pair declines`() {
         val day = 24 * HOUR
-        val points = (0..4).map { CapacityPointInput(it * 15 * day, 4000.0 + (2 - it) * 4, 2) }
+        val points = (0..6).map { CapacityPointInput(it * 10 * day, 4000.0 + (3 - it) * 3, 2) }
         val input = inputs(emptyList(), emptyList()).copy(nowMs = 60 * day, capacity = points)
-        // About -2.44% per year: direction is clear, but magnitude is not material.
+        // About -2.74% per year: statistically significant, but magnitude is not material.
         assertTrue("A clear decline under three percent per year must stay silent", ChargingHealth.detect(input).isEmpty())
-        val material = points.mapIndexed { index, point -> point.copy(mah = 4000.0 + (2 - index) * 5) }
+        val material = points.mapIndexed { index, point -> point.copy(mah = 4000.0 + (3 - index) * 4) }
         assertEquals(FindingType.HEALTH_DECLINE, ChargingHealth.detect(input.copy(capacity = material)).single().type)
-    }
-
-    @Test fun `negative slope share excludes equal timestamps but includes flat pairs`() {
-        val points = listOf(TimedValue(0, 10.0), TimedValue(0, 8.0), TimedValue(1, 6.0), TimedValue(2, 8.0))
-        val trend = requireNotNull(TheilSen.trend(points))
-        assertEquals(-1.0, trend.slope, 0.0)
-        assertEquals(3.0 / 5, trend.negativeSlopeShare, 0.0)
-        assertEquals(trend, TheilSen.trend(points.reversed()))
-        assertNull(TheilSen.trend(listOf(TimedValue(0, 10.0), TimedValue(0, 8.0))))
     }
 
     @Test fun `health uses robust slope converted to annual percentage with point span confidence and age gates`() {
         val day = 24 * HOUR
-        val points = (0..4).map { CapacityPointInput(it * 10 * day, 4000.0 - it * 10, 2) }
+        val points = (0..8).map { CapacityPointInput(it * 5 * day, 4000.0 - it * 5, 2) }
         val input = inputs(emptyList(), emptyList()).copy(nowMs = 40 * day, capacity = points)
         val finding = ChargingHealth.detect(input).single()
         assertEquals(FindingType.HEALTH_DECLINE, finding.type)
         assertEquals(Direction.DOWN, finding.direction)
         assertEquals(Metric.CAPACITY_CHANGE_PCT_PER_YEAR, finding.evidence.single().metric)
         assertEquals(-365.25 / 3980 * 100, finding.evidence.single().observed, 0.0001)
-        assertTrue(ChargingHealth.detect(input.copy(capacity = points.drop(1))).isEmpty())
+        assertTrue(ChargingHealth.detect(input.copy(capacity = points.take(4))).isEmpty())
         assertTrue(ChargingHealth.detect(input.copy(capacity = points.map { it.copy(atMs = it.atMs / 2) })).isEmpty())
         assertTrue(ChargingHealth.detect(input.copy(capacity = points.map { it.copy(confidence = 1) })).isEmpty())
         assertTrue(ChargingHealth.detect(input.copy(capacity = points.map { it.copy(mah = 4000.0) })).isEmpty())
@@ -121,5 +134,9 @@ class ChargingHealthTest {
         val outlier = input.copy(capacity = points.mapIndexed { i, p -> if (i == 2) p.copy(mah = 9000.0) else p })
         assertEquals(Direction.DOWN, ChargingHealth.detect(outlier).single().direction)
         assertEquals(finding, ChargingHealth.detect(input.copy(capacity = points.reversed())).single())
+        val sameTimeEstimates = points.flatMap { point ->
+            listOf(point.copy(mah = point.mah - 20), point.copy(mah = point.mah + 20))
+        }
+        assertEquals(finding, ChargingHealth.detect(input.copy(capacity = sameTimeEstimates)).single())
     }
 }
