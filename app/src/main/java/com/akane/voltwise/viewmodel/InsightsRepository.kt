@@ -73,10 +73,12 @@ internal fun Finding.toInsightState(privileged: Boolean, actions: List<InsightAc
     evidence.insightSnapshot(), series.insightSnapshot(),
     recommendations.map { rec ->
         val applied = actions.any { row ->
-            row.type == rec.action.name && row.undoable() && when (val subject = subject) {
-                is Subject.App -> row.packageName == subject.packageName && row.uid == subject.uid
-                Subject.Device -> row.findingKey == key
-            }
+            row.type == rec.action.name && row.undoable() &&
+                !(type == FindingType.DOZE_WHITELISTED_DRAINER && rec.action == ActionType.REMOVE_DOZE_WHITELIST) &&
+                when (val subject = subject) {
+                    is Subject.App -> row.packageName == subject.packageName && row.uid == subject.uid
+                    Subject.Device -> row.findingKey == key
+                }
         }
         RecommendationState(rec.action, rec.reversible, rec.requiresPrivilege, (!rec.requiresPrivilege || privileged) && !applied, applied)
     }.insightSnapshot(),
