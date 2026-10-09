@@ -56,8 +56,14 @@ class ActionEffectsTest {
         assertTrue(ActionEffects.detect(input.copy(actions = listOf(action.copy(uid = null)))).isEmpty())
         assertTrue(ActionEffects.detect(input.copy(appSessions = rows.map { it.copy(wakeupAlarms = 10) })).isEmpty())
         assertTrue(ActionEffects.detect(input.copy(sessions = sessions.map { it.copy(appWindow = null) })).isEmpty())
+        val extraWakers = (0 until 10).map { index ->
+            row(sessions.first().id).copy(uid = 20_000 + index, packageName = "example.waker$index",
+                rank = 30 + index, wakeupAlarms = 40)
+        }
+        val others = row(sessions.first().id).copy(uid = -1, packageName = "", rank = 40, isOthers = true)
         val censored = input.copy(sessions = sessions.map { it.copy(appWindow = it.appWindow?.copy(fullRowSet = true)) },
-            appSessions = rows.mapIndexed { i, row -> if (i == 0) row.copy(packageName = "other.app") else row })
+            appSessions = rows.mapIndexed { i, row -> if (i == 0) row.copy(packageName = "other.app") else row } +
+                extraWakers + others)
         assertTrue(ActionEffects.detect(censored).isEmpty())
     }
 }
