@@ -55,6 +55,72 @@ The Health card (Now) and the Health screen show a full-charge capacity estimate
 
 Design capacity is the Settings override (mAh; 0 = automatic) when set, otherwise the fuel gauge's sysfs `charge_full_design` read through root when Health (or Status › Check again) asks, cached for the process; Now never starts the read, and an unknown result is read again after Check again. A full-charge value outside a plausible range (roughly 0.3–50 Ah, to reject unit mistakes such as mAh landing in a µAh field) is rejected outright rather than scaled. Health is unavailable without a resolved design capacity, and it may read above 100% for a battery that is still newer than its design figure.
 
+## Insights
+
+The Insights tab (and the Insights card on Now and the Findings list on an app's details) is an analysis of Voltwise's own recorded history. It looks for apps and device behaviour that drain more than that device's usual, shows the numbers behind each finding, and suggests fixes. It is a set of fixed rules over robust statistics, not a model, and every finding is an observation about this device's recent sessions rather than a diagnosis. Findings are recomputed after each finalized session, once at app start if the last analysis is more than six hours old, and on **Analyze now**, which first takes a fresh per-app dump; only the last 90 days of closed sessions and daily summaries are read.
+
+### Data used
+
+- **Eligible per-app windows.** A per-app window is used only if its session is a closed, non-imported discharge session whose stored per-app basis is a delta over that session, whose capture window is at least 1 hour, and whose capture start, end and length each lie within 10% of the session's own span. Sessions without app evidence (no privileged access at unplug/plug-in, imported history, windows that reset or were captured from an absolute total) contribute nothing to app baselines or detections. Imports never carry per-app evidence, so they are always ineligible.
+- **Per-window rates.** Per-app figures are whole-window totals from Android's batterystats, divided by the capture window in hours (or, for time shares, by its length). Rows labelled as Android's "others" bucket are never a subject. A field the device did not report is unsupported and is never read as zero.
+- **Process-state proxies.** Android supplies no per-app screen-off energy and no per-app background CPU. Background behaviour is therefore inferred from proxies: background process time (against foreground plus top time), foreground-service time, background partial-wakelock time, wakeup alarms, job and sync counts, GPS/sensor time and mobile-radio active time. These indicate work, not energy.
+- **Device Doze and deep sleep.** Each discharge session and daily summary also stores screen-off time, how much of it was in Android Doze, and how much was CPU suspend (see **Observed periods**). Device-level findings (screen-off drain, Doze not engaging, trends) use these and the screen-on/off charge buckets, which need their own covered time as described above. All screen-off conclusions are about the whole device.
+- **Window drain.** A window's total drain is the covered screen-on plus screen-off charge when both are fully covered, otherwise full capacity × level drop; it is never summed from per-app rows. If neither exists, rules that need a share of drain stay silent.
+- **Device wakers.** Named kernel wakelocks and wakeup reasons are stored per session as matched-name deltas only. They are attached to Doze and screen-off-drain findings as possible causes (top five by time or count, plus the top five apps by wakeup alarms or background wakelock time); they are hints, not proof.
+
+### Baselines, censoring and thresholds
+
+A baseline is a time-decayed median and median absolute deviation (MAD) of earlier eligible windows, with a 14-day half-life so recent behaviour weighs more. A baseline needs at least four earlier sessions in which the app was measured; with fewer, the detector stays silent. The latest window is scored as a robust z = (value − median) ÷ (1.4826 × MAD). When MAD is zero (a perfectly flat history) one absolute floor-sized change is scored as z = 3 instead. A finding needs z ≥ 3, the value at or above its floor, and the rise over the median at or above the floor; floors are per metric (below). The device-level screen-off detectors apply the same rule to discharge sessions instead of app windows.
+
+If a session captured the full row set (40 or more app rows stored), an app missing from it is censored: it used less than the smallest stored value of that metric. Its upper bound feeds the baseline conservatively but does not count toward the four measured sessions and is never plotted as a measurement. If only a truncated row set was stored, absence is treated as no usage.
+
+Severity is HIGH when z ≥ 6 and MEDIUM otherwise. Confidence is HIGH with 12 or more measured baseline sessions and at most 10% censored, MEDIUM with at most 25% censored, otherwise LOW. Device findings (including Charging at full and Hot charging) are MEDIUM severity with MEDIUM confidence; New heavy app is MEDIUM with LOW confidence; Trends, Health decline and Action effect are INFO.
+
+| Finding | Rule |
+| --- | --- |
+| Draining more than usual | Power (mAh per hour of the window) ≥ 10 mAh/h and anomalous against its baseline |
+| Busy in the background | The latest two windows both: background time ≥ 3× foreground-plus-top (or foreground-service time ≥ 3× foreground), CPU ≥ 120 s/h, background partial-wakelock time ≥ 20% of the window, and background share (floor 20%) or foreground-service time (floor 12 min/h) anomalous in both |
+| Keeps the phone awake | Background partial-wakelock share anomalous (floor 20% of the window) while CPU ≤ 60 s/h |
+| Wakes the phone often | Wakeup alarms ≥ 30/h and anomalous |
+| Many background jobs | Jobs ≥ 20/h or syncs ≥ 20/h and anomalous |
+| Background location | GPS or sensor time ≥ 5 min/h and anomalous, with foreground-plus-top time ≤ 1 min/h |
+| Background radio | Mobile-radio active time ≥ 5 min/h and anomalous, same foreground limit |
+| Lingering foreground service | Foreground-service time ≥ 10 min/h and the ratio of it to foreground time anomalous (floor 5) |
+| New heavy app | Cold-start exception to the four-session rule: at least four earlier eligible windows, fewer than four of them with the app measured, and in at least four the app absent (including censored) or under 15% of window drain; the latest window ≥ 15% of window drain and background-dominant. At four measured windows Draining more than usual takes over |
+| Doze not engaging | The latest discharge session with at least 2 h screen-off: the Doze share of screen-off time is under 20% and the CPU-suspend share under 50%, each at least 0.10 below its baseline (four earlier sessions with at least 2 h screen-off) and at z ≤ −3 |
+| High drain with the screen off | Screen-off charge rate ≥ 1 %/h, at least 1 %/h above its baseline, z ≥ 3, four earlier sessions |
+| Exempt from Doze and draining | Needs the Doze whitelist (a privileged read): among the top five apps by measured background time in the latest window, any on the user whitelist |
+| Charging at full | At least 3 plugged sessions in the last 14 days that stayed at 100% for 2 h or more |
+| Hot charging | At least 3 charge sessions in the last 14 days with a peak temperature of 40 °C or more |
+| Health decline | At least 5 capacity estimates of MEDIUM or HIGH confidence in the last 90 days spanning at least 30 days, with a negative Theil–Sen (median pairwise) slope, shown per year |
+
+Pressing **Not a problem** on an app finding scales its floors and z threshold by 1.5 each time, up to 4×, and hides it; **Dismiss** hides it until it returns at a higher severity. A finding the next analysis no longer produces is resolved. Findings are ranked by severity, confidence, score and key, and a run keeps at most 12; the headline is the first one that is not INFO.
+
+### Trends
+
+Trends compare the last seven completed days (today is excluded) with the preceding 21: median against median, with at least four measured observations on each side, an absolute change of at least the metric's floor and a relative change of at least 20%. Device trends cover screen-on and screen-off %/h (floors 1 and 0.5 %/h), daily use in % of a full battery (10 points), Doze and CPU-suspend share of screen-off time (0.10) and peak temperature (3 °C), and a day contributes only if it has the covered time those rates need. App trends compare capture-hour-normalised power (floor 2 mAh/h) across eligible windows, with censored absences left out. A trend states that a number went up or down; it does not say why.
+
+### Effect of an applied fix
+
+After a reversible fix is applied in the app (including one since undone; see [platform notes](PLATFORM_NOTES.md#privileged-actions-in-insights)), the metric the finding was about is compared across at least two eligible windows or sessions that ended before it was applied and at least two that began after, by median. This is an association: other apps, charging habits and Doze change at the same time, and nothing here proves the fix caused the difference. One-time actions (force-stop, enabling the high-battery alert) get no effect comparison.
+
+### Notification
+
+Insights has its own notification channel (low importance, so no sound). Voltwise posts at most one notice per 24 hours, and only for an active finding of HIGH severity with MEDIUM or HIGH confidence that differs from the one last announced. The text is generic and names no app, and tapping it opens the Insights tab. Dismissed and not-a-problem findings are never announced, and no notice is posted if notifications or the channel are blocked.
+
+### What it cannot tell
+
+- It cannot say which app used the energy while the screen was off, or how much CPU an app used in the background, because Android reports neither per app. A background rule showing an app is busy does not show it caused the screen-off drain.
+- Batterystats counters and the top wakelock, alarm and job tags Voltwise stores per session are Android's since-charge totals, so they are hints about what ran, not proof of which event cost the charge. Tag text is app-chosen and is never exported, never imported, and not used by any rule.
+- A UID shared by several packages cannot be reliably split, so a per-app figure may include work by other packages in the same UID.
+- With too little history, nothing is shown: app findings wait for four measured sessions, which need Shizuku or root at unplug and plug-in. Without access, only device-level findings from ordinary readings remain.
+- Per-app counters are Android's. Voltwise uses the difference between its dumps at unplug and plug-in and trusts a window only if it matches the session, so a session that began before monitoring or whose counters reset is not used.
+- The baseline rules compare an app with its own earlier sessions on this phone, so an app that has always been heavy is not flagged as anomalous.
+
+### Why no learned model in v1
+
+Per-device history is small (tens of sessions), unlabelled, and shifts with how the phone is used, so a trained model would have little to learn from and could not show a user the numbers behind its verdict. The rules above are deterministic, add no dependency and can be checked by hand against the evidence shown on a finding. v1 also does not run significance tests; instead it relies on effect sizes against fixed floors and on coverage gates (four measured sessions, one hour windows, covered time) that decline to speak when data is thin.
+
 ## Monitoring cost and storage
 
 Sampling runs at 2 seconds while something needs a live reading (the Now screen, an open session's details, or the Quick Settings tile while the shade is open), 30 seconds with the screen on otherwise, and 300 seconds with the screen off; none of this is user-configurable. Delays are scheduled on the uptime clock, so a pending poll never wakes a sleeping CPU, but broadcasts (screen on/off, Doze, a battery status change) still capture while it sleeps. A capture is written to history when it crosses a screen, Doze or gap boundary, when status/plugged or the level changes, or — for an ordinary poll — when at least 30 seconds have passed since the last saved row; everything else only updates realtime values and alerts. With monitoring off, only an active demand (e.g. the tile) polls, and those captures are realtime-only and never saved.
