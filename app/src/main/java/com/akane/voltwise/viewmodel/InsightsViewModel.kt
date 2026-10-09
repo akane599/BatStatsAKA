@@ -21,10 +21,11 @@ class InsightsViewModel(
     private val error = MutableStateFlow<InsightMessageCode?>(null)
     val effects = flow.effects
 
-    private val content = combine(source.report, source.actions, source.privileged) { report, actions, privileged ->
+    private val content = combine(source.report, source.actions, source.privileged) { report, actions, access ->
+        val privileged = access == true
         val findings = report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }
         InsightsUiState(
-            loaded = true,
+            loaded = report != null,
             headline = report?.headline?.toInsightState(privileged, actions),
             keyFindings = findings.filter { it.type != FindingType.TREND && it.severity != Severity.INFO }.insightSnapshot(),
             changes = findings.filter { it.type == FindingType.TREND && it.direction != null }.insightSnapshot(),
@@ -98,7 +99,7 @@ internal class InsightApplyFlow(
                 Triple(report, actions, privileged)
             }.collect { (report, actions, privileged) ->
                 val request = state.value.pending
-                if (report != null && request != null) {
+                if (report != null && privileged != null && request != null) {
                     val available = report.findings.firstOrNull { it.key == request.key }
                         ?.toInsightState(privileged, actions)?.recommendations
                         ?.any { it.action == request.action && it.available } == true

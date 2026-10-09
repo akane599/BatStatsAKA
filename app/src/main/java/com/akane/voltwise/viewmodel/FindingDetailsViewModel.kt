@@ -19,14 +19,15 @@ class FindingDetailsViewModel(
     private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope)
     private val key = savedStateHandle.getStateFlow("key", "")
     val effects = flow.effects
-    private val content = combine(source.report, source.actions, source.privileged, key) { report, actions, privileged, key ->
+    private val content = combine(source.report, source.actions, source.privileged, key) { report, actions, access, key ->
+        val privileged = access == true
         val finding = report?.findings?.firstOrNull { it.key == key }
         val packageName = (finding?.subject as? com.akane.voltwise.battery.insights.model.Subject.App)?.packageName
         val related = actions.filter { row ->
             if (packageName != null) row.packageName == packageName else row.findingKey == key
         }
         FindingDetailsUiState(
-            loaded = true,
+            loaded = report != null,
             finding = finding?.toInsightState(privileged, actions),
             relatedActions = actionStates(related, report?.findings.orEmpty().map { it.toInsightState(privileged, actions) }),
             privileged = privileged,
