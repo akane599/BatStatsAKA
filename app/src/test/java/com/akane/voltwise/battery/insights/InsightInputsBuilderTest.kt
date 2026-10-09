@@ -29,8 +29,45 @@ class InsightInputsBuilderTest {
         days: List<DailySummary> = emptyList(),
         capacity: List<CapacityEstimateRow> = emptyList(),
         actions: List<InsightActionEntity> = emptyList(),
+        findings: List<InsightFindingEntity> = listOf(FindingCodec.encode(testFinding(), 1, feedbackMultiplier = 1.5)),
     ) = InsightInputsBuilder.build(NOW, 100, 4_000_000, true, sessions, days, rows, wakers, capacity,
-        setOf("example.app0"), actions, listOf(FindingCodec.encode(testFinding(), 1, feedbackMultiplier = 1.5)))
+        setOf("example.app0"), actions, findings)
+
+    @Test fun appliedActionMetricComesFromMatchingStoredFindingsLeadEvidence() {
+        for ((type, metric) in listOf(
+            FindingType.JOB_STORM to Metric.SYNCS_PER_H,
+            FindingType.BACKGROUND_LOCATION to Metric.SENSOR_MS_PER_H,
+            FindingType.BACKGROUND_RUNAWAY to Metric.FGS_MS_PER_H,
+        )) {
+            val finding = testFinding("$type:example.app0").copy(
+                type = type,
+                subject = Subject.App(10_001, "example.app0"),
+                evidence = listOf(
+                    Evidence(metric, 60.0, 1.0, metric.unit, 5),
+                    Evidence(Metric.CPU_MS_PER_H, 300_000.0, null, MetricUnit.MS_PER_H, 2),
+                ),
+            )
+            val action = InsightActionEntity(1, finding.key, ActionType.RESTRICT_BACKGROUND.name,
+                packageName = "example.app0", uid = 10_001, userId = 0,
+                status = InsightActionStatus.APPLIED, priorStateVersion = 1, createdAt = 1, appliedAt = 2)
+            val stored = FindingCodec.encode(finding, 1, feedbackMultiplier = 1.5)
+            val input = build(actions = listOf(action), findings = listOf(FindingCodec.encode(testFinding(), 1), stored))
+            assertEquals(metric, input.actions.single().metric)
+            assertEquals(finding.key, input.actions.single().findingKey)
+            assertEquals(1.5, input.feedback[finding.key]!!, 0.0)
+
+            for (records in listOf(
+                emptyList(),
+                listOf(stored.copy(key = "unrelated:example.app0")),
+                listOf(stored.copy(evidenceJson = "{broken")),
+                listOf(stored.copy(evidenceVersion = 99)),
+                listOf(FindingCodec.encode(finding.copy(evidence = emptyList()), 1)),
+            )) {
+                assertNull(build(actions = listOf(action), findings = records).actions.single().metric)
+            }
+        }
+    }
+
 
     @Test fun readyWindowCountsOnlyNonOthersAndUsesOthersForFullRowSet() {
         val rows = (0..38).map { testAppRow(rank = it) } + testAppRow(rank = 39, others = true)
