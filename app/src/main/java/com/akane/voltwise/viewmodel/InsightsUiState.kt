@@ -55,7 +55,7 @@ data class InsightApplyState(
     val pending: PendingInsightApply? = null,
     val selectedKey: String? = null,
     val working: Boolean = false,
-    /** Latest unconsumed result; ResultShown clears it and its saved representation. */
+    /** Latest application-owned unconsumed result; ResultShown consumes it across both destinations. */
     val lastResult: InsightActionMessage? = null,
 )
 

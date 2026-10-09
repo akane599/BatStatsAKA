@@ -34,11 +34,12 @@ import org.junit.Test
 class InsightsViewModelTest {
     private val dispatcher = StandardTestDispatcher()
     private val source = FakeInsightsRepository()
+    private val results = InsightApplyResults()
     @Before fun setup() = Dispatchers.setMain(dispatcher)
     @After fun cleanup() = Dispatchers.resetMain()
 
     private fun TestScope.start(saved: SavedStateHandle = SavedStateHandle()): InsightsViewModel {
-        val vm = InsightsViewModel(source, backgroundScope, saved)
+        val vm = InsightsViewModel(source, backgroundScope, saved, results)
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()
         return vm
@@ -310,7 +311,7 @@ class InsightsViewModelTest {
 
     @Test fun pendingIsInvalidatedWithoutAScreenCollector() = runTest {
         val saved = SavedStateHandle()
-        val vm = InsightsViewModel(source, backgroundScope, saved)
+        val vm = InsightsViewModel(source, backgroundScope, saved, results)
         vm.onEvent(InsightsEvent.RequestApply("finding", ActionType.RESTRICT_BACKGROUND))
         runCurrent()
         assertNotNull(saved.get<String>("insights.pending.key"))
@@ -342,7 +343,20 @@ class InsightsViewModelTest {
         assertTrue(source.applied.isEmpty())
     }
 
-    @Test fun latestUnconsumedResultRestoresAndConsumptionIsSaved() = runTest {
+    @Test fun consumingAnOlderObservedResultDoesNotEraseTheLatestOutcome() {
+        val older = InsightActionMessage(InsightMessageCode.PROTECTED)
+        val latest = InsightActionMessage(InsightMessageCode.ROLE_HOLDER)
+        results.publish(older)
+        results.publish(latest)
+        results.consume(older)
+        assertEquals("a stale screen receipt must not erase a newer outcome", latest, results.latest.value)
+        results.consume(latest)
+        assertNull(results.latest.value)
+        results.consume(latest)
+        assertNull("repeated consumption must not restore a result", results.latest.value)
+    }
+
+    @Test fun latestUnconsumedResultSurvivesRecreationAndConsumptionIsShared() = runTest {
         val saved = SavedStateHandle()
         val vm = start(saved)
         vm.onEvent(InsightsEvent.Undo(7))
@@ -358,6 +372,8 @@ class InsightsViewModelTest {
         restored.onEvent(InsightsEvent.ResultShown)
         runCurrent()
         assertNull(restored.state.value.apply.lastResult)
+        assertNull("consumption must clear the original observer too", vm.state.value.apply.lastResult)
+        assertFalse("results must not be duplicated in saved state", saved.keys().any { it.startsWith("insights.result.") })
         assertNull(start(SavedStateHandle(restoredSaved.keys().associateWith { restoredSaved.get<Any?>(it) })).state.value.apply.lastResult)
         assertEquals("restoring or consuming must not replay actions", listOf(7L, 8L), source.undone)
     }
@@ -370,7 +386,7 @@ class InsightsViewModelTest {
             override val actions = actions
             override val eligibleSessionCount = count
         }
-        val vm = InsightsViewModel(delayed, backgroundScope)
+        val vm = InsightsViewModel(delayed, backgroundScope, applyResults = results)
         assertFalse(vm.state.value.loaded)
         backgroundScope.launch { vm.state.collect {} }
         runCurrent()

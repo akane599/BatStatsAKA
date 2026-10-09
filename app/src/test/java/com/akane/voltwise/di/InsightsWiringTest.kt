@@ -13,6 +13,17 @@ import com.akane.voltwise.battery.insights.actions.InsightActionRepository
 import com.akane.voltwise.battery.insights.actions.PackageManagerTargetInspector
 import com.akane.voltwise.battery.insights.actions.ShellRunnerActionExecutor
 import com.akane.voltwise.battery.insights.actions.TargetInspector
+import androidx.lifecycle.SavedStateHandle
+import androidx.lifecycle.ViewModelStore
+import com.akane.voltwise.viewmodel.FakeInsightsRepository
+import com.akane.voltwise.viewmodel.InsightApplyResults
+import com.akane.voltwise.viewmodel.InsightActionMessage
+import com.akane.voltwise.viewmodel.InsightMessageCode
+import com.akane.voltwise.viewmodel.InsightsEvent
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
+import org.koin.dsl.module
 import com.akane.voltwise.viewmodel.AppDetailsRepository
 import com.akane.voltwise.viewmodel.FindingDetailsViewModel
 import com.akane.voltwise.viewmodel.InsightsRepository
@@ -49,7 +60,7 @@ class InsightsWiringTest {
 
     @Test fun applicationScopeAndJournalAuthoritiesAreSingletons() = runTest {
         for (type in listOf(CoroutineScope::class, InsightDao::class, InsightRepository::class,
-            InsightActionRepository::class, InsightsRepository::class)) {
+            InsightActionRepository::class, InsightsRepository::class, InsightApplyResults::class)) {
             assertEquals(type.toString(), Kind.Singleton, definition(type).kind)
         }
         assertTrue(ActionExecutor::class in definition(ShellRunnerActionExecutor::class).secondaryTypes)
@@ -63,6 +74,50 @@ class InsightsWiringTest {
         } finally {
             scope.coroutineContext[Job]?.cancelAndJoin()
             application.close()
+        }
+    }
+
+    @Test fun bothViewModelsResolveAndConsumeTheSameApplicationResult() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val source = FakeInsightsRepository()
+        val application = koinApplication {
+            modules(appModule, module {
+                single<InsightsRepository> { source }
+                single<CoroutineScope> { backgroundScope }
+            })
+        }
+        val store = ViewModelStore()
+        try {
+            val results = application.koin.get<InsightApplyResults>()
+            assertSame(results, application.koin.get<InsightApplyResults>())
+            val insights = application.koin.get<InsightsViewModel> { parametersOf(SavedStateHandle()) }
+            val details = application.koin.get<FindingDetailsViewModel> {
+                parametersOf(SavedStateHandle(mapOf("key" to "finding")))
+            }
+            store.put("insights", insights)
+            store.put("details", details)
+            backgroundScope.launch { insights.state.collect {} }
+            backgroundScope.launch { details.state.collect {} }
+            source.result = com.akane.voltwise.battery.insights.actions.ActionResult.Refused(
+                com.akane.voltwise.battery.insights.actions.RefusalCode.ROLE_HOLDER,
+            )
+            details.onEvent(InsightsEvent.Undo(7))
+            runCurrent()
+            val expected = InsightActionMessage(InsightMessageCode.ROLE_HOLDER)
+            assertEquals("details must publish to the application singleton", expected, results.latest.value)
+            assertEquals(expected, insights.state.value.apply.lastResult)
+            assertEquals(expected, details.state.value.apply.lastResult)
+            details.onEvent(InsightsEvent.ResultShown)
+            runCurrent()
+            assertEquals("details consumption must clear the singleton", null, results.latest.value)
+            assertEquals("details consumption must clear Insights too", null, insights.state.value.apply.lastResult)
+            assertEquals(null, details.state.value.apply.lastResult)
+            assertEquals(listOf(7L), source.undone)
+        } finally {
+            store.clear()
+            runCurrent()
+            application.close()
+            Dispatchers.resetMain()
         }
     }
 

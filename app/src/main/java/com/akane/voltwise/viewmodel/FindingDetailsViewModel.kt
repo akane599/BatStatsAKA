@@ -15,8 +15,9 @@ class FindingDetailsViewModel(
     private val source: InsightsRepository,
     private val applicationScope: CoroutineScope,
     savedStateHandle: SavedStateHandle,
+    applyResults: InsightApplyResults,
 ) : ViewModel() {
-    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope)
+    private val flow = InsightApplyFlow(source, applicationScope, savedStateHandle, viewModelScope, applyResults)
     private val key = savedStateHandle.getStateFlow("key", "")
     val effects = flow.effects
     private val content = combine(source.report, source.actions, source.privileged, key) { report, actions, access, key ->
