@@ -38,6 +38,9 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.akane.voltwise.R
+import com.akane.voltwise.battery.insights.model.Evidence
+import com.akane.voltwise.battery.insights.model.FindingType
+import com.akane.voltwise.battery.insights.model.Metric
 import com.akane.voltwise.battery.insights.model.MetricUnit
 import com.akane.voltwise.battery.insights.model.SeriesPoint
 import com.akane.voltwise.ui.components.chart.CHART_TEXT_CACHE_SIZE
@@ -80,6 +83,18 @@ private const val MAX_PLAIN_DOTS = 24
  */
 @Immutable
 internal data class FindingChartPoint(val atMs: Long, val value: Double, val low: Double?, val high: Double?, val emphasised: Boolean)
+
+/** What a finding's chart plots: [metric] names the axis caption and the TalkBack summary; [usual] is its usual level. */
+internal data class ChartMeasure(val metric: Metric, val usual: Double?)
+
+/**
+ * The series measures the finding's first evidence metric, against that evidence's baseline, except a capacity decline:
+ * its series holds the capacity estimates in mAh (ChargingHealth) while its evidence is the change per year.
+ */
+internal fun chartMeasure(type: FindingType, evidence: List<Evidence>): ChartMeasure? = when (type) {
+    FindingType.HEALTH_DECLINE -> ChartMeasure(Metric.CAPACITY_MAH, usual = null)
+    else -> evidence.firstOrNull()?.let { ChartMeasure(it.metric, it.baseline) }
+}
 
 /** The readings in time order, scaled to axis units; non-finite readings are dropped rather than plotted. */
 internal fun chartPoints(series: List<SeriesPoint>, unit: MetricUnit): List<FindingChartPoint> {

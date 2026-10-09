@@ -71,7 +71,7 @@
     <string name="finding_seen_trend">Over the last 7 days this changed compared with the 3 weeks before.</string>
     <string name="finding_seen_charging_at_full">Your phone stayed plugged in at full charge for hours, several times in the last two weeks.</string>
     <string name="finding_seen_hot_charging">Your battery got hot while charging, several times recently.</string>
-    <string name="finding_seen_health_decline">Your battery\'s estimated capacity has been falling faster than usual.</string>
+    <string name="finding_seen_health_decline">Your battery\'s estimated capacity has been falling steadily for weeks.</string>
     <string name="finding_seen_background_location">This app used location in the background more than it usually does.</string>
     <string name="finding_seen_background_radio">This app kept the mobile radio active or moved data in the background more than usual.</string>
     <string name="finding_seen_lingering_foreground_service">This app kept a foreground service running long after you stopped using it.</string>
@@ -90,7 +90,7 @@
     <string name="finding_matters_trend">A lasting change shows up here before it is obvious day to day.</string>
     <string name="finding_matters_charging_at_full">Sitting at full charge for long periods ages a battery faster, especially when it\'s warm.</string>
     <string name="finding_matters_hot_charging">Heat is the main thing that wears a battery out. Charging while hot speeds that up.</string>
-    <string name="finding_matters_health_decline">A faster decline means shorter battery life sooner. Charging habits can slow it down.</string>
+    <string name="finding_matters_health_decline">Less capacity means shorter battery life per charge. Every battery wears with age, but charging habits can slow it down.</string>
     <string name="finding_matters_background_location">Location in the background keeps GPS and radios on, one of the costliest things an app can do.</string>
     <string name="finding_matters_background_radio">An active mobile radio uses a lot of power and stays on for a while after each transfer.</string>
     <string name="finding_matters_lingering_foreground_service">A foreground service keeps the app alive and allowed to work, even when you think it is closed.</string>

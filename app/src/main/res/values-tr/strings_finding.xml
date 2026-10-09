@@ -63,7 +63,7 @@
     <string name="finding_seen_trend">Son 7 günde bu, önceki 3 haftaya göre değişti.</string>
     <string name="finding_seen_charging_at_full">Telefonunuz son iki haftada birkaç kez saatlerce yüzde 100\'de şarjda kaldı.</string>
     <string name="finding_seen_hot_charging">Piliniz son zamanlarda şarj olurken birkaç kez ısındı.</string>
-    <string name="finding_seen_health_decline">Pilinizin tahmini kapasitesi her zamankinden hızlı düşüyor.</string>
+    <string name="finding_seen_health_decline">Pilinizin tahmini kapasitesi haftalardır istikrarlı bir şekilde düşüyor.</string>
     <string name="finding_seen_background_location">Bu uygulama arka planda konumu her zamankinden fazla kullandı.</string>
     <string name="finding_seen_background_radio">Bu uygulama arka planda mobil radyoyu her zamankinden fazla etkin tuttu ya da veri aktardı.</string>
     <string name="finding_seen_lingering_foreground_service">Bu uygulama, siz kullanmayı bıraktıktan çok sonra da bir ön plan hizmetini çalışır tuttu.</string>
@@ -81,7 +81,7 @@
     <string name="finding_matters_trend">Kalıcı bir değişiklik, gün gün fark edilmeden önce burada görünür.</string>
     <string name="finding_matters_charging_at_full">Uzun süre yüzde 100\'de kalmak, özellikle sıcakken, pili daha hızlı yaşlandırır.</string>
     <string name="finding_matters_hot_charging">Pili en çok yıpratan şey ısıdır. Sıcakken şarj etmek bunu hızlandırır.</string>
-    <string name="finding_matters_health_decline">Daha hızlı düşüş, pil ömrünün daha erken kısalması demektir. Şarj alışkanlıkları bunu yavaşlatabilir.</string>
+    <string name="finding_matters_health_decline">Daha düşük kapasite, şarj başına daha kısa pil ömrü demektir. Her pil zamanla yıpranır, ancak şarj alışkanlıkları bunu yavaşlatabilir.</string>
     <string name="finding_matters_background_location">Arka planda konum GPS\'i ve radyoları açık tutar; bir uygulamanın yapabileceği en pahalı işlerden biridir.</string>
     <string name="finding_matters_background_radio">Etkin mobil radyo çok güç kullanır ve her aktarımdan sonra bir süre açık kalır.</string>
     <string name="finding_matters_lingering_foreground_service">Ön plan hizmeti, kapalı sandığınızda bile uygulamayı canlı ve çalışmaya izinli tutar.</string>
