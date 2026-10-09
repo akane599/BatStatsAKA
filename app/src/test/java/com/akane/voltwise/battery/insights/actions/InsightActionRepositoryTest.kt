@@ -275,6 +275,63 @@ class InsightActionRepositoryTest {
         assertEquals(ActionResult.Reverted, f.repo.undo(1))
     }
 
+    @Test fun uncertainApplyReconciledAtTargetUsesCreatedAtNotRecoveryTime() = runTest {
+        val f = Fixture()
+        f.replies.addAll(listOf(ok("active"), ok(), failure()))
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(UNKNOWN, f.row().status)
+        assertNull(f.row().appliedAt)
+        val createdAt = f.row().createdAt
+
+        f.now += 3 * 24 * 60 * 60 * 1_000L
+        f.reply("rare")
+        f.repo.reconcile()
+
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(createdAt, f.row().appliedAt)
+        assertEquals(1, f.commands.count { it is PrivilegedCommand.SetStandbyBucket })
+    }
+
+    @Test fun uncertainApplyFailedUndoAtTargetUsesCreatedAt() = runTest {
+        val f = Fixture()
+        f.replies.addAll(listOf(ok("active"), ok(), failure()))
+        assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
+        assertEquals(UNKNOWN, f.row().status)
+        assertNull(f.row().appliedAt)
+        val createdAt = f.row().createdAt
+
+        f.now += 3 * 24 * 60 * 60 * 1_000L
+        f.reply("rare", "", "rare")
+        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.repo.undo(1))
+
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(createdAt, f.row().appliedAt)
+        assertEquals("STATE_MISMATCH", f.row().message)
+        assertEquals(PrivilegedCommand.SetStandbyBucket(pkg, StandbyBucket.ACTIVE), f.commands[4])
+    }
+
+    @Test fun confirmedApplyKeepsConfirmationTimestampAfterFailedUndoAndReconcile() = runTest {
+        val f = Fixture()
+        f.reply("active", "", "rare")
+        assertEquals(ActionResult.Applied(1), f.apply(ActionType.STANDBY_BUCKET_RARE))
+        val appliedAt = f.row().appliedAt
+        assertEquals(101L, appliedAt)
+        assertEquals(100L, f.row().createdAt)
+
+        f.now += 3 * 24 * 60 * 60 * 1_000L
+        f.reply("rare", "", "rare")
+        assertEquals(ActionResult.Failed(FailureCode.STATE_MISMATCH), f.repo.undo(1))
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(appliedAt, f.row().appliedAt)
+
+        f.replies.addAll(listOf(ok("rare"), denied()))
+        assertEquals(ActionResult.Unknown, f.repo.undo(1))
+        f.reply("rare")
+        f.repo.reconcile()
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(appliedAt, f.row().appliedAt)
+    }
+
     @Test fun crashAfterExecuteLeavesPreparedAndReconcileNeverReplays() = runTest {
         for ((output, status) in listOf("rare" to APPLIED, "active" to FAILED, "frequent" to UNKNOWN, "garbage" to UNKNOWN)) {
             val f = Fixture(); f.reply("active", "")

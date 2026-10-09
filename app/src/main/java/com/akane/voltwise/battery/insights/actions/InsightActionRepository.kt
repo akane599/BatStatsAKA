@@ -122,7 +122,7 @@ class InsightActionRepository(
             dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
             ActionResult.Reverted
         } else if (confirmed.value == row.targetState) {
-            dao.updateAction(row.copy(status = APPLIED, message = FailureCode.STATE_MISMATCH.name))
+            dao.updateAction(row.copy(status = APPLIED, appliedAt = row.appliedAt ?: row.createdAt, message = FailureCode.STATE_MISMATCH.name))
             ActionResult.Failed(FailureCode.STATE_MISMATCH)
         } else unknown(row)
     }
@@ -155,7 +155,7 @@ class InsightActionRepository(
             }
             dao.updateAction(row.copy(
                 status = status,
-                appliedAt = if (status == APPLIED) row.appliedAt ?: clock() else row.appliedAt,
+                appliedAt = if (status == APPLIED) row.appliedAt ?: row.createdAt else row.appliedAt,
                 revertedAt = if (status == REVERTED) clock() else row.revertedAt,
                 message = null,
             ))
