@@ -68,6 +68,41 @@ class SnapshotExtensionTest {
         assertEquals(190L, started.cpuTimeMs)
     }
 
+    @Test fun counterAbsentFromBothSupportedDumpsIsZero() {
+        val base = snapshot(listOf(row().copy(cpuTimeMs = 10), row(9).copy(wakeupAlarms = 5, jobCount = 2)))
+        val end = snapshot(listOf(row().copy(cpuTimeMs = 20), row(9).copy(wakeupAlarms = 7, jobCount = 3)), 200)
+
+        val result = AppUsageDelta.compute(base, end)
+
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        val idle = result.rows.single { it.uid == 1 }
+        assertEquals("Observed jobs absent from both dumps must be zero", 0L, idle.jobCount)
+        assertEquals("Observed alarms absent from both dumps must be zero", 0L, idle.wakeupAlarms)
+        assertEquals(10L, idle.cpuTimeMs)
+    }
+
+    @Test fun countersObservedOnlyAtEndMakeSparseAbsenceZero() {
+        val base = snapshot(listOf(row().copy(cpuTimeMs = 10), row(9).copy(wakeupAlarms = 0)))
+        val end = snapshot(listOf(row().copy(cpuTimeMs = 20), row(9, counter = 6)), 200)
+
+        val result = AppUsageDelta.compute(base, end)
+
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        assertTrue("Every observed extended counter must record sparse zero",
+            counters(result.rows.single { it.uid == 1 }).all { it == 0L })
+    }
+
+    @Test fun counterUnobservedInBothDumpsStaysUnknown() {
+        val base = snapshot(listOf(row().copy(cpuTimeMs = 10), row(9).copy(wakeupAlarms = 5)))
+        val end = snapshot(listOf(row().copy(cpuTimeMs = 20), row(9).copy(wakeupAlarms = 7)), 200)
+
+        val result = AppUsageDelta.compute(base, end)
+
+        assertEquals(AppUsageBasis.DELTA, result.basis)
+        assertTrue("Support for alarms must not imply support for unobserved counters",
+            result.rows.all { counters(it).drop(1).all { value -> value == null } })
+    }
+
     @Test fun everyExtendedCounterCanEstablishBaselineSupportEvenWhenZero() {
         val supportRows = listOf(
             row(9).copy(wakeupAlarms = 0),
@@ -85,6 +120,11 @@ class SnapshotExtensionTest {
         for ((index, support) in supportRows.withIndex()) {
             val result = AppUsageDelta.compute(snapshot(listOf(row(), support)), snapshot(listOf(row(counter = 6))))
             assertTrue("Baseline support from counter $index", counters(result.rows.single()).all { it == 6L })
+            val sparse = AppUsageDelta.compute(
+                snapshot(listOf(row(), support)), snapshot(listOf(row(power = 2.0))),
+            )
+            assertEquals("Only counter $index observed in the baseline is known zero",
+                counters(support).map { if (it == null) null else 0L }, counters(sparse.rows.single()))
         }
     }
 
