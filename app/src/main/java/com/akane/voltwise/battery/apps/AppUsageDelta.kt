@@ -94,11 +94,19 @@ object AppUsageDelta {
     private fun wakerDelta(baseline: AppUsageSnapshot?, end: AppUsageSnapshot, basis: AppUsageBasis): List<DeviceWaker> {
         if (baseline == null || basis != AppUsageBasis.DELTA) return emptyList()
         val byName = baseline.deviceWakers.associateBy { it.kind to it.name }
-        return end.deviceWakers.mapNotNull { waker ->
+        val (kernels, reasons) = end.deviceWakers.mapNotNull { waker ->
             val base = byName[waker.kind to waker.name]
             if (base == null && baseline.wakersComplete != true) return@mapNotNull null
             waker.copy(count = (waker.count - (base?.count ?: 0L)).coerceAtLeast(0L),
                 totalMs = (waker.totalMs - (base?.totalMs ?: 0L)).coerceAtLeast(0L))
-        }.filter { it.count > 0 || it.totalMs > 0 }.rankedWakers().take(10)
+        }.filter { it.count > 0 || it.totalMs > 0 }.partition { it.kind == "KERNEL_WAKELOCK" }
+        // Reserve six time-ranked kernels and four count-ranked reasons; lend unused slots to the other kind.
+        val selectedKernels = kernels.sortedWith(
+            compareByDescending<DeviceWaker> { it.totalMs }.thenBy { it.name },
+        ).take(6 + (4 - reasons.size).coerceAtLeast(0))
+        val selectedReasons = reasons.sortedWith(
+            compareByDescending<DeviceWaker> { it.count }.thenBy { it.name },
+        ).take(10 - selectedKernels.size)
+        return selectedKernels + selectedReasons
     }
 }
