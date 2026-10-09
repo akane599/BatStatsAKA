@@ -167,6 +167,7 @@
     <string name="insights_status_failed">Uygulanamadı</string>
     <string name="insights_status_unknown">Sonuç bilinmiyor</string>
     <string name="insights_status_reverted">Geri alındı</string>
+    <string name="insights_status_changed_externally">Voltwise dışında değiştirildi</string>
     <string name="insights_status_one_shot">Yapıldı</string>
 
     <!-- InsightMessageCode -->

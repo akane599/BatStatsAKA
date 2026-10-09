@@ -43,6 +43,8 @@ data class AppliedInsightAction(
     val appliedAt: Long?,
     val undoable: Boolean,
     val effect: InsightFindingState?,
+    /** REVERTED because the setting had already changed outside Voltwise; the device wasn't touched. */
+    val changedExternally: Boolean = false,
 )
 
 @Immutable

@@ -130,6 +130,20 @@ class InsightsViewModelTest {
         assertTrue(vm.state.value.empty)
     }
 
+    @Test fun marksOnlyRevertedRowsSettledAsChangedExternally() = runTest {
+        source.actions.value = listOf(
+            insightAction(1, InsightActionStatus.REVERTED).copy(message = "CHANGED_EXTERNALLY"),
+            insightAction(2, InsightActionStatus.REVERTED),
+            insightAction(3, InsightActionStatus.APPLIED).copy(message = "CHANGED_EXTERNALLY"),
+        )
+        val vm = start()
+        assertEquals(
+            "only an undo that found the setting changed outside Voltwise is marked",
+            listOf(1L to true, 2L to false, 3L to false),
+            vm.state.value.appliedActions.map { it.id to it.changedExternally },
+        )
+    }
+
     @Test fun analyzeShowsBusyAndClearsItAfterCompletionAndFailure() = runTest {
         val vm = start()
         source.analyzeGate = CompletableDeferred()

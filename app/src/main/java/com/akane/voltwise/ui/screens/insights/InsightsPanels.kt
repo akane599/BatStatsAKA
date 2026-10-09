@@ -395,7 +395,7 @@ private fun AppliedFixRow(action: AppliedInsightAction, labels: Map<String, AppL
     val subject = action.packageName?.let { Subject.App(-1, it) } ?: Subject.Device
     val name = subjectName(subject, labels)
     val actionLabel = action.action?.let { stringResource(it.labelRes()) }
-    val status = stringResource(action.status.labelRes())
+    val status = stringResource(action.statusLabelRes())
     Row(
         Modifier
             .fillMaxWidth()

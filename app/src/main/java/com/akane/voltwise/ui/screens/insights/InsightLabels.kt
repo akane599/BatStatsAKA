@@ -23,6 +23,7 @@ import com.akane.voltwise.ui.format.formatPercent
 import com.akane.voltwise.ui.format.formatRate
 import com.akane.voltwise.ui.format.mahText
 import com.akane.voltwise.ui.format.valueWithUnit
+import com.akane.voltwise.viewmodel.AppliedInsightAction
 import com.akane.voltwise.viewmodel.InsightMessageCode
 import kotlin.math.abs
 
@@ -145,6 +146,11 @@ internal fun InsightActionStatus.labelRes(): Int = when (this) {
     InsightActionStatus.REVERTED -> R.string.insights_status_reverted
     InsightActionStatus.ONE_SHOT -> R.string.insights_status_one_shot
 }
+
+/** A history row's status; an undo that found the setting already changed outside Voltwise isn't "Undone". */
+@StringRes
+internal fun AppliedInsightAction.statusLabelRes(): Int =
+    if (changedExternally) R.string.insights_status_changed_externally else status.labelRes()
 
 /** Every apply, undo and analysis result (the ViewModel's fixed codes for each ActionResult). */
 @StringRes
