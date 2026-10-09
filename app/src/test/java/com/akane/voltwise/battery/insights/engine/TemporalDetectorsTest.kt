@@ -15,7 +15,7 @@ class TemporalDetectorsTest {
         val recent = (93L..96).map { day(it, 200_000) }
         val input = inputs(emptyList(), emptyList()).copy(days = prior + recent)
         val trend = Trends.detect(input).single { it.evidence.first().metric == Metric.SCREEN_OFF_PCT_PER_H }
-        assertEquals("TREND:device:SCREEN_OFF_PCT_PER_H", trend.key)
+        assertEquals("TREND:device:SCREEN_OFF_PCT_PER_H:UP", trend.key)
         assertEquals(Direction.UP, trend.direction)
         assertEquals(2.5, trend.evidence.single().baseline!!, 0.0001)
         assertEquals(5.0, trend.evidence.single().observed, 0.0001)
@@ -50,7 +50,7 @@ class TemporalDetectorsTest {
         val rows = sessions.mapIndexed { i, s -> row(s.id).copy(powerMah = if (i < 4) 5.0 else 30.0) }
         val input = inputs(sessions, rows)
         val trend = Trends.detect(input).single()
-        assertEquals("TREND:$APP:POWER_MAH_PER_H", trend.key)
+        assertEquals("TREND:$APP:POWER_MAH_PER_H:UP", trend.key)
         assertEquals(15.0, trend.evidence.single().observed, 0.0)
         val withExactZero = Trends.detect(input.copy(appSessions = rows.drop(1))).single()
         assertEquals(0.0, withExactZero.series.first().value, 0.0)
