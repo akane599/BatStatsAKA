@@ -7,6 +7,7 @@ import com.akane.voltwise.battery.insights.model.SessionInput
 import com.akane.voltwise.battery.insights.model.SessionKind
 import com.akane.voltwise.battery.insights.model.Subject
 import com.akane.voltwise.battery.insights.model.WindowBasis
+import com.akane.voltwise.battery.util.BatteryStatsParser
 import kotlin.math.abs
 import kotlin.math.max
 
@@ -129,8 +130,12 @@ object AppWindows {
 
     fun foregroundMs(row: AppSessionInput): Double? {
         val top = row.topMs?.takeIf { it >= 0 } ?: return null
-        // A known process-state (st) timer makes an absent sparse foreground (fg) timer an observed zero.
-        val fg = (row.fgMs ?: 0L).takeIf { it >= 0 } ?: return null
+        // A known process-state (st) timer makes an absent sparse foreground (fg) timer an observed zero
+        // only for application UIDs. System/native UIDs can be foreground in non-TOP states we don't store.
+        // whittle: App-UID keyboards (IMEs) also use FOREGROUND, not TOP, and can look background-only.
+        // Upgrade when the st FOREGROUND column is stored (schema change).
+        val fg = (row.fgMs ?: if (!BatteryStatsParser.isSystemUid(row.uid)) 0L else null)
+            ?.takeIf { it >= 0 } ?: return null
         return fg.toDouble() + top.toDouble()
     }
 

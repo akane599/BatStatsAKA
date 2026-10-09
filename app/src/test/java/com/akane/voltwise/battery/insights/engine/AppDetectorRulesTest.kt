@@ -53,6 +53,17 @@ class AppDetectorRulesTest {
         assertTrue(appFindings(unknownTop).none { it.type == FindingType.BACKGROUND_LOCATION })
     }
 
+    @Test fun systemUidWithSparseForegroundDoesNotProduceBackgroundRadioFinding() {
+        val input = detectorInputs(FindingType.BACKGROUND_RADIO).let { input ->
+            input.copy(appSessions = input.appSessions.map { it.copy(uid = 1001, fgMs = null, topMs = 0) })
+        }
+        assertTrue(appFindings(input).none { it.type == FindingType.BACKGROUND_RADIO })
+
+        val application = input.copy(appSessions = input.appSessions.map { it.copy(uid = 10123) })
+        assertEquals(1, appFindings(application).count { it.type == FindingType.BACKGROUND_RADIO })
+        assertTrue(appFindings(input).any { it.type == FindingType.APP_DRAIN_ANOMALY })
+    }
+
     @Test fun foregroundActivityDisqualifiesLocationRadioAndLingeringService() {
         for (type in listOf(FindingType.BACKGROUND_LOCATION, FindingType.BACKGROUND_RADIO, FindingType.LINGERING_FOREGROUND_SERVICE)) {
             val input = detectorInputs(type)
