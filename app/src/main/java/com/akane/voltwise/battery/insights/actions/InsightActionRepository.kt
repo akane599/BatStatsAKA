@@ -95,10 +95,17 @@ class InsightActionRepository(
         val current = read(operation, pkg)
         if (current !is StateRead.Known) return@withLock initialReadFailure(current)
         if (row.status == UNKNOWN && current.value == row.priorState) {
+            if (row.appliedAt != null) {
+                dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = null))
+                return@withLock ActionResult.Reverted
+            }
             dao.updateAction(row.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
             return@withLock ActionResult.Failed(FailureCode.STATE_MISMATCH)
         }
-        if (current.value != row.targetState) return@withLock ActionResult.ChangedExternally(current.value)
+        if (current.value != row.targetState) {
+            dao.updateAction(row.copy(status = REVERTED, revertedAt = clock(), message = "CHANGED_EXTERNALLY"))
+            return@withLock ActionResult.ChangedExternally(current.value)
+        }
         // Preserve uncertainty if cancellation/process death interrupts restoration.
         dao.updateAction(row.copy(status = UNKNOWN))
         val outcome = executor.run(operation.write(pkg, requireNotNull(row.priorState)))
@@ -137,12 +144,13 @@ class InsightActionRepository(
             val status = when {
                 current !is StateRead.Known -> UNKNOWN
                 current.value == row.targetState -> APPLIED
-                current.value == row.priorState -> FAILED
+                current.value == row.priorState -> if (row.appliedAt != null) REVERTED else FAILED
                 else -> UNKNOWN
             }
             dao.updateAction(row.copy(
                 status = status,
                 appliedAt = if (status == APPLIED) row.appliedAt ?: clock() else row.appliedAt,
+                revertedAt = if (status == REVERTED) clock() else row.revertedAt,
                 message = null,
             ))
         }
