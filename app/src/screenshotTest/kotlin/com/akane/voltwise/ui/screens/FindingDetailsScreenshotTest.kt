@@ -83,6 +83,7 @@ private val effect = appFinding.copy(
 )
 
 private val normal = FindingDetailsUiState(
+    loaded = true,
     finding = appFinding,
     relatedActions = listOf(
         AppliedInsightAction(
@@ -95,6 +96,7 @@ private val normal = FindingDetailsUiState(
 
 /** No shell access: privileged fixes say what they need, the settings page is still offered. */
 private val notPrivileged = FindingDetailsUiState(
+    loaded = true,
     finding = appFinding.copy(
         recommendations = listOf(
             rec(ActionType.RESTRICT_BACKGROUND, available = false),
@@ -107,6 +109,7 @@ private val notPrivileged = FindingDetailsUiState(
 
 /** Deep Doze share per night (no band from the engine): the latest night against the 64% usual. */
 private val device = FindingDetailsUiState(
+    loaded = true,
     finding = InsightFindingState(
         key = "DOZE_BLOCKED:device",
         type = FindingType.DOZE_BLOCKED,
@@ -196,5 +199,13 @@ fun FindingDetailsRtlPreview() {
 @PhonePreview
 @Composable
 fun FindingDetailsGonePreview() {
-    ScreenshotTheme { FindingDetailsPreviewContent(FindingDetailsUiState(privileged = true)) }
+    ScreenshotTheme { FindingDetailsPreviewContent(FindingDetailsUiState(loaded = true, privileged = true)) }
+}
+
+/** Before the first report (also right after a restore): a quiet loading line, never "finding gone". */
+@PreviewTest
+@PhonePreview
+@Composable
+fun FindingDetailsLoadingPreview() {
+    ScreenshotTheme { FindingDetailsPreviewContent(FindingDetailsUiState()) }
 }

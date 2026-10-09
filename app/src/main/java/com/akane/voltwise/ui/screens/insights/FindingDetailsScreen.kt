@@ -70,11 +70,11 @@ import com.akane.voltwise.ui.components.EmptyState
 import com.akane.voltwise.ui.components.Notice
 import com.akane.voltwise.ui.components.NoticeTone
 import com.akane.voltwise.ui.components.Panel
+import com.akane.voltwise.ui.components.QuietText
 import com.akane.voltwise.ui.theme.numericBody
 import com.akane.voltwise.ui.theme.spacing
 import com.akane.voltwise.viewmodel.FindingDetailsUiState
 import com.akane.voltwise.viewmodel.FindingDetailsViewModel
-import com.akane.voltwise.viewmodel.InsightActionMessage
 import com.akane.voltwise.viewmodel.InsightFindingState
 import com.akane.voltwise.viewmodel.InsightMessageCode
 import com.akane.voltwise.viewmodel.InsightUiEffect
@@ -91,7 +91,7 @@ private const val FINDING_KEY_ARG = "key"
 
 /**
  * Finding details, wired: the Koin [FindingDetailsViewModel] for [findingKey], app labels from [AppInfoSource], and
- * the ViewModel's one-shot effects (result snackbars, Android settings pages). After Not a problem or Dismiss the
+ * the ViewModel's one-shot effects (Android settings pages; result snackbars come from its state). After Not a problem or Dismiss the
  * screen leaves once the finding drops out of the report; a failed write keeps it here with a message.
  */
 @Composable
@@ -106,22 +106,21 @@ fun FindingDetailsScreen(
     val context = LocalContext.current
     val appInfo: AppInfoSource = koinInject()
     val back by rememberUpdatedState(onBack)
-    var message by remember { mutableStateOf<InsightActionMessage?>(null) }
     var leaving by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(vm) {
         vm.effects.collect { effect ->
             when (effect) {
-                is InsightUiEffect.Message -> {
-                    if (effect.result.code == InsightMessageCode.FEEDBACK_FAILED) leaving = false
-                    message = effect.result
-                }
+                // The snackbar follows the ViewModel's held result (state.apply.lastResult), which survives rotation.
+                is InsightUiEffect.Message -> if (effect.result.code == InsightMessageCode.FEEDBACK_FAILED) leaving = false
                 is InsightUiEffect.OpenSettings -> openSettings(context, effect.spec)
                 is InsightUiEffect.OpenFinding -> Unit
             }
         }
     }
-    LaunchedEffect(leaving, state.finding == null) {
-        if (leaving && state.finding == null) back()
+    // Before the first report the finding is absent only because nothing has loaded yet: not a reason to leave.
+    val gone = state.loaded && state.finding == null
+    LaunchedEffect(leaving, gone) {
+        if (leaving && gone) back()
     }
     val subjects = remember(state.finding, state.relatedActions) { appSubjects(state) }
     val labels by produceState(emptyMap<String, AppLabel>(), subjects, appInfo) {
@@ -137,8 +136,6 @@ fun FindingDetailsScreen(
         },
         onBack = onBack,
         onOpenAccessSetup = onOpenAccessSetup,
-        message = message,
-        onMessageShown = { message = null },
         modifier = modifier,
     )
 }
@@ -182,7 +179,9 @@ internal val ActionType.opensSettings: Boolean
  * against the usual range, possible causes (device findings), then what to do: each fix with its effect (privileged
  * ones only through the confirmation dialog; Force stop marked as permanent), settings pages, Not a problem and
  * Dismiss, and fixes already applied with Undo and their measured association. From 840 dp the finding sits on the
- * start and what to do on the end. [labels] names apps by package (missing while loading).
+ * start and what to do on the end. [labels] names apps by package (missing while loading). Until the first report
+ * arrives (not [FindingDetailsUiState.loaded]) it says it's loading; "finding gone" is only for a loaded report
+ * without it. The ViewModel's held result shows as a snackbar, consumed with [InsightsEvent.ResultShown].
  */
 @Composable
 fun FindingDetailsContent(
@@ -193,20 +192,12 @@ fun FindingDetailsContent(
     onBack: () -> Unit,
     onOpenAccessSetup: () -> Unit,
     modifier: Modifier = Modifier,
-    message: InsightActionMessage? = null,
-    onMessageShown: () -> Unit = {},
 ) {
     val spacing = MaterialTheme.spacing
     val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
     val column = Arrangement.spacedBy(spacing.sm)
     val snackbar = remember { SnackbarHostState() }
-    val messageText = message?.let { stringResource(it.code.messageRes()) }
-    LaunchedEffect(message) {
-        if (messageText != null) {
-            snackbar.showSnackbar(messageText)
-            onMessageShown()
-        }
-    }
+    ResultSnackbar(snackbar, state.apply.lastResult, onEvent)
     val finding = state.finding
 
     Scaffold(
@@ -222,6 +213,10 @@ fun FindingDetailsContent(
                 .padding(start = spacing.md, end = spacing.md, bottom = spacing.md),
             verticalArrangement = column,
         ) {
+            if (!state.loaded) {
+                QuietText(stringResource(R.string.finding_loading), Modifier.padding(top = spacing.xs))
+                return@Column
+            }
             if (finding == null) {
                 EmptyState(
                     title = stringResource(R.string.finding_gone_title),

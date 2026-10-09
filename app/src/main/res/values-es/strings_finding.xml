@@ -48,6 +48,7 @@
 
     <string name="finding_gone_title">Este hallazgo ya no aparece</string>
     <string name="finding_gone_body">Se descartó, o el último análisis ya no lo muestra.</string>
+    <string name="finding_loading">Cargando hallazgo…</string>
 
     <string name="finding_seen_app_drain_anomaly">Esta app gastó mucha más batería por hora de lo habitual en las sesiones recientes con batería.</string>
     <string name="finding_seen_new_heavy_app">Esta app apenas se notaba antes. En la última sesión con batería se llevó gran parte del consumo, sobre todo en segundo plano.</string>

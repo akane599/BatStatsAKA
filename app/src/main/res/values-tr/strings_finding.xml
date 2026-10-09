@@ -45,6 +45,7 @@
 
     <string name="finding_gone_title">Bu bulgu artık listede yok</string>
     <string name="finding_gone_body">Kapatıldı ya da son analiz artık göstermiyor.</string>
+    <string name="finding_loading">Bulgu yükleniyor…</string>
 
     <string name="finding_seen_app_drain_anomaly">Bu uygulama, son pil oturumlarında saat başına her zamankinden çok daha fazla pil kullandı.</string>
     <string name="finding_seen_new_heavy_app">Bu uygulama önceden pek fark edilmiyordu. Son pil oturumunda tüketimin büyük bir kısmını, çoğunlukla arka planda aldı.</string>

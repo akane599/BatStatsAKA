@@ -30,11 +30,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -70,8 +68,8 @@ internal const val LEARNING_SESSIONS = 4
 
 /**
  * Insights, wired: the Koin [InsightsViewModel], app labels from [AppInfoSource] for every app a finding or fix
- * names, and the ViewModel's one-shot effects (result messages as a snackbar, Android settings pages, finding
- * details). Navigation leaves through the lambdas; every [InsightsEvent] goes to the ViewModel.
+ * names, and the ViewModel's one-shot effects (Android settings pages, finding details; result messages come from
+ * its state instead, so they survive rotation). Navigation leaves through the lambdas; every [InsightsEvent] goes to the ViewModel.
  */
 @Composable
 fun InsightsScreen(
@@ -84,12 +82,11 @@ fun InsightsScreen(
     val context = LocalContext.current
     val appInfo: AppInfoSource = koinInject()
     val openFinding by rememberUpdatedState(onOpenFinding)
-    var message by remember { mutableStateOf<InsightActionMessage?>(null) }
     LaunchedEffect(vm) {
         vm.effects.collect { effect ->
             when (effect) {
-                // Analysis and feedback failures already stand as the error notice on screen.
-                is InsightUiEffect.Message -> if (effect.result.code !in NOTICE_CODES) message = effect.result
+                // The snackbar follows the ViewModel's held result (state.apply.lastResult), which survives rotation.
+                is InsightUiEffect.Message -> Unit
                 is InsightUiEffect.OpenSettings -> openSettings(context, effect.spec)
                 is InsightUiEffect.OpenFinding -> openFinding(effect.key)
             }
@@ -105,14 +102,33 @@ fun InsightsScreen(
         nowMs = remember(state.lastAnalyzedAt) { System.currentTimeMillis() },
         onEvent = vm::onEvent,
         onOpenAccessSetup = onOpenAccessSetup,
-        message = message,
-        onMessageShown = { message = null },
         modifier = modifier,
     )
 }
 
 /** Codes the screen shows as its error notice rather than as a snackbar. */
 private val NOTICE_CODES = setOf(InsightMessageCode.ANALYSIS_FAILED, InsightMessageCode.FEEDBACK_FAILED)
+
+/**
+ * Shows the ViewModel's held [result] in [snackbar] (codes in [silentCodes] skip it), then consumes it with
+ * [InsightsEvent.ResultShown] once it was shown or dismissed. A rotation mid-snackbar cancels this before the
+ * consume, so the result shows again on the new screen instead of being lost.
+ */
+@Composable
+internal fun ResultSnackbar(
+    snackbar: SnackbarHostState,
+    result: InsightActionMessage?,
+    onEvent: (InsightsEvent) -> Unit,
+    silentCodes: Set<InsightMessageCode> = emptySet(),
+) {
+    val text = result?.let { stringResource(it.code.messageRes()) }
+    val currentOnEvent by rememberUpdatedState(onEvent)
+    LaunchedEffect(result) {
+        if (result == null || text == null) return@LaunchedEffect
+        if (result.code !in silentCodes) snackbar.showSnackbar(text)
+        currentOnEvent(InsightsEvent.ResultShown)
+    }
+}
 
 /** Package → uid of every app the screen names (a fix row knows no uid: -1, its label then never reads "system"). */
 private fun appSubjects(state: InsightsUiState): Map<String, Int> {
@@ -170,6 +186,8 @@ internal fun InsightsUiState.findingFor(key: String): InsightFindingState? =
  * Without findings the body is a designed state: learning (n of 4 sessions), not analysed yet, error, or all good.
  * From 840 dp findings sit on the start and changes and fixes on the end. Apply always goes through the
  * confirmation dialog; [labels] names apps by package (missing while loading), [nowMs] dates the last analysis.
+ * Until the first report arrives (not [InsightsUiState.loaded]) only the header shows, saying it's loading.
+ * The ViewModel's held result shows as a snackbar and is consumed with [InsightsEvent.ResultShown] once it's gone.
  */
 @Composable
 fun InsightsContent(
@@ -179,20 +197,13 @@ fun InsightsContent(
     onEvent: (InsightsEvent) -> Unit,
     onOpenAccessSetup: () -> Unit,
     modifier: Modifier = Modifier,
-    message: InsightActionMessage? = null,
-    onMessageShown: () -> Unit = {},
 ) {
     val spacing = MaterialTheme.spacing
     val twoColumns = LocalWindowInfo.current.containerSize.width / LocalDensity.current.density >= TWO_COLUMN_MIN_WIDTH_DP
     val column = Arrangement.spacedBy(spacing.sm)
     val snackbar = remember { SnackbarHostState() }
-    val messageText = message?.let { stringResource(it.code.messageRes()) }
-    LaunchedEffect(message) {
-        if (messageText != null) {
-            snackbar.showSnackbar(messageText)
-            onMessageShown()
-        }
-    }
+    // Analysis and feedback failures already stand as the error notice on screen: consumed without a snackbar.
+    ResultSnackbar(snackbar, state.apply.lastResult, onEvent, silentCodes = NOTICE_CODES)
     val busy = state.apply.working
     val open: (String) -> Unit = { key -> onEvent(InsightsEvent.OpenFinding(key)) }
     val apply: (String, RecommendationState) -> Unit = { key, rec -> onEvent(InsightsEvent.RequestApply(key, rec.action)) }
@@ -253,8 +264,15 @@ fun InsightsContent(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = spacing.md),
         ) {
-            InsightsHeader(state.analyzing, state.lastAnalyzedAt, nowMs, onAnalyze = { onEvent(InsightsEvent.AnalyzeNow) })
-            Column(Modifier.fillMaxWidth().padding(horizontal = spacing.md), verticalArrangement = column) {
+            InsightsHeader(
+                state.analyzing,
+                state.lastAnalyzedAt,
+                nowMs,
+                onAnalyze = { onEvent(InsightsEvent.AnalyzeNow) },
+                loaded = state.loaded,
+            )
+            // Before the first report every field is a default: no notices or "still learning" that may not be true.
+            if (state.loaded) Column(Modifier.fillMaxWidth().padding(horizontal = spacing.md), verticalArrangement = column) {
                 notices()
                 when (state.body()) {
                     InsightsBody.FINDINGS -> if (twoColumns) {

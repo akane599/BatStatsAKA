@@ -16,6 +16,7 @@
     <string name="insights_analyzing_description">Analyzing your battery data</string>
     <string name="insights_last_analyzed">Last analyzed %1$s</string>
     <string name="insights_never_analyzed">Not analyzed yet</string>
+    <string name="insights_loading">Loading insights…</string>
 
     <!-- Screen states -->
     <string name="insights_access_title">Fixes need Shizuku or root</string>
@@ -43,6 +44,7 @@
     <string name="insights_applied_at">Applied %1$s</string>
     <string name="insights_undo">Undo</string>
     <string name="insights_undo_description">Undo %1$s for %2$s</string>
+    <string name="insights_apply_description">%1$s for %2$s</string>
 
     <!-- Evidence: "Drain: 3.2× usual" -->
     <string name="insights_ratio">%1$s×</string>
