@@ -24,10 +24,12 @@ object Recommender {
             FindingType.CHARGING_AT_FULL, FindingType.HOT_CHARGING -> listOf(ActionType.ENABLE_HIGH_BATTERY_ALERT)
             FindingType.TREND, FindingType.HEALTH_DECLINE, FindingType.ACTION_EFFECT -> emptyList()
         }
-        val pkg = (finding.subject as? Subject.App)?.packageName
+        val app = finding.subject as? Subject.App
+        val pkg = app?.packageName
         // A live whitelist finding proves an earlier removal no longer holds.
         val applied = inputs.actions.filter {
             it.status == ActionStatus.APPLIED && it.packageName == pkg &&
+                (app == null || it.uid == app.uid) &&
                 !(finding.type == FindingType.DOZE_WHITELISTED_DRAINER && it.type == ActionType.REMOVE_DOZE_WHITELIST)
         }.map { it.type }.toSet()
         return finding.copy(recommendations = actions.filterNot { action ->
