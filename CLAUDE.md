@@ -14,7 +14,7 @@ Android, developed on Ubuntu from the CLI.
 - DI/DB/Net: Koin / Room / none · Async: coroutines/Flow · Navigation: Navigation 3 · Firebase: no · Version catalog: yes
 - App id: com.akane.voltwise (debug .debug, preview .preview; was org.mlm.batstats before 2026-10-08) · namespace: com.akane.voltwise (was app.batstats) · Launcher: com.akane.voltwise.battery.BatteryMainActivity
 - Tests: JUnit4 + kotlinx-coroutines-test; androidTest present, no Espresso · Lint: Android lint; no detekt/ktlint/spotless
-- Baseline: debug build OK (2026-10-07); existing unit reports 542 tests, 0 failures/errors (not rerun by bootstrap; PROGRESS.md)
+- Baseline: full gate green on feat/insights @ 82d32ac (2026-10-09): unit 1225/0 fail, androidTest compile, assembleDebug, 259 screenshots/0 fail
 <!-- STACK:END -->
 
 ## How work flows here
@@ -44,6 +44,8 @@ Android, developed on Ubuntu from the CLI.
 - Device: `./gradlew :app:installDebug --console=plain -q && adb shell am start -n com.akane.voltwise.debug/com.akane.voltwise.battery.BatteryMainActivity`
 - Logs: `adb logcat -d --pid=$(adb shell pidof -s com.akane.voltwise.debug) | tail -80`
 - Emulator: no configured AVD, so no launch command yet; after creating/launching one, wait with `adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done'`.
+- CI logs: `gh run view --log-failed` comes back empty here; use `gh api repos/akane599/Voltwise/actions/jobs/<job-id>/logs`. Device-phase results: artifact `validation-reports-*` → `reports/device-validation/standard/ordinary-results/*.xml` and `phase-status.txt` (`ordinary_exit`, `shizuku_exit`).
+- Known CI flake: the 16 KB page-size emulator step can fail with `Error on ZipFile unknown archive` (corrupt system-image download, emulator never boots); check `ordinary_exit`/`shizuku_exit` are 0, then `gh run rerun <run-id> --failed`.
 
 ## Open questions
 - None from stack detection after targeted checks. Device QA needs an AVD or attached device; unit results above are existing reports, not a fresh bootstrap test run.

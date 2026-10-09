@@ -82,6 +82,7 @@ _Work items, stories and blockers live on the Sidequest board. This file keeps w
 - 2026-10-09 — Insights startup work (reconcile, catch-up refresh, notifier collection) runs from BatteryApp's IO startup coroutine after SettingsMigrator.awaitMigrated(), on the shared appScope, and InsightNotifier is a plain lazy Koin single, because an eager `createdAtStart` single crashed JVM tests (no Android context) and resolved Android-backed dependencies on the main thread at startKoin (SQ-169, after the SQ-166 review rejected SQ-144).
 - 2026-10-09 — Finding feedback (Dismiss/Not a problem) runs on the injected applicationScope, not viewModelScope, so it survives the screen popping itself when the finding leaves the report (SQ-146).
 - 2026-10-09 — The full gate (incl. :app:compileDebugAndroidTestKotlin) must pass before any push; UI ticket verifiers don't compile androidTest, so new required composable params can break device-test call sites unseen (SQ-147 → fixed in 7152fc3).
+- 2026-10-09: Ship Insights as its own PR after PR #2 merges, rather than folding feat/insights into feat/overhaul, because PR #2 is green and large and Insights still has unverified device paths (privileged apply/readback, notification deep link, migration 6→7 on device).
 
 ## Audit status
 | Area | Last run | Result | How |
