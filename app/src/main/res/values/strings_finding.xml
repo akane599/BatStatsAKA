@@ -52,6 +52,7 @@
     <!-- Missing finding -->
     <string name="finding_gone_title">This finding isn\'t listed any more</string>
     <string name="finding_gone_body">It was dismissed, or the latest analysis no longer shows it.</string>
+    <string name="finding_loading">Loading finding…</string>
 
     <!-- What we saw, per FindingType -->
     <string name="finding_seen_app_drain_anomaly">This app used much more battery per hour than it usually does, across recent sessions on battery.</string>

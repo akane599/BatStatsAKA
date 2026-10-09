@@ -59,9 +59,19 @@ import com.akane.voltwise.viewmodel.AppliedInsightAction
 import com.akane.voltwise.viewmodel.InsightFindingState
 import com.akane.voltwise.viewmodel.RecommendationState
 
-/** Title and Analyze now (wrapping under the title at large font sizes), the last analysis time, progress while busy. */
+/**
+ * Title and Analyze now (wrapping under the title at large font sizes), the last analysis time ("Loading insights…"
+ * until [loaded]), progress while busy.
+ */
 @Composable
-internal fun InsightsHeader(analyzing: Boolean, lastAnalyzedAt: Long?, nowMs: Long, onAnalyze: () -> Unit, modifier: Modifier = Modifier) {
+internal fun InsightsHeader(
+    analyzing: Boolean,
+    lastAnalyzedAt: Long?,
+    nowMs: Long,
+    onAnalyze: () -> Unit,
+    modifier: Modifier = Modifier,
+    loaded: Boolean = true,
+) {
     val spacing = MaterialTheme.spacing
     val formatter = rememberTimeAxisFormatter()
     Column(
@@ -91,10 +101,10 @@ internal fun InsightsHeader(analyzing: Boolean, lastAnalyzedAt: Long?, nowMs: Lo
             }
         }
         Text(
-            if (lastAnalyzedAt != null) {
-                stringResource(R.string.insights_last_analyzed, dayAwareTime(formatter, lastAnalyzedAt, nowMs))
-            } else {
-                stringResource(R.string.insights_never_analyzed)
+            when {
+                !loaded -> stringResource(R.string.insights_loading)
+                lastAnalyzedAt != null -> stringResource(R.string.insights_last_analyzed, dayAwareTime(formatter, lastAnalyzedAt, nowMs))
+                else -> stringResource(R.string.insights_never_analyzed)
             },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -164,7 +174,7 @@ internal fun HeadlinePanel(
             TextButton(onClick = onOpen, modifier = Modifier.align(Alignment.CenterVertically)) {
                 Text(stringResource(R.string.insights_details))
             }
-            RecommendationControl(finding, busy, onApply, Modifier.align(Alignment.CenterVertically))
+            RecommendationControl(finding, subjectName(finding.subject, labels), busy, onApply, Modifier.align(Alignment.CenterVertically))
         }
     }
 }
@@ -245,6 +255,7 @@ private fun FindingRow(
         }
         RecommendationControl(
             finding,
+            subjectName(finding.subject, labels),
             busy,
             onApply,
             Modifier.padding(start = spacing.md + AppIconDefaults.Size + spacing.sm, end = spacing.md, bottom = spacing.xs),
@@ -252,18 +263,31 @@ private fun FindingRow(
     }
 }
 
-/** The finding's primary fix: a button when it can run, "Fix applied" once it has, "Needs Shizuku or root" otherwise. */
+/**
+ * The finding's primary fix: a button when it can run (announced with [subjectName], the app or phone it acts on,
+ * once known), "Fix applied" once it has, "Needs Shizuku or root" otherwise.
+ */
 @Composable
 private fun RecommendationControl(
     finding: InsightFindingState,
+    subjectName: String?,
     busy: Boolean,
     onApply: (RecommendationState) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rec = finding.primaryRecommendation() ?: return
     when {
-        rec.available -> FilledTonalButton(onClick = { onApply(rec) }, enabled = !busy, modifier = modifier) {
-            Text(stringResource(rec.action.labelRes()))
+        rec.available -> {
+            val label = stringResource(rec.action.labelRes())
+            // Read as "Restrict background for Chrome": in a list of findings the label alone doesn't say whose.
+            val description = subjectName?.let { stringResource(R.string.insights_apply_description, label, it) }
+            FilledTonalButton(
+                onClick = { onApply(rec) },
+                enabled = !busy,
+                modifier = if (description != null) modifier.semantics { contentDescription = description } else modifier,
+            ) {
+                Text(label)
+            }
         }
         rec.alreadyApplied -> Row(
             modifier.semantics(mergeDescendants = true) {},

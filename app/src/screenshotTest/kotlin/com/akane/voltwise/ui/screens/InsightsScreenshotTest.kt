@@ -124,6 +124,7 @@ private val restrictEffect = finding(
 )
 
 private val full = InsightsUiState(
+    loaded = true,
     headline = drainHeadline,
     keyFindings = listOf(drainHeadline, wakeups, dozeBlocked, lingering),
     changes = listOf(facebookUp, screenOffDown),
@@ -146,6 +147,7 @@ private val full = InsightsUiState(
 
 /** Shell access missing: device findings only, privileged fixes say what they need, manual paths still offered. */
 private val notPrivileged = InsightsUiState(
+    loaded = true,
     headline = dozeBlocked,
     keyFindings = listOf(
         dozeBlocked,
@@ -200,8 +202,16 @@ fun InsightsNotPrivilegedPreview() {
 @Composable
 fun InsightsLearningPreview() {
     ScreenshotTheme {
-        InsightsPreviewContent(InsightsUiState(privileged = true, eligibleSessionCount = 2, lowData = true, analyzing = true))
+        InsightsPreviewContent(InsightsUiState(loaded = true, privileged = true, eligibleSessionCount = 2, lowData = true, analyzing = true))
     }
+}
+
+/** Before the first report (also right after a restore): only the header, saying it's loading, no "still learning". */
+@PreviewTest
+@PhonePreview
+@Composable
+fun InsightsLoadingPreview() {
+    ScreenshotTheme { InsightsPreviewContent(InsightsUiState()) }
 }
 
 @PreviewTest
@@ -210,7 +220,7 @@ fun InsightsLearningPreview() {
 fun InsightsAllGoodPreview() {
     ScreenshotTheme {
         InsightsPreviewContent(
-            InsightsUiState(lastAnalyzedAt = FIXED_TIME_MS - 10 * MINUTE, privileged = true, eligibleSessionCount = 12, lowData = false),
+            InsightsUiState(loaded = true, lastAnalyzedAt = FIXED_TIME_MS - 10 * MINUTE, privileged = true, eligibleSessionCount = 12, lowData = false),
         )
     }
 }
@@ -223,6 +233,7 @@ fun InsightsErrorPreview() {
     ScreenshotTheme {
         InsightsPreviewContent(
             InsightsUiState(
+                loaded = true,
                 lastAnalyzedAt = FIXED_TIME_MS - 2 * DAY,
                 privileged = true,
                 eligibleSessionCount = 12,

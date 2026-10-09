@@ -9,6 +9,7 @@
     <string name="insights_analyzing_description">Pil verilerin analiz ediliyor</string>
     <string name="insights_last_analyzed">Son analiz: %1$s</string>
     <string name="insights_never_analyzed">Henüz analiz edilmedi</string>
+    <string name="insights_loading">Analiz yükleniyor…</string>
 
     <!-- Screen states -->
     <string name="insights_access_title">Düzeltmeler için Shizuku veya root gerekir</string>
@@ -36,6 +37,7 @@
     <string name="insights_applied_at">Uygulandı: %1$s</string>
     <string name="insights_undo">Geri al</string>
     <string name="insights_undo_description">%2$s için %1$s işlemini geri al</string>
+    <string name="insights_apply_description">%2$s için %1$s</string>
 
     <!-- Evidence -->
     <string name="insights_ratio">%1$s×</string>
