@@ -47,10 +47,11 @@ object ChargingHealth {
         }.groupBy { it.atMs }.map { (at, values) -> TimedValue(at, requireNotNull(median(values.map { it.mah }))) }
             .sortedBy { it.atMs }
         if (points.size < 5 || points.last().atMs - points.first().atMs < 30 * DAY_MS) return null
-        val slope = TheilSen.slope(points) ?: return null
-        if (slope >= 0) return null
+        val trend = TheilSen.trend(points) ?: return null
+        if (trend.negativeSlopeShare < MIN_NEGATIVE_SLOPE_SHARE) return null
         val reference = median(points.map { it.value }) ?: return null
-        val annualPct = slope * (365.25 * DAY_MS) / reference * 100.0
+        val annualPct = trend.slope * (365.25 * DAY_MS) / reference * 100.0
+        if (annualPct > MAX_DECLINE_ANNUAL_PCT) return null
         val metric = Metric.CAPACITY_CHANGE_PCT_PER_YEAR
         return finding(
             FindingType.HEALTH_DECLINE, listOf(Evidence(metric, annualPct, null, metric.unit, points.size)),
@@ -59,5 +60,7 @@ object ChargingHealth {
         )
     }
 
+    private const val MIN_NEGATIVE_SLOPE_SHARE = 0.75
+    private const val MAX_DECLINE_ANNUAL_PCT = -3.0
     private const val FULL_HOLD_MS = 2 * 3_600_000L
 }

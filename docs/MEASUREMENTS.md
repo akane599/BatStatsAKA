@@ -94,7 +94,7 @@ Severity is HIGH when z ≥ 6 and MEDIUM otherwise. Confidence is HIGH with 12 o
 | Exempt from Doze and draining | Needs the Doze whitelist (a privileged read): among the top five apps by measured background time in the latest window, any on the user whitelist |
 | Charging at full | At least 3 plugged sessions in the last 14 days that stayed at 100% for 2 h or more |
 | Hot charging | At least 3 charge sessions in the last 14 days with a peak temperature of 40 °C or more |
-| Health decline | At least 5 capacity estimates of MEDIUM or HIGH confidence in the last 90 days spanning at least 30 days, with a negative Theil–Sen (median pairwise) slope, shown per year |
+| Health decline | At least 5 capacity estimates of MEDIUM or HIGH confidence in the last 90 days spanning at least 30 days, with at least 75% of pairwise slopes between distinct timestamps negative and an annualised Theil–Sen (median pairwise) change ≤ −3% per year |
 
 Pressing **Not a problem** on an app finding scales its floors and z threshold by 1.5 each time, up to 4×, and hides it; **Dismiss** hides it until it returns at a higher severity. A finding the next analysis no longer produces is resolved. Findings are ranked by severity, confidence, score and key, and a run keeps at most 12; the headline is the first one that is not INFO.
 
