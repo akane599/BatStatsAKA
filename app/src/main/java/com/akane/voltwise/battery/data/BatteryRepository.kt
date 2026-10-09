@@ -373,11 +373,9 @@ class BatteryRepository(
             // On the in-memory row, since every save rewrites it: PENDING for discharge, NOT_APPLICABLE otherwise.
             SessionReport.open(point, raw).let { it.copy(appUsageStatus = SessionSnapshotCollector.initialStatus(it.type)) }
         } else open
-        val sessionBefore = sessionEngine.summary
         val sessionSummary = sessionEngine.accept(point)
         val calibratedUa = BatteryReading.calibratedUa(point.currentUa, calibration.state.value.effective)
-        sessionExtremes = sessionExtremes.plus(BatteryReading.powerMw(calibratedUa, point.voltageMv), raw.temperatureDeciC,
-            sessionSummary.cpuSuspendMs - sessionBefore.cpuSuspendMs, screenOffBefore = sessionBefore.latest?.interactive == false)
+        sessionExtremes = sessionExtremes.plus(BatteryReading.powerMw(calibratedUa, point.voltageMv), raw.temperatureDeciC)
         calibration.accept(point, raw.plugged) // RAW current: detection must never see its own output.
 
         // Both estimators see every observation in order; at most one has an estimate.
