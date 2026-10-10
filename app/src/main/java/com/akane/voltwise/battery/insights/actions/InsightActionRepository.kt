@@ -100,11 +100,16 @@ class InsightActionRepository(
             val prepared = row(finding, rec.action, PREPARED).copy(priorState = prior.value, targetState = operation.target)
             val saved = prepared.copy(id = dao.insertAction(prepared))
             val outcome = executor.run(operation.write(app.packageName, operation.target))
-            if (outcome is Outcome.NoAccess) return@withLock unknown(saved)
+            if (outcome is Outcome.NoAccess) {
+                dao.updateAction(saved.copy(status = FAILED, message = RefusalCode.NOT_PRIVILEGED.name))
+                return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
+            }
             val confirmed = read(operation, app.packageName)
             if (confirmed !is StateRead.Known) return@withLock unknown(saved)
             if (confirmed.value != operation.target) {
-                if (confirmed.value != prior.value) return@withLock unknown(saved)
+                if (confirmed.value != prior.value ||
+                    outcome is Outcome.Failure && outcome.certainty == ExecutionCertainty.UNKNOWN
+                ) return@withLock unknown(saved)
                 dao.updateAction(saved.copy(status = FAILED, message = FailureCode.STATE_MISMATCH.name))
                 return@withLock ActionResult.Failed(FailureCode.NOT_APPLIED)
             }
@@ -149,13 +154,19 @@ class InsightActionRepository(
         val restoring = row.copy(status = UNKNOWN, appliedAt = row.appliedAt ?: row.createdAt)
         dao.updateAction(restoring)
         val outcome = executor.run(operation.write(pkg, requireNotNull(restoring.priorState)))
-        if (outcome is Outcome.NoAccess) return@withLock unknown(restoring)
+        if (outcome is Outcome.NoAccess) {
+            dao.updateAction(restoring.copy(status = APPLIED, message = RefusalCode.NOT_PRIVILEGED.name))
+            return@withLock ActionResult.Refused(RefusalCode.NOT_PRIVILEGED)
+        }
         val confirmed = read(operation, pkg)
         if (confirmed !is StateRead.Known) return@withLock unknown(restoring)
         if (confirmed.value == restoring.priorState) {
             dao.updateAction(restoring.copy(status = REVERTED, revertedAt = clock(), message = null))
             ActionResult.Reverted
         } else if (confirmed.value == restoring.targetState) {
+            if (outcome is Outcome.Failure && outcome.certainty == ExecutionCertainty.UNKNOWN) {
+                return@withLock unknown(restoring)
+            }
             dao.updateAction(restoring.copy(status = APPLIED, message = FailureCode.STATE_MISMATCH.name))
             ActionResult.Failed(FailureCode.STATE_MISMATCH)
         } else unknown(restoring)

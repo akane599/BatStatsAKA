@@ -52,7 +52,7 @@ class ShizukuBridge(private val context: Context) {
 
         const val PERMISSION_REQUEST_CODE = 1001
 
-        private const val SERVICE_VERSION = 8
+        private const val SERVICE_VERSION = 9
 
         private const val BIND_TIMEOUT_MS = 10_000L
         private const val DEFAULT_CMD_TIMEOUT_MS = 25_000L
@@ -421,8 +421,11 @@ internal fun readPipeResult(
 ): CommandOutput.Result =
     if (accepted) {
         val result = read()
-        // An accepted mutation may have taken effect even when the helper reports an error.
-        if (result.error != null) result.copy(certainty = ExecutionCertainty.UNKNOWN) else result
+        // Only helper-owned non-dispatch errors prove that an accepted mutation never started.
+        when (result.error) {
+            null, ShellUserService.NOT_STARTED_UNSUPPORTED, ShellUserService.NOT_STARTED_BUSY -> result
+            else -> result.copy(certainty = ExecutionCertainty.UNKNOWN)
+        }
     } else CommandOutput.Result(error = "Helper command refused")
 
 internal fun classifyAfterRead(

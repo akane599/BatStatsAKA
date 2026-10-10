@@ -5,6 +5,9 @@ import com.akane.voltwise.battery.shizuku.ShizukuBridge.RunResult
 import com.akane.voltwise.battery.util.CommandOutput
 import com.akane.voltwise.battery.util.ExecutionCertainty
 import com.akane.voltwise.battery.util.ExecutionPolicy
+import com.akane.voltwise.battery.util.CommandProtocol
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
@@ -50,9 +53,27 @@ class ShizukuMutationPolicyTest {
         }
     }
 
+    @Test fun helperNotStartedErrorsRemainConfirmedAcrossPipeProtocol() {
+        assertEquals("NOT_STARTED:UNSUPPORTED_COMMAND", ShellUserService.NOT_STARTED_UNSUPPORTED)
+        assertEquals("NOT_STARTED:HELPER_BUSY", ShellUserService.NOT_STARTED_BUSY)
+        for (error in listOf("NOT_STARTED:UNSUPPORTED_COMMAND", "NOT_STARTED:HELPER_BUSY")) {
+            val output = ByteArrayOutputStream()
+            CommandProtocol.write(output, CommandOutput.Result(error = error))
+            val response = readPipeResult(true) { CommandProtocol.read(ByteArrayInputStream(output.toByteArray())) }
+            assertEquals(error, response.error)
+            assertEquals(ExecutionCertainty.CONFIRMED, response.certainty)
+            for ((running, permitted) in listOf(true to true, true to false, false to false)) {
+                val result = classifyAfterRead(running, permitted, response, ExecutionPolicy.MUTATION) as RunResult.Error
+                assertEquals(ExecutionCertainty.CONFIRMED, result.certainty)
+            }
+        }
+    }
+
     @Test fun unsuccessfulMutationResponseDoesNotClaimConfirmedFailure() {
-        val result = classifyAfterRead(true, true, readPipeResult(true) { CommandOutput.Result(error = "response unavailable") },
-            ExecutionPolicy.MUTATION) as RunResult.Error
-        assertEquals(ExecutionCertainty.UNKNOWN, result.certainty)
+        for (error in listOf("response unavailable", "Unsupported command", "Helper busy; retry later")) {
+            val result = classifyAfterRead(true, true, readPipeResult(true) { CommandOutput.Result(error = error) },
+                ExecutionPolicy.MUTATION) as RunResult.Error
+            assertEquals(ExecutionCertainty.UNKNOWN, result.certainty)
+        }
     }
 }
