@@ -13,7 +13,7 @@ single sampler (`SamplingController`) and the single history writer (`BatteryRep
 | [architecture.md](architecture.md) | Layers, key flows (monitoring, live readings, per-app stats, insights, deep links), invariants |
 | [entry-points.md](entry-points.md) | Application, activity, FGS, boot receiver, tile, widgets, notification actions, navigation routes |
 | [modules.md](modules.md) | Every package with its key files; screen → ViewModel → repository table |
-| [database.md](database.md) | Room v8 tables, DAOs, migrations (4→5 irreversible, 5→6, 6→7 and 7→8 additive), other persistence, checks |
+| [database.md](database.md) | Room v9 tables, DAOs, migrations (4→5 irreversible; 5→6, 6→7 and 7→8 additive; 8→9 data-only, forward-only: retire legacy capture certification, snapshots and waker attribution, resolve ACTIVE findings), other persistence, checks |
 | [insights.md](insights.md) | Insights: findings engine, detectors, privileged actions + journal, notifier, UI, wiring |
 | [privileged-shell.md](privileged-shell.md) | ShellRunner modes, Shizuku bridge/user service, batterystats parsing, session snapshots |
 | [tech-landscape.md](tech-landscape.md) | Toolchain versions, libraries, variants/signing, CI, localization |

@@ -25,7 +25,7 @@ against per-device baselines and can apply reversible privileged fixes ([insight
    ├─ InsightActionRepository  battery/insights/actions/           privileged apply/undo journal
    ├─ CalibrationStore, DesignCapacitySource, HistoryRetention, ExportImportManager, DiagnosticStore
    └─ SettingsRepository<AppSettings>  (kmp-settings over DataStore; settings/)
- Persistence             battery/data/db/  Room `battery.db` v8   + DataStore + SharedPreferences
+ Persistence             battery/data/db/  Room `battery.db` v9   + DataStore + SharedPreferences
  Android surfaces        service/ (FGS), drain/ (notification), widget/ (RemoteViews), tile/ (QS tile)
 ```
 
@@ -74,7 +74,11 @@ publishes `report`, which the Insights tab, Finding details, the Now card, App d
 - Insights startup work waits for `SettingsMigrator.awaitMigrated()`, runs on `Dispatchers.IO` on the shared `appScope`;
   `InsightNotifier` is a lazy Koin single (never `createdAtStart`).
 - `battery/actions/CommandPolicy.allows` is the only privileged-command allow-list (helper + actions).
-- `MIGRATION_6_7` and `MIGRATION_7_8` are additive and forward-only; reverting the app leaves `battery.db` at v8.
+- `MIGRATION_6_7` and `MIGRATION_7_8` are additive and forward-only.
+- `MIGRATION_8_9` is data-only and forward-only: clears legacy app capture certification, retires snapshots
+  and device-waker attribution, and resolves old ACTIVE findings; chart/history rows, feedback and action journals remain.
+  Reverting feature logic must retain schema v9 and its migrations. A schema-v8 build cannot open an upgraded
+  v9 database without a downgrade migration; none is provided. See [database.md](database.md).
 - `MIGRATION_4_5` is irreversible: it drops `alarm_rules` and `app_energy_stats`. See [database.md](database.md).
 
 Related: [modules.md](modules.md), [entry-points.md](entry-points.md), [patterns.md](patterns.md).
