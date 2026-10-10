@@ -118,8 +118,13 @@ class HistoryRetentionTest {
         val initial = retention.cutoff(now, 1_000, now)!!
         assertEquals(initial + 30_000, retention.cutoff(now + 365 * 86_400_000L, 31_000))
         assertEquals(initial + 60_000, retention.cutoff(now + 60_000, 61_000))
-        assertEquals(initial + 60_000, retention.cutoff(now - 30_000, 91_000))
-        assertEquals("A monotonic reset cannot advance the durable clock", initial + 60_000,
+        assertEquals("A corrected wall clock must cap the cutoff at wall time minus retention",
+            now - 30_000 - 90 * 86_400_000L, retention.cutoff(now - 30_000, 91_000))
+        assertEquals("A backwards wall clock must not lower the stored trusted clock",
+            now + 60_000, SamplerState(localState).retentionClock!!.wallMs)
+        assertEquals("Clock correction must preserve the stored trusted clock", initial + 60_000,
+            retention.cutoff(now + 60_000, 121_000))
+        assertEquals("A zero-uptime reset cannot advance the durable clock", initial + 60_000,
             retention.cutoff(now + 365 * 86_400_000L, 0))
     }
 
@@ -154,8 +159,27 @@ class HistoryRetentionTest {
         migrator.run()
         val retention = retention(migrator, store)
         val initial = retention.cutoff(now, 1_000, now)
-        assertEquals("A backwards RTC must not lower the persisted watermark", initial,
-            retention.cutoff(0, 31_000))
+        assertEquals("An RTC fallback must not purge rows stamped at the fallback time",
+            -90 * 86_400_000L, retention.cutoff(0, 31_000))
+        assertEquals("A backwards RTC must not lower the persisted watermark", now,
+            SamplerState(localState).retentionClock!!.wallMs)
+        assertEquals("The watermark must remain trusted after the RTC is corrected", initial,
+            retention.cutoff(now, 61_000))
+    }
+
+    @Test fun futureSeedWithoutHistoryCapsCutoffAfterClockCorrection() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val retention = retention(migrator, store)
+        val future = now + 365 * 86_400_000L
+        assertNull(retention.cutoff(future, 1_000))
+        val correctedNow = now + 86_400_000L
+        val cutoff = retention.cutoff(correctedNow, 61_000)!!
+        assertTrue("A future seed must not purge history newer than 90 days at corrected wall time",
+            cutoff <= correctedNow - 90 * 86_400_000L)
+        assertEquals("Clock correction must not regress the stored future seed", future,
+            SamplerState(localState).retentionClock!!.wallMs)
     }
 
     @Test fun restartWithinSameBootCountsElapsedTime() = runBlocking {
@@ -168,17 +192,45 @@ class HistoryRetentionTest {
             restarted.cutoff(now + 60_000, 61_000, now))
     }
 
-    @Test fun rebootDoesNotMistakeLargerUptimeForSameBootElapsedTime() = runBlocking {
+    @Test fun rebootCountsCurrentUptimeWithoutCountingPreviousBootUptime() = runBlocking {
         val store = store()
         val migrator = SettingsMigrator(store)
         migrator.run()
         val initial = retention(migrator, store).cutoff(now, 1_000, now)!!
         bootCount++
         val restarted = retention(migrator, store)
-        assertEquals("New boot must not advance by unrelated uptime", initial,
+        assertEquals("A new boot must advance by its full current uptime", initial + 61_000,
             restarted.cutoff(now + 365 * 86_400_000L, 61_000))
-        assertEquals("Elapsed time resumes after recording the new boot", initial + 1_000,
+        assertEquals("Later cleanup must count only the new boot's additional elapsed time", initial + 62_000,
             restarted.cutoff(now + 365 * 86_400_000L, 62_000))
+    }
+
+    @Test fun backwardsElapsedWithUnavailableBootCountCountsCurrentUptime() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        bootCount = -1
+        val initial = retention(migrator, store).cutoff(now, 61_000, now)!!
+        assertEquals("An elapsed reset with unknown boot count must count current uptime", initial + 1_000,
+            retention(migrator, store).cutoff(now + 60_000, 1_000))
+    }
+
+    @Test fun dailyRebootsWithOneCleanupPerBootEventuallyExpireNinetyDayHistory() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val initial = retention(migrator, store).cutoff(now, 1_000, now)!!
+        val uptime = 23 * 3_600_000L
+        var cutoff = initial
+        repeat(100) { index ->
+            bootCount++
+            cutoff = retention(migrator, store).cutoff(now + (index + 1) * 86_400_000L, uptime)!!
+            assertEquals("One cleanup per daily boot must accumulate each boot's uptime", initial + (index + 1) * uptime,
+                cutoff)
+        }
+        assertTrue("Daily reboots must eventually make the original row eligible for the 90-day purge", now < cutoff)
+        assertTrue("Time outside the observed boot uptime must not advance the trusted clock",
+            cutoff < now + 10 * 86_400_000L)
     }
 
     @Test fun repeatedShortMonitoringRunsAccumulateSameBootTime() = runBlocking {

@@ -157,7 +157,7 @@ val appModule = module {
         val context = androidContext()
         val preferences = context.getSharedPreferences(SamplerState.PREFS_NAME, Context.MODE_PRIVATE)
         HistoryRetention(get(), get(named(RAW_SETTINGS_DATASTORE)), SamplerState(SharedPreferencesStore(preferences))) {
-            Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT)
+            Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
         }
     }
     single { ExportImportManager(androidContext(), get(), get()) }
