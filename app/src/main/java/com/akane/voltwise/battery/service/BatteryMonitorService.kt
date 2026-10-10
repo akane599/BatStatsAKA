@@ -11,6 +11,7 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import android.os.SystemClock
+import android.provider.Settings
 import android.util.Log
 import com.akane.voltwise.battery.BatteryApp
 import com.akane.voltwise.battery.apps.SessionSnapshotCollector
@@ -114,10 +115,13 @@ class BatteryMonitorService : Service() {
             },
         )
         serviceScope.launch(Dispatchers.IO) {
-            // Private, excluded from automatic backup; changes are written only at episode boundaries.
+            // Private, excluded from automatic backup. Only latched episodes need a fresh timestamp.
             val preferences = getSharedPreferences("battery_alert_episodes", MODE_PRIVATE)
             val saved = preferences.getStringSet("latched", emptySet()).orEmpty()
-            val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet())
+            var savedElapsedMs = preferences.getLong("last_elapsed_ms", -1L).takeIf { it >= 0 }
+            val savedBootCount = preferences.getInt("boot_count", -1).takeIf { it >= 0 }
+            val bootCount = Settings.Global.getInt(contentResolver, Settings.Global.BOOT_COUNT, -1).takeIf { it >= 0 }
+            val alerts = BatteryAlerts(BatteryAlert.entries.filter { it.name in saved }.toSet(), savedElapsedMs, savedBootCount)
             var alertChannelReady = false
             var previousIntervalMs: Long? = null
             combine(repository.realtimeFlow, repository.settingsFlow) { reading, settings -> reading to settings }
@@ -131,7 +135,7 @@ class BatteryMonitorService : Service() {
                     previousIntervalMs = reading.expectedIntervalMs
                     // Calibrated current: an inverted or mA-reporting device still trips the discharge alert.
                     val events = alerts.accept(AlertReading(sample.elapsedMs, sample.levelPercent,
-                        sample.status, sample.plugged, reading.currentUa, sample.temperatureDeciC, intervalMs),
+                        sample.status, sample.plugged, reading.currentUa, sample.temperatureDeciC, intervalMs, bootCount),
                         BatteryAlertSettings(settings.lowBatteryAlertEnabled, settings.lowBatteryThreshold,
                             settings.highBatteryAlertEnabled, settings.highBatteryThreshold,
                             settings.temperatureWarningEnabled, settings.temperatureThreshold.toDouble(),
@@ -146,16 +150,22 @@ class BatteryMonitorService : Service() {
                                 // The alert text shows the calibrated current, as the realtime values do.
                                 val shown = sample.copy(currentNowUa = reading.currentUa)
                                 events.forEach { Notifier.batteryAlert(this@BatteryMonitorService, it, shown, settings) }
-                            } else alerts.restoreLatches(before)
+                            } else alerts.retryDelivery()
                         }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: RuntimeException) {
-                        alerts.restoreLatches(before)
+                        alerts.retryDelivery()
                         diagnostics.record(DiagnosticCode.ALERT_FAILED)
                         Log.w("BatteryAlerts", "Alert delivery failed (${e.javaClass.simpleName})")
                     }
-                    if (alerts.latches != before) preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet()).apply()
+                    if (alerts.latches != before || (alerts.latches.isNotEmpty() && alerts.lastAcceptedElapsedMs != savedElapsedMs)) {
+                        // Refresh while latched so an abrupt process death does not age a still-observed episode.
+                        preferences.edit().putStringSet("latched", alerts.latches.map { it.name }.toSet())
+                            .putLong("last_elapsed_ms", sample.elapsedMs)
+                            .putInt("boot_count", bootCount ?: -1).apply()
+                        savedElapsedMs = sample.elapsedMs
+                    }
                 }
         }
         // Display updates: only with the screen on, on changed content, ≥5 s apart; SCREEN_ON pushes at once (gated in run).
