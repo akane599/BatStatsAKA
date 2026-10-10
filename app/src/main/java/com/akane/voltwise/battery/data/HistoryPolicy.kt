@@ -1,5 +1,6 @@
 package com.akane.voltwise.battery.data
 
+import android.os.BatteryManager
 import androidx.room.withTransaction
 import com.akane.voltwise.battery.apps.AppUsageStatus
 import com.akane.voltwise.battery.data.db.BatteryDatabase
@@ -55,7 +56,6 @@ object HistoryPolicy {
     fun sample(input: BatterySample, clock: Clock): BatterySample {
         epoch(input.timestamp, clock.millis())
         require(input.levelPercent == null || input.levelPercent in 0..100) { "Invalid battery percentage" }
-        require(input.status in 1..5 && (input.plugged == null || input.plugged in 0..15)) { "Invalid power state" }
         require(input.elapsedMs == null || input.elapsedMs >= 0) { "Invalid elapsed time" }
         require(input.uptimeMs == null || input.elapsedMs != null && input.uptimeMs in 0..input.elapsedMs) { "Invalid uptime" }
         val voltage = input.voltageMv?.takeUnless { it == 0 || it == Int.MIN_VALUE }
@@ -69,6 +69,8 @@ object HistoryPolicy {
             sessionId = identity(input.sessionId), observationId = identity(input.observationId),
             currentNowUa = current(input.currentNowUa), currentAverageUa = current(input.currentAverageUa),
             chargeCounterUah = charge(input.chargeCounterUah), voltageMv = voltage, temperatureDeciC = temperature,
+            status = input.status.takeIf { it in 1..5 } ?: BatteryManager.BATTERY_STATUS_UNKNOWN,
+            plugged = input.plugged?.takeIf { it in 0..15 },
             health = input.health?.takeIf { it in 1..7 },
             etaBasis = text(input.etaBasis), boundaryReason = text(input.boundaryReason))
         val digest = MessageDigest.getInstance("SHA-256").digest(canonicalJson.encodeToString(BatterySample.serializer(), normalized).toByteArray())
