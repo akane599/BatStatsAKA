@@ -2,6 +2,8 @@ package com.akane.voltwise.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
@@ -12,11 +14,13 @@ import kotlinx.coroutines.flow.catch
 import java.io.File
 import java.io.IOException
 
+internal val SETTINGS_RECOVERED = booleanPreferencesKey("__settings_recovered__")
+
 internal fun createSettingsDataStore(
     file: File,
     scope: CoroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob()),
 ): DataStore<Preferences> = PreferenceDataStoreFactory.create(
-    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+    corruptionHandler = ReplaceFileCorruptionHandler { mutablePreferencesOf(SETTINGS_RECOVERED to true) },
     scope = scope,
     produceFile = { file },
 )

@@ -107,7 +107,7 @@ class SettingsMigrationsTest {
         val store = store()
         assertTrue(migrate(store) is MigrationResult.Success)
         assertEquals(AppSettings(), SettingsRepository(store, AppSettingsSchema).flow.first())
-        assertEquals(setOf(SettingsMigrations.VERSION_KEY), storedKeys(store))
+        assertEquals(setOf(SettingsMigrations.VERSION_KEY, "data_retention_index"), storedKeys(store))
     }
 
     @Test fun exportUpgradeAppliesTheSameRules() {

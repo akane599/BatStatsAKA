@@ -2,6 +2,7 @@ package com.akane.voltwise.di
 
 import android.content.Context
 import android.os.Build
+import android.provider.Settings
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStoreFile
@@ -152,7 +153,13 @@ val appModule = module {
     }
 
     single { HistoryMaintenance() }
-    single { HistoryRetention(get(), get<SettingsRepository<AppSettings>>().flow) }
+    single {
+        val context = androidContext()
+        val preferences = context.getSharedPreferences(SamplerState.PREFS_NAME, Context.MODE_PRIVATE)
+        HistoryRetention(get(), get(named(RAW_SETTINGS_DATASTORE)), SamplerState(SharedPreferencesStore(preferences))) {
+            Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
+        }
+    }
     single { ExportImportManager(androidContext(), get(), get()) }
     // One sampler thread per process; screens, the tile and details hold it as SamplingDemand.
     single { SamplingController(androidContext(), get()) } bind SamplingDemand::class

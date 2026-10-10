@@ -65,6 +65,10 @@ object SettingsMigrations {
             if (prefs[booleanPreferencesKey(AUTO_CLEANUP_KEY)] == false) {
                 prefs[intPreferencesKey(RETENTION_KEY)] = RETENTION_FOREVER_INDEX
             }
+            // Explicitly authorize the default for fresh/legacy stores, never for corruption recovery.
+            if (prefs[intPreferencesKey(RETENTION_KEY)] == null && prefs[SETTINGS_RECOVERED] != true) {
+                prefs[intPreferencesKey(RETENTION_KEY)] = AppSettings().dataRetentionIndex
+            }
             // Keys compare by name, whatever type a key was stored with.
             prefs.asMap().keys.filter { it.name in V3_REMOVED_KEYS }.forEach { prefs.remove(it) }
         }
