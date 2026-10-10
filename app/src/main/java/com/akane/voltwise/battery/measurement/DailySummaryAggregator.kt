@@ -41,6 +41,7 @@ object DailySummaryAggregator {
      * The interval ObservationEngine accounted between two summaries: [before] as it stood at the
      * previous persisted sample, [after] including this one (its `latest` is the end reading).
      * Gaps, restarts and resets add nothing. Null when [after] has no observation.
+     * The wall span is capped by elapsed time so a forward clock jump cannot invent skipped days.
      *
      * The whole CPU-suspend delta is attributed to discharge when any discharging time was added.
      * That is exact only because PersistPolicy persists every status/plugged change, so each
@@ -48,11 +49,15 @@ object DailySummaryAggregator {
      */
     fun interval(before: ObservationSummary, after: ObservationSummary, endTemperatureDeciC: Int?): DayInterval? {
         val end = after.latest ?: return null
+        val startWallMs = before.latest?.let { start ->
+            val elapsedMs = (end.elapsedMs - start.elapsedMs).coerceAtLeast(0)
+            maxOf(start.wallMs, end.wallMs - elapsedMs)
+        } ?: end.wallMs
         fun grew(now: Long, then: Long) = (now - then).coerceAtLeast(0)
         val dischargeMs = grew(after.discharge.durationMs, before.discharge.durationMs)
         val observed = grew(after.observedMs, before.observedMs) > 0
         return DayInterval(
-            startWallMs = before.latest?.wallMs ?: end.wallMs,
+            startWallMs = startWallMs,
             endWallMs = end.wallMs,
             screenOnMs = grew(after.screenOn.durationMs, before.screenOn.durationMs),
             screenOffMs = grew(after.screenOff.durationMs, before.screenOff.durationMs),

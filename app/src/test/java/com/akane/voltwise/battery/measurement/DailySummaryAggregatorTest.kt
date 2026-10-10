@@ -173,6 +173,66 @@ class DailySummaryAggregatorTest {
         assertEquals(0L, second.screenOffSuspendMs)
     }
 
+    @Test fun forwardWallClockJumpTouchesOnlyRealDays() {
+        val start = at("2026-06-10T12:00+02:00")
+        val end = start + 30 * 86_400_000L
+        val engine = ObservationEngine()
+        val before = engine.accept(Observation(start, 1_000, 1_000, 70, null, null, null,
+            PowerState.DISCHARGING, true, false, "one"))
+        val observed = engine.accept(before.latest!!.copy(wallMs = start + 20_000,
+            elapsedMs = 21_000, uptimeMs = 21_000))
+        val after = engine.accept(observed.latest!!.copy(wallMs = end,
+            elapsedMs = 26_000, uptimeMs = 26_000))
+        assertEquals(1, after.gaps)
+        assertEquals("Wall clock changed; new interval baseline", after.lastIssue)
+        assertEquals(20_000L, after.screenOn.durationMs)
+
+        val interval = DailySummaryAggregator.interval(before, after, null)!!
+        val rows = apply(interval)
+        val realDays = setOf(DailySummaryAggregator.epochDay(start, berlin),
+            DailySummaryAggregator.epochDay(end, berlin))
+        assertTrue("A clock jump must not create rows for skipped days: ${rows.keys}",
+            rows.keys.all { it in realDays })
+        assertEquals(20_000L, rows.values.sumOf { it.screenOnMs })
+        assertTrue(DailySummaryAggregator.days(interval, berlin).all { it in realDays })
+    }
+
+    @Test fun normalMultiDayElapsedIntervalStillTouchesEveryObservedDay() {
+        val start = at("2026-06-10T12:00+02:00")
+        val duration = 3 * 86_400_000L
+        val engine = ObservationEngine()
+        val before = engine.accept(Observation(start, 1_000, 1_000, 70, null, null, null,
+            PowerState.DISCHARGING, true, false, "one", expectedIntervalMs = duration))
+        val after = engine.accept(before.latest!!.copy(wallMs = start + duration,
+            elapsedMs = 1_000 + duration, uptimeMs = 1_000 + duration))
+        assertEquals(0, after.gaps)
+        val interval = DailySummaryAggregator.interval(before, after, null)!!
+        assertEquals(start, interval.startWallMs)
+        assertEquals(day("2026-06-10")..day("2026-06-13"), DailySummaryAggregator.days(interval, berlin))
+        val rows = apply(interval)
+        assertEquals((day("2026-06-10")..day("2026-06-13")).toSet(), rows.keys)
+        assertEquals(listOf(43_200_000L, 86_400_000L, 86_400_000L, 43_200_000L),
+            rows.values.map { it.screenOnMs })
+        assertEquals(duration, rows.values.sumOf { it.screenOnMs })
+    }
+
+    @Test fun missingBaselineOrNegativeElapsedTouchesOnlyEndDay() {
+        val end = at("2026-07-10T12:00+02:00")
+        val point = Observation(end, 1_000, 1_000, 70, null, null, null,
+            PowerState.DISCHARGING, true, false, "one")
+        val after = ObservationSummary(latest = point, screenOn = ObservedBucket(durationMs = 20_000))
+        val before = ObservationSummary(latest = point.copy(wallMs = end - 30 * 86_400_000L,
+            elapsedMs = 2_000, uptimeMs = 2_000))
+        for (baseline in listOf(ObservationSummary(), before)) {
+            val interval = DailySummaryAggregator.interval(baseline, after, null)!!
+            assertEquals(end, interval.startWallMs)
+            val row = apply(interval).values.single()
+            assertEquals(day("2026-07-10"), row.epochDay)
+            assertEquals(20_000L, row.screenOnMs)
+        }
+        assertNull(DailySummaryAggregator.interval(before, ObservationSummary(), null))
+    }
+
     @Test fun acceptedNonincreasingWallClockKeepsMeasuredTotalsAndLaterAccumulation() {
         val start = at("2026-06-10T00:00:00.500+02:00")
         for ((wallDelta, endDay) in listOf(-1_000L to day("2026-06-09"), 0L to day("2026-06-10"))) {
