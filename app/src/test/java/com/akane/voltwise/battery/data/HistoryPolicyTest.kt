@@ -10,17 +10,85 @@ import com.akane.voltwise.battery.measurement.ObservationEngine
 import com.akane.voltwise.battery.measurement.PowerState
 import org.junit.Assert.*
 import org.junit.Test
+import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
 class HistoryPolicyTest {
-    private fun sample() = BatterySample(timestamp = 1000, levelPercent = 0, status = 3, plugged = 0,
+    private fun sample(status: Int = 3, plugged: Int? = 0) = BatterySample(timestamp = 1000, levelPercent = 0, status = status, plugged = plugged,
         currentNowUa = 0, chargeCounterUah = 0, voltageMv = 4000, temperatureDeciC = 0,
         health = 2, screenOn = true, elapsedMs = 100, uptimeMs = 80, observationId = "observation", sessionId = "session", source = "BatteryManager")
     private fun session() = ChargeSession("session", SessionType.DISCHARGE, 1000, null, 60, 59, 1000, -1000, null,
         observationId = "observation", lastSampleTime = 2000, observedMs = 1000, counterCoveredMs = 1000, screenOnMs = 1000, screenOnUah = 1000)
+
+    private val importClock = Clock.fixed(Instant.parse("2026-10-10T12:00:00Z"), ZoneOffset.UTC)
+    private val importTimeMs = importClock.millis()
+    private val dayMs = 24 * 60 * 60 * 1000L
+
+    @Test fun sampleOneYearAfterImportTimeIsRejected() {
+        val failure = assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.sample(sample().copy(timestamp = importTimeMs + 365 * dayMs), importClock)
+        }
+        assertEquals("Invalid timestamp; exceeds import time allowance", failure.message)
+    }
+
+    @Test fun sampleOneHourAfterImportTimeIsAccepted() {
+        val timestamp = importTimeMs + 60 * 60 * 1000
+        assertEquals(timestamp, HistoryPolicy.sample(sample().copy(timestamp = timestamp), importClock).timestamp)
+    }
+
+    @Test fun sampleImportClockAllowanceIsInclusiveAndUsesTheInjectedClock() {
+        val boundary = sample().copy(timestamp = importTimeMs + dayMs)
+        assertEquals(boundary.timestamp, HistoryPolicy.sample(boundary, importClock).timestamp)
+        assertThrows(IllegalArgumentException::class.java) {
+            HistoryPolicy.sample(boundary.copy(timestamp = boundary.timestamp + 1), importClock)
+        }
+        val tomorrow = Clock.offset(importClock, java.time.Duration.ofDays(1))
+        assertEquals(boundary.timestamp + 1,
+            HistoryPolicy.sample(boundary.copy(timestamp = boundary.timestamp + 1), tomorrow).timestamp)
+    }
+
+    @Test fun absoluteTimestampBoundsStillApplyWithAnInjectedClock() {
+        for (timestamp in listOf(-1L, 253402300800000L, Long.MAX_VALUE)) {
+            val failure = assertThrows(IllegalArgumentException::class.java) {
+                HistoryPolicy.sample(sample().copy(timestamp = timestamp), importClock)
+            }
+            assertEquals("Invalid timestamp; expected Unix milliseconds", failure.message)
+        }
+    }
+
+    @Test fun everySessionTimestampRejectsExcessiveImportClockSkew() {
+        val boundary = importTimeMs + dayMs
+        val future = boundary + 1
+        val rows = listOf(
+            session().copy(startTime = future, endTime = future + 1000, lastSampleTime = future + 1000),
+            session().copy(startTime = importTimeMs, endTime = future, lastSampleTime = importTimeMs + 1000),
+            // Only the last sample is outside the allowance, even though session normalization would clamp it.
+            session().copy(startTime = boundary - 1000, endTime = boundary, lastSampleTime = future),
+            session().copy(startTime = importTimeMs, endTime = null, lastSampleTime = future),
+        )
+        for (row in rows) {
+            val failure = assertThrows(IllegalArgumentException::class.java) {
+                HistoryPolicy.session(row, clock = importClock)
+            }
+            assertEquals("Invalid timestamp; exceeds import time allowance", failure.message)
+        }
+    }
+
+    @Test fun closedAndActiveSessionsAcceptOneHourSkewAndTheOneDayBoundary() {
+        for (end in listOf(importTimeMs + 60 * 60 * 1000, importTimeMs + dayMs)) {
+            val row = session().copy(startTime = end - 1000, endTime = end, lastSampleTime = end)
+            val closed = HistoryPolicy.session(row, clock = importClock)
+            val active = HistoryPolicy.session(row.copy(endTime = null), clock = importClock)
+            assertEquals(end - 1000, closed.startTime)
+            assertEquals(end, closed.endTime)
+            assertEquals(end, closed.lastSampleTime)
+            assertEquals(end, active.endTime)
+            assertEquals(end, active.lastSampleTime)
+        }
+    }
 
     @Test fun sampleIdentitySurvivesRepeatedImportsAndLocalRowIds() {
         val original = sample()
@@ -49,6 +117,33 @@ class HistoryPolicyTest {
         }
         for (health in (1..7).toList() + null) {
             assertEquals(health, HistoryPolicy.sample(sample().copy(health = health)).health)
+        }
+    }
+    @Test fun legacyZeroSampleStatusBecomesUnknown() {
+        val result = runCatching { HistoryPolicy.sample(sample(status = 0)) }
+        assertTrue("Legacy status 0 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(status = 1)), result.getOrThrow())
+        assertTrue(HistoryPolicy.sameSample(sample(status = 0), sample(status = 1)))
+    }
+    @Test fun outOfRangeSampleStatusBecomesUnknown() {
+        val result = runCatching { HistoryPolicy.sample(sample(status = 6)) }
+        assertTrue("Status 6 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(status = 1)), result.getOrThrow())
+    }
+    @Test fun outOfRangeSamplePluggedBecomesMissing() {
+        val result = runCatching { HistoryPolicy.sample(sample(plugged = 16)) }
+        assertTrue("Plugged 16 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(plugged = null)), result.getOrThrow())
+        assertTrue(HistoryPolicy.sameSample(sample(plugged = 16), sample(plugged = null)))
+    }
+    @Test fun validSamplePowerStateSurvivesImport() {
+        for (status in 1..5) {
+            for (plugged in (0..15).toList() + null) {
+                val imported = HistoryPolicy.sample(sample(status = status, plugged = plugged))
+                assertEquals(status, imported.status)
+                assertEquals(plugged, imported.plugged)
+                assertEquals(imported, HistoryPolicy.sample(imported))
+            }
         }
     }
     @Test fun invalidUnitsTimesAndTextAreRejected() {
