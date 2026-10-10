@@ -1,12 +1,16 @@
 package com.akane.voltwise.viewmodel
 
 import androidx.compose.runtime.Immutable
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.akane.voltwise.battery.data.CalibrationStore
 import com.akane.voltwise.battery.measurement.CalibrationState
 import com.akane.voltwise.settings.AppSettings
 import com.akane.voltwise.settings.AppSettingsSchema
+import com.akane.voltwise.settings.SETTINGS_RECOVERED
 import com.akane.voltwise.settings.SettingsWrites
 import io.github.mlmgames.settings.core.SettingMeta
 import io.github.mlmgames.settings.core.SettingsRepository
@@ -17,6 +21,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -24,15 +30,34 @@ import kotlinx.coroutines.launch
 interface SettingsStore {
     val settings: Flow<AppSettings>
 
+    /**
+     * True while no history retention has been chosen since settings recovered from corruption: [settings] then
+     * decodes the default period, but age cleanup stays paused (HistoryRetention) until a period is picked.
+     */
+    val retentionUnset: Flow<Boolean>
+
     /** Writes one [AppSettingsSchema] field by name; throws when storage fails. */
     suspend fun set(fieldName: String, value: Any)
 }
 
-/** [SettingsStore] over the app's kmp-settings repository. */
-class KmpSettingsStore(private val repository: SettingsRepository<AppSettings>) : SettingsStore {
+/**
+ * [SettingsStore] over the app's settings DataStore: kmp-settings for the typed values, the raw keys for
+ * [retentionUnset] (as HistoryRetention reads them). The store is the one source of truth; this
+ * [SettingsRepository] over it only differs from the app's in change listeners, which the app does not use.
+ */
+class KmpSettingsStore(private val dataStore: DataStore<Preferences>) : SettingsStore {
+    private val repository = SettingsRepository(dataStore, AppSettingsSchema)
+
     override val settings: Flow<AppSettings> get() = repository.flow
 
+    override val retentionUnset: Flow<Boolean> =
+        dataStore.data.map { it[RETENTION_INDEX] == null && it[SETTINGS_RECOVERED] == true }.distinctUntilChanged()
+
     override suspend fun set(fieldName: String, value: Any) = repository.set(fieldName, value)
+
+    private companion object {
+        val RETENTION_INDEX = intPreferencesKey("data_retention_index")
+    }
 }
 
 private fun schemaMeta(field: String): SettingMeta =
@@ -147,6 +172,8 @@ data class SettingsUiState(
     val calibration: CalibrationState = CalibrationState(),
     val error: SettingsError? = null,
     val notificationsEnabled: Boolean = true,
+    /** [SettingsStore.retentionUnset]: the retention row shows "not set" instead of the decoded default. */
+    val retentionUnset: Boolean = false,
 )
 
 sealed interface SettingsEvent {
@@ -188,7 +215,7 @@ class SettingsViewModel(
     private val notificationsEnabled = MutableStateFlow(true)
 
     val state: StateFlow<SettingsUiState> =
-        combine(store.settings, calibration.state, error, notificationsEnabled, ::SettingsUiState)
+        combine(store.settings, calibration.state, error, notificationsEnabled, store.retentionUnset, ::SettingsUiState)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
     fun onEvent(event: SettingsEvent) {
