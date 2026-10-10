@@ -62,7 +62,8 @@ class SettingsDataStoreTest {
         val restartedMigrator = SettingsMigrator(reopened)
         restartedMigrator.run()
         assertNull("Retention remains paused after unrelated setting writes and restart",
-            com.akane.voltwise.battery.data.HistoryRetention(restartedMigrator, reopened)
+            com.akane.voltwise.battery.data.HistoryRetention(restartedMigrator, reopened,
+                com.akane.voltwise.battery.data.sampling.SamplerState(com.akane.voltwise.battery.data.sampling.FakeKeyValueStore())) { 1 }
                 .cutoff(1_790_000_000_000L, previousWallMs = 1_790_000_000_000L))
         assertEquals(SettingsMigrations.CURRENT_VERSION, reopened.data.first()[intPreferencesKey(SettingsMigrations.VERSION_KEY)])
     }

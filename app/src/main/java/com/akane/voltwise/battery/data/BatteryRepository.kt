@@ -539,7 +539,7 @@ class BatteryRepository(
     private suspend fun cleanup(point: Observation) {
         // Waits for the settings migration (v2 "auto-cleanup off" becomes Forever); throws if it failed.
         val purgeFailure = try {
-            retention.cutoff(point.wallMs, point.elapsedMs, point.generation, retentionReferenceWallMs)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
+            retention.cutoff(point.wallMs, point.elapsedMs, retentionReferenceWallMs)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
             null
         } catch (e: CancellationException) {
             throw e

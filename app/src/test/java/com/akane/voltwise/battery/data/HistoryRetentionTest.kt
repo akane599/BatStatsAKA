@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
+import com.akane.voltwise.battery.data.sampling.SamplerState
 import com.akane.voltwise.settings.AppSettingsSchema
 import com.akane.voltwise.settings.SettingsMigrations
 import com.akane.voltwise.settings.SettingsMigrator
@@ -37,6 +39,12 @@ class HistoryRetentionTest {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     @After fun close() = scope.cancel()
 
+    private val localState = FakeKeyValueStore()
+    private var bootCount = 1
+
+    private fun retention(migrator: SettingsMigrator, store: DataStore<Preferences>, state: FakeKeyValueStore = localState) =
+        HistoryRetention(migrator, store, SamplerState(state)) { bootCount }
+
     private val now = 1_790_000_000_000L
 
     private fun store(): DataStore<Preferences> =
@@ -53,7 +61,7 @@ class HistoryRetentionTest {
         seedV2(store, autoCleanup = false)
         val settings = SettingsRepository(store, AppSettingsSchema)
         val migrator = SettingsMigrator(store)
-        val retention = HistoryRetention(migrator, store)
+        val retention = retention(migrator, store)
 
         val cutoff = async { retention.cutoff(now, previousWallMs = now) }
         delay(300)
@@ -69,7 +77,7 @@ class HistoryRetentionTest {
         val store = store()
         seedV2(store, autoCleanup = true)
         val migrator = SettingsMigrator(store)
-        val retention = HistoryRetention(migrator, store)
+        val retention = retention(migrator, store)
 
         val cutoff = async { retention.cutoff(now, previousWallMs = now) }
         delay(100)
@@ -83,9 +91,9 @@ class HistoryRetentionTest {
         store.edit { it[intPreferencesKey("data_retention_index")] = 2 }
         val migrator = SettingsMigrator(store)
         migrator.run()
-        val retention = HistoryRetention(migrator, store)
+        val retention = retention(migrator, store)
         val future = now + 365 * 86_400_000L
-        val cutoff = retention.cutoff(future, 1_000, "run-1", now)
+        val cutoff = retention.cutoff(future, 1_000, now)
         assertEquals("A future wall clock must not advance the purge cutoff", now - 90 * 86_400_000L, cutoff)
         assertTrue("Recent persisted history must survive the jump", now - 30 * 86_400_000L >= cutoff!!)
         scope.coroutineContext[kotlinx.coroutines.Job]?.cancelAndJoin()
@@ -94,9 +102,9 @@ class HistoryRetentionTest {
             val reopened = com.akane.voltwise.settings.createSettingsDataStore(File(folder.root, "settings.preferences_pb"), reopenedScope)
             val restartedMigrator = SettingsMigrator(reopened)
             restartedMigrator.run()
-            val restarted = HistoryRetention(restartedMigrator, reopened)
-            assertEquals("The future sample must not become a trusted reference after reopening the file", cutoff,
-                restarted.cutoff(future, 2_000, "run-2", future))
+            val restarted = retention(restartedMigrator, reopened)
+            assertEquals("The future sample must not become a trusted reference after reopening the file", cutoff!! + 1_000,
+                restarted.cutoff(future, 2_000, future))
         } finally {
             reopenedScope.coroutineContext[kotlinx.coroutines.Job]?.cancelAndJoin()
         }
@@ -106,29 +114,102 @@ class HistoryRetentionTest {
         val store = store()
         val migrator = SettingsMigrator(store)
         migrator.run()
-        val retention = HistoryRetention(migrator, store)
-        val initial = retention.cutoff(now, 1_000, "run", now)!!
-        assertEquals(initial + 30_000, retention.cutoff(now + 365 * 86_400_000L, 31_000, "run"))
-        assertEquals(initial + 60_000, retention.cutoff(now + 60_000, 61_000, "run"))
-        assertEquals(initial - 30_000, retention.cutoff(now - 30_000, 91_000, "run"))
-        assertEquals("A monotonic reset cannot advance the durable clock", initial - 30_000,
-            retention.cutoff(now + 365 * 86_400_000L, 0, "run"))
+        val retention = retention(migrator, store)
+        val initial = retention.cutoff(now, 1_000, now)!!
+        assertEquals(initial + 30_000, retention.cutoff(now + 365 * 86_400_000L, 31_000))
+        assertEquals(initial + 60_000, retention.cutoff(now + 60_000, 61_000))
+        assertEquals(initial + 60_000, retention.cutoff(now - 30_000, 91_000))
+        assertEquals("A monotonic reset cannot advance the durable clock", initial + 60_000,
+            retention.cutoff(now + 365 * 86_400_000L, 0))
     }
 
-    @Test fun noReferencePausesFirstPurgeAndMissingOrInvalidStoredChoiceStaysPaused() = runBlocking {
+    @Test fun noReferencePausesFirstPurgeAndInvalidStoredChoiceStaysPaused() = runBlocking {
         val store = store()
         val migrator = SettingsMigrator(store)
         migrator.run()
-        val retention = HistoryRetention(migrator, store)
-        assertNull("No history reference means no first purge", retention.cutoff(now, 1_000, "run"))
-        assertEquals(now + 30_000 - 90 * 86_400_000L, retention.cutoff(now + 30_000, 31_000, "run"))
+        val retention = retention(migrator, store)
+        assertNull("No history reference means no first purge", retention.cutoff(now, 1_000))
+        assertEquals(now + 30_000 - 90 * 86_400_000L, retention.cutoff(now + 30_000, 31_000))
         store.edit { it.remove(intPreferencesKey("data_retention_index")) }
-        assertNull(retention.cutoff(now + 60_000, 61_000, "run"))
+        assertEquals(now + 60_000 - 90 * 86_400_000L, retention.cutoff(now + 60_000, 61_000))
         store.edit { it[intPreferencesKey("data_retention_index")] = 99 }
-        assertNull(retention.cutoff(now + 90_000, 91_000, "run"))
+        assertNull(retention.cutoff(now + 90_000, 91_000))
         store.edit { it[intPreferencesKey("data_retention_index")] = 2 }
         assertEquals("An explicit choice resumes age maintenance", now + 120_000 - 90 * 86_400_000L,
-            retention.cutoff(now + 120_000, 121_000, "run"))
+            retention.cutoff(now + 120_000, 121_000))
+    }
+
+    @Test fun v3MissingRetentionStillUsesNinetyDays() = runBlocking {
+        val store = store()
+        store.edit { it[intPreferencesKey(SettingsMigrations.VERSION_KEY)] = 3 }
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        assertEquals("Existing v3 without a choice must retain the 90-day default", now - 90 * 86_400_000L,
+            retention(migrator, store).cutoff(now, 1_000, now))
+    }
+
+    @Test fun backwardsWallClockNeverLowersWatermark() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val retention = retention(migrator, store)
+        val initial = retention.cutoff(now, 1_000, now)
+        assertEquals("A backwards RTC must not lower the persisted watermark", initial,
+            retention.cutoff(0, 31_000))
+    }
+
+    @Test fun restartWithinSameBootCountsElapsedTime() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val initial = retention(migrator, store).cutoff(now, 1_000, now)!!
+        val restarted = retention(migrator, store)
+        assertEquals("Same-boot restart must retain elapsed time since the last cleanup", initial + 60_000,
+            restarted.cutoff(now + 60_000, 61_000, now))
+    }
+
+    @Test fun rebootDoesNotMistakeLargerUptimeForSameBootElapsedTime() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val initial = retention(migrator, store).cutoff(now, 1_000, now)!!
+        bootCount++
+        val restarted = retention(migrator, store)
+        assertEquals("New boot must not advance by unrelated uptime", initial,
+            restarted.cutoff(now + 365 * 86_400_000L, 61_000))
+        assertEquals("Elapsed time resumes after recording the new boot", initial + 1_000,
+            restarted.cutoff(now + 365 * 86_400_000L, 62_000))
+    }
+
+    @Test fun repeatedShortMonitoringRunsAccumulateSameBootTime() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        val initial = retention(migrator, store).cutoff(now, 1_000, now)!!
+        repeat(10) { index ->
+            val elapsed = (index + 1) * 60_000L
+            assertEquals("Short runs must accumulate rather than reset the retention clock", initial + elapsed,
+                retention(migrator, store).cutoff(now + elapsed, 1_000 + elapsed, now))
+        }
+    }
+
+    @Test fun restoringSettingsWithoutHistoryDoesNotRestoreWatermark() = runBlocking {
+        val store = store()
+        val migrator = SettingsMigrator(store)
+        migrator.run()
+        retention(migrator, store).cutoff(now, 1_000, now)
+        // A backup made by the rejected implementation may still carry this obsolete key.
+        store.edit { it[androidx.datastore.preferences.core.longPreferencesKey("__history_retention_now_ms")] = now }
+        val restored = PreferenceDataStoreFactory.create(scope = scope) { File(folder.root, "restored.preferences_pb") }
+        restored.updateData { store.data.first() }
+        val restoredMigrator = SettingsMigrator(restored)
+        restoredMigrator.run()
+        val retention = retention(restoredMigrator, restored, FakeKeyValueStore())
+        val restoredNow = now + 180 * 86_400_000L
+        assertNull("Settings-only restore must have no history clock reference",
+            retention.cutoff(restoredNow, 1_000))
+        assertEquals("Restored device must seed its own current clock", restoredNow + 1_000 - 90 * 86_400_000L,
+            retention.cutoff(restoredNow + 1_000, 2_000))
     }
 
     @Test fun normalClockWithStoredThreeMonthsExpiresOnlyOlderRows() = runBlocking {
@@ -136,8 +217,8 @@ class HistoryRetentionTest {
         store.edit { it[intPreferencesKey("data_retention_index")] = 2 }
         val migrator = SettingsMigrator(store)
         migrator.run()
-        val retention = HistoryRetention(migrator, store)
-        val cutoff = retention.cutoff(now, 1_000, "run", now)!!
+        val retention = retention(migrator, store)
+        val cutoff = retention.cutoff(now, 1_000, now)!!
         assertEquals(now - 90 * 86_400_000L, cutoff)
         assertTrue("Rows older than three months are eligible for purge", now - 91 * 86_400_000L < cutoff)
         assertTrue("The cutoff boundary remains retained", now - 90 * 86_400_000L >= cutoff)
@@ -149,12 +230,12 @@ class HistoryRetentionTest {
         val corrupt = com.akane.voltwise.settings.createSettingsDataStore(file, scope)
         val migrator = SettingsMigrator(corrupt)
         migrator.run()
-        val retention = HistoryRetention(migrator, corrupt)
+        val retention = retention(migrator, corrupt)
         assertNull("Corruption recovery must not silently impose 90-day retention", retention.cutoff(now, previousWallMs = now))
         val fresh = store()
         val freshMigrator = SettingsMigrator(fresh)
         freshMigrator.run()
-        val defaults = HistoryRetention(freshMigrator, fresh)
+        val defaults = retention(freshMigrator, fresh)
         assertEquals("A genuine fresh store must explicitly retain the 90-day default", now - 90 * 86_400_000L,
             defaults.cutoff(now, previousWallMs = now))
     }
@@ -164,7 +245,7 @@ class HistoryRetentionTest {
         // A store from a newer app version: kmp-settings refuses to downgrade it.
         store.edit { it[intPreferencesKey(SettingsMigrations.VERSION_KEY)] = SettingsMigrations.CURRENT_VERSION + 1 }
         val migrator = SettingsMigrator(store)
-        val retention = HistoryRetention(migrator, store)
+        val retention = retention(migrator, store)
 
         assertTrue(migrator.run() is MigrationResult.DowngradeDetected)
         assertFalse(migrator.awaitMigrated())
