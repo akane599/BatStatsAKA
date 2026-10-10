@@ -17,7 +17,7 @@ import java.time.ZoneId
 import java.time.ZoneOffset
 
 class HistoryPolicyTest {
-    private fun sample() = BatterySample(timestamp = 1000, levelPercent = 0, status = 3, plugged = 0,
+    private fun sample(status: Int = 3, plugged: Int? = 0) = BatterySample(timestamp = 1000, levelPercent = 0, status = status, plugged = plugged,
         currentNowUa = 0, chargeCounterUah = 0, voltageMv = 4000, temperatureDeciC = 0,
         health = 2, screenOn = true, elapsedMs = 100, uptimeMs = 80, observationId = "observation", sessionId = "session", source = "BatteryManager")
     private fun session() = ChargeSession("session", SessionType.DISCHARGE, 1000, null, 60, 59, 1000, -1000, null,
@@ -117,6 +117,33 @@ class HistoryPolicyTest {
         }
         for (health in (1..7).toList() + null) {
             assertEquals(health, HistoryPolicy.sample(sample().copy(health = health)).health)
+        }
+    }
+    @Test fun legacyZeroSampleStatusBecomesUnknown() {
+        val result = runCatching { HistoryPolicy.sample(sample(status = 0)) }
+        assertTrue("Legacy status 0 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(status = 1)), result.getOrThrow())
+        assertTrue(HistoryPolicy.sameSample(sample(status = 0), sample(status = 1)))
+    }
+    @Test fun outOfRangeSampleStatusBecomesUnknown() {
+        val result = runCatching { HistoryPolicy.sample(sample(status = 6)) }
+        assertTrue("Status 6 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(status = 1)), result.getOrThrow())
+    }
+    @Test fun outOfRangeSamplePluggedBecomesMissing() {
+        val result = runCatching { HistoryPolicy.sample(sample(plugged = 16)) }
+        assertTrue("Plugged 16 must not abort import: ${result.exceptionOrNull()?.message}", result.isSuccess)
+        assertEquals(HistoryPolicy.sample(sample(plugged = null)), result.getOrThrow())
+        assertTrue(HistoryPolicy.sameSample(sample(plugged = 16), sample(plugged = null)))
+    }
+    @Test fun validSamplePowerStateSurvivesImport() {
+        for (status in 1..5) {
+            for (plugged in (0..15).toList() + null) {
+                val imported = HistoryPolicy.sample(sample(status = status, plugged = plugged))
+                assertEquals(status, imported.status)
+                assertEquals(plugged, imported.plugged)
+                assertEquals(imported, HistoryPolicy.sample(imported))
+            }
         }
     }
     @Test fun invalidUnitsTimesAndTextAreRejected() {
