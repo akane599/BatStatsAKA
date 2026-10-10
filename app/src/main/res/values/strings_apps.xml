@@ -143,8 +143,8 @@
 
     <string name="apps_details_history_title">Sessions on battery</string>
     <plurals name="apps_details_history_caption">
-        <item quantity="one">Among the top 30 in %1$d of %2$d session</item>
-        <item quantity="other">Among the top 30 in %1$d of %2$d sessions</item>
+        <item quantity="one">Individually recorded in %1$d of %2$d session</item>
+        <item quantity="other">Individually recorded in %1$d of %2$d sessions</item>
     </plurals>
     <string name="apps_details_history_empty">No sessions with per-app data in the last 30 days.</string>
     <string name="apps_details_history_failed">Couldn\'t read the saved sessions.</string>

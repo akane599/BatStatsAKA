@@ -36,7 +36,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** One discharge session with per-app data: this app's mAh in it, or null when it wasn't among the session's top 30. */
+/** One discharge session with per-app data: this app's mAh in it, or null when the app wasn't individually recorded. */
 @Immutable
 data class AppSessionUsage(val sessionId: String, val startMs: Long, val powerMah: Double?)
 
