@@ -131,6 +131,7 @@ class BatteryRepository(
     private var chargeEta = ChargeEta()
     private var savedTapers: Map<Int, Long>? = null // Loaded at the first start, on the writer rather than the caller's thread.
     private var generation: String? = null
+    private var retentionReferenceWallMs: Long? = null
     private var session: ChargeSession? = null
     private var sessionExtremes = SessionExtremes()
     private var needsSessionRecovery = false
@@ -319,6 +320,8 @@ class BatteryRepository(
 
     private suspend fun start(generation: String) {
         this.generation = generation
+        // Freeze the reference before any sample under this generation can be saved.
+        retentionReferenceWallMs = batteryDao.lastSample()?.timestamp
         session = null
         if (savedTapers == null) savedTapers = samplerState.loadTapers().also { chargeEta = ChargeEta(it) }
         resetObservationState()
@@ -440,7 +443,7 @@ class BatteryRepository(
         if (lastCleanupElapsed == Long.MIN_VALUE || samplesSinceCleanup >= HistoryLimits.CLEANUP_SAMPLE_INTERVAL || point.elapsedMs - lastCleanupElapsed >= 86_400_000) {
             lastCleanupElapsed = point.elapsedMs
             samplesSinceCleanup = 0
-            try { cleanup(sample.timestamp); failure(FailureSource.RETENTION) }
+            try { cleanup(point); failure(FailureSource.RETENTION) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 diagnostics.record(DiagnosticCode.HISTORY_WRITE_FAILED)
@@ -533,10 +536,10 @@ class BatteryRepository(
         }
     }
 
-    private suspend fun cleanup(now: Long) {
+    private suspend fun cleanup(point: Observation) {
         // Waits for the settings migration (v2 "auto-cleanup off" becomes Forever); throws if it failed.
         val purgeFailure = try {
-            retention.cutoff(now)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
+            retention.cutoff(point.wallMs, point.elapsedMs, point.generation, retentionReferenceWallMs)?.let { cutoff -> HistoryPolicy.purgeExpired(db, cutoff) }
             null
         } catch (e: CancellationException) {
             throw e

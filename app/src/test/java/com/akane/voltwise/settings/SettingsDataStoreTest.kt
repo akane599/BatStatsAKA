@@ -16,6 +16,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -42,19 +43,27 @@ class SettingsDataStoreTest {
         val recovered = try {
             store.data.first()
         } catch (failure: CorruptionException) {
-            throw AssertionError("Corrupt settings must recover to empty preferences, not fail startup", failure)
+            throw AssertionError("Corrupt settings must recover to marked defaults, not fail startup", failure)
         }
-        assertEquals(emptyPreferences(), recovered)
+        assertTrue("Recovery must be distinguishable from a fresh install", recovered[SETTINGS_RECOVERED] == true)
         val repository = SettingsRepository(store, AppSettingsSchema)
         assertEquals(AppSettings(), repository.flow.first())
         val migrator = SettingsMigrator(store)
         assertTrue(migrator.run() is MigrationResult.Success)
         assertTrue(migrator.awaitMigrated())
+        assertNull("Migration must not invent a retention choice after corruption",
+            store.data.first()[intPreferencesKey("data_retention_index")])
         repository.set("lowBatteryThreshold", 15)
         scope.coroutineContext[Job]?.cancelAndJoin()
 
         val reopened = createSettingsDataStore(file, reopenedScope).withDefaultsOnReadFailure()
         assertEquals(15, SettingsRepository(reopened, AppSettingsSchema).flow.first().lowBatteryThreshold)
+        assertTrue("Recovery marker must survive a process restart", reopened.data.first()[SETTINGS_RECOVERED] == true)
+        val restartedMigrator = SettingsMigrator(reopened)
+        restartedMigrator.run()
+        assertNull("Retention remains paused after unrelated setting writes and restart",
+            com.akane.voltwise.battery.data.HistoryRetention(restartedMigrator, reopened)
+                .cutoff(1_790_000_000_000L, previousWallMs = 1_790_000_000_000L))
         assertEquals(SettingsMigrations.CURRENT_VERSION, reopened.data.first()[intPreferencesKey(SettingsMigrations.VERSION_KEY)])
     }
 

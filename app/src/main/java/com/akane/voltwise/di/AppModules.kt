@@ -152,7 +152,7 @@ val appModule = module {
     }
 
     single { HistoryMaintenance() }
-    single { HistoryRetention(get(), get<SettingsRepository<AppSettings>>().flow) }
+    single { HistoryRetention(get(), get(named(RAW_SETTINGS_DATASTORE))) }
     single { ExportImportManager(androidContext(), get(), get()) }
     // One sampler thread per process; screens, the tile and details hold it as SamplingDemand.
     single { SamplingController(androidContext(), get()) } bind SamplingDemand::class
