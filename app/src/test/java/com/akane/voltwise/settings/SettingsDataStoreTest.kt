@@ -1,6 +1,10 @@
 package com.akane.voltwise.settings
 
 import androidx.datastore.core.CorruptionException
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.mutablePreferencesOf
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import io.github.mlmgames.settings.core.SettingsRepository
@@ -10,11 +14,16 @@ import io.github.mlmgames.settings.core.managers.MigrationResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertEquals
@@ -79,6 +88,26 @@ class SettingsDataStoreTest {
         assertEquals(emptyPreferences(), recovered)
         assertEquals(AppSettings(), SettingsRepository(store, AppSettingsSchema).flow.first())
         assertTrue("Read fallback must not replace the unreadable path", file.isDirectory)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun transientReadIOExceptionEmitsDefaultsThenRecoveredPreferences() = runTest {
+        val recovered = mutablePreferencesOf(booleanPreferencesKey("oled_black") to true)
+        var collections = 0
+        val store = object : DataStore<Preferences> {
+            override val data = flow {
+                collections++
+                if (collections == 1) throw IOException("Transient settings read failure")
+                emit(recovered)
+            }
+
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
+                error("This fake only exercises reads")
+        }.withDefaultsOnReadFailure()
+
+        assertEquals(listOf(emptyPreferences(), recovered), store.data.take(2).toList())
+        assertEquals(2, collections)
+        assertEquals("Retry must back off instead of spinning", 1_000L, testScheduler.currentTime)
     }
 
     @Test fun exportReadIOExceptionReturnsErrorInsteadOfEmptyBackup() = runBlocking {

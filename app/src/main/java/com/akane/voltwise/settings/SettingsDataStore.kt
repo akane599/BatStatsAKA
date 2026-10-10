@@ -10,7 +10,8 @@ import androidx.datastore.preferences.core.Preferences
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.retryWhen
 import java.io.File
 import java.io.IOException
 
@@ -28,8 +29,15 @@ internal fun createSettingsDataStore(
 internal fun DataStore<Preferences>.withDefaultsOnReadFailure(): DataStore<Preferences> {
     val store = this
     return object : DataStore<Preferences> by store {
-        override val data = store.data.catch { failure ->
-            if (failure is IOException) emit(emptyPreferences()) else throw failure
+        override val data = store.data.retryWhen { failure, _ ->
+            if (failure is IOException) {
+                emit(emptyPreferences())
+                // Keep lifetime collectors alive without spinning on an unreadable store.
+                delay(1_000)
+                true
+            } else {
+                false
+            }
         }
     }
 }
