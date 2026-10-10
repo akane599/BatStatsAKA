@@ -29,6 +29,9 @@ interface BatteryDao {
     @Query("SELECT * FROM battery_samples ORDER BY timestamp DESC LIMIT 1")
     suspend fun lastSample(): BatterySample?
 
+    @Query("SELECT * FROM battery_samples WHERE substr(source, 1, 7) != 'import:' ORDER BY timestamp DESC LIMIT 1")
+    suspend fun lastLocalSample(): BatterySample?
+
     @Query("SELECT * FROM battery_samples WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
     fun samplesBetween(from: Long, to: Long): Flow<List<BatterySample>>
 
