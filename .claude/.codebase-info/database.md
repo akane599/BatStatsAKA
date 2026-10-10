@@ -1,6 +1,6 @@
 # Database
 
-*Last Updated: 2026-10-09*
+*Last Updated: 2026-10-10*
 
 Room database `battery.db`, **version 9**, `exportSchema = true`.
 - Definition and migrations: `app/src/main/java/com/akane/voltwise/battery/data/db/BatteryDatabase.kt`
@@ -57,15 +57,20 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 - JVM: `app/src/test/java/com/akane/voltwise/battery/data/db/EnumConvertersTest.kt`.
 
 ## Other persistence
-- Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`).
+- Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`). A corrupt file is
+  replaced with only the `SETTINGS_RECOVERED` marker (`SettingsDataStore.kt`), which pauses history age cleanup until a retention is chosen again.
 - SharedPreferences: `CalibrationStore.PREFS_NAME` (calibration) and `SamplerState.PREFS_NAME` (sampler
   state), both wrapped in `SharedPreferencesStore` / `KeyValueStore` (`data/sampling/KeyValueStore.kt`).
 - Export/import: `data/ExportImport.kt` (`BatteryExport` format 5 = `HISTORY_FORMAT_VERSION`, carries portable battery measurements and excludes local per-app/capture evidence; formats 1–4 still import) and
   `data/HistoryFiles.kt`. Backup rules: `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml`.
-- Retention: `data/HistoryRetention.kt`, `data/HistoryPolicy.kt`; `boundStorage` trims to
+- Age retention (`data/HistoryRetention.kt`): the cutoff is `minOf(trustedNow, wallNow) - retentionDays`, where the trusted
+  clock (`SamplerState.RetentionClock`: wall, elapsedRealtime, `BOOT_COUNT`) lives in the non-backed-up `sampler_state`
+  prefs, never regresses and advances only by monotonic time, so forward clock jumps, RTC fallbacks and Auto Backup restores
+  can't purge recent rows. An absent retention key means the 90-day default unless `SETTINGS_RECOVERED` is set.
+- Size retention: `data/HistoryPolicy.kt`; `boundStorage` trims to
   `HistoryLimits.SAMPLE_TRIM_TARGET`/`SESSION_TRIM_TARGET` (cap − 200) every `CLEANUP_SAMPLE_INTERVAL` inserts
   (`data/HistoryFiles.kt`), so tables may sit slightly over `MAX_SAMPLES`/`MAX_SESSIONS` between trims; import
   refuses only its own growth past the cap (`importWithinLimit`).
-- Import validation (`HistoryPolicy.kt`): session coverage is clamped to the span within a clock-correction
+- Import validation (`HistoryPolicy.kt`): timestamps may be at most one day in the future; session coverage is clamped to the span within a clock-correction
   allowance (5 s + span/10, capped at 15 min; `normalizeCoverage`, which scales screen-on/off charge with the clamped time, `sampleInSessionWindow`), and
   `planSessionImport` decides ADDED/UPDATED/UNCHANGED/STALE from the raw stored and raw incoming rows.
