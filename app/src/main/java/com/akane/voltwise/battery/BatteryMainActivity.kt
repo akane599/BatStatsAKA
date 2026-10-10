@@ -31,6 +31,10 @@ internal fun mainActivityIntent(context: Context, destination: String? = null): 
             if (destination != null) putExtra(Destinations.EXTRA_DESTINATION, destination)
         }
 
+/** Where the app records that it has asked for POST_NOTIFICATIONS (here on first launch, or from Settings). */
+internal const val NOTIFICATION_PERMISSION_PREFS = "notification_permission"
+internal const val NOTIFICATION_PERMISSION_ASKED = "asked_once"
+
 internal fun shouldRequestNotificationPermission(
     sdkInt: Int,
     granted: Boolean,
@@ -69,17 +73,17 @@ class BatteryMainActivity : ComponentActivity() {
             val granted = ContextCompat.checkSelfPermission(
                 this, Manifest.permission.POST_NOTIFICATIONS
             ) == PackageManager.PERMISSION_GRANTED
-            val permissionPreferences = getSharedPreferences("notification_permission", MODE_PRIVATE)
+            val permissionPreferences = getSharedPreferences(NOTIFICATION_PERMISSION_PREFS, MODE_PRIVATE)
             if (shouldRequestNotificationPermission(
                     sdkInt = Build.VERSION.SDK_INT,
                     granted = granted,
                     restored = savedInstanceState != null,
-                    askedBefore = permissionPreferences.getBoolean("asked_once", false),
+                    askedBefore = permissionPreferences.getBoolean(NOTIFICATION_PERMISSION_ASKED, false),
                     rationale = shouldShowRequestPermissionRationale(Manifest.permission.POST_NOTIFICATIONS),
                 )
             ) {
                 // Record before launch so recreation while the dialog is open cannot request again.
-                permissionPreferences.edit().putBoolean("asked_once", true).apply()
+                permissionPreferences.edit().putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply()
                 notifPerm.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
