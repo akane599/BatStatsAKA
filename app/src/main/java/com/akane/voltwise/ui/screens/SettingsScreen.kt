@@ -266,7 +266,7 @@ fun SettingsContent(
         AppearancePanel(settings, dynamicColorAvailable, onEvent, Modifier.fillMaxWidth())
     }
     val data: @Composable () -> Unit = {
-        DataPanel(settings, onEvent, onChoose = { choice = it }, Modifier.fillMaxWidth())
+        DataPanel(settings, state.retentionUnset, onEvent, onChoose = { choice = it }, Modifier.fillMaxWidth())
     }
 
     Box(modifier.fillMaxSize()) {
@@ -315,7 +315,8 @@ fun SettingsContent(
         ChoiceDialog(
             title = stringResource(setting.titleRes()),
             options = setting.optionLabels(),
-            selectedIndex = setting.selectedIndex(settings),
+            // An unset retention preselects nothing, so confirming the decoded default is a deliberate pick.
+            selectedIndex = if (setting == SettingsChoice.RETENTION && state.retentionUnset) -1 else setting.selectedIndex(settings),
             onSelect = { index ->
                 choice = null
                 onEvent(SettingsEvent.SetChoice(setting, index))
@@ -556,6 +557,7 @@ private fun AppearancePanel(
 @Composable
 private fun DataPanel(
     settings: AppSettings,
+    retentionUnset: Boolean,
     onEvent: (SettingsEvent) -> Unit,
     onChoose: (SettingsChoice) -> Unit,
     modifier: Modifier = Modifier,
@@ -566,7 +568,12 @@ private fun DataPanel(
         modifier = modifier,
     ) {
         Rows {
-            ChoiceRow(SettingsChoice.RETENTION, settings, onClick = { onChoose(SettingsChoice.RETENTION) })
+            ChoiceRow(
+                SettingsChoice.RETENTION,
+                settings,
+                onClick = { onChoose(SettingsChoice.RETENTION) },
+                unsetSummary = if (retentionUnset) stringResource(R.string.settings_retention_unset) else null,
+            )
             LinkRow(
                 stringResource(R.string.settings_data_link),
                 icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
@@ -663,15 +670,21 @@ private fun SwitchRow(
     }
 }
 
-/** A setting with several options: its current option under the title; opens the picker. */
+/** A setting with several options: its current option (or [unsetSummary] when none is chosen) under the title; opens the picker. */
 @Composable
-private fun ChoiceRow(setting: SettingsChoice, settings: AppSettings, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ChoiceRow(
+    setting: SettingsChoice,
+    settings: AppSettings,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    unsetSummary: String? = null,
+) {
     val options = setting.optionLabels()
     val noValue = stringResource(R.string.component_no_value)
     SettingRow(
         stringResource(setting.titleRes()),
         modifier.clickable(role = Role.Button, onClick = onClick),
-        summary = options.getOrElse(setting.selectedIndex(settings)) { noValue },
+        summary = unsetSummary ?: options.getOrElse(setting.selectedIndex(settings)) { noValue },
     )
 }
 
