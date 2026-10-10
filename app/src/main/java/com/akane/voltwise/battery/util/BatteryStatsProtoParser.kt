@@ -25,8 +25,10 @@ import java.nio.charset.CodingErrorAction
  * AOSP API 28+ current charged aggregate, android/service/batterystats.proto ->
  * android/os/batterystats.proto. Field numbers/types are unchanged through Android 16.
  * Names remain opaque UTF-8 payload: no CSV, line framing, or shell text is interpreted here.
- * Invalid framing makes the whole dump unavailable; invalid measurements reject their record and
- * prevent a partial snapshot from certifying a session. Normal producer zero omissions are valid.
+ * Invalid framing or typed record shapes can make the whole dump unavailable. Invalid numeric metrics
+ * in app or consumed non-waker records prevent app session certification. Rejected numeric device-waker
+ * metrics mark waker completeness separately, without invalidating valid app measurements.
+ * Normal producer zero omissions are valid.
  */
 object BatteryStatsProtoParser {
     private const val MAX_BYTES = 8 * 1024 * 1024

@@ -102,14 +102,28 @@ class NowRecoveryDeviceTest {
                 }
             }
             runBlocking { fixture.refresh() }
-            compose.waitUntil(120_000) { fixture.repository.error.value?.contains("not supplied") == true }
+            // Repository changes precede the ViewModel's Default-dispatcher pipeline and UI collection.
+            // Wait for both the active model's expected state and the displayed controls at each transition.
+            compose.waitUntil(120_000) {
+                val hero = vm.state.value.hero
+                fixture.repository.error.value?.contains("not supplied") == true &&
+                    !hero.hasReading && !hero.monitoring &&
+                    compose.onNodeWithText(context.getString(R.string.now_waiting_reading)).isDisplayed() &&
+                    compose.onNodeWithText(context.getString(R.string.now_start_monitoring)).isDisplayed()
+            }
             compose.onNodeWithText(context.getString(R.string.now_waiting_reading)).assertIsDisplayed()
             compose.onNodeWithText(context.getString(R.string.now_start_monitoring)).assertIsDisplayed()
             DeviceEnvironment.screenshot("now-unavailable-scripted")
 
             fixture.context.missingBattery = false
             runBlocking { fixture.refresh() }
-            compose.waitUntil(120_000) { fixture.repository.error.value == null && fixture.repository.realtimeFlow.value.level == 80 }
+            compose.waitUntil(120_000) {
+                val hero = vm.state.value.hero
+                fixture.repository.error.value == null && fixture.repository.realtimeFlow.value.level == 80 &&
+                    hero.hasReading && hero.level == 80 && !hero.monitoring &&
+                    compose.onNodeWithText("80%").isDisplayed() &&
+                    compose.onNodeWithText(context.getString(R.string.now_start_monitoring)).isDisplayed()
+            }
             compose.onNodeWithText("80%").assertIsDisplayed()
             assertNull(fixture.repository.observation.value.startedAt)
             DeviceEnvironment.screenshot("now-recovered-scripted")
@@ -117,7 +131,11 @@ class NowRecoveryDeviceTest {
             // Drives the fixture's own repository state (never a click), so this never starts the real
             // production BatteryMonitorService/singleton repository the button's MonitoringController targets.
             fixture.repository.startSampling()
-            compose.waitUntil(120_000) { fixture.repository.isMonitoringFlow.value }
+            compose.waitUntil(120_000) {
+                val hero = vm.state.value.hero
+                fixture.repository.isMonitoringFlow.value && hero.hasReading && hero.level == 80 && hero.monitoring &&
+                    compose.onNodeWithText(context.getString(R.string.now_stop_monitoring)).isDisplayed()
+            }
             compose.onNodeWithText(context.getString(R.string.now_stop_monitoring)).assertIsDisplayed()
             DeviceEnvironment.screenshot("now-monitoring-started-scripted")
 
@@ -126,12 +144,23 @@ class NowRecoveryDeviceTest {
             val restarted = viewModel(fixture)
             models.put("scripted-now-restarted", restarted)
             compose.runOnUiThread { current.value = restarted }
+            // The old frame already showed 80% / Stop; only this model's non-default state proves recovery.
+            compose.waitUntil(120_000) {
+                val hero = restarted.state.value.hero
+                hero.hasReading && hero.level == 80 && hero.monitoring &&
+                    compose.onNodeWithText("80%").isDisplayed() &&
+                    compose.onNodeWithText(context.getString(R.string.now_stop_monitoring)).isDisplayed()
+            }
             compose.onNodeWithText("80%").assertIsDisplayed()
             compose.onNodeWithText(context.getString(R.string.now_stop_monitoring)).assertIsDisplayed()
             DeviceEnvironment.screenshot("now-restarted-scripted")
 
             fixture.repository.stopSampling()
-            compose.waitUntil(120_000) { !fixture.repository.isMonitoringFlow.value }
+            compose.waitUntil(120_000) {
+                val hero = restarted.state.value.hero
+                !fixture.repository.isMonitoringFlow.value && hero.hasReading && hero.level == 80 && !hero.monitoring &&
+                    compose.onNodeWithText(context.getString(R.string.now_start_monitoring)).isDisplayed()
+            }
             compose.onNodeWithText(context.getString(R.string.now_start_monitoring)).assertIsDisplayed()
             DeviceEnvironment.screenshot("now-monitoring-stopped-scripted")
         } finally {

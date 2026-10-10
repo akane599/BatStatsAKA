@@ -88,17 +88,20 @@ object DailySummaryAggregator {
         val screenOffUah = apportion(interval.screenOffDischargeUah, weights)
         val charged = apportion(interval.chargedUah, weights)
         val suspend = interval.cpuSuspendMs?.let { apportion(it, weights) }
+        // Accepted elapsed time survives a nonincreasing wall clock in the sole end-day bucket.
+        // A zero-length midnight endpoint beside observed segments still receives no measurement.
+        val observedWeights = if (weights.singleOrNull() == 0L) listOf(1L) else weights
         fun observedShares(value: Long): List<Long> {
-            val shares = apportion(value, weights.filter { it > 0 }).iterator()
-            return weights.map { if (it > 0) shares.next() else 0L }
+            val shares = apportion(value, observedWeights.filter { it > 0 }).iterator()
+            return observedWeights.map { if (it > 0) shares.next() else 0L }
         }
         val doze = interval.dozeMs?.let(::observedShares)
         val screenOffDoze = interval.screenOffDozeMs?.let(::observedShares)
         val screenOffSuspend = interval.screenOffSuspendMs?.let(::observedShares)
         val endDay = segments.last().first
-        return segments.mapIndexed { i, (day, duration) ->
+        return segments.mapIndexed { i, (day, _) ->
             fun contribute(previous: Long?, shares: List<Long>?): Long? =
-                if (duration > 0 && shares != null) (previous ?: 0L) + shares[i] else previous
+                if (observedWeights[i] > 0 && shares != null) (previous ?: 0L) + shares[i] else previous
             val row = rows[day] ?: DailySummary(epochDay = day, screenOnCoveredMs = 0, screenOffCoveredMs = 0)
             val added = row.copy(
                 screenOnMs = row.screenOnMs + screenOn[i],

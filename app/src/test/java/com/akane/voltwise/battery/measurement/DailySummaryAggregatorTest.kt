@@ -173,6 +173,83 @@ class DailySummaryAggregatorTest {
         assertEquals(0L, second.screenOffSuspendMs)
     }
 
+    @Test fun acceptedNonincreasingWallClockKeepsMeasuredTotalsAndLaterAccumulation() {
+        val start = at("2026-06-10T00:00:00.500+02:00")
+        for ((wallDelta, endDay) in listOf(-1_000L to day("2026-06-09"), 0L to day("2026-06-10"))) {
+            val engine = ObservationEngine()
+            val before = engine.accept(Observation(start, 0, 0, 70, null, null, null,
+                PowerState.DISCHARGING, false, true, "one"))
+            val after = engine.accept(before.latest!!.copy(wallMs = start + wallDelta,
+                elapsedMs = 2_000, uptimeMs = 1_000, dozing = false, boundary = Boundary.DOZE))
+            val lastState = PersistPolicy.State(0, 3, 0, 70, "one")
+            assertEquals(PersistReason.DOZE, PersistPolicy.decide(lastState,
+                lastState.copy(elapsedMs = 2_000), Boundary.DOZE, screenOn = false, poll = false))
+            assertEquals(0, after.gaps)
+            val interval = DailySummaryAggregator.interval(before, after, null)!!
+            assertEquals(2_000L, interval.screenOffMs)
+            assertEquals(2_000L, interval.dozeMs)
+            assertEquals(2_000L, interval.screenOffDozeMs)
+            assertEquals(1_000L, interval.screenOffSuspendMs)
+            assertEquals(endDay..endDay, DailySummaryAggregator.days(interval, berlin))
+
+            val first = apply(interval).values.single()
+            assertEquals(endDay, first.epochDay)
+            assertEquals(2_000L, first.screenOffMs)
+            assertEquals(1_000L, first.cpuSuspendMs)
+            assertEquals(2_000L, first.dozeMs)
+            assertEquals(2_000L, first.screenOffDozeMs)
+            assertEquals(1_000L, first.screenOffSuspendMs)
+
+            val later = engine.accept(after.latest!!.copy(wallMs = start + wallDelta + 2_000,
+                elapsedMs = 4_000, uptimeMs = 2_000, boundary = Boundary.SAMPLE))
+            val next = apply(DailySummaryAggregator.interval(after, later, null)!!,
+                mapOf(endDay to first)).values
+            assertEquals(4_000L, next.sumOf { it.screenOffMs })
+            assertEquals(2_000L, next.sumOf { it.dozeMs!! })
+            assertEquals(2_000L, next.sumOf { it.screenOffDozeMs!! })
+            assertEquals(2_000L, next.sumOf { it.screenOffSuspendMs!! })
+        }
+    }
+
+    @Test fun acceptedBackwardWallClockAccumulatesKnownTotalsAndPreservesUnknownHistory() {
+        val start = at("2026-06-10T12:00+02:00")
+        val d = day("2026-06-10")
+        val engine = ObservationEngine()
+        val before = engine.accept(Observation(start, 0, 0, 70, null, null, null,
+            PowerState.DISCHARGING, false, true, "one"))
+        val after = engine.accept(before.latest!!.copy(wallMs = start - 1_000,
+            elapsedMs = 2_000, uptimeMs = 1_000, dozing = false, boundary = Boundary.DOZE))
+        val interval = DailySummaryAggregator.interval(before, after, null)!!
+        val known = DailySummary(d, screenOffMs = 10_000, dozeMs = 4_000,
+            screenOffDozeMs = 4_000, screenOffSuspendMs = 3_000)
+        val measured = apply(interval, mapOf(d to known)).getValue(d)
+        assertEquals(12_000L, measured.screenOffMs)
+        assertEquals(6_000L, measured.dozeMs)
+        assertEquals(6_000L, measured.screenOffDozeMs)
+        assertEquals(4_000L, measured.screenOffSuspendMs)
+
+        val unknown = known.copy(screenOffDozeMs = null, screenOffSuspendMs = null)
+        val retained = apply(interval, mapOf(d to unknown)).getValue(d)
+        assertEquals(12_000L, retained.screenOffMs)
+        assertNull(retained.screenOffDozeMs)
+        assertNull(retained.screenOffSuspendMs)
+    }
+
+    @Test fun acceptedCollapsedPluggedIntervalPreservesMeasuredScreenOffZeros() {
+        val start = at("2026-06-10T12:00+02:00")
+        val engine = ObservationEngine()
+        val before = engine.accept(Observation(start, 0, 0, 70, null, null, null,
+            PowerState.PLUGGED, false, true, "one"))
+        val after = engine.accept(before.latest!!.copy(wallMs = start - 1_000,
+            elapsedMs = 2_000, uptimeMs = 1_000, dozing = false, boundary = Boundary.DOZE))
+        val measured = apply(DailySummaryAggregator.interval(before, after, null)!!).values.single()
+        assertEquals(0L, measured.screenOffMs)
+        assertNull(measured.cpuSuspendMs)
+        assertEquals(2_000L, measured.dozeMs)
+        assertEquals(0L, measured.screenOffDozeMs)
+        assertEquals(0L, measured.screenOffSuspendMs)
+    }
+
     @Test fun midnightAndDstSplitNewMetricsWithoutMeasuringEndpointOnlyDays() {
         for ((start, end, shares) in listOf(
             Triple("2026-06-10T23:45+02:00", "2026-06-11T00:15+02:00", listOf(900_000L, 900_000L)),
