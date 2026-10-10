@@ -88,6 +88,22 @@ class SessionSnapshotStoreTest {
         assertTrue(store.saveEnd(id, end, AppUsageDelta.compute(null, end)))
     }
 
+    @Test fun saveBaselineRejectsClosedSession() = runBlocking {
+        sessions.rows["closed"] = session("closed")
+
+        val saved = store.saveBaseline("closed", snapshot(2_000))
+
+        assertFalse("A closed session must reject a late baseline", saved)
+        assertNull(usage.latestSnapshot("closed", AppSnapshotKind.BASELINE))
+    }
+
+    @Test fun saveBaselineAcceptsOpenSession() = runBlocking {
+        sessions.rows["open"] = session("open", open = true)
+
+        assertTrue(store.saveBaseline("open", snapshot(1_200)))
+        assertEquals(1_200L, usage.latestSnapshot("open", AppSnapshotKind.BASELINE)!!.capturedAt)
+    }
+
     @Test fun backwardClockSaveEndRetainsSnapshotAndWritesWakersBeforePruning() = runBlocking {
         repeat(3) { saveEnd("seed$it", 10_000L + it) }
         saveEnd("backward", 500)

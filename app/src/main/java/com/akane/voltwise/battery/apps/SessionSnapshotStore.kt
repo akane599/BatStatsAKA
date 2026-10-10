@@ -29,7 +29,7 @@ interface SessionSnapshotStore {
 
     /**
      * Stores [snapshot] as the session's one BASELINE, then prunes. Skipped (false) when the session already
-     * has one or its row does not exist (orphan pruning would delete it).
+     * has one, is closed, or its row does not exist (orphan pruning would delete it).
      */
     suspend fun saveBaseline(sessionId: String, snapshot: AppUsageSnapshot): Boolean
 
@@ -69,7 +69,9 @@ class RoomSessionSnapshotStore internal constructor(
     }
 
     override suspend fun saveBaseline(sessionId: String, snapshot: AppUsageSnapshot): Boolean = transaction {
-        if (sessions.byId(sessionId) == null || usage.latestSnapshot(sessionId, AppSnapshotKind.BASELINE) != null) {
+        val session = sessions.byId(sessionId) ?: return@transaction false
+        if (session.activeKey != 1 || session.endTime != null ||
+            usage.latestSnapshot(sessionId, AppSnapshotKind.BASELINE) != null) {
             return@transaction false
         }
         insert(sessionId, AppSnapshotKind.BASELINE, snapshot)
