@@ -10,6 +10,7 @@ import com.akane.voltwise.battery.measurement.BatteryReading
 import kotlinx.serialization.json.Json
 import java.nio.ByteBuffer
 import java.security.MessageDigest
+import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 
@@ -27,6 +28,7 @@ internal data class UsageImportPlan(val rows: List<SessionAppUsage>, val updated
 object HistoryPolicy {
     private val canonicalJson = Json { encodeDefaults = true }
     private const val MAX_TIMESTAMP = 253402300799999L // end of year9999, milliseconds since Unix epoch
+    private const val MAX_IMPORT_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000L
     fun originalId(value: String) = value.removePrefix("import:")
     private fun requiredIdentity(value: String): String {
         require(value.isNotBlank() && originalId(value).length <= 240 && value.none { c -> c.isISOControl() }) { "Invalid history identity" }
@@ -36,7 +38,10 @@ object HistoryPolicy {
     private fun source(value: String) = "import:${value.removePrefix("import:").take(128)}"
     private fun requiredText(value: String): String = value.also { require(it.length <= 512 && it.trimStart().firstOrNull() !in listOf('=', '+', '-', '@') && '\u0000' !in it) { "Invalid history text" } }
     private fun text(value: String?): String? = value?.let { requiredText(it) }
-    private fun epoch(value: Long) { require(value in 0..MAX_TIMESTAMP) { "Invalid timestamp; expected Unix milliseconds" } }
+    private fun epoch(value: Long, importTimeMs: Long) {
+        require(value in 0..MAX_TIMESTAMP) { "Invalid timestamp; expected Unix milliseconds" }
+        require(value <= importTimeMs + MAX_IMPORT_CLOCK_SKEW_MS) { "Invalid timestamp; exceeds import time allowance" }
+    }
     private fun charge(value: Long?): Long? {
         if (value == Long.MIN_VALUE || value == Int.MIN_VALUE.toLong()) return null
         return value?.let(BatteryReading::chargeUah).also { require(value == null || it != null) { "Invalid charge counter; expected µAh" } }
@@ -45,8 +50,10 @@ object HistoryPolicy {
         if (value == Long.MIN_VALUE || value == Int.MIN_VALUE.toLong()) return null
         return value?.let(BatteryReading::currentUa).also { require(value == null || it != null) { "Invalid current; expected µA" } }
     }
-    fun sample(input: BatterySample): BatterySample {
-        epoch(input.timestamp)
+    fun sample(input: BatterySample): BatterySample = sample(input, Clock.systemUTC())
+
+    fun sample(input: BatterySample, clock: Clock): BatterySample {
+        epoch(input.timestamp, clock.millis())
         require(input.levelPercent == null || input.levelPercent in 0..100) { "Invalid battery percentage" }
         require(input.status in 1..5 && (input.plugged == null || input.plugged in 0..15)) { "Invalid power state" }
         require(input.elapsedMs == null || input.elapsedMs >= 0) { "Invalid elapsed time" }
@@ -100,9 +107,10 @@ object HistoryPolicy {
             screenOffUah = bucketCharge(input.screenOffUah, input.screenOffCoveredMs ?: input.screenOffMs, screenOffCovered ?: screenOff))
     }
 
-    fun session(input: ChargeSession, formatVersion: Int = HISTORY_FORMAT_VERSION): ChargeSession {
-        epoch(input.startTime)
-        input.endTime?.let(::epoch); input.lastSampleTime?.let(::epoch)
+    fun session(input: ChargeSession, formatVersion: Int = HISTORY_FORMAT_VERSION, clock: Clock = Clock.systemUTC()): ChargeSession {
+        val importTimeMs = clock.millis()
+        epoch(input.startTime, importTimeMs)
+        input.endTime?.let { epoch(it, importTimeMs) }; input.lastSampleTime?.let { epoch(it, importTimeMs) }
         val end = input.endTime ?: input.lastSampleTime ?: input.startTime
         require(end >= input.startTime) { "Session ends before it starts" }
         require(input.startLevel == null || input.startLevel in 0..100) { "Invalid start level" }
