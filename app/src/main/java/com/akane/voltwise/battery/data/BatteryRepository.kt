@@ -30,6 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Persisted Stop identity, also used by the application-owned insights refresh listener. */
 internal const val MONITORING_STOPPED_CLOSE_REASON = "Monitoring stopped"
 
+/** Local history reference frozen at monitoring start, before the generation's first write. */
+internal suspend fun BatteryDao.retentionReferenceWallMs(): Long? = lastLocalSample()?.timestamp
+
 /** Whether the writer's current session can be reset by a user action. */
 internal fun resetApplies(open: ChargeSession?): Boolean = open?.type == SessionType.DISCHARGE
 
@@ -321,7 +324,7 @@ class BatteryRepository(
     private suspend fun start(generation: String) {
         this.generation = generation
         // Freeze the reference before any sample under this generation can be saved.
-        retentionReferenceWallMs = batteryDao.lastSample()?.timestamp
+        retentionReferenceWallMs = batteryDao.retentionReferenceWallMs()
         session = null
         if (savedTapers == null) savedTapers = samplerState.loadTapers().also { chargeEta = ChargeEta(it) }
         resetObservationState()
