@@ -227,6 +227,7 @@ class AppDetailsViewModel(
     private val infoLoaded = MutableStateFlow(false)
     private val history = MutableStateFlow<AppHistoryState>(AppHistoryState.Loading)
     private var historyJob: Job? = null
+    private var started = false
 
     init {
         viewModelScope.launch {
@@ -263,9 +264,16 @@ class AppDetailsViewModel(
         AppDetailsUiState(uid, packageName),
     )
 
-    fun onStart() = loader.start()
+    fun onStart() {
+        if (!started) loadHistory()
+        started = true
+        loader.start()
+    }
 
-    fun onStop() = loader.stop()
+    fun onStop() {
+        started = false
+        loader.stop()
+    }
 
     fun onEvent(event: AppDetailsEvent) {
         when (event) {
@@ -309,7 +317,9 @@ class AppDetailsViewModel(
         /** Details for this identity, or null when its row or application package membership is unavailable. */
         fun details(snapshot: BatteryStatsParser.FullSnapshot, uid: Int, packageName: String): AppUsageDetails? {
             val app = snapshot.apps.firstOrNull { it.uid == uid } ?: return null
-            if (!BatteryStatsParser.isSystemUid(uid) && packageName !in app.packages) return null
+            if (!BatteryStatsParser.isSystemUid(uid) && packageName !in app.packages &&
+                !(app.packages.isEmpty() && packageName == BatteryStatsParser.displayNameFor(uid, emptyList()))
+            ) return null
             val total = snapshot.apps.sumOf { it.powerMah.coerceAtLeast(0.0) }
             val network = snapshot.network.firstOrNull { it.uid == uid }
             return AppUsageDetails(

@@ -224,6 +224,19 @@ class AppDetailsViewModelTest {
         assertEquals(124.0, checkNotNull(state().usage).powerMah, 1e-9)
     }
 
+    @Test fun uidOnlyRowShowsItsUsage() = runTest {
+        val uid = 10_123
+        val packageName = "UID $uid"
+        source.cached.value = dump().copy(apps = listOf(
+            BatteryStatsParser.AppPowerStats(uid, packageName, 18.5, packages = emptyList()),
+        ))
+        val (_, state) = start(uid = uid, packageName = packageName)
+
+        assertEquals(AppLabel.Unknown, state().label)
+        assertNotNull("a UID-only row still has measured usage", state().usage)
+        assertEquals(18.5, checkNotNull(state().usage).powerMah, 1e-9)
+    }
+
     @Test fun unknownPackageMembershipDoesNotFallBackToTheDisplayPackage() = runTest {
         val base = detailedDump()
         source.cached.value = base.copy(apps = base.apps.map { app ->
@@ -293,6 +306,34 @@ class AppDetailsViewModelTest {
         assertEquals(9, history.listedIn)
     }
 
+    @Test fun returningToStartedScreenReloadsHistoryWithoutFlashingOrReadingWhileStillStarted() = runTest {
+        val repository = HistorySource(source)
+        val sessions = listOf(AppSessionUsage("deleted", NOW - DAY, 12.0))
+        repository.answer = { sessions }
+        val (vm, state) = start(repository = repository)
+        vm.onStart()
+        runCurrent()
+        val loaded = AppHistoryState.Loaded(AppHistory(sessions))
+        assertEquals(loaded, state().history)
+        val initialReads = repository.reads
+
+        val updated = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { updated.await() }
+        vm.onStart()
+        runCurrent()
+        assertEquals("no extra history read while still started", initialReads, repository.reads)
+
+        vm.onStop()
+        vm.onStart()
+        runCurrent()
+        assertEquals("keep loaded bars while the return read is pending", loaded, state().history)
+        updated.complete(emptyList())
+        runCurrent()
+
+        assertEquals("deleted sessions disappear on return", AppHistoryState.Loaded(AppHistory(emptyList())), state().history)
+        assertEquals(initialReads + 1, repository.reads)
+    }
+
     @Test fun aFailedHistoryReadIsAFailureNotAnEmptyHistoryAndRetryReadsAgain() = runTest {
         val repository = HistorySource(source)
         repository.answer = { throw IllegalStateException("SELECT * FROM session_app_usage WHERE packageName = 'com.android.chrome'") }
@@ -308,6 +349,30 @@ class AppDetailsViewModelTest {
 
         assertEquals(2, repository.reads)
         assertEquals(AppHistoryState.Loaded(AppHistory(sessions)), state().history)
+    }
+
+    @Test fun returningCancelsPendingHistorySoItsLateResultCannotRestoreDeletedSessions() = runTest {
+        val repository = HistorySource(source)
+        val (vm, state) = start(repository = repository)
+        vm.onStart()
+        runCurrent()
+
+        val older = CompletableDeferred<List<AppSessionUsage>>()
+        repository.answer = { older.await() }
+        vm.onEvent(AppDetailsEvent.Refresh)
+        runCurrent()
+
+        repository.answer = { emptyList() }
+        vm.onStop()
+        vm.onStart()
+        runCurrent()
+        val expected = AppHistoryState.Loaded(AppHistory(emptyList()))
+        assertEquals(expected, state().history)
+
+        older.complete(listOf(AppSessionUsage("deleted", NOW - DAY, 12.0)))
+        runCurrent()
+        assertEquals("a cancelled read cannot restore deleted history after return", expected, state().history)
+        assertTrue(warnings.isEmpty())
     }
 
     @Test fun olderHistorySuccessCannotOverwriteNewerRefreshHistory() = runTest {
@@ -382,7 +447,7 @@ class AppDetailsViewModelTest {
         vm.onEvent(AppDetailsEvent.Refresh)
         runCurrent()
         assertEquals(listOf(false, true), source.calls)
-        assertEquals(2, source.historyCalls.size)
+        assertEquals(3, source.historyCalls.size)
     }
 
     @Test fun permanentShizukuDenialIsDistinctFromOrdinaryDenial() = runTest {
