@@ -52,7 +52,7 @@
     <string name="finding_loading">Bulgu yükleniyor…</string>
 
     <string name="finding_seen_app_drain_anomaly">Bu uygulama, son pil oturumlarında saat başına her zamankinden çok daha fazla pil kullandı.</string>
-    <string name="finding_seen_new_heavy_app">Bu uygulama önceden pek fark edilmiyordu. Son pil oturumunda tüketimin büyük bir kısmını, çoğunlukla arka planda aldı.</string>
+    <string name="finding_seen_new_heavy_app">Bu uygulama önceden pek fark edilmiyordu. Son pil oturumunda tüketimin büyük bir kısmını oluşturdu ve arka planda ön plandakinden daha uzun süre kaldı.</string>
     <string name="finding_seen_background_runaway">Bu uygulama arka planda her zamankinden çok daha uzun süre çalıştı.</string>
     <string name="finding_seen_stuck_wakelock">Bu uygulama arka plandayken telefonu wakelock\'larla her zamankinden çok daha uzun süre uyanık tuttu.</string>
     <string name="finding_seen_wakeup_storm">Bu uygulama saat başına her zamankinden çok daha fazla uyanma alarmı tetikledi.</string>

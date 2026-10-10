@@ -56,7 +56,7 @@
     <string name="finding_loading">Cargando hallazgo…</string>
 
     <string name="finding_seen_app_drain_anomaly">Esta app gastó mucha más batería por hora de lo habitual en las sesiones recientes con batería.</string>
-    <string name="finding_seen_new_heavy_app">Esta app apenas se notaba antes. En la última sesión con batería se llevó gran parte del consumo, sobre todo en segundo plano.</string>
+    <string name="finding_seen_new_heavy_app">Esta app apenas se notaba antes. En la última sesión con batería se llevó gran parte del consumo y pasó más tiempo en segundo plano que en primer plano.</string>
     <string name="finding_seen_background_runaway">Esta app pasó mucho más tiempo en segundo plano de lo habitual.</string>
     <string name="finding_seen_stuck_wakelock">Esta app mantuvo el teléfono despierto con wakelocks mucho más tiempo de lo habitual en segundo plano.</string>
     <string name="finding_seen_wakeup_storm">Esta app disparó muchas más alarmas de activación por hora de lo habitual.</string>

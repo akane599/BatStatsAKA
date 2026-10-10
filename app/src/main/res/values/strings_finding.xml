@@ -60,7 +60,7 @@
 
     <!-- What we saw, per FindingType -->
     <string name="finding_seen_app_drain_anomaly">This app used much more battery per hour than it usually does, across recent sessions on battery.</string>
-    <string name="finding_seen_new_heavy_app">This app was barely noticeable before. In the latest session on battery it took a large share of the drain, mostly in the background.</string>
+    <string name="finding_seen_new_heavy_app">This app was barely noticeable before. In the latest session on battery it took a large share of the drain and spent more time in the background than in the foreground.</string>
     <string name="finding_seen_background_runaway">This app spent far more time running in the background than it usually does.</string>
     <string name="finding_seen_stuck_wakelock">This app held the phone awake with wakelocks much longer than usual while it was in the background.</string>
     <string name="finding_seen_wakeup_storm">This app set off far more wakeup alarms per hour than it usually does.</string>
