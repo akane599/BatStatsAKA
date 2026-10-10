@@ -472,7 +472,11 @@ class AppCounterPipelineTest {
                 collectorScope.runCurrent()
                 sessions[source.id] = sessions.getValue(source.id).copy(endTime = source.endMs, activeKey = null)
                 active.value = null
-            } else assertTrue(store.saveBaseline(source.id, baseline))
+            } else {
+                sessions[source.id] = sessions.getValue(source.id).copy(endTime = null, activeKey = 1)
+                assertTrue(store.saveBaseline(source.id, baseline))
+                sessions[source.id] = sessions.getValue(source.id).copy(endTime = source.endMs, activeKey = null)
+            }
             val end = parsedEnd.toAppUsageSnapshot()
             if (collectorScope == null) {
                 val result = AppUsageDelta.compute(store.baseline(source.id), end)

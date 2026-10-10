@@ -14,7 +14,7 @@ import org.junit.Test
 /** Real parser, mapper, production store, delta and consumers; DAO fakes are not Room validation. */
 class ParserWakerQualityPipelineTest {
     private class Sessions : UnusedSessionDao() {
-        var session = ChargeSession("session", SessionType.DISCHARGE, 1_000_000, 4_600_000,
+        var session = ChargeSession("session", SessionType.DISCHARGE, 1_000_000, null,
             80, 70, null, null, null, appUsageStatus = AppUsageStatus.PENDING)
         override suspend fun byId(id: String) = session.takeIf { it.sessionId == id }
         override suspend fun update(session: ChargeSession): Int {
@@ -91,6 +91,7 @@ class ParserWakerQualityPipelineTest {
         assertEquals(label, AppUsageBasis.DELTA, result.basis)
         assertEquals(2.0, result.rows.single().powerMah, 0.0)
         assertEquals(1_000_000L, result.captureStartMs)
+        sessions.session = sessions.session.copy(endTime = end.capturedAt, activeKey = null)
         assertTrue(store.saveEnd("session", end, result))
         assertEquals(AppUsageStatus.READY, sessions.session.appUsageStatus)
         assertEquals(2.0, usage.appRows.single().powerMah, 0.0)
