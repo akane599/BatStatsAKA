@@ -70,6 +70,27 @@ class NowViewModelTest {
         return vm to { vm.state.value }
     }
 
+    @Test fun lowChargeDrainAndHealthPreferLocalCapacityAndFallBackToImportedOnly() = runTest {
+        monitoring.isMonitoring.value = true
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0).copy(levelPercent = 40, chargeCounterUah = 1_200_000))
+        repo.discharge.value = listOf(drainSession("open", endTime = null))
+        val local = session("local", capacityMah = 5_000, confidence = "MEDIUM")
+        val imported = List(3) { i -> session("import:old-$i", capacityMah = 3_000, confidence = "HIGH") }
+        repo.sessions.value = listOf(local) + imported
+        repo.design.value = DesignCapacityReading.Known(5_000_000, fromSettings = true)
+        val (_, state) = start()
+
+        assertEquals(5_000, state().health?.capacityMah)
+        assertEquals(100.0, state().health!!.healthPercent!!, 1e-9)
+        assertEquals(8.0, state().sinceUnplug!!.screenOn.percentPerHour!!, 1e-9)
+
+        repo.sessions.value = imported
+        runCurrent()
+        assertEquals(3_000, state().health?.capacityMah)
+        assertEquals(60.0, state().health!!.healthPercent!!, 1e-9)
+        assertEquals(400_000 * 100.0 / 3_000_000, state().sinceUnplug!!.screenOn.percentPerHour!!, 1e-9)
+    }
+
     @Test fun insightsDistinguishNotAnalyzedFromAllGoodAndIgnoreInformationalFindings() = runTest {
         repo.insights.value = InsightReport(0, emptyList(), null)
         val (_, state) = start()
