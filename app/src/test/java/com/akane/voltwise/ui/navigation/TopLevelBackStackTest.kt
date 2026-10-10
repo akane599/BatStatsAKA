@@ -346,6 +346,39 @@ class TopLevelBackStackTest {
         assertEquals(0, refusals)
     }
 
+    // Back at Now's root finishes the activity, clearing every entry's ViewModel: a busy entry on another tab must hold
+    // it the same way, by showing that tab and telling its blocker.
+
+    @Test
+    fun `back at Now root is held while another tab has a busy blocker`() {
+        val settings = backStacks.getValue(Routes.Settings)
+        settings.add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData, isBusy = { true }) { refusals++ }
+        subject.select(Routes.Now)
+
+        assertTrue(subject.isLeavingBlocked())
+        val handled = subject.onBack()
+
+        assertTrue(handled)
+        assertEquals(1, refusals)
+        assertEquals(Routes.Settings, subject.selectedTab)
+        assertEquals(listOf(Routes.Settings, Routes.SettingsData), settings.toList())
+    }
+
+    @Test
+    fun `back at Now root still finishes when no blocker is busy`() {
+        backStacks.getValue(Routes.Settings).add(Routes.SettingsData)
+        var refusals = 0
+        subject.blockLeaving(Routes.SettingsData, isBusy = { false }) { refusals++ }
+        subject.select(Routes.Now)
+
+        assertFalse(subject.isLeavingBlocked())
+        assertFalse(subject.onBack())
+        assertEquals(0, refusals)
+        assertEquals(Routes.Now, subject.selectedTab)
+    }
+
     @Test
     fun `a replaced block's unblock does not lift the newer block`() {
         selected = Routes.Settings

@@ -25,7 +25,8 @@ import kotlinx.coroutines.channels.ReceiveChannel
  * - Neither pops a stack holding a busy [blockLeaving] entry: the stack stays as it is and the blocker is told.
  * - [onBack] pops the visible tab's stack. Popping the last entry of a non-[Routes.Now] tab
  *   switches to [Routes.Now] instead of leaving that tab empty. Popping [Routes.Now]'s root
- *   returns `false` so the caller (the system back handler) can finish the activity.
+ *   returns `false` so the caller (the system back handler) can finish the activity, unless another tab holds a busy
+ *   [blockLeaving] entry: finishing would clear that entry too, so its tab is shown instead.
  *
  * Holds no Compose state of its own — [getSelectedTab]/[setSelectedTab] are supplied by the
  * caller — so it can be constructed and exercised with plain JUnit (see `TopLevelBackStackTest`).
@@ -73,8 +74,18 @@ class TopLevelBackStack(
         return atRoot
     }
 
+    /** A busy [blockLeaving] entry above [stack]'s root, which popping that stack to its root would clear. */
+    private fun busyBlocker(stack: NavBackStack<NavKey>): LeaveBlockers.Blocker? =
+        stack.drop(1).firstNotNullOfOrNull { entry -> leaveBlockers.byEntry[entry]?.takeIf { it.isBusy() } }
+
+    /**
+     * `true` while any tab holds a busy [blockLeaving] entry, so Back at [Routes.Now]'s root must not finish the
+     * activity (see [onBack]). Not observable: a caller re-reads it whenever it recomposes.
+     */
+    fun isLeavingBlocked(): Boolean = backStacks.values.any { busyBlocker(it) != null }
+
     private fun popToRoot(stack: NavBackStack<NavKey>): Boolean {
-        val blocker = stack.drop(1).firstNotNullOfOrNull { entry -> leaveBlockers.byEntry[entry]?.takeIf { it.isBusy() } }
+        val blocker = busyBlocker(stack)
         if (blocker != null) {
             blocker.onBlocked()
             return false
@@ -110,7 +121,14 @@ class TopLevelBackStack(
                 setSelectedTab(Routes.Now)
                 true
             }
-            else -> false
+            // Finishing the activity would clear a busy entry's ViewModel and cancel its work: show it instead.
+            else -> {
+                val (tab, blocker) = backStacks.firstNotNullOfOrNull { (tab, stack) -> busyBlocker(stack)?.let { tab to it } }
+                    ?: return false
+                setSelectedTab(tab)
+                blocker.onBlocked()
+                true
+            }
         }
     }
 }
