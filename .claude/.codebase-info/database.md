@@ -66,11 +66,12 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 - Age retention (`data/HistoryRetention.kt`): the cutoff is `minOf(trustedNow, wallNow) - retentionDays`, where the trusted
   clock (`SamplerState.RetentionClock`: wall, elapsedRealtime, `BOOT_COUNT`) lives in the non-backed-up `sampler_state`
   prefs, never regresses and advances only by monotonic time, so forward clock jumps, RTC fallbacks and Auto Backup restores
-  can't purge recent rows. An absent retention key means the 90-day default unless `SETTINGS_RECOVERED` is set.
+  can't purge recent rows. The reference wall time is the newest local sample (`BatteryDao.lastLocalSample`, skipping `import:` sources), so
+  imported rows can't seed or advance it. An absent retention key means the 90-day default unless `SETTINGS_RECOVERED` is set.
 - Size retention: `data/HistoryPolicy.kt`; `boundStorage` trims to
   `HistoryLimits.SAMPLE_TRIM_TARGET`/`SESSION_TRIM_TARGET` (cap − 200) every `CLEANUP_SAMPLE_INTERVAL` inserts
   (`data/HistoryFiles.kt`), so tables may sit slightly over `MAX_SAMPLES`/`MAX_SESSIONS` between trims; import
   refuses only its own growth past the cap (`importWithinLimit`).
-- Import validation (`HistoryPolicy.kt`): timestamps may be at most one day in the future; session coverage is clamped to the span within a clock-correction
+- Import validation (`HistoryPolicy.kt`): timestamps may be at most one day in the future; unknown `status` becomes UNKNOWN and an out-of-range `plugged` becomes null instead of rejecting the file; session coverage is clamped to the span within a clock-correction
   allowance (5 s + span/10, capped at 15 min; `normalizeCoverage`, which scales screen-on/off charge with the clamped time, `sampleInSessionWindow`), and
   `planSessionImport` decides ADDED/UPDATED/UNCHANGED/STALE from the raw stored and raw incoming rows.

@@ -25,7 +25,8 @@ Everything is declared in `app/src/main/AndroidManifest.xml`. Paths below are un
   already on top), `onBack(entry)` (pops only while that entry is on top), `openDestination(value)`, and
   `blockLeaving(entry, isBusy, onBlocked)` leave blockers held in a `LeaveBlockers` ViewModel. DataScreen
   registers through `ViewModel.blockLeavingWhileBusy`, so the block lives as long as `DataViewModel`;
-  `popToRoot`/`openRoot` refuse to drop a blocked entry.
+  `popToRoot`/`openRoot` refuse to drop a blocked entry. At Now's root, `MainScreen` keeps its `BackHandler` on while
+  `isLeavingBlocked()`; `onBack` then selects the busy tab and calls its `onBlocked` instead of letting Back leave the app.
 - `ui/NavGraph.kt`: the `entry<Routes.X>` → screen mapping. Screens get Koin VMs (`koinViewModel`).
   `AppDetails`, `SessionDetails` and `FindingDetails` take parameters; Now's insights card, App details' Findings rows and the Insights tab navigate to `FindingDetails(key)`.
 - `ui/navigation/Destinations.kt`: string values for the `destination` deep-link extra (`now`,
