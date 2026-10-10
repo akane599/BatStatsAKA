@@ -58,7 +58,7 @@ There's no destructive fallback: every version needs an explicit `MIGRATION_a_b`
 
 ## Other persistence
 - Settings: DataStore `batstats_settings` via kmp-settings (`settings/`; schema v3, `SettingsMigrations`). A corrupt file is
-  replaced with only the `SETTINGS_RECOVERED` marker (`SettingsDataStore.kt`), which pauses history age cleanup until a retention is chosen again.
+  replaced with only the `SETTINGS_RECOVERED` marker (`SettingsDataStore.kt`), which pauses history age cleanup until a retention is chosen again; meanwhile Settings shows the retention as "not set" (`KmpSettingsStore.retentionUnset`).
 - SharedPreferences: `CalibrationStore.PREFS_NAME` (calibration) and `SamplerState.PREFS_NAME` (sampler
   state), both wrapped in `SharedPreferencesStore` / `KeyValueStore` (`data/sampling/KeyValueStore.kt`).
 - Export/import: `data/ExportImport.kt` (`BatteryExport` format 5 = `HISTORY_FORMAT_VERSION`, carries portable battery measurements and excludes local per-app/capture evidence; formats 1–4 still import) and
