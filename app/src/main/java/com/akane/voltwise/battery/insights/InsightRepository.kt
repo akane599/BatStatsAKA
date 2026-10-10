@@ -120,8 +120,11 @@ class InsightRepository(
                     } else finding
                     FindingCodec.encode(persisted, old?.firstSeenAt ?: inputs.nowMs, inputs.nowMs, status,
                         old?.feedbackMultiplier ?: 1.0)
-                } + existing.values.filter { it.status == InsightFindingStatus.ACTIVE && it.key !in produced }
-                    .map { it.copy(status = InsightFindingStatus.RESOLVED) }
+                } + existing.values.filter {
+                    it.status == InsightFindingStatus.ACTIVE && it.key !in produced &&
+                        // Unknown membership cannot establish that a whitelist finding has resolved.
+                        (inputs.dozeUserWhitelist != null || it.type != FindingType.DOZE_WHITELISTED_DRAINER.name)
+                }.map { it.copy(status = InsightFindingStatus.RESOLVED) }
                 currentCoroutineContext().ensureActive()
                 // Once rows can commit, their timestamp and publication must finish with them.
                 withContext(NonCancellable) {
