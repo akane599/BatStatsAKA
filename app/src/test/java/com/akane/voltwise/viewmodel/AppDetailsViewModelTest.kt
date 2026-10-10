@@ -3,6 +3,7 @@ package com.akane.voltwise.viewmodel
 import com.akane.voltwise.battery.insights.model.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import com.akane.voltwise.battery.apps.AppInfo
 import com.akane.voltwise.battery.apps.AppLabel
 import com.akane.voltwise.battery.apps.AppStatsResult
 import com.akane.voltwise.battery.util.BatteryStatsParser
@@ -191,6 +192,86 @@ class AppDetailsViewModelTest {
         // A uid-only system row: a system process.
         val (_, system) = start(uid = 1_041, packageName = "System UID 1041")
         assertEquals(AppLabel.SystemProcess, system().label)
+    }
+
+    @Test fun returningAfterUninstallClearsAppLabelAndDisablesAppInfo() = runTest {
+        val (vm, state) = start()
+        vm.onStart()
+        runCurrent()
+        assertEquals(AppLabel.Named("Chrome"), state().label)
+        assertTrue(state().canOpenAppInfo)
+
+        vm.onStop()
+        source.infos[CHROME] = checkNotNull(source.infos[CHROME]).copy(installed = false)
+        vm.onStart()
+        runCurrent()
+
+        assertFalse("an uninstalled package must not offer App info on return", state().canOpenAppInfo)
+        assertEquals("an uninstalled package must lose its installed-app label on return", AppLabel.Unknown, state().label)
+    }
+
+    @Test fun returningWithUnchangedAppInfoKeepsLabelWhileRereadingAndAfterwards() = runTest {
+        var reads = 0
+        var pending: CompletableDeferred<AppInfo>? = null
+        val repository = object : AppDetailsRepository by source {
+            override suspend fun info(packageName: String): AppInfo {
+                reads++
+                return pending?.await() ?: source.info(packageName)
+            }
+        }
+        val (vm, state) = start(repository = repository)
+        vm.onStart()
+        runCurrent()
+        val initialReads = reads
+        val label = AppLabel.Named("Chrome")
+        assertEquals(label, state().label)
+
+        vm.onStart()
+        runCurrent()
+        assertEquals("no extra app-info read while still started", initialReads, reads)
+
+        vm.onStop()
+        val updated = CompletableDeferred<AppInfo>()
+        pending = updated
+        vm.onStart()
+        runCurrent()
+        assertEquals("returning must re-read app info", initialReads + 1, reads)
+        assertEquals("keep the loaded label while the return read is pending", label, state().label)
+        assertTrue(state().canOpenAppInfo)
+
+        updated.complete(checkNotNull(source.infos[CHROME]))
+        runCurrent()
+        assertEquals("an unchanged installed package keeps its label", label, state().label)
+        assertTrue(state().canOpenAppInfo)
+    }
+
+    @Test fun returningCancelsPendingAppInfoSoItsLateResultCannotRestoreAnUninstalledApp() = runTest {
+        var pending: CompletableDeferred<AppInfo>? = null
+        val repository = object : AppDetailsRepository by source {
+            override suspend fun info(packageName: String): AppInfo = pending?.await() ?: source.info(packageName)
+        }
+        val (vm, state) = start(repository = repository)
+        vm.onStart()
+        runCurrent()
+        val installed = checkNotNull(source.infos[CHROME])
+        val older = CompletableDeferred<AppInfo>()
+        pending = older
+        vm.onStop()
+        vm.onStart()
+        runCurrent()
+
+        pending = null
+        source.infos[CHROME] = installed.copy(installed = false)
+        vm.onStop()
+        vm.onStart()
+        runCurrent()
+        assertFalse(state().canOpenAppInfo)
+        assertEquals(AppLabel.Unknown, state().label)
+
+        older.complete(installed)
+        runCurrent()
+        assertFalse("a cancelled read cannot restore App info after uninstall", state().canOpenAppInfo)
+        assertEquals("a cancelled read cannot restore the installed-app label", AppLabel.Unknown, state().label)
     }
 
     @Test fun reusedApplicationUidDoesNotAttributeReplacementPackagesLiveUsageToTheRoute() = runTest {

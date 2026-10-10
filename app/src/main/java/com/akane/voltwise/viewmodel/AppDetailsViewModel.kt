@@ -225,15 +225,13 @@ class AppDetailsViewModel(
     private val loader = StatsLoader(viewModelScope, source)
     private val info = MutableStateFlow<AppInfo?>(null)
     private val infoLoaded = MutableStateFlow(false)
+    private var infoJob: Job? = null
     private val history = MutableStateFlow<AppHistoryState>(AppHistoryState.Loading)
     private var historyJob: Job? = null
     private var started = false
 
     init {
-        viewModelScope.launch {
-            info.value = source.infoOrNull(packageName)
-            infoLoaded.value = true
-        }
+        loadInfo()
         loadHistory()
     }
 
@@ -265,7 +263,10 @@ class AppDetailsViewModel(
     )
 
     fun onStart() {
-        if (!started) loadHistory()
+        if (!started) {
+            loadInfo()
+            loadHistory()
+        }
         started = true
         loader.start()
     }
@@ -285,6 +286,14 @@ class AppDetailsViewModel(
             // Navigation, the App info intent and Shizuku's permission prompt are the screen wrapper's.
             AppDetailsEvent.Back, AppDetailsEvent.OpenAppInfo, AppDetailsEvent.OpenAccessSetup, AppDetailsEvent.AllowShizuku,
             is AppDetailsEvent.OpenFinding -> Unit
+        }
+    }
+
+    private fun loadInfo() {
+        infoJob?.cancel()
+        infoJob = viewModelScope.launch {
+            info.value = source.infoOrNull(packageName)
+            infoLoaded.value = true
         }
     }
 
