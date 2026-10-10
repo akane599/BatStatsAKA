@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.scan
 import kotlinx.coroutines.flow.stateIn
 
@@ -72,7 +73,7 @@ class NowViewModel(
 
     private val live: Flow<Live> = combine(
         source.realtime.scan(EtaHold.Reading()) { previous, reading -> EtaHold.next(previous, reading) },
-        monitoring.isMonitoring,
+        monitoring.isMonitoring.onEach { active -> if (active) startBlocked.value = false },
         startBlocked,
     ) { reading, on, blocked ->
         Live(

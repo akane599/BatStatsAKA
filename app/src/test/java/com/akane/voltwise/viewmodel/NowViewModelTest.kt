@@ -294,6 +294,22 @@ class NowViewModelTest {
         assertEquals(2, monitoring.starts)
     }
 
+    @Test fun externalMonitoringStartClearsStaleStartBlockedNotice() = runTest {
+        repo.realtime.value = BatteryRepository.Realtime(sample(T0))
+        val (vm, state) = start()
+        monitoring.result = MonitoringControl.StartResult.BLOCKED
+
+        vm.onEvent(NowEvent.ToggleMonitoring)
+        runCurrent()
+        assertTrue(state().hero.startBlocked)
+
+        monitoring.isMonitoring.value = true
+        runCurrent()
+        monitoring.isMonitoring.value = false
+        runCurrent()
+        assertFalse("a prior refusal must not return after monitoring stops elsewhere", state().hero.startBlocked)
+    }
+
     @Test fun liveTraceIsSeededFromStoredRowsThenAppendedFromRealtimeTrimmedAndRecalibrated() = runTest {
         repo.calibration.value = CalibrationState(effective = CurrentCalibration(CurrentUnit.MILLIAMPS))
         repo.samples.value = listOf(
