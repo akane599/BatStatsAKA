@@ -31,6 +31,7 @@ class InsightActionRepositoryTest {
     private fun ok(output: String = "") = ShellRunner.Outcome.Success(output, ShellRunner.Mode.ROOT)
     private fun denied() = ShellRunner.Outcome.NoAccess(ShellRunner.Mode.NONE, "sensitive diagnostic")
     private fun failure() = ShellRunner.Outcome.Failure(ShellRunner.Mode.ROOT, "sensitive diagnostic")
+    private fun uncertainFailure() = ShellRunner.Outcome.Failure(ShellRunner.Mode.ROOT, "response lost", ExecutionCertainty.UNKNOWN)
 
     private inner class Inspector : TargetInspector {
         var inspectionFails = false
@@ -225,7 +226,7 @@ class InsightActionRepositoryTest {
             val f = Fixture()
             val system = "system,android,1000"
             val present = "$system\nuser,$pkg,$uid"
-            f.replies.addAll(listOf(ok(present), denied()))
+            f.replies.addAll(listOf(ok(present), uncertainFailure(), failure()))
             assertEquals(ActionResult.Unknown, f.apply(ActionType.REMOVE_DOZE_WHITELIST))
             f.replies += denied()
             f.repo.reconcile()
@@ -268,7 +269,7 @@ class InsightActionRepositoryTest {
     @Test fun reapplyAfterReinstallSettlesStaleUnknownRowAsChangedExternally() = runTest {
         for (appliedAt in listOf(null, 90L)) {
             val f = Fixture()
-            f.replies.addAll(listOf(ok("active"), denied()))
+            f.replies.addAll(listOf(ok("active"), uncertainFailure(), failure()))
             assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RESTRICTED))
             assertEquals(UNKNOWN, f.row().status)
             assertEquals("ACTIVE", f.row().priorState)
@@ -449,7 +450,7 @@ class InsightActionRepositoryTest {
 
     @Test fun applyRetiresSameActionThirdStateUnknownButPreservesOtherTypesAndPackages() = runTest {
         val f = Fixture()
-        f.replies.addAll(listOf(ok("active"), denied()))
+        f.replies.addAll(listOf(ok("active"), uncertainFailure(), failure()))
         assertEquals(ActionResult.Unknown, f.apply(ActionType.STANDBY_BUCKET_RARE))
         val old = f.row()
         val retained = listOf(
@@ -589,13 +590,68 @@ class InsightActionRepositoryTest {
         assertTrue(f.dao.rows.value.isEmpty())
     }
 
-    @Test fun executeNoAccessRetainsUnknownUndoAuthority() = runTest {
+    @Test fun executeNoAccessFailsWithoutUndoOrReadback() = runTest {
         val f = Fixture(); f.replies.addAll(listOf(ok("No operations."), denied()))
+        assertEquals(ActionResult.Refused(RefusalCode.NOT_PRIVILEGED), f.apply())
+        assertEquals(FAILED, f.row().status)
+        assertEquals(RefusalCode.NOT_PRIVILEGED.name, f.row().message)
+        assertEquals(2, f.commands.size)
+        f.repo.reconcile()
+        assertEquals(ActionResult.Failed(FailureCode.NOT_UNDOABLE), f.repo.undo(1))
+        assertEquals(2, f.commands.size)
+    }
+
+    @Test fun uncertainWriteAtPriorRetainsUnknownUntilLateApplicationAndUndo() = runTest {
+        val f = Fixture()
+        f.replies.addAll(listOf(ok("No operations."),
+            ShellRunner.Outcome.Failure(ShellRunner.Mode.ROOT, "timeout", ExecutionCertainty.UNKNOWN),
+            ok("No operations.")))
         assertEquals(ActionResult.Unknown, f.apply())
-        assertEquals(UNKNOWN, f.row().status); assertEquals(2, f.commands.size)
+        assertEquals(UNKNOWN, f.row().status)
+        assertNull(f.row().message)
+        assertNull(f.row().appliedAt)
+        assertEquals(3, f.commands.size)
+        // The timed-out write lands after the immediate readback.
         f.reply("RUN_ANY_IN_BACKGROUND: ignore")
         f.repo.reconcile()
         assertEquals(APPLIED, f.row().status)
+        assertEquals(1, f.commands.count { it is PrivilegedCommand.SetBackgroundOp })
+        f.reply("RUN_ANY_IN_BACKGROUND: ignore", "", "No operations.")
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+        assertEquals(REVERTED, f.row().status)
+    }
+
+    @Test fun undoNoAccessPreservesAppliedAuthorityAndRefusesWithoutReadback() = runTest {
+        val f = Fixture()
+        f.reply("No operations.", "", "RUN_ANY_IN_BACKGROUND: ignore")
+        assertEquals(ActionResult.Applied(1), f.apply())
+        val appliedAt = f.row().appliedAt
+        f.replies.addAll(listOf(ok("RUN_ANY_IN_BACKGROUND: ignore"), denied()))
+        assertEquals(ActionResult.Refused(RefusalCode.NOT_PRIVILEGED), f.repo.undo(1))
+        assertEquals(APPLIED, f.row().status)
+        assertEquals(appliedAt, f.row().appliedAt)
+        assertEquals(RefusalCode.NOT_PRIVILEGED.name, f.row().message)
+        assertEquals(5, f.commands.size)
+        f.reply("RUN_ANY_IN_BACKGROUND: ignore", "", "No operations.")
+        assertEquals(ActionResult.Reverted, f.repo.undo(1))
+    }
+
+    @Test fun uncertainUndoAtTargetRemainsUnknownUntilLateRestoration() = runTest {
+        val f = Fixture()
+        f.reply("No operations.", "", "RUN_ANY_IN_BACKGROUND: ignore")
+        assertEquals(ActionResult.Applied(1), f.apply())
+        val appliedAt = f.row().appliedAt
+        f.replies.addAll(listOf(ok("RUN_ANY_IN_BACKGROUND: ignore"),
+            ShellRunner.Outcome.Failure(ShellRunner.Mode.ROOT, "timeout", ExecutionCertainty.UNKNOWN),
+            ok("RUN_ANY_IN_BACKGROUND: ignore")))
+        assertEquals(ActionResult.Unknown, f.repo.undo(1))
+        assertEquals(UNKNOWN, f.row().status)
+        assertEquals(appliedAt, f.row().appliedAt)
+        assertNull(f.row().message)
+        f.reply("No operations.")
+        f.repo.reconcile()
+        assertEquals(REVERTED, f.row().status)
+        assertEquals(2, f.commands.count { it is PrivilegedCommand.SetBackgroundOp })
     }
 
     @Test fun confirmationNoAccessRetainsUnknownUndoAuthority() = runTest {
@@ -674,7 +730,7 @@ class InsightActionRepositoryTest {
         }
     }
 
-    @Test fun uncertainApplyUndoKeepsCreatedAtWhenWriteOrReadbackIsUnknown() = runTest {
+    @Test fun uncertainApplyUndoKeepsCreatedAtWhenWriteRefusedOrReadbackUnknown() = runTest {
         for (readback in listOf(null, "garbage", "frequent")) {
             val f = Fixture()
             f.replies.addAll(listOf(ok("active"), ok(), failure()))
@@ -682,8 +738,9 @@ class InsightActionRepositoryTest {
             val createdAt = f.row().createdAt
             f.reply("rare")
             if (readback == null) f.replies += denied() else f.reply("", readback)
-            assertEquals(ActionResult.Unknown, f.repo.undo(1))
-            assertEquals(UNKNOWN, f.row().status)
+            val expected = if (readback == null) ActionResult.Refused(RefusalCode.NOT_PRIVILEGED) else ActionResult.Unknown
+            assertEquals(expected, f.repo.undo(1))
+            assertEquals(if (readback == null) APPLIED else UNKNOWN, f.row().status)
             assertEquals(createdAt, f.row().appliedAt)
         }
     }
@@ -720,7 +777,7 @@ class InsightActionRepositoryTest {
         assertEquals(APPLIED, f.row().status)
         assertEquals(appliedAt, f.row().appliedAt)
 
-        f.replies.addAll(listOf(ok("rare"), denied()))
+        f.replies.addAll(listOf(ok("rare"), uncertainFailure(), failure()))
         assertEquals(ActionResult.Unknown, f.repo.undo(1))
         f.reply("rare")
         f.repo.reconcile()
@@ -1021,14 +1078,16 @@ class InsightActionRepositoryTest {
         }
     }
 
-    @Test fun interruptedUndoRetainsUnknownAndNoAccessDoesNotClaimRefusalAfterWrite() = runTest {
+    @Test fun undoRefusesNeverSentRestoreButKeepsUnknownWhenReadbackLosesAccess() = runTest {
         for (atWrite in listOf(true, false)) {
             val f = Fixture(); f.reply("active", "", "rare"); f.apply(ActionType.STANDBY_BUCKET_RARE)
             f.replies += ok("rare")
             if (!atWrite) f.replies += ok()
             f.replies += denied()
-            assertEquals(ActionResult.Unknown, f.repo.undo(1))
-            assertEquals(UNKNOWN, f.row().status)
+            val expected = if (atWrite) ActionResult.Refused(RefusalCode.NOT_PRIVILEGED) else ActionResult.Unknown
+            assertEquals(expected, f.repo.undo(1))
+            assertEquals(if (atWrite) APPLIED else UNKNOWN, f.row().status)
+            assertEquals(if (atWrite) 5 else 6, f.commands.size)
         }
     }
 

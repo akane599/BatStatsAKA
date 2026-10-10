@@ -14,6 +14,9 @@ class ShellUserService : Binder() {
     companion object {
         const val TRANSACTION_RUN_PIPE = 2
         const val TRANSACTION_CANCEL = 3
+        // Fixed helper-owned errors carried by CommandProtocol: neither refusal starts a process.
+        internal const val NOT_STARTED_UNSUPPORTED = "NOT_STARTED:UNSUPPORTED_COMMAND"
+        internal const val NOT_STARTED_BUSY = "NOT_STARTED:HELPER_BUSY"
         // Shizuku's USER_SERVICE_TRANSACTION_destroy (restricted to its library group; ShellUserServiceTest pins it).
         const val TRANSACTION_DESTROY = 16777115
         internal fun allows(command: String): Boolean = CommandPolicy.allows(command.split(' '))
@@ -37,8 +40,8 @@ class ShellUserService : Binder() {
                         val acquired = permits.tryAcquire()
                         try {
                             val result = when {
-                                !allows(command) -> CommandOutput.Result(error = "Unsupported command")
-                                !acquired -> CommandOutput.Result(error = "Helper busy; retry later")
+                                !allows(command) -> CommandOutput.Result(error = NOT_STARTED_UNSUPPORTED)
+                                !acquired -> CommandOutput.Result(error = NOT_STARTED_BUSY)
                                 else -> CommandOutput.run(command.split(' '), timeout)
                             }
                             CommandProtocol.write(output, result)
