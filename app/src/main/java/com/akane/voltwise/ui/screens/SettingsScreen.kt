@@ -1,10 +1,16 @@
 package com.akane.voltwise.ui.screens
 
+import android.Manifest
+import android.app.Activity
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -65,8 +71,14 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.akane.voltwise.R
+import com.akane.voltwise.battery.NOTIFICATION_PERMISSION_ASKED
+import com.akane.voltwise.battery.NOTIFICATION_PERMISSION_PREFS
 import com.akane.voltwise.battery.measurement.CalibrationState
 import com.akane.voltwise.battery.measurement.CurrentSign
 import com.akane.voltwise.battery.measurement.CurrentUnit
@@ -86,6 +98,7 @@ import com.akane.voltwise.ui.format.currentLocale
 import com.akane.voltwise.ui.theme.numericBody
 import com.akane.voltwise.ui.theme.numericHeadline
 import com.akane.voltwise.ui.theme.spacing
+import com.akane.voltwise.viewmodel.NotificationsAction
 import com.akane.voltwise.viewmodel.SettingsChoice
 import com.akane.voltwise.viewmodel.SettingsError
 import com.akane.voltwise.viewmodel.SettingsEvent
@@ -93,6 +106,7 @@ import com.akane.voltwise.viewmodel.SettingsSwitch
 import com.akane.voltwise.viewmodel.SettingsThreshold
 import com.akane.voltwise.viewmodel.SettingsUiState
 import com.akane.voltwise.viewmodel.SettingsViewModel
+import com.akane.voltwise.viewmodel.notificationsAction
 import java.text.NumberFormat
 import java.util.Locale
 import kotlin.math.ceil
@@ -111,8 +125,9 @@ private const val TWO_COLUMN_MIN_WIDTH_DP = 840
 private const val DISABLED_ALPHA = 0.38f
 
 /**
- * Settings, wired: the Koin [SettingsViewModel], the links to Data and Status, and Android's settings for the alert
- * channel (created first: Android makes a channel only when it is first used). Everything else goes to the ViewModel.
+ * Settings, wired: the Koin [SettingsViewModel], the links to Data and Status, Android's settings for the alert
+ * channel (created first: Android makes a channel only when it is first used), and turning the app's notifications
+ * back on (checked on every resume and after the permission dialog). Everything else goes to the ViewModel.
  */
 @Composable
 fun SettingsScreen(
@@ -122,10 +137,21 @@ fun SettingsScreen(
     vm: SettingsViewModel = koinViewModel(),
 ) {
     val context = LocalContext.current
+    val activity = LocalActivity.current
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val unavailable = stringResource(R.string.alert_settings_unavailable)
+    val checkNotifications = {
+        vm.onEvent(SettingsEvent.NotificationsChecked(NotificationManagerCompat.from(context).areNotificationsEnabled()))
+    }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        checkNotifications()
+    }
+    LifecycleResumeEffect(Unit) {
+        checkNotifications()
+        onPauseOrDispose {}
+    }
     SettingsContent(
         state = state,
         onEvent = { event ->
@@ -134,6 +160,11 @@ fun SettingsScreen(
                 SettingsEvent.OpenStatus -> onOpenStatus()
                 SettingsEvent.OpenAlertSound -> {
                     if (!openAlertChannelSettings(context)) scope.launch { snackbarHostState.showSnackbar(unavailable) }
+                }
+                SettingsEvent.EnableNotifications -> {
+                    if (!enableNotifications(context, activity, notificationPermission::launch)) {
+                        scope.launch { snackbarHostState.showSnackbar(unavailable) }
+                    }
                 }
                 else -> vm.onEvent(event)
             }
@@ -149,6 +180,39 @@ private fun openAlertChannelSettings(context: Context): Boolean {
     val intent = Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
         .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
         .putExtra(Settings.EXTRA_CHANNEL_ID, Notifier.ALERT_CHANNEL_ID)
+    return try {
+        context.startActivity(intent)
+        true
+    } catch (_: ActivityNotFoundException) {
+        false
+    }
+}
+
+/**
+ * Asks for POST_NOTIFICATIONS while Android would still show its dialog (see [notificationsAction]), recording the
+ * ask as first launch does; otherwise opens the app's notification settings. False when neither could open.
+ */
+private fun enableNotifications(context: Context, activity: Activity?, request: (String) -> Unit): Boolean {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && activity != null) {
+        val permission = Manifest.permission.POST_NOTIFICATIONS
+        val asked = context.getSharedPreferences(NOTIFICATION_PERMISSION_PREFS, Context.MODE_PRIVATE)
+        val action = notificationsAction(
+            sdkInt = Build.VERSION.SDK_INT,
+            granted = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED,
+            askedBefore = asked.getBoolean(NOTIFICATION_PERMISSION_ASKED, false),
+            rationale = ActivityCompat.shouldShowRequestPermissionRationale(activity, permission),
+        )
+        if (action == NotificationsAction.REQUEST_PERMISSION) {
+            asked.edit().putBoolean(NOTIFICATION_PERMISSION_ASKED, true).apply()
+            return try {
+                request(permission)
+                true
+            } catch (_: ActivityNotFoundException) {
+                false
+            }
+        }
+    }
+    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
     return try {
         context.startActivity(intent)
         true
@@ -186,7 +250,7 @@ fun SettingsContent(
         MonitoringPanel(settings, onEvent, onChoose = { choice = it }, Modifier.fillMaxWidth())
     }
     val alerts: @Composable () -> Unit = {
-        AlertsPanel(settings, onEvent, onEditThreshold = { threshold = it }, Modifier.fillMaxWidth())
+        AlertsPanel(settings, state.notificationsEnabled, onEvent, onEditThreshold = { threshold = it }, Modifier.fillMaxWidth())
     }
     val measurement: @Composable () -> Unit = {
         MeasurementPanel(
@@ -330,10 +394,14 @@ private fun MonitoringPanel(
     }
 }
 
-/** The five alerts; the four with a threshold carry it as a value button (dimmed while the alert is off). */
+/**
+ * The five alerts; the four with a threshold carry it as a value button (dimmed while the alert is off). While Android
+ * blocks the app's notifications a notice leads, with the one way to turn them back on.
+ */
 @Composable
 private fun AlertsPanel(
     settings: AppSettings,
+    notificationsEnabled: Boolean,
     onEvent: (SettingsEvent) -> Unit,
     onEditThreshold: (SettingsThreshold) -> Unit,
     modifier: Modifier = Modifier,
@@ -344,6 +412,17 @@ private fun AlertsPanel(
         modifier = modifier,
     ) {
         Rows {
+            if (!notificationsEnabled) {
+                Notice(
+                    stringResource(R.string.settings_notifications_off_body),
+                    Modifier.fillMaxWidth().padding(horizontal = MaterialTheme.spacing.md),
+                    title = stringResource(R.string.settings_notifications_off_title),
+                ) {
+                    TextButton(onClick = { onEvent(SettingsEvent.EnableNotifications) }) {
+                        Text(stringResource(R.string.settings_notifications_turn_on))
+                    }
+                }
+            }
             SettingsThreshold.entries.forEach { setting ->
                 val title = stringResource(setting.titleRes())
                 val on = setting.alert.isOn(settings)

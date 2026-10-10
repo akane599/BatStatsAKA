@@ -118,15 +118,35 @@ enum class SettingsThreshold(val fieldName: String, val alert: SettingsSwitch, p
     }
 }
 
+/** What "Turn on" does while the app's notifications are off. */
+enum class NotificationsAction { REQUEST_PERMISSION, OPEN_SETTINGS }
+
+/**
+ * [NotificationsAction.REQUEST_PERMISSION] while Android would still show its dialog: API 33+, not granted, and never
+ * asked or denied only once (Android then reports a [rationale]). After a second denial Android stops showing it, so
+ * only the app's notification settings can turn notifications back on; that also covers notifications switched off
+ * there with the permission granted. A first dialog dismissed without an answer lands in settings too, which works.
+ */
+fun notificationsAction(sdkInt: Int, granted: Boolean, askedBefore: Boolean, rationale: Boolean): NotificationsAction =
+    if (sdkInt >= 33 && !granted && (!askedBefore || rationale)) {
+        NotificationsAction.REQUEST_PERMISSION
+    } else {
+        NotificationsAction.OPEN_SETTINGS
+    }
+
 /** A write the screen reports inline, until dismissed or the next successful write. */
 enum class SettingsError { WRITE_FAILED, INVALID_DESIGN_CAPACITY }
 
-/** Plain values; the screen formats them for the viewer's locale. */
+/**
+ * Plain values; the screen formats them for the viewer's locale. [notificationsEnabled] is Android's last reported
+ * answer (true until the screen first checks, so the "notifications are off" row never flashes in).
+ */
 @Immutable
 data class SettingsUiState(
     val settings: AppSettings = AppSettingsSchema.default,
     val calibration: CalibrationState = CalibrationState(),
     val error: SettingsError? = null,
+    val notificationsEnabled: Boolean = true,
 )
 
 sealed interface SettingsEvent {
@@ -138,6 +158,12 @@ sealed interface SettingsEvent {
     data class SetDesignCapacity(val mAh: Int) : SettingsEvent
     data object ResetCalibration : SettingsEvent
     data object DismissError : SettingsEvent
+
+    /** What Android reports now for the app's notifications; the screen checks on every resume. */
+    data class NotificationsChecked(val enabled: Boolean) : SettingsEvent
+
+    /** Handled by the screen: ask for the permission again, or open Android's notification settings for the app. */
+    data object EnableNotifications : SettingsEvent
 
     /** Handled by the screen: Android's settings for the alert channel. */
     data object OpenAlertSound : SettingsEvent
@@ -159,9 +185,11 @@ class SettingsViewModel(
     private val calibration: CalibrationStore,
 ) : ViewModel() {
     private val error = MutableStateFlow<SettingsError?>(null)
+    private val notificationsEnabled = MutableStateFlow(true)
 
-    val state: StateFlow<SettingsUiState> = combine(store.settings, calibration.state, error, ::SettingsUiState)
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
+    val state: StateFlow<SettingsUiState> =
+        combine(store.settings, calibration.state, error, notificationsEnabled, ::SettingsUiState)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MS), SettingsUiState())
 
     fun onEvent(event: SettingsEvent) {
         when (event) {
@@ -174,7 +202,9 @@ class SettingsViewModel(
             is SettingsEvent.SetDesignCapacity -> write(DESIGN_CAPACITY_FIELD) { event.mAh }
             SettingsEvent.ResetCalibration -> calibration.reset()
             SettingsEvent.DismissError -> error.value = null
-            SettingsEvent.OpenAlertSound, SettingsEvent.OpenData, SettingsEvent.OpenStatus -> Unit
+            is SettingsEvent.NotificationsChecked -> notificationsEnabled.value = event.enabled
+            SettingsEvent.EnableNotifications, SettingsEvent.OpenAlertSound, SettingsEvent.OpenData,
+            SettingsEvent.OpenStatus -> Unit
         }
     }
 

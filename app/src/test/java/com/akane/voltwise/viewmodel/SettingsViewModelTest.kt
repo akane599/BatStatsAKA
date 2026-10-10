@@ -250,6 +250,30 @@ class SettingsViewModelTest {
         assertEquals(covered.size, covered.toSet().size)
         assertEquals(AppSettingsSchema.fields.filter { it.meta != null }.map { it.name }.toSet(), covered.toSet())
     }
+
+    @Test fun theNotificationsOffRowFollowsWhatAndroidLastReported() = runTest(dispatcher) {
+        val (vm, state) = start()
+        // Hidden until the screen's first check, so it never flashes in for a user whose notifications are on.
+        assertTrue(state().notificationsEnabled)
+
+        send(vm, SettingsEvent.NotificationsChecked(enabled = false))
+        assertFalse("blocked notifications show the row", state().notificationsEnabled)
+
+        send(vm, SettingsEvent.NotificationsChecked(enabled = true))
+        assertTrue("turned back on (checked on resume) hides it", state().notificationsEnabled)
+        assertTrue("checking is not a setting", store.writes.isEmpty())
+    }
+
+    @Test fun turnOnAsksWhileAndroidWouldStillShowItsDialogAndOpensSettingsOtherwise() {
+        fun action(sdkInt: Int = 33, granted: Boolean = false, askedBefore: Boolean = true, rationale: Boolean = false) =
+            notificationsAction(sdkInt, granted, askedBefore, rationale)
+
+        assertEquals(NotificationsAction.REQUEST_PERMISSION, action(askedBefore = false))
+        assertEquals("denied once", NotificationsAction.REQUEST_PERMISSION, action(rationale = true))
+        assertEquals("denied twice: Android no longer asks", NotificationsAction.OPEN_SETTINGS, action())
+        assertEquals("granted but switched off", NotificationsAction.OPEN_SETTINGS, action(granted = true, askedBefore = false))
+        assertEquals("no runtime permission before 13", NotificationsAction.OPEN_SETTINGS, action(sdkInt = 32, askedBefore = false))
+    }
 }
 
 /** Applies writes through the schema field, so a value of the wrong type fails as it would in kmp-settings. */

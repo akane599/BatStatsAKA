@@ -104,6 +104,16 @@ fun BatterySettingsScreenLargeFontOptionsPreview() {
     }
 }
 
+/** Android blocks the app's notifications (permission denied): the notice leading Alerts, with Turn on. */
+@PreviewTest
+@PhonePreview
+@Composable
+fun BatterySettingsScreenNotificationsOffPreview() {
+    ScreenshotTheme {
+        SettingsFixture(SettingsUiState(notificationsEnabled = false))
+    }
+}
+
 /** A write the store refused: the inline error under the title. */
 @PreviewTest
 @PhonePreview
