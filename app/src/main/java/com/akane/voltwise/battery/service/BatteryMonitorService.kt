@@ -90,6 +90,7 @@ class BatteryMonitorService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        recordPromptStart(intent?.action, monitoringStateStore(this))
         display("start prompt") { Notifier.cancelStartPrompt(this) }
         if (started) return START_STICKY
         try {
