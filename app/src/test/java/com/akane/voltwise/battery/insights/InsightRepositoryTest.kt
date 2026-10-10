@@ -85,7 +85,7 @@ class InsightRepositoryTest {
         var analyze: ((InsightInputs) -> InsightReport)? = null
         var appRows: List<SessionAppUsage>? = null
         val maintenance = HistoryMaintenance()
-        var whitelist = setOf("old.whitelist")
+        var whitelist: Set<String>? = setOf("old.whitelist")
         var highBatteryAlertEnabled = false
         val store = CountingStore()
         val insights = MemoryInsights()
@@ -316,6 +316,47 @@ class InsightRepositoryTest {
         repo.refresh()
         assertEquals(2, fixture.seen.size)
         assertFalse("Disabling the alert must reach the next analysis", fixture.seen.last().highBatteryAlertEnabled)
+    }
+
+    @Test fun refreshKeepsWhitelistFindingWhenMembershipUnknownAndResolvesKnownRemoval() = runTest {
+        val fixture = Fixture()
+        fixture.whitelist = setOf("example.app0")
+        fixture.appRows = listOf(testAppRow().copy(backgroundTimeMs = 60_000))
+        fixture.analyze = { InsightEngine.analyze(it, 28) }
+        val repo = fixture.repository(this)
+        repo.refresh()
+        val finding = repo.report.value!!.findings.single()
+        assertEquals(FindingType.DOZE_WHITELISTED_DRAINER, finding.type)
+        val active = fixture.insights.row(finding.key)
+        assertEquals(InsightFindingStatus.ACTIVE, active.status)
+
+        fixture.now += 100
+        fixture.whitelist = null
+        repo.refresh()
+        assertNull(fixture.seen.last().dozeUserWhitelist)
+        assertEquals("Unknown membership must preserve the last known active row", active,
+            fixture.insights.row(finding.key))
+        assertEquals(listOf(finding), repo.report.value!!.findings)
+
+        fixture.now += 100
+        fixture.whitelist = emptySet()
+        repo.refresh()
+        assertEquals("Known removal must resolve the whitelist finding", InsightFindingStatus.RESOLVED,
+            fixture.insights.row(finding.key).status)
+        assertTrue(repo.report.value!!.findings.isEmpty())
+    }
+
+    @Test fun unknownWhitelistDoesNotPreventResolvingOtherFindingTypes() = runTest {
+        val fixture = Fixture()
+        fixture.whitelist = null
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(InsightFindingStatus.ACTIVE, fixture.insights.row().status)
+
+        fixture.output = emptyList()
+        repo.refresh()
+        assertEquals(InsightFindingStatus.RESOLVED, fixture.insights.row().status)
+        assertTrue(repo.report.value!!.findings.isEmpty())
     }
 
     @Test fun refreshResolvesExpiredWhitelistFindingAndRemovesItsOffer() = runTest {
