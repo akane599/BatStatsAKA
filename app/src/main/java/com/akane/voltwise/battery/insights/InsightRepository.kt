@@ -28,6 +28,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.time.Clock
 import java.time.Instant
+import java.time.ZoneId
 
 /** One writer for analysis and feedback; never writes app snapshots or an open session's baseline. */
 class InsightRepository(
@@ -48,6 +49,8 @@ class InsightRepository(
     private val analyzeDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val analyze: (InsightInputs) -> InsightReport = { InsightEngine.analyze(it, Build.VERSION.SDK_INT) },
     private val highBatteryAlertEnabled: suspend () -> Boolean = { false },
+    /** Production resolves the live device zone; explicit clocks retain their fixture zone by default. */
+    private val currentZone: () -> ZoneId = { clock.zone },
 ) {
     private val mutex = Mutex()
     private val publishLock = Mutex()
@@ -84,7 +87,8 @@ class InsightRepository(
         val inputs = withContext(ioDispatcher) {
             if (liveDump) this@InsightRepository.liveDump()
             val now = clock.millis()
-            val today = Instant.ofEpochMilli(now).atZone(clock.zone).toLocalDate().toEpochDay()
+            val zone = currentZone()
+            val today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate().toEpochDay()
             val sessions = sessionDao.closedSessionsBetween(now - InsightInputsBuilder.HISTORY_MS, now)
                 .filter { it.endTime != null }
             val ids = sessions.map { it.sessionId }
@@ -95,7 +99,7 @@ class InsightRepository(
                 now, today, resolveFullUah(counter, level, storedFullUah(sessions)), privileged(), sessions,
                 dailyDao.range(today - InsightInputsBuilder.HISTORY_DAYS, today), rows, wakers,
                 sessionDao.capacityEstimates(Int.MAX_VALUE).first(), dozeWhitelist(),
-                insightDao.actionsOnce(), insightDao.findingsOnce(), zone = clock.zone,
+                insightDao.actionsOnce(), insightDao.findingsOnce(), zone = zone,
             ).copy(highBatteryAlertEnabled = highBatteryAlertEnabled())
         }
         val analyzed = withContext(analyzeDispatcher) { analyze(inputs) }

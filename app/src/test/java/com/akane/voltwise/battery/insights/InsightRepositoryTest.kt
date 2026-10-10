@@ -7,6 +7,7 @@ import com.akane.voltwise.battery.data.sampling.FakeKeyValueStore
 import com.akane.voltwise.battery.data.sampling.KeyValueStore
 import com.akane.voltwise.battery.insights.model.*
 import com.akane.voltwise.battery.insights.engine.InsightEngine
+import com.akane.voltwise.battery.insights.engine.Trends
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
@@ -22,6 +23,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
@@ -66,7 +68,7 @@ class InsightRepositoryTest {
         override fun edit(values: Map<String, String?>) = delegate.edit(values)
     }
 
-    private class Fixture {
+    private class Fixture(private val clockZone: ZoneId = ZoneOffset.UTC) {
         var now = NOW
         var sessions = listOf(testSession())
         var output = listOf(testFinding())
@@ -76,6 +78,8 @@ class InsightRepositoryTest {
         val wakerChunks = mutableListOf<List<String>>()
         var window: Pair<Long, Long>? = null
         var dayWindow: Pair<Long, Long>? = null
+        var dailyRows = emptyList<DailySummary>()
+        var currentZone: () -> ZoneId = { clockZone }
         var dump: suspend () -> Unit = {}
         var duringAnalysis: () -> Unit = {}
         var analyze: ((InsightInputs) -> InsightReport)? = null
@@ -86,7 +90,7 @@ class InsightRepositoryTest {
         val store = CountingStore()
         val insights = MemoryInsights()
         val clock = object : Clock() {
-            override fun getZone(): ZoneId = ZoneOffset.UTC
+            override fun getZone(): ZoneId = clockZone
             override fun withZone(zone: ZoneId): Clock = this
             override fun instant(): Instant = Instant.ofEpochMilli(now)
         }
@@ -101,7 +105,7 @@ class InsightRepositoryTest {
         val daily = object : UnusedDailySummaryDao() {
             override suspend fun range(fromDay: Long, toDay: Long): List<DailySummary> {
                 dayWindow = fromDay to toDay
-                return emptyList()
+                return dailyRows.filter { it.epochDay in fromDay..toDay }
             }
         }
         val apps = object : UnusedAppUsageDao() {
@@ -119,6 +123,7 @@ class InsightRepositoryTest {
             maintenance = maintenance,
             capacityReading = { 2_000_000L to 50 },
             highBatteryAlertEnabled = { highBatteryAlertEnabled },
+            currentZone = { currentZone() },
             ioDispatcher = StandardTestDispatcher(scope.testScheduler),
             analyzeDispatcher = StandardTestDispatcher(scope.testScheduler),
             analyze = {
@@ -128,6 +133,100 @@ class InsightRepositoryTest {
                 analyze?.invoke(it) ?: InsightReport(it.nowMs, output, output.firstOrNull())
             })
     }
+
+    @Test fun retainedRepositoryUsesNewZoneForCompletedDaysAndAppMidnights() = runTest {
+        val losAngeles = ZoneId.of("America/Los_Angeles")
+        val tokyo = ZoneId.of("Asia/Tokyo")
+        val fixture = Fixture(losAngeles)
+        fixture.now = 1_791_594_000_000L // 2026-10-10T01:00Z: Oct 9 in LA, Oct 10 in Tokyo.
+        var zone = losAngeles
+        fixture.currentZone = { zone }
+        fixture.dailyRows = trendDays()
+        val dates = listOf("2026-09-20", "2026-09-21", "2026-09-22", "2026-09-23",
+            "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09")
+        fixture.sessions = dates.map { date ->
+            val start = LocalDate.parse(date).atTime(17, 0).atZone(tokyo).toInstant().toEpochMilli()
+            testSession(date).copy(startTime = start, endTime = start + HOUR,
+                appCaptureStartMs = start, appCaptureEndMs = start + HOUR)
+        }
+        fixture.appRows = fixture.sessions.mapIndexed { index, session ->
+            testAppRow(session.sessionId).copy(powerMah = if (index < 4) 5.0 else 10.0)
+        }
+        fixture.analyze = { InsightReport(it.nowMs, Trends.detect(it), null) }
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(20_735L, fixture.seen.last().todayEpochDay)
+        assertEquals(losAngeles, fixture.seen.last().zone)
+        assertTrue("LA Oct 9 is incomplete and leaves only three recent points", repo.report.value!!.findings.isEmpty())
+
+        zone = tokyo
+        repo.refresh()
+        val inputs = fixture.seen.last()
+        assertEquals(20_736L, inputs.todayEpochDay)
+        assertEquals(tokyo, inputs.zone)
+        assertEquals(20_646L to 20_736L, fixture.dayWindow)
+        val findings = repo.report.value!!.findings
+        val device = findings.single { it.subject == Subject.Device }
+        assertEquals(8, device.evidence.single().sessions)
+        assertEquals(20.0, device.evidence.single().observed, 0.0)
+        assertEquals("Oct 9 local midnight in Tokyo", 1_791_471_600_000L, device.series.last().atMs)
+        val app = findings.single { it.subject is Subject.App }
+        assertEquals(8, app.evidence.single().sessions)
+        assertEquals(10.0, app.evidence.single().observed, 0.0)
+        assertEquals("Yesterday evening remains inside the completed-day app window",
+            fixture.sessions.last().appCaptureEndMs, app.series.last().atMs)
+    }
+
+    @Test fun retainedRepositoryExcludesNewCurrentDayAfterReverseZoneChange() = runTest {
+        val tokyo = ZoneId.of("Asia/Tokyo")
+        val losAngeles = ZoneId.of("America/Los_Angeles")
+        val fixture = Fixture(tokyo)
+        fixture.now = 1_791_594_000_000L
+        var zone = tokyo
+        fixture.currentZone = { zone }
+        fixture.dailyRows = trendDays()
+        fixture.sessions = emptyList()
+        fixture.analyze = { InsightReport(it.nowMs, Trends.detect(it), null) }
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(1, repo.report.value!!.findings.size)
+
+        zone = losAngeles
+        repo.refresh()
+        assertEquals(20_735L, fixture.seen.last().todayEpochDay)
+        assertEquals(losAngeles, fixture.seen.last().zone)
+        assertEquals(20_645L to 20_735L, fixture.dayWindow)
+        assertTrue("Oct 9 is now incomplete, leaving only three completed recent days",
+            repo.report.value!!.findings.isEmpty())
+    }
+
+    @Test fun refreshReadsOneZoneForDailyQueryAndAnalyzerInputs() = runTest {
+        val fixture = Fixture(ZoneId.of("America/Los_Angeles"))
+        fixture.now = 1_791_594_000_000L
+        var reads = 0
+        fixture.currentZone = {
+            reads++
+            if (reads == 1) ZoneId.of("Asia/Tokyo") else ZoneId.of("America/Los_Angeles")
+        }
+        val repo = fixture.repository(this)
+        repo.refresh()
+        assertEquals(1, reads)
+        assertEquals(20_736L, fixture.seen.last().todayEpochDay)
+        assertEquals(ZoneId.of("Asia/Tokyo"), fixture.seen.last().zone)
+        assertEquals(20_646L to 20_736L, fixture.dayWindow)
+        repo.refresh()
+        assertEquals(2, reads)
+        assertEquals(20_735L, fixture.seen.last().todayEpochDay)
+        assertEquals(ZoneId.of("America/Los_Angeles"), fixture.seen.last().zone)
+        assertEquals(20_645L to 20_735L, fixture.dayWindow)
+    }
+
+    private fun trendDays(): List<DailySummary> =
+        listOf(20_716L, 20_717L, 20_718L, 20_719L, 20_732L, 20_733L, 20_734L, 20_735L)
+            .mapIndexed { index, day ->
+                DailySummary(epochDay = day, screenOffMs = HOUR, screenOffCoveredMs = HOUR,
+                    screenOffDischargeUah = if (index < 4) 400_000 else 800_000)
+            }
 
     @Test fun completedRevisionsAdvanceAfterPublicationWithRepeatedAndBackwardClock() = runTest {
         val fixture = Fixture()

@@ -24,6 +24,7 @@ import com.akane.voltwise.viewmodel.InsightsRepository
 import com.akane.voltwise.viewmodel.InsightsViewModel
 import com.akane.voltwise.viewmodel.NowRepository
 import java.time.Clock
+import java.time.ZoneId
 import com.akane.voltwise.battery.apps.AppInfoRepository
 import com.akane.voltwise.battery.apps.AppInfoSource
 import com.akane.voltwise.battery.apps.AppStatsRepository
@@ -188,6 +189,7 @@ val appModule = module {
         InsightRepository(
             database.sessionDao(), database.dailySummaryDao(), database.appUsageDao(), get(),
             get(), Clock.systemDefaultZone(),
+            currentZone = ZoneId::systemDefault,
             dozeWhitelist = {
                 val mode = shell.detectMode()
                 if (mode == ShellRunner.Mode.SHIZUKU || mode == ShellRunner.Mode.ROOT) {

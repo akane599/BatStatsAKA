@@ -23,7 +23,11 @@ data class SnapshotDeviceWaker(
     val totalMs: Long,
 )
 
-/** Matched-name deltas only; the writer ranks and bounds these rows. */
+/**
+ * Deltas keyed by kind and name. A missing baseline name counts as zero only when baseline waker
+ * evidence is complete; otherwise the name must be present at both captures.
+ * The writer ranks and bounds these rows.
+ */
 @Entity(
     tableName = "session_device_wakers",
     primaryKeys = ["sessionId", "kind", "name"],
